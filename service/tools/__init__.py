@@ -21,6 +21,10 @@ service/tools — 统一数据查询接口
     stk_weekly_monthly.py       —   周线/月线行情 ⭐ 新增
   finance/                      — 财务数据
     income.py                   —   利润表 ⭐ 新增
+    balancesheet.py             —   资产负债表 ⭐ 新增
+    cashflow.py                 —   现金流量表 ⭐ 新增
+    fina_indicator.py           —   财务指标 ⭐ 新增
+    extras.py                   —   业绩预告/快报/分红/主营/披露计划 ⭐ 新增
 """
 
 from service.tools.trade_cal import (
@@ -70,4 +74,30 @@ from service.tools.finance.income import (
     get_income,
     get_income_by_period,
     get_income_summary,
+)
+from service.tools.finance.balancesheet import (
+    get_balancesheet,
+    get_balancesheet_by_period,
+    get_balancesheet_summary,
+)
+from service.tools.finance.cashflow import (
+    get_cashflow,
+    get_cashflow_summary,
+)
+from service.tools.finance.fina_indicator import (
+    get_fina_indicator,
+    get_fina_indicator_by_period,
+    get_fina_indicator_ratings,
+)
+from service.tools.finance.extras import (
+    get_forecast,
+    get_forecast_by_period,
+    get_express,
+    get_dividend,
+    get_dividend_upcoming,
+    get_mainbz,
+    get_mainbz_by_industry,
+    get_disclosure_date,
+    get_upcoming_disclosures,
+    get_next_earnings,
 )

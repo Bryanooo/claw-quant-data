@@ -347,7 +347,7 @@ def run_bak_basic():
 @track_run(task_id="income_quarterly", task_name="利润表-季度财报更新", trigger_type="cron")
 def run_income():
     """利润表：财报季后自动更新"""
-    from collectors.stock.finance.income import IncomeCollector
+    from collectors.finance.income import IncomeCollector
     from service.db import query
 
     today = datetime.now()
@@ -377,7 +377,7 @@ def run_income():
 @track_run(task_id="income_bootstrap", task_name="利润表-季度补齐", trigger_type="date")
 def run_income_bootstrap():
     """启动时补齐所有缺失的报告期"""
-    from collectors.stock.finance.income import IncomeCollector
+    from collectors.finance.income import IncomeCollector
     from service.db import query
     import time
 
@@ -403,6 +403,169 @@ def run_income_bootstrap():
         time.sleep(1)
     if total > 0:
         logger.info(f"  ✅ income_bootstrap: 补齐 {total} 行")
+    return total
+
+
+def _run_finance_quarterly(collector_cls, name):
+    """通用：财报季后自动更新某张财务表"""
+    today = datetime.now()
+    m = today.month; y = today.year
+    if m >= 11:
+        period = f"{y}0930"
+    elif m >= 9:
+        period = f"{y}0630"
+    elif m >= 5:
+        period = f"{y}0331"
+    else:
+        period = f"{y-1}1231"
+
+    from service.db import query
+    c = collector_cls()
+    tbl = c.TABLE_NAME
+    rows = query(f"SELECT count(*) FROM {tbl} WHERE end_date = '{period}'")
+    if rows[0]['count'] > 0:
+        logger.info(f"⏭️  {name}({period}) 已有数据，跳过")
+        return rows[0]['count']
+    df = c.fetch_period(period)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ {name}({period}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="balancesheet_quarterly", task_name="资产负债表-季度更新", trigger_type="cron")
+def run_balancesheet():
+    from collectors.finance.balancesheet import BalancesheetCollector
+    return _run_finance_quarterly(BalancesheetCollector, "资产负债表")
+
+
+@track_run(task_id="cashflow_quarterly", task_name="现金流量表-季度更新", trigger_type="cron")
+def run_cashflow():
+    from collectors.finance.cashflow import CashflowCollector
+    return _run_finance_quarterly(CashflowCollector, "现金流量表")
+
+
+@track_run(task_id="fina_indicator_quarterly", task_name="财务指标-季度更新", trigger_type="cron")
+def run_fina_indicator():
+    from collectors.finance.fina_indicator import FinaIndicatorCollector
+    return _run_finance_quarterly(FinaIndicatorCollector, "财务指标")
+
+
+@track_run(task_id="express_annual", task_name="业绩快报-年报更新", trigger_type="cron")
+def run_express():
+    """业绩快报通常在1~4月发布"""
+    today = datetime.now()
+    m = today.month; y = today.year
+    if m < 5:
+        period = f"{y-1}1231"
+    else:
+        logger.info("⏭️  非年报季，跳过业绩快报")
+        return 0
+    from collectors.finance.express import ExpressCollector
+    from service.db import query
+    rows = query(f"SELECT count(*) FROM express WHERE end_date = '{period}'")
+    if rows[0]['count'] > 0:
+        logger.info(f"⏭️  业绩快报({period}) 已有数据，跳过")
+        return rows[0]['count']
+    c = ExpressCollector()
+    df = c.fetch_period(period)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ express({period}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="forecast_seasonal", task_name="业绩预告-季度更新", trigger_type="cron")
+def run_forecast():
+    """业绩预告通常在1月(年报)、4月(Q1)、7月(半年报)、10月(Q3)批量发布"""
+    today = datetime.now()
+    m = today.month; y = today.year
+    # 预告是按公告日而不是报告期取的，取最近的一个完整报告期
+    if m >= 10:
+        period = f"{y}0930"
+    elif m >= 7:
+        period = f"{y}0630"
+    elif m >= 4:
+        period = f"{y}0331"
+    else:
+        period = f"{y-1}1231"
+    from collectors.finance.forecast import ForecastCollector
+    from service.db import query
+    rows = query(f"SELECT count(*) FROM forecast WHERE end_date = '{period}'")
+    if rows[0]['count'] > 0:
+        logger.info(f"⏭️  业绩预告({period}) 已有数据，跳过")
+        return rows[0]['count']
+    c = ForecastCollector()
+    df = c.fetch_period(period)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ forecast({period}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="mainbz_annual", task_name="主营业务构成-年报更新", trigger_type="cron")
+def run_mainbz():
+    """主营业务构成：年报为主"""
+    y = datetime.now().year
+    period = f"{y-1}1231"
+    from collectors.finance.fina_mainbz import FinaMainbzCollector
+    from service.db import query
+    rows = query(f"SELECT count(*) FROM fina_mainbz WHERE end_date = '{period}'")
+    if rows[0]['count'] > 0:
+        logger.info(f"⏭️  主营业务({period}) 已有数据，跳过")
+        return rows[0]['count']
+    c = FinaMainbzCollector()
+    df = c.fetch_period(period)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ mainbz({period}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="dividend_bootstrap", task_name="分红送股-全量补齐", trigger_type="date")
+def run_dividend_bootstrap():
+    """分红送股：按股票逐个取（无vip接口），只在启动时补齐"""
+    from collectors.finance.dividend import DividendCollector
+    from service.db import query
+    import pandas as pd
+
+    c = DividendCollector()
+    stocks = query("SELECT ts_code FROM stock_basic WHERE list_status IN ('L','D') ORDER BY ts_code")
+    if not stocks:
+        logger.warning("⚠️  stock_basic 无数据，跳过分红")
+        return 0
+
+    total = 0
+    for s in stocks:
+        code = s['ts_code']
+        df = c.fetch(ts_code=code)
+        if df is not None and len(df) > 0:
+            c.save(df)
+            total += len(df)
+
+    if total > 0:
+        logger.info(f"  ✅ dividend_bootstrap: 补齐 {total} 行")
+    return total
+
+
+@track_run(task_id="disclosure_date_quarterly", task_name="财报披露计划-季度更新", trigger_type="cron")
+def run_disclosure_date():
+    """财报披露计划：按 end_date 取"""
+    today = datetime.now()
+    y = today.year
+    # 取当期+展望一个季度
+    from collectors.finance.disclosure_date import DisclosureDateCollector
+    from service.db import query
+    c = DisclosureDateCollector()
+    total = 0
+    for p in [f"{y}0331", f"{y}0630", f"{y}0930", f"{y}1231"]:
+        rows = query(f"SELECT count(*) FROM disclosure_date WHERE end_date = '{p}'")
+        if rows[0]['count'] > 0:
+            continue
+        df = c.fetch_period(p)
+        c.save(df)
+        total += len(df) if df is not None else 0
+    logger.info(f"  ✅ disclosure_date: {total} 行")
     return total
 
 
@@ -741,6 +904,138 @@ def create_scheduler() -> BackgroundScheduler:
         minute=0,
         id="income_annual_update",
         name="利润表-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    # ── 财务数据：资产负债表 + 现金流量表 + 财务指标 ──
+    scheduler.add_job(
+        run_balancesheet,
+        trigger="cron",
+        month="5,9,11",
+        day=5,
+        hour=21,
+        minute=10,
+        id="balancesheet_quarterly",
+        name="资产负债表-季度更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+    scheduler.add_job(
+        run_balancesheet,
+        trigger="cron",
+        month="1,2,3",
+        day=5,
+        hour=21,
+        minute=10,
+        id="balancesheet_annual",
+        name="资产负债表-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    scheduler.add_job(
+        run_cashflow,
+        trigger="cron",
+        month="5,9,11",
+        day=5,
+        hour=21,
+        minute=20,
+        id="cashflow_quarterly",
+        name="现金流量表-季度更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+    scheduler.add_job(
+        run_cashflow,
+        trigger="cron",
+        month="1,2,3",
+        day=5,
+        hour=21,
+        minute=20,
+        id="cashflow_annual",
+        name="现金流量表-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    scheduler.add_job(
+        run_fina_indicator,
+        trigger="cron",
+        month="5,9,11",
+        day=5,
+        hour=21,
+        minute=30,
+        id="fina_indicator_quarterly",
+        name="财务指标-季度更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+    scheduler.add_job(
+        run_fina_indicator,
+        trigger="cron",
+        month="1,2,3",
+        day=5,
+        hour=21,
+        minute=30,
+        id="fina_indicator_annual",
+        name="财务指标-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    # ── 财务数据：业绩预告（1/4/7/10月15日发布高峰） ──
+    scheduler.add_job(
+        run_forecast,
+        trigger="cron",
+        month="1,4,7,10",
+        day=15,
+        hour=21,
+        minute=0,
+        id="forecast_seasonal",
+        name="业绩预告-季度更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    # ── 财务数据：业绩快报（年报季后） ──
+    scheduler.add_job(
+        run_express,
+        trigger="cron",
+        month="1,2,3,4",
+        day=20,
+        hour=21,
+        minute=0,
+        id="express_annual",
+        name="业绩快报-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    # ── 财务数据：主营业务构成（年报后） ──
+    scheduler.add_job(
+        run_mainbz,
+        trigger="cron",
+        month="5",
+        day=5,
+        hour=21,
+        minute=40,
+        id="mainbz_annual",
+        name="主营业务-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
+    )
+
+    # ── 财务数据：财报披露计划（季度初更新） ──
+    scheduler.add_job(
+        run_disclosure_date,
+        trigger="cron",
+        month="1,4,7,10",
+        day=5,
+        hour=21,
+        minute=50,
+        id="disclosure_date_quarterly",
+        name="财报披露计划-季度更新",
         replace_existing=True,
         misfire_grace_time=86400,
     )

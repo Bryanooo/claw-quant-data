@@ -136,6 +136,67 @@ def run_suspend_d():
     return cnt
 
 
+@track_run(task_id="hsgt_top10_daily", task_name="沪深股通十大成交股-盘后更新", trigger_type="cron")
+def run_hsgt_top10():
+    """沪深股通十大成交股：交易日 20:00 跑"""
+    today = datetime.now().strftime("%Y%m%d")
+    if not _is_trade_day(today):
+        logger.info(f"⏭️  非交易日({today})，跳过 hsgt_top10")
+        return 0
+    from collectors.stock.connect.hsgt_top10 import HsgtTop10Collector
+    c = HsgtTop10Collector()
+    df = c.fetch(today)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ hsgt_top10({today}): {cnt} 条")
+    return cnt
+
+
+@track_run(task_id="ggt_top10_daily", task_name="港股通十大成交股-盘后更新", trigger_type="cron")
+def run_ggt_top10():
+    """港股通十大成交股：交易日 20:00 跑"""
+    today = datetime.now().strftime("%Y%m%d")
+    if not _is_trade_day(today):
+        logger.info(f"⏭️  非交易日({today})，跳过 ggt_top10")
+        return 0
+    from collectors.stock.connect.ggt_top10 import GgtTop10Collector
+    c = GgtTop10Collector()
+    df = c.fetch(today)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ ggt_top10({today}): {cnt} 条")
+    return cnt
+
+
+@track_run(task_id="ggt_daily_daily", task_name="港股通每日成交统计-盘后更新", trigger_type="cron")
+def run_ggt_daily():
+    """港股通每日成交统计：交易日 20:00 跑（取近2天防遗漏）"""
+    from collectors.stock.connect.ggt_daily import GgtDailyCollector
+    today = datetime.now().strftime("%Y%m%d")
+    yesterday = (datetime.now() - timedelta(days=3)).strftime("%Y%m%d")
+    c = GgtDailyCollector()
+    df = c.fetch(yesterday, today)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ ggt_daily({today}): {cnt} 条")
+    return cnt
+
+
+@track_run(task_id="ggt_monthly_daily", task_name="港股通每月成交统计-盘后更新", trigger_type="cron")
+def run_ggt_monthly():
+    """港股通每月成交统计：交易日 20:00 跑（取近3个月）"""
+    from collectors.stock.connect.ggt_monthly import GgtMonthlyCollector
+    today = datetime.now()
+    start_m = (today.replace(day=1) - timedelta(days=90)).strftime("%Y%m")
+    end_m = today.strftime("%Y%m")
+    c = GgtMonthlyCollector()
+    df = c.fetch(start_m, end_m)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ ggt_monthly({end_m}): {cnt} 条")
+    return cnt
+
+
 @track_run(task_id="new_share_weekly", task_name="IPO新股列表-每周更新", trigger_type="cron")
 def run_new_share():
     """IPO新股列表：每周一交易日补一次（近1个月增量）"""
@@ -409,6 +470,52 @@ def create_scheduler() -> BackgroundScheduler:
         name="股票每日基本面-盘后更新",
         replace_existing=True,
         misfire_grace_time=600,
+    )
+
+    # ── 沪深港通/港股通：交易日 20:00 跑（数据 18:00~20:00 更新） ──
+
+    scheduler.add_job(
+        run_hsgt_top10,
+        trigger="cron",
+        hour=20,
+        minute=0,
+        id="hsgt_top10_daily",
+        name="沪深股通十大成交股-盘后更新",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    scheduler.add_job(
+        run_ggt_top10,
+        trigger="cron",
+        hour=20,
+        minute=5,
+        id="ggt_top10_daily",
+        name="港股通十大成交股-盘后更新",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    scheduler.add_job(
+        run_ggt_daily,
+        trigger="cron",
+        hour=20,
+        minute=10,
+        id="ggt_daily_daily",
+        name="港股通每日成交统计-盘后更新",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    scheduler.add_job(
+        run_ggt_monthly,
+        trigger="cron",
+        hour=20,
+        minute=15,
+        id="ggt_monthly_daily",
+        name="港股通每月成交统计-盘后更新",
+        replace_existing=True,
+        misfire_grace_time=1800,
     )
 
     # ── 巡检任务（每 15 分钟，交易日 08:00-21:45） ──

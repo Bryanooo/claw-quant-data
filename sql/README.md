@@ -10,6 +10,7 @@
 | `init_collector_run.sql` | 任务运行记录表 | sys_collector_run |
 | `init_stk_limit.sql` | 每日涨跌停价格表 | stk_limit |
 | `init_suspend_d.sql` | 每日停复牌信息表 | suspend_d |
+| `init_connect.sql` | 沪深港通/港股通表 | hsgt_top10, ggt_top10, ggt_daily, ggt_monthly |
 
 ## 用法
 

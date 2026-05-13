@@ -111,7 +111,7 @@ def run_stk_limit():
     if not _is_trade_day(today):
         logger.info(f"⏭️  非交易日({today})，跳过 stk_limit")
         return 0
-    from collectors.stock.basic.stk_limit import STKLimitCollector
+    from collectors.stock.market.stk_limit import STKLimitCollector
     c = STKLimitCollector()
     df = c.fetch()
     c.save(df)
@@ -127,7 +127,7 @@ def run_suspend_d():
     if not _is_trade_day(today):
         logger.info(f"⏭️  非交易日({today})，跳过 suspend_d")
         return 0
-    from collectors.stock.basic.suspend_d import SuspendDCollector
+    from collectors.stock.market.suspend_d import SuspendDCollector
     c = SuspendDCollector()
     df = c.fetch(today, today)
     c.save(df)
@@ -143,7 +143,7 @@ def run_hsgt_top10():
     if not _is_trade_day(today):
         logger.info(f"⏭️  非交易日({today})，跳过 hsgt_top10")
         return 0
-    from collectors.stock.connect.hsgt_top10 import HsgtTop10Collector
+    from collectors.stock.market.hsgt_top10 import HsgtTop10Collector
     c = HsgtTop10Collector()
     df = c.fetch(today)
     c.save(df)
@@ -159,7 +159,7 @@ def run_ggt_top10():
     if not _is_trade_day(today):
         logger.info(f"⏭️  非交易日({today})，跳过 ggt_top10")
         return 0
-    from collectors.stock.connect.ggt_top10 import GgtTop10Collector
+    from collectors.stock.market.ggt_top10 import GgtTop10Collector
     c = GgtTop10Collector()
     df = c.fetch(today)
     c.save(df)
@@ -171,7 +171,7 @@ def run_ggt_top10():
 @track_run(task_id="ggt_daily_daily", task_name="港股通每日成交统计-盘后更新", trigger_type="cron")
 def run_ggt_daily():
     """港股通每日成交统计：交易日 20:00 跑（取近2天防遗漏）"""
-    from collectors.stock.connect.ggt_daily import GgtDailyCollector
+    from collectors.stock.market.ggt_daily import GgtDailyCollector
     today = datetime.now().strftime("%Y%m%d")
     yesterday = (datetime.now() - timedelta(days=3)).strftime("%Y%m%d")
     c = GgtDailyCollector()
@@ -185,7 +185,7 @@ def run_ggt_daily():
 @track_run(task_id="ggt_monthly_daily", task_name="港股通每月成交统计-盘后更新", trigger_type="cron")
 def run_ggt_monthly():
     """港股通每月成交统计：交易日 20:00 跑（取近3个月）"""
-    from collectors.stock.connect.ggt_monthly import GgtMonthlyCollector
+    from collectors.stock.market.ggt_monthly import GgtMonthlyCollector
     today = datetime.now()
     start_m = (today.replace(day=1) - timedelta(days=90)).strftime("%Y%m")
     end_m = today.strftime("%Y%m")
@@ -200,7 +200,7 @@ def run_ggt_monthly():
 @track_run(task_id="stk_weekly_monthly_week", task_name="周线行情-盘后更新", trigger_type="cron")
 def run_stk_weekly_monthly_week():
     """周线行情：每个交易日 20:30 用 stk_weekly_monthly 更新"""
-    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    from collectors.stock.market.stk_weekly_monthly import StkWeeklyMonthlyCollector
     today = datetime.now()
     ds = today.strftime("%Y%m%d")
     c = StkWeeklyMonthlyCollector()
@@ -217,7 +217,7 @@ def run_stk_weekly_monthly_week():
 @track_run(task_id="stk_weekly_monthly_month", task_name="月线行情-盘后更新", trigger_type="cron")
 def run_stk_weekly_monthly_month():
     """月线行情：每个交易日 20:35 用 stk_weekly_monthly 更新（仅月末）"""
-    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    from collectors.stock.market.stk_weekly_monthly import StkWeeklyMonthlyCollector
     from service.db import query
     today = datetime.now().strftime("%Y%m%d")
     rows = query(f"""
@@ -243,7 +243,7 @@ def run_stk_weekly_monthly_month():
 @track_run(task_id="stk_weekly_weekly_fri", task_name="周线行情-周收盘校订", trigger_type="cron")
 def run_stk_weekly_weekly():
     """周线行情：周五 20:40 用 weekly 接口覆盖"""
-    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    from collectors.stock.market.stk_weekly_monthly import StkWeeklyMonthlyCollector
     today = datetime.now().strftime("%Y%m%d")
     c = StkWeeklyMonthlyCollector()
     df = c.fetch_weekly(today)
@@ -259,7 +259,7 @@ def run_stk_weekly_weekly():
 @track_run(task_id="stk_monthly_monthly_eom", task_name="月线行情-月收盘校订", trigger_type="cron")
 def run_stk_monthly_monthly():
     """月线行情：月末交易日 20:45 用 monthly 接口覆盖"""
-    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    from collectors.stock.market.stk_weekly_monthly import StkWeeklyMonthlyCollector
     from service.db import query
     today = datetime.now().strftime("%Y%m%d")
     rows = query(f"""
@@ -351,7 +351,7 @@ def run_daily():
     if not _is_trade_day(today):
         logger.info(f"⏭️  非交易日({today})，跳过 daily")
         return 0
-    from collectors.stock.daily.daily import DailyCollector
+    from collectors.stock.market.daily import DailyCollector
     c = DailyCollector()
     rows = c.collect_by_date(trade_date=today)
     logger.info(f"  ✅ daily({today}): {rows} 行")

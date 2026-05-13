@@ -1091,6 +1091,41 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=3600,
     )
 
+    # ── SGE 黄金现货 ──
+    def run_sge_basic():
+        from collectors.sge.sge_basic import SgeBasicCollector
+        c = SgeBasicCollector()
+        return c.collect_full()
+
+    def run_sge_daily_daily():
+        from collectors.sge.sge_daily import SgeDailyCollector
+        c = SgeDailyCollector()
+        return c.refresh_latest(days=10)
+
+    scheduler.add_job(
+        run_sge_basic,
+        trigger="cron",
+        day_of_week="mon",
+        hour=7,
+        minute=35,
+        id="sge_basic_weekly",
+        name="SGE现货基础信息-周更新",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_sge_daily_daily,
+        trigger="cron",
+        hour="9-22/2",
+        minute=30,
+        day_of_week="mon-fri",
+        id="sge_daily_daily",
+        name="SGE日线-日增量",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     return scheduler
 if __name__ == "__main__":
     # ── 初始化通知器 ──

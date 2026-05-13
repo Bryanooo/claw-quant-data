@@ -110,3 +110,12 @@ from service.tools.forex.forex import (
     get_fx_daily_by_classify,
     get_fx_daily_latest,
 )
+
+# ── SGE 黄金现货（5接口） ──
+from service.tools.sge.sge import (
+    get_sge_basic,
+    get_sge_daily,
+    get_sge_daily_by_date,
+    get_sge_daily_latest,
+    get_sge_daily_all_tscode,
+)

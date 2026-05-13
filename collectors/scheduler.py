@@ -344,6 +344,68 @@ def run_bak_basic():
     return rows
 
 
+@track_run(task_id="income_quarterly", task_name="利润表-季度财报更新", trigger_type="cron")
+def run_income():
+    """利润表：财报季后自动更新"""
+    from collectors.stock.finance.income import IncomeCollector
+    from service.db import query
+
+    today = datetime.now()
+    m = today.month; y = today.year
+    if m >= 11:
+        period = f"{y}0930"
+    elif m >= 9:
+        period = f"{y}0630"
+    elif m >= 5:
+        period = f"{y}0331"
+    else:
+        period = f"{y-1}1231"
+
+    rows = query(f"SELECT count(*) FROM income WHERE end_date = '{period}'")
+    if rows[0]['count'] > 0:
+        logger.info(f"⏭️  {period} 已有数据，跳过")
+        return rows[0]['count']
+
+    c = IncomeCollector()
+    df = c.fetch_period(period)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ income({period}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="income_bootstrap", task_name="利润表-季度补齐", trigger_type="date")
+def run_income_bootstrap():
+    """启动时补齐所有缺失的报告期"""
+    from collectors.stock.finance.income import IncomeCollector
+    from service.db import query
+    import time
+
+    c = IncomeCollector()
+    periods = []
+    for y in range(2020, 2026):
+        for m in ['0331', '0630', '0930', '1231']:
+            p = f"{y}{m}"
+            if p > '20250331':
+                break
+            if p >= '20200101':
+                periods.append(p)
+
+    total = 0
+    for p in periods:
+        r = query(f"SELECT count(*) FROM income WHERE end_date = '{p}'")
+        if r[0]['count'] > 0:
+            continue
+        df = c.fetch_period(p)
+        if df is not None and len(df) > 0:
+            c.save(df)
+            total += len(df)
+        time.sleep(1)
+    if total > 0:
+        logger.info(f"  ✅ income_bootstrap: 补齐 {total} 行")
+    return total
+
+
 @track_run(task_id="daily_daily", task_name="A股日线行情-盘后全量", trigger_type="cron")
 def run_daily():
     """A股日线行情：每天 16:00 盘后取当日全市场（分组100只/组，限交易日）"""
@@ -653,6 +715,34 @@ def create_scheduler() -> BackgroundScheduler:
         name="月线行情-月收盘校订（月末）",
         replace_existing=True,
         misfire_grace_time=3600,
+    )
+
+    # ── 财务数据：利润表 — 季度财报季更新 ──
+
+    scheduler.add_job(
+        run_income,
+        trigger="cron",
+        month="5,9,11",
+        day=5,
+        hour=21,
+        minute=0,
+        id="income_quarterly",
+        name="利润表-季度财报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,  # 24小时容错
+    )
+
+    scheduler.add_job(
+        run_income,
+        trigger="cron",
+        month="1,2,3",
+        day=5,
+        hour=21,
+        minute=0,
+        id="income_annual_update",
+        name="利润表-年报更新",
+        replace_existing=True,
+        misfire_grace_time=86400,
     )
 
     # ── 巡检任务（每 15 分钟，交易日 08:00-21:45） ──

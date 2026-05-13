@@ -19,6 +19,8 @@ service/tools — 统一数据查询接口
     ggt_top10.py                —   港股通十大成交 ⭐ 新增
     ggt_stat.py                 —   港股通日/月统计 ⭐ 新增
     stk_weekly_monthly.py       —   周线/月线行情 ⭐ 新增
+  finance/                      — 财务数据
+    income.py                   —   利润表 ⭐ 新增
 """
 
 from service.tools.trade_cal import (
@@ -63,4 +65,9 @@ from service.tools.stock.stk_weekly_monthly import (
     get_monthly_line,
     get_weekly_line_by_date,
     get_monthly_line_by_date,
+)
+from service.tools.finance.income import (
+    get_income,
+    get_income_by_period,
+    get_income_summary,
 )

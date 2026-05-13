@@ -120,6 +120,22 @@ def run_stk_limit():
     return cnt
 
 
+@track_run(task_id="suspend_d_daily", task_name="每日停复牌信息-盘前更新", trigger_type="cron")
+def run_suspend_d():
+    """每日停复牌信息：交易日 09:10 跑"""
+    today = datetime.now().strftime("%Y%m%d")
+    if not _is_trade_day(today):
+        logger.info(f"⏭️  非交易日({today})，跳过 suspend_d")
+        return 0
+    from collectors.stock.basic.suspend_d import SuspendDCollector
+    c = SuspendDCollector()
+    df = c.fetch(today, today)
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ suspend_d({today}): {cnt} 条")
+    return cnt
+
+
 @track_run(task_id="new_share_weekly", task_name="IPO新股列表-每周更新", trigger_type="cron")
 def run_new_share():
     """IPO新股列表：每周一交易日补一次（近1个月增量）"""
@@ -293,6 +309,18 @@ def create_scheduler() -> BackgroundScheduler:
         minute=0,
         id="stk_limit_daily",
         name="每日涨跌停价格-盘前更新",
+        replace_existing=True,
+        misfire_grace_time=600,
+    )
+
+    # 每日停复牌信息：交易日 09:10 跑
+    scheduler.add_job(
+        run_suspend_d,
+        trigger="cron",
+        hour=9,
+        minute=10,
+        id="suspend_d_daily",
+        name="每日停复牌信息-盘前更新",
         replace_existing=True,
         misfire_grace_time=600,
     )

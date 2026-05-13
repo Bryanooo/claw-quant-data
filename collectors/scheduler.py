@@ -104,6 +104,22 @@ def run_stock_hsgt():
     return total
 
 
+@track_run(task_id="stk_limit_daily", task_name="每日涨跌停价格-盘前更新", trigger_type="cron")
+def run_stk_limit():
+    """每日涨跌停价格：交易日 09:00 跑（数据 08:40 已更新）"""
+    today = datetime.now().strftime("%Y%m%d")
+    if not _is_trade_day(today):
+        logger.info(f"⏭️  非交易日({today})，跳过 stk_limit")
+        return 0
+    from collectors.stock.basic.stk_limit import STKLimitCollector
+    c = STKLimitCollector()
+    df = c.fetch()
+    c.save(df)
+    cnt = len(df) if df is not None else 0
+    logger.info(f"  ✅ stk_limit({today}): {cnt} 行")
+    return cnt
+
+
 @track_run(task_id="new_share_weekly", task_name="IPO新股列表-每周更新", trigger_type="cron")
 def run_new_share():
     """IPO新股列表：每周一交易日补一次（近1个月增量）"""
@@ -267,6 +283,18 @@ def create_scheduler() -> BackgroundScheduler:
         name="交易日历-每日更新",
         replace_existing=True,
         misfire_grace_time=600,  # 允许延迟 10 分钟
+    )
+
+    # 每日涨跌停价格：交易日 09:00 跑（数据 08:40 已更新）
+    scheduler.add_job(
+        run_stk_limit,
+        trigger="cron",
+        hour=9,
+        minute=0,
+        id="stk_limit_daily",
+        name="每日涨跌停价格-盘前更新",
+        replace_existing=True,
+        misfire_grace_time=600,
     )
 
     # ST股票列表+风险警示板明细：每天 09:20 跑

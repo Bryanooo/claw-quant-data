@@ -197,6 +197,91 @@ def run_ggt_monthly():
     return cnt
 
 
+@track_run(task_id="stk_weekly_monthly_week", task_name="周线行情-盘后更新", trigger_type="cron")
+def run_stk_weekly_monthly_week():
+    """周线行情：每个交易日 20:30 用 stk_weekly_monthly 更新"""
+    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    today = datetime.now()
+    ds = today.strftime("%Y%m%d")
+    c = StkWeeklyMonthlyCollector()
+    df = c.fetch_daily(ds, "week")
+    if df is not None:
+        c.save_daily(df, ds, "week")
+        cnt = len(df)
+    else:
+        cnt = 0
+    logger.info(f"  ✅ stk_weekly_monthly(week {ds}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="stk_weekly_monthly_month", task_name="月线行情-盘后更新", trigger_type="cron")
+def run_stk_weekly_monthly_month():
+    """月线行情：每个交易日 20:35 用 stk_weekly_monthly 更新（仅月末）"""
+    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    from service.db import query
+    today = datetime.now().strftime("%Y%m%d")
+    rows = query(f"""
+        SELECT cal_date FROM trade_cal
+        WHERE exchange='SSE' AND is_open=1
+        AND date_trunc('month', cal_date::date) = date_trunc('month', DATE '{today}')
+        ORDER BY cal_date DESC LIMIT 1
+    """)
+    if not rows or rows[0]['cal_date'].strftime("%Y%m%d") != today:
+        logger.info(f"⏭️  {today} 不是月末交易日，跳过月线")
+        return 0
+    c = StkWeeklyMonthlyCollector()
+    df = c.fetch_daily(today, "month")
+    if df is not None:
+        c.save_daily(df, today, "month")
+        cnt = len(df)
+    else:
+        cnt = 0
+    logger.info(f"  ✅ stk_weekly_monthly(month {today}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="stk_weekly_weekly_fri", task_name="周线行情-周收盘校订", trigger_type="cron")
+def run_stk_weekly_weekly():
+    """周线行情：周五 20:40 用 weekly 接口覆盖"""
+    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    today = datetime.now().strftime("%Y%m%d")
+    c = StkWeeklyMonthlyCollector()
+    df = c.fetch_weekly(today)
+    if df is not None:
+        c.save_weekly(df, today)
+        cnt = len(df)
+    else:
+        cnt = 0
+    logger.info(f"  ✅ weekly(fri {today}): {cnt} 行")
+    return cnt
+
+
+@track_run(task_id="stk_monthly_monthly_eom", task_name="月线行情-月收盘校订", trigger_type="cron")
+def run_stk_monthly_monthly():
+    """月线行情：月末交易日 20:45 用 monthly 接口覆盖"""
+    from collectors.stock.daily.stk_weekly_monthly import StkWeeklyMonthlyCollector
+    from service.db import query
+    today = datetime.now().strftime("%Y%m%d")
+    rows = query(f"""
+        SELECT cal_date FROM trade_cal
+        WHERE exchange='SSE' AND is_open=1
+        AND date_trunc('month', cal_date::date) = date_trunc('month', DATE '{today}')
+        ORDER BY cal_date DESC LIMIT 1
+    """)
+    if not rows or rows[0]['cal_date'].strftime("%Y%m%d") != today:
+        logger.info(f"⏭️  {today} 不是月末交易日，跳过月线校订")
+        return 0
+    c = StkWeeklyMonthlyCollector()
+    df = c.fetch_monthly(today)
+    if df is not None:
+        c.save_monthly(df, today)
+        cnt = len(df)
+    else:
+        cnt = 0
+    logger.info(f"  ✅ monthly(eom {today}): {cnt} 行")
+    return cnt
+
+
 @track_run(task_id="new_share_weekly", task_name="IPO新股列表-每周更新", trigger_type="cron")
 def run_new_share():
     """IPO新股列表：每周一交易日补一次（近1个月增量）"""
@@ -516,6 +601,58 @@ def create_scheduler() -> BackgroundScheduler:
         name="港股通每月成交统计-盘后更新",
         replace_existing=True,
         misfire_grace_time=1800,
+    )
+
+    # ── 周/月线行情：盘后更新 ──
+
+    scheduler.add_job(
+        run_stk_weekly_monthly_week,
+        trigger="cron",
+        hour=20,
+        minute=30,
+        day_of_week="mon-fri",
+        id="stk_weekly_monthly_week_daily",
+        name="周线行情-盘后更新（每日）",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    scheduler.add_job(
+        run_stk_weekly_monthly_month,
+        trigger="cron",
+        hour=20,
+        minute=35,
+        day_of_week="mon-fri",
+        id="stk_weekly_monthly_month_daily",
+        name="月线行情-盘后更新（每日）",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+
+    # ── 周/月线 — 周五/月末专用（用 official 接口覆盖） ──
+
+    scheduler.add_job(
+        run_stk_weekly_weekly,
+        trigger="cron",
+        hour=20,
+        minute=40,
+        day_of_week="fri",
+        id="stk_weekly_weekly_fri",
+        name="周线行情-周收盘校订（周五）",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_stk_monthly_monthly,
+        trigger="cron",
+        hour=20,
+        minute=45,
+        day_of_week="mon-fri",
+        id="stk_monthly_monthly_eom",
+        name="月线行情-月收盘校订（月末）",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
 
     # ── 巡检任务（每 15 分钟，交易日 08:00-21:45） ──

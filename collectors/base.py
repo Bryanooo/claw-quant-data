@@ -208,6 +208,7 @@ class BaseCollector(ABC):
     def fetch(self, **params) -> pd.DataFrame:
         """从 Tushare 获取数据，返回 DataFrame"""
         ...
+        return pd.DataFrame()  # 默认返回空 DataFrame
 
     # ─────────────── 通用 store 方法 ───────────────
     def store(self, df: pd.DataFrame) -> int:

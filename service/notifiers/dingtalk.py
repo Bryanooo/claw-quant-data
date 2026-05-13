@@ -13,19 +13,20 @@
 
 import json
 import logging
+import os
 import subprocess
 
 from service.notifier import BaseNotifier
 
 logger = logging.getLogger("notifier.dingtalk")
 
-DEFAULT_USER_ID = "1830664110642027"
+_DEFAULT_USER_ID = os.getenv("DINGTALK_USER_ID", "1830664110642027")
 
 
 class DingtalkNotifier(BaseNotifier):
     """钉钉通知器，复用 OpenClaw 的 message send 命令。"""
 
-    def __init__(self, user_id: str = DEFAULT_USER_ID):
+    def __init__(self, user_id: str = _DEFAULT_USER_ID):
         self.user_id = user_id
 
     def send(self, content: str, title: str = "通知") -> bool:

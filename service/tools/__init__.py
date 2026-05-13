@@ -119,3 +119,19 @@ from service.tools.sge.sge import (
     get_sge_daily_latest,
     get_sge_daily_all_tscode,
 )
+
+# ── 参考数据（12接口） ──
+from service.tools.reference.reference import (
+    get_stk_shock,
+    get_stk_high_shock,
+    get_stk_alert,
+    get_top10_holders,
+    get_top10_floatholders,
+    get_pledge_stat,
+    get_pledge_detail,
+    get_repurchase,
+    get_share_float,
+    get_block_trade,
+    get_stk_holdernumber,
+    get_stk_holdertrade,
+)

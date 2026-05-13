@@ -3,7 +3,7 @@ income: 利润表采集器
 """
 
 import logging
-from collectors.finance.base import BaseFinanceCollector
+from collectors.stock.finance.base import BaseFinanceCollector
 
 logger = logging.getLogger("collector.income")
 

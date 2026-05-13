@@ -7,6 +7,8 @@ import sys, os
 sys.path.insert(0, "/home/ecs-user/.openclaw/workspace/claw-quant-data")
 
 import re
+import time
+from datetime import datetime, timedelta
 import pandas as pd
 import psycopg2
 import psycopg2.extras
@@ -82,6 +84,21 @@ class StkAlertCollector(BaseCollector):
 
     def collect_by_date(self, trade_date: str) -> int:
         return self.collect(start_date=trade_date, end_date=trade_date)
+
+    def collect_all_history(self, start_date="20250101", end_date="20260513"):
+        logger = logging.getLogger("collector.stk_alert")
+        total = 0
+        s, e = datetime.strptime(start_date, "%Y%m%d"), datetime.strptime(end_date, "%Y%m%d")
+        d = s
+        while d <= e:
+            ds = d.strftime("%Y%m%d")
+            df = self.fetch(trade_date=ds)
+            if df is not None and len(df) > 0:
+                total += self.store(df)
+            d += timedelta(days=1)
+            time.sleep(0.3)
+        logger.info(f"✅ stk_alert: 历史补齐 {total} 行")
+        return total
 
 
 if __name__ == "__main__":

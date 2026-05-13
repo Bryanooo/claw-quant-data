@@ -347,7 +347,7 @@ def run_bak_basic():
 @track_run(task_id="income_quarterly", task_name="利润表-季度财报更新", trigger_type="cron")
 def run_income():
     """利润表：财报季后自动更新"""
-    from collectors.finance.income import IncomeCollector
+    from collectors.stock.finance.income import IncomeCollector
     from service.db import query
 
     today = datetime.now()
@@ -377,7 +377,7 @@ def run_income():
 @track_run(task_id="income_bootstrap", task_name="利润表-季度补齐", trigger_type="date")
 def run_income_bootstrap():
     """启动时补齐所有缺失的报告期"""
-    from collectors.finance.income import IncomeCollector
+    from collectors.stock.finance.income import IncomeCollector
     from service.db import query
     import time
 
@@ -435,19 +435,19 @@ def _run_finance_quarterly(collector_cls, name):
 
 @track_run(task_id="balancesheet_quarterly", task_name="资产负债表-季度更新", trigger_type="cron")
 def run_balancesheet():
-    from collectors.finance.balancesheet import BalancesheetCollector
+    from collectors.stock.finance.balancesheet import BalancesheetCollector
     return _run_finance_quarterly(BalancesheetCollector, "资产负债表")
 
 
 @track_run(task_id="cashflow_quarterly", task_name="现金流量表-季度更新", trigger_type="cron")
 def run_cashflow():
-    from collectors.finance.cashflow import CashflowCollector
+    from collectors.stock.finance.cashflow import CashflowCollector
     return _run_finance_quarterly(CashflowCollector, "现金流量表")
 
 
 @track_run(task_id="fina_indicator_quarterly", task_name="财务指标-季度更新", trigger_type="cron")
 def run_fina_indicator():
-    from collectors.finance.fina_indicator import FinaIndicatorCollector
+    from collectors.stock.finance.fina_indicator import FinaIndicatorCollector
     return _run_finance_quarterly(FinaIndicatorCollector, "财务指标")
 
 
@@ -461,7 +461,7 @@ def run_express():
     else:
         logger.info("⏭️  非年报季，跳过业绩快报")
         return 0
-    from collectors.finance.express import ExpressCollector
+    from collectors.stock.finance.express import ExpressCollector
     from service.db import query
     rows = query(f"SELECT count(*) FROM express WHERE end_date = '{period}'")
     if rows[0]['count'] > 0:
@@ -489,7 +489,7 @@ def run_forecast():
         period = f"{y}0331"
     else:
         period = f"{y-1}1231"
-    from collectors.finance.forecast import ForecastCollector
+    from collectors.stock.finance.forecast import ForecastCollector
     from service.db import query
     rows = query(f"SELECT count(*) FROM forecast WHERE end_date = '{period}'")
     if rows[0]['count'] > 0:
@@ -508,7 +508,7 @@ def run_mainbz():
     """主营业务构成：年报为主"""
     y = datetime.now().year
     period = f"{y-1}1231"
-    from collectors.finance.fina_mainbz import FinaMainbzCollector
+    from collectors.stock.finance.fina_mainbz import FinaMainbzCollector
     from service.db import query
     rows = query(f"SELECT count(*) FROM fina_mainbz WHERE end_date = '{period}'")
     if rows[0]['count'] > 0:
@@ -525,7 +525,7 @@ def run_mainbz():
 @track_run(task_id="dividend_bootstrap", task_name="分红送股-全量补齐", trigger_type="date")
 def run_dividend_bootstrap():
     """分红送股：按股票逐个取（无vip接口），只在启动时补齐"""
-    from collectors.finance.dividend import DividendCollector
+    from collectors.stock.finance.dividend import DividendCollector
     from service.db import query
     import pandas as pd
 
@@ -554,7 +554,7 @@ def run_disclosure_date():
     today = datetime.now()
     y = today.year
     # 取当期+展望一个季度
-    from collectors.finance.disclosure_date import DisclosureDateCollector
+    from collectors.stock.finance.disclosure_date import DisclosureDateCollector
     from service.db import query
     c = DisclosureDateCollector()
     total = 0

@@ -3,7 +3,7 @@ fina_mainbz: 主营业务构成采集器
 """
 
 import logging
-from collectors.finance.base import BaseFinanceCollector
+from collectors.stock.finance.base import BaseFinanceCollector
 
 logger = logging.getLogger("collector.fina_mainbz")
 

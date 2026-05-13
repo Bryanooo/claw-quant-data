@@ -4,7 +4,7 @@ disclosure_date: 财报披露计划采集器
 
 import logging
 import math
-from collectors.finance.base import BaseFinanceCollector
+from collectors.stock.finance.base import BaseFinanceCollector
 
 logger = logging.getLogger("collector.disclosure_date")
 

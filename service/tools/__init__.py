@@ -135,3 +135,20 @@ from service.tools.reference.reference import (
     get_stk_holdernumber,
     get_stk_holdertrade,
 )
+
+# ── 股票特色数据（13接口） ──
+from service.tools.stock_extra.stock_extra import (
+    get_report_rc,
+    get_cyq_perf,
+    get_cyq_chips,
+    get_stk_factor_pro,
+    get_ccass_hold,
+    get_ccass_hold_detail,
+    get_hk_hold,
+    get_stk_auction_o,
+    get_stk_auction_c,
+    get_stk_nineturn,
+    get_stk_ah_comparison,
+    get_stk_surv,
+    get_broker_recommend,
+)

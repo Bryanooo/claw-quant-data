@@ -101,3 +101,12 @@ from service.tools.finance.extras import (
     get_upcoming_disclosures,
     get_next_earnings,
 )
+
+# ── 外汇数据（5接口） ──
+from service.tools.forex.forex import (
+    get_fx_obasic,
+    get_fx_classify_stats,
+    get_fx_daily,
+    get_fx_daily_by_classify,
+    get_fx_daily_latest,
+)

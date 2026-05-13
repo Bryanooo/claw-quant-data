@@ -1053,12 +1053,45 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=300,
     )
 
+    # ── 外汇数据 ──
+
+    def run_fx_obasic():
+        """外汇基础信息（每周全量更新）"""
+        from collectors.forex.fx_obasic import FxObasicCollector
+        c = FxObasicCollector()
+        return c.collect_full()
+
+    def run_fx_daily_daily():
+        """外汇日线行情（每日增量更新近7天）"""
+        from collectors.forex.fx_daily import FxDailyCollector
+        c = FxDailyCollector()
+        return c.refresh_latest(days=7)
+
+    scheduler.add_job(
+        run_fx_obasic,
+        trigger="cron",
+        day_of_week="mon",
+        hour=7,
+        minute=30,
+        id="fx_obasic_weekly",
+        name="外汇基础信息-周更新",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_fx_daily_daily,
+        trigger="cron",
+        hour="8-21/2",
+        minute=30,
+        day_of_week="mon-fri",
+        id="fx_daily_daily",
+        name="外汇日线-隔日增量",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     return scheduler
-
-
-# ──────────────────────────────────────────────
-# 主入口
-# ──────────────────────────────────────────────
 if __name__ == "__main__":
     # ── 初始化通知器 ──
     from service.notifier import Notifier

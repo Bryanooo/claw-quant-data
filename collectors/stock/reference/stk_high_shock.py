@@ -3,22 +3,15 @@
 接口：stk_high_shock
 """
 
-import sys, os
-sys.path.insert(0, "/home/ecs-user/.openclaw/workspace/claw-quant-data")
-
 import re
-import time
-from datetime import datetime, timedelta
 import pandas as pd
-import psycopg2
-import psycopg2.extras
-from collectors.base import BaseCollector, get_db_conn, safe_str
+from collectors.base import BaseCollector
 
 
 class StkHighShockCollector(BaseCollector):
+    API_NAME = "stk_high_shock"
     table_name = "stk_high_shock"
     pk_columns = ["ts_code", "trade_date"]
-    API_NAME = "stk_high_shock"
 
     def _fix_date(self, val):
         if val is None:
@@ -34,79 +27,17 @@ class StkHighShockCollector(BaseCollector):
         return None
 
     def fetch(self, **params) -> pd.DataFrame:
-        fields = ["ts_code", "trade_date", "name", "trade_market", "reason", "period"]
-        df = self.pro.stk_high_shock(**params, fields=",".join(fields))
-        if df is None or df.empty:
-            return pd.DataFrame(columns=fields)
-        return df
+        return self.pro.stk_high_shock(**params)
 
-    def store(self, df: pd.DataFrame) -> int:
-        conn = get_db_conn()
-        try:
-            with conn.cursor() as cur:
-                rows = df.to_dict(orient="records")
-                if not rows:
-                    return 0
-                cleaned = []
-                for r in rows:
-                    td = self._fix_date(r.get("trade_date"))
-                    if td is None:
-                        continue
-                    cleaned.append({
-                        "ts_code": safe_str(r.get("ts_code")),
-                        "trade_date": td,
-                        "name": safe_str(r.get("name")),
-                        "trade_market": safe_str(r.get("trade_market")),
-                        "reason": safe_str(r.get("reason")),
-                        "period": safe_str(r.get("period")),
-                    })
-                if not cleaned:
-                    return 0
-                columns = list(cleaned[0].keys())
-                ph = ",".join(["%s"] * len(columns))
-                col_names = ",".join(columns)
-                update_set = ", ".join(
-                    [f"{c} = EXCLUDED.{c}" for c in columns if c not in self.pk_columns]
-                )
-                insert_sql = (
-                    f"INSERT INTO {self.table_name} ({col_names}) "
-                    f"VALUES ({ph}) ON CONFLICT ({', '.join(self.pk_columns)}) "
-                    f"DO UPDATE SET {update_set}"
-                )
-                vals = [tuple(r[c] for c in columns) for r in cleaned]
-                psycopg2.extras.execute_batch(cur, insert_sql, vals)
-            conn.commit()
-            return len(cleaned)
-        except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        if "trade_date" in df.columns:
+            df["trade_date"] = df["trade_date"].apply(self._fix_date)
+        before = len(df)
+        df = df.dropna(subset=["trade_date"], how="any")
+        if len(df) < before:
+            self.logger.warning(f"过滤掉 {before - len(df)} 行（trade_date 为空）")
+        return df
 
     def collect_by_date(self, trade_date: str) -> int:
         return self.collect(trade_date=trade_date)
-
-    def collect_all_history(self, start_date="20250101", end_date="20260513"):
-        logger = logging.getLogger("collector.stk_high_shock")
-        total = 0
-        s, e = datetime.strptime(start_date, "%Y%m%d"), datetime.strptime(end_date, "%Y%m%d")
-        d = s
-        while d <= e:
-            ds = d.strftime("%Y%m%d")
-            df = self.fetch(trade_date=ds)
-            if df is not None and len(df) > 0:
-                total += self.store(df)
-            d += timedelta(days=1)
-            time.sleep(0.3)
-        logger.info(f"✅ stk_high_shock: 历史补齐 {total} 行")
-        return total
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--trade_date", type=str, default="", help="交易日期 YYYYMMDD")
-    args = parser.parse_args()
-    c = StkHighShockCollector()
-    r = c.collect_by_date(args.trade_date)
-    print(f"\n🎯 {args.trade_date}: {r} 行")

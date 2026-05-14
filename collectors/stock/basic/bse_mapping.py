@@ -12,9 +12,6 @@
 运行模式：全量拉取，TRUNCATE+INSERT覆盖
 """
 
-import sys, os
-sys.path.insert(0, "/home/ecs-user/.openclaw/workspace/claw-quant-data")
-
 import pandas as pd
 import psycopg2
 import psycopg2.extras
@@ -22,16 +19,15 @@ from collectors.base import BaseCollector, get_db_conn
 
 
 class BseMappingCollector(BaseCollector):
+    API_NAME = "bse_mapping"
     table_name = "bse_mapping"
     pk_columns = ["o_code"]
 
-    def fetch(self, **params) -> pd.DataFrame:
-        df = self.pro.bse_mapping(**params, fields="name,o_code,n_code,list_date")
-        if df is None or df.empty:
-            return pd.DataFrame(columns=["name", "o_code", "n_code", "list_date"])
-        return df
-
     def store(self, df: pd.DataFrame) -> int:
+        """
+        全量覆盖模式：先 TRUNCATE 再 INSERT。
+        基类通用 UPSERT 虽然也能用，但 TRUNCATE+INSERT 性能更好且适合全量快照。
+        """
         conn = get_db_conn()
         try:
             with conn.cursor() as cur:
@@ -53,7 +49,4 @@ class BseMappingCollector(BaseCollector):
             conn.close()
 
 
-if __name__ == "__main__":
-    c = BseMappingCollector()
-    rows = c.collect()
-    print(f"🎯 {rows} 行")
+

@@ -1,42 +1,15 @@
 """
-=============================================================================
 ST股票列表采集器（含风险警示板明细）
-=============================================================================
-
 接口：
   - stock_st  → ST股票列表（3000积分，每天9:20更新）
-    文档：https://tushare.pro/document/2?doc_id=397
   - st        → ST风险警示板明细（6000积分）
-    文档：https://tushare.pro/document/2?doc_id=423
 
-描述：
-  两步走：
-  1. 每日调 stock_st 获取当日所有ST股票列表
-  2. 对列表中的每只股票，调 st 接口获取详细的变更原因
+两步走：
+1. 每日调 stock_st 获取当日所有ST股票列表
+2. 对列表中的每只股票，调 st 接口获取详细的变更原因
 
-  两条数据合并写入 stock_st 表。
-
-输出表字段（来自两个接口合并）：
-  字段             来源          说明
-  ─────────────────────────────────────────
-  ts_code          stock_st      股票代码
-  name             stock_st      股票名称
-  trade_date       stock_st      交易日期
-  type             stock_st      类型（ST/*ST等）
-  type_name        stock_st      类型名称
-  pub_date         st            发布日期
-  imp_date         st            实施日期
-  st_type          st            ST变更类型
-  st_reason        st            ST变更原因（简短）
-  st_explain       st            ST变更详细原因
-
-运行模式：
-  按日：每天取当日数据，单次完成列表+明细全部获取
-  按 (ts_code, trade_date) 主键幂等写入
+注意：此采集器的 fetch 方法做了两个 API 的合并，store 也因此保留了自定义逻辑。
 """
-
-import sys, os
-sys.path.insert(0, "/home/ecs-user/.openclaw/workspace/claw-quant-data")
 
 import time
 import pandas as pd
@@ -46,6 +19,7 @@ from collectors.base import BaseCollector, get_db_conn, safe_str
 
 
 class StockSTCollector(BaseCollector):
+    API_NAME = "stock_st"  # 仅用于标识，实际 fetch 也会调 st 接口
     table_name = "stock_st"
     pk_columns = ["ts_code", "trade_date"]
 
@@ -96,16 +70,13 @@ class StockSTCollector(BaseCollector):
 
         # step 2: 逐只获取明细
         self.logger.info(f"🔍 step2: 逐只获取风险警示明细...")
-        detail_map = {}  # ts_code → 最新一条st明细
+        detail_map = {}
         for i, s in enumerate(stocks):
             code = s["ts_code"]
             details = self.fetch_st_detail(code)
             if details:
-                # 取最新一条（按 imp_date 降序）
                 sorted_d = sorted(details, key=lambda x: x.get("imp_date", "") or "", reverse=True)
                 detail_map[code] = sorted_d[0]
-
-            # 间隔一下避免频率限制
             if (i + 1) % 50 == 0:
                 self.logger.info(f"  明细进度: {i+1}/{len(stocks)}")
                 time.sleep(0.5)
@@ -138,6 +109,7 @@ class StockSTCollector(BaseCollector):
         return pd.DataFrame(merged)
 
     def store(self, df: pd.DataFrame) -> int:
+        """自定义 store：合并了 stock_st 和 st 两个接口的数据"""
         conn = get_db_conn()
         try:
             with conn.cursor() as cur:
@@ -176,18 +148,4 @@ class StockSTCollector(BaseCollector):
             conn.close()
 
 
-# ──────────────────────────────────────────────
-# 命令行入口
-# ──────────────────────────────────────────────
-if __name__ == "__main__":
-    import argparse
-    from datetime import datetime
 
-    parser = argparse.ArgumentParser(description="采集ST股票列表（含明细）")
-    parser.add_argument("--trade_date", type=str,
-                        default=datetime.now().strftime("%Y%m%d"))
-    args = parser.parse_args()
-
-    c = StockSTCollector()
-    rows = c.collect(trade_date=args.trade_date)
-    print(f"\n🎯 合计入库 {rows} 行")

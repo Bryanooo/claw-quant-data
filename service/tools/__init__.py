@@ -152,3 +152,49 @@ from service.tools.stock_extra.stock_extra import (
     get_stk_surv,
     get_broker_recommend,
 )
+
+# ── 两融数据（4接口） ──
+from service.tools.margin.margin import (
+    get_margin,
+    get_margin_detail,
+    get_margin_secs,
+    get_slb_len,
+)
+
+# ── 资金流向数据（8表，26+接口） ──
+from service.tools.moneyflow.moneyflow import (
+    # moneyflow — 个股资金流向
+    get_moneyflow,
+    get_moneyflow_by_date,
+    get_moneyflow_by_stock,
+    # moneyflow_ths — 同花顺个股资金流向
+    get_moneyflow_ths,
+    get_moneyflow_ths_by_date,
+    get_moneyflow_ths_by_stock,
+    # moneyflow_dc — 东方财富个股资金流向
+    get_moneyflow_dc,
+    get_moneyflow_dc_by_date,
+    get_moneyflow_dc_by_stock,
+    # moneyflow_cnt_ths — 同花顺概念板块资金流向
+    get_moneyflow_cnt_ths,
+    get_moneyflow_cnt_ths_by_date,
+    get_moneyflow_cnt_ths_history,
+    # moneyflow_ind_ths — 同花顺行业资金流向
+    get_moneyflow_ind_ths,
+    get_moneyflow_ind_ths_by_date,
+    get_moneyflow_ind_ths_history,
+    # moneyflow_ind_dc — 东财板块资金流向
+    get_moneyflow_ind_dc,
+    get_moneyflow_ind_dc_by_date,
+    get_moneyflow_ind_dc_by_sector,
+    # moneyflow_mkt_dc — 大盘资金流向(DC)
+    get_moneyflow_mkt_dc,
+    get_moneyflow_mkt_dc_history,
+    # moneyflow_hsgt — 沪深港通资金流向
+    get_moneyflow_hsgt,
+    get_moneyflow_hsgt_history,
+    get_moneyflow_hsgt_latest,
+)
+
+# ── 打板数据（23表） ──
+from service.tools.board.board import *

@@ -421,7 +421,7 @@ def _run_finance_quarterly(collector_cls, name):
 
     from service.db import query
     c = collector_cls()
-    tbl = c.TABLE_NAME
+    tbl = c.table_name
     rows = query(f"SELECT count(*) FROM {tbl} WHERE end_date = '{period}'")
     if rows[0]['count'] > 0:
         logger.info(f"⏭️  {name}({period}) 已有数据，跳过")

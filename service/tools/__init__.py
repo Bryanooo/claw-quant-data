@@ -102,6 +102,18 @@ from service.tools.finance.extras import (
     get_next_earnings,
 )
 
+# ── 指数数据（16接口） ⭐ 2026-05-15 新增 ──
+from service.tools.index import (
+    get_index_basic,
+    get_index_daily, get_index_daily_by_date,
+    get_index_weekly, get_index_weekly_by_date,
+    get_index_monthly, get_index_monthly_by_date,
+    get_index_dailybasic, get_index_dailybasic_by_date,
+    get_index_global, get_index_global_by_date,
+    get_ths_daily, get_ths_daily_by_date, get_ths_daily_top_gainer,
+    get_ths_member, get_ths_member_by_stock,
+)
+
 # ── 外汇数据（5接口） ──
 from service.tools.forex.forex import (
     get_fx_obasic,

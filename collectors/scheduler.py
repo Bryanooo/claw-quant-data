@@ -1053,6 +1053,124 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=300,
     )
 
+    # ── 指数数据 ──
+
+    def run_index_basic():
+        """指数基本信息（每周全量刷新）"""
+        from collectors.index.basic import IndexBasicCollector
+        c = IndexBasicCollector()
+        return c.collect()
+
+    def run_index_daily():
+        """指数日线行情（每日盘后增量）"""
+        from collectors.index.daily import IndexDailyCollector
+        from datetime import datetime
+        c = IndexDailyCollector()
+        today = datetime.now().strftime("%Y%m%d")
+        return c.collect(ts_code="000001.SH", trade_date=today)
+
+    def run_index_dailybasic():
+        """大盘指数每日指标（每日盘后增量）"""
+        from collectors.index.dailybasic import IndexDailybasicCollector
+        from datetime import datetime
+        c = IndexDailybasicCollector()
+        today = datetime.now().strftime("%Y%m%d")
+        return c.collect(trade_date=today)
+
+    def run_index_global():
+        """国际指数（每日盘后增量）"""
+        from collectors.index.global_index import IndexGlobalCollector
+        from datetime import datetime
+        c = IndexGlobalCollector()
+        today = datetime.now().strftime("%Y%m%d")
+        return c.collect(trade_date=today)
+
+    def run_ths_daily():
+        """申万行业日线（每日盘后增量）"""
+        from collectors.index.ths_daily import ThsDailyCollector
+        from datetime import datetime
+        c = ThsDailyCollector()
+        today = datetime.now().strftime("%Y%m%d")
+        return c.collect(trade_date=today)
+
+    def run_ths_member():
+        """申万行业成分构成（每周全量刷新）"""
+        from collectors.index.ths_member import ThsMemberCollector
+        c = ThsMemberCollector()
+        return c.collect()
+
+    scheduler.add_job(
+        run_index_basic,
+        trigger="cron",
+        day_of_week="mon",
+        hour=7,
+        minute=0,
+        id="index_basic_weekly",
+        name="指数基本信息-周更新",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_index_daily,
+        trigger="cron",
+        hour="15-20/1",
+        minute=5,
+        day_of_week="mon-fri",
+        id="index_daily_daily",
+        name="指数日线行情-盘后增量",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_index_dailybasic,
+        trigger="cron",
+        hour="15-20/1",
+        minute=10,
+        day_of_week="mon-fri",
+        id="index_dailybasic_daily",
+        name="大盘指数每日指标-盘后增量",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_index_global,
+        trigger="cron",
+        hour="15-22/1",
+        minute=15,
+        day_of_week="mon-fri",
+        id="index_global_daily",
+        name="国际指数-盘后增量",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_ths_daily,
+        trigger="cron",
+        hour="15-20/1",
+        minute=20,
+        day_of_week="mon-fri",
+        id="ths_daily_daily",
+        name="申万行业日线-盘后增量",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_ths_member,
+        trigger="cron",
+        day_of_week="mon",
+        hour=7,
+        minute=5,
+        id="ths_member_weekly",
+        name="申万行业成分构成-周更新",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     # ── 外汇数据 ──
 
     def run_fx_obasic():

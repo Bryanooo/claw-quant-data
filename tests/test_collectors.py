@@ -103,6 +103,15 @@ TEST_CASES = [
     # sge
     ("sge/sge_basic", "collectors.sge.sge_basic", "SgeBasicCollector"),
     ("sge/sge_daily", "collectors.sge.sge_daily", "SgeDailyCollector"),
+    # index
+    ("index/basic", "collectors.index.basic", "IndexBasicCollector"),
+    ("index/daily", "collectors.index.daily", "IndexDailyCollector"),
+    ("index/weekly", "collectors.index.weekly", "IndexWeeklyCollector"),
+    ("index/monthly", "collectors.index.monthly", "IndexMonthlyCollector"),
+    ("index/dailybasic", "collectors.index.dailybasic", "IndexDailybasicCollector"),
+    ("index/global_index", "collectors.index.global_index", "IndexGlobalCollector"),
+    ("index/ths_daily", "collectors.index.ths_daily", "ThsDailyCollector"),
+    ("index/ths_member", "collectors.index.ths_member", "ThsMemberCollector"),
 ]
 
 

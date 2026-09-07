@@ -538,6 +538,13 @@ CLI 默认没有任何写命令，Agent 无法通过它创建、重试或删除�
 
 完整命令、配置和输出契约见 [Agent 与命令行访问说明](docs/CLI.md)。
 
+### Agent Skill
+
+仓库内置 `.agents/skills/claw-quant-data`，Codex 从仓库目录工作时会自动发现。
+也可以显式调用 `$claw-quant-data`。Skill 要求 Agent 在给出数据结论前依次检查
+服务健康度、相关数据集契约、新鲜度和覆盖证据，并明确区分“确认缺失”和“尚未
+审计”；它只复用只读 `clawq`，不会绕过控制台的管理确认流程。
+
 ### Python 查询函数
 
 `service/tools/` 保留了按股票、财务、指数、资金流、板块、外汇和黄金等领域
@@ -857,6 +864,7 @@ ON CONFLICT (cfg_key) DO UPDATE SET cfg_value = EXCLUDED.cfg_value;
 
 ```text
 claw-quant-data/
+├── .agents/skills/             # 随仓库分发的 Agent 数据查询 Skill
 ├── collectors/                 # 专项采集器、通用采集器和 APScheduler
 │   ├── stock/                  # A股基础、行情、财务、资金流、参考数据
 │   ├── index/                  # 指数与行业数据

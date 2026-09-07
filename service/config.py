@@ -5,6 +5,8 @@ import os
 
 from dotenv import load_dotenv
 
+from service.version import APP_VERSION
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -55,7 +57,6 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD", ""),
 }
 
-APP_VERSION = "0.1.0"
 APP_REVISION = os.getenv("APP_REVISION", APP_VERSION)
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = _get_int("API_PORT", 8000)

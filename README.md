@@ -502,6 +502,42 @@ curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
 
 Swagger UI：<http://127.0.0.1:8000/api/docs>
 
+### `clawq` CLI
+
+仓库根目录提供面向个人和 Agent 的只读命令行入口。CLI 只使用 Python 标准库，
+无需在宿主机安装项目依赖；默认连接本机的 `/api` 服务：
+
+```bash
+./clawq health
+./clawq status
+./clawq datasets list --category market
+./clawq --pretty datasets describe stock_daily
+
+./clawq query stock_daily \
+  --filter ts_code=000001.SZ \
+  --start-date 2026-01-01 \
+  --limit 20
+
+./clawq stock snapshot 000001.SZ
+./clawq freshness stock_daily
+./clawq coverage show stock_daily --status missing
+./clawq interfaces describe adj_factor
+```
+
+全局参数必须放在子命令之前。例如：
+
+```bash
+./clawq --pretty datasets describe stock_daily
+./clawq --output csv query stock_daily --limit 20
+./clawq --output jsonl interfaces query adj_factor --limit 20
+```
+
+默认输出稳定的单行 JSON；`--pretty` 用于人工阅读，`--output jsonl|csv` 用于
+行式处理。错误只写入 `stderr`，并返回机器可读的 `error.code` 和稳定退出码。
+CLI 默认没有任何写命令，Agent 无法通过它创建、重试或删除采集任务。
+
+完整命令、配置和输出契约见 [Agent 与命令行访问说明](docs/CLI.md)。
+
 ### Python 查询函数
 
 `service/tools/` 保留了按股票、财务、指数、资金流、板块、外汇和黄金等领域
@@ -835,6 +871,7 @@ claw-quant-data/
 │   ├── data_coverage/          # 覆盖规则、审计服务、持久化和 Auditor
 │   ├── data_service/           # Dataset Registry 和查询服务
 │   ├── initialization/         # 首次回填状态机、阶段计划和运行模式门控
+│   ├── cli/                    # 零额外依赖的只读 Agent/命令行客户端
 │   ├── dashboard/              # 采集控制台页面
 │   ├── tools/                  # Python 查询函数
 │   ├── collection_monitor.py   # 全接口完成状态聚合
@@ -853,6 +890,7 @@ claw-quant-data/
 ├── reports/                    # 权限与实现审计结果
 ├── tests/                      # 单元测试和 PostgreSQL 集成测试
 ├── docker-compose.yml
+├── clawq                      # 宿主机只读 CLI 入口
 └── install.sh                  # 一键安装与升级
 ```
 

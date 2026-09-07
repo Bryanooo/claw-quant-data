@@ -1,12 +1,5 @@
-"""
-同花顺概念板块成分采集器
-接口：ths_member（tushare pro）
-"""
+"""Compatibility import for the canonical THS member collector."""
 
-from collectors.base import BaseCollector
+from collectors.index.ths_member import ThsMemberCollector
 
-
-class ThsMemberCollector(BaseCollector):
-    API_NAME = "ths_member"
-    table_name = "ths_member"
-    pk_columns = ["ts_code", "con_code"]
+__all__ = ["ThsMemberCollector"]

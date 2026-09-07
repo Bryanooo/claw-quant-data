@@ -10,3 +10,5 @@ class KplConceptConsCollector(BaseCollector):
     API_NAME = "kpl_concept_cons"
     table_name = "kpl_concept_cons"
     pk_columns = ["ts_code", "con_code", "trade_date"]
+    pagination_mode = "offset"
+    collector_version = "2"

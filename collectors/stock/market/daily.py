@@ -4,7 +4,6 @@ A股日线行情采集器
 """
 
 import re
-import time
 import pandas as pd
 from collectors.base import BaseCollector
 
@@ -41,23 +40,13 @@ class DailyCollector(BaseCollector):
         return df
 
     def collect_by_date(self, trade_date: str) -> int:
-        """按日期获取当日全市场行情（分组100只/组）"""
-        total = 0
-        from service.db import query
-        stocks = query("SELECT ts_code FROM stock_basic WHERE list_status = 'L'")
-        codes = [s["ts_code"] for s in stocks]
+        """按日期使用 Tushare 支持的全市场分区采集。
 
-        for i in range(0, len(codes), 100):
-            group = codes[i:i+100]
-            code_str = ",".join(group)
-            try:
-                rows = self.collect(ts_code=code_str, trade_date=trade_date)
-                total += rows
-            except Exception as e:
-                self.logger.warning(f"⚠️  组 {i//100} 失败: {e}")
-            time.sleep(0.3)
-
-        return total
+        ``ts_code`` 不接受逗号分隔列表；旧实现会把一百只代码当成一个代码，
+        最终得到静默空结果。单交易日全市场请求低于接口 6000 行上限，并由
+        覆盖审计进一步验证截面数量。
+        """
+        return self.collect(trade_date=trade_date)
 
     def collect_history_stock(self, ts_code: str, start_date: str = None, end_date: str = None) -> int:
         """获取单只股票全部历史日线"""
@@ -67,5 +56,3 @@ class DailyCollector(BaseCollector):
         if end_date:
             params["end_date"] = end_date
         return self.collect(**params)
-
-

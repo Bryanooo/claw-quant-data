@@ -37,17 +37,13 @@ class StockSTCollector(BaseCollector):
     # ── step 2: 获取单只股票的风险警示明细 ──
     def fetch_st_detail(self, ts_code: str) -> list[dict]:
         """调 st 接口获取某只股票的ST警示板明细"""
-        try:
-            df = self.pro.st(
-                ts_code=ts_code,
-                fields="ts_code,name,pub_date,imp_date,st_tpye,st_reason,st_explain"
-            )
-            if df is None or df.empty:
-                return []
-            return df.to_dict(orient="records")
-        except Exception as e:
-            self.logger.warning(f"  ⚠️  {ts_code} st明细获取失败: {e}")
+        df = self.pro.st(
+            ts_code=ts_code,
+            fields="ts_code,name,pub_date,imp_date,st_tpye,st_reason,st_explain"
+        )
+        if df is None or df.empty:
             return []
+        return df.to_dict(orient="records")
 
     # ── 采集入口 ──
     def fetch(self, **params) -> pd.DataFrame:
@@ -120,7 +116,7 @@ class StockSTCollector(BaseCollector):
                 insert_sql = """
                     INSERT INTO stock_st (ts_code, name, trade_date, type, type_name,
                                           pub_date, imp_date, st_type, st_reason, st_explain)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES %s
                     ON CONFLICT (ts_code, trade_date) DO UPDATE
                     SET name = EXCLUDED.name,
                         type = EXCLUDED.type,
@@ -137,7 +133,7 @@ class StockSTCollector(BaseCollector):
                     "pub_date", "imp_date", "st_type", "st_reason", "st_explain"
                 ]) for r in rows]
 
-                psycopg2.extras.execute_batch(cur, insert_sql, vals)
+                psycopg2.extras.execute_values(cur, insert_sql, vals, page_size=1000)
 
             conn.commit()
             return len(rows)
@@ -146,6 +142,3 @@ class StockSTCollector(BaseCollector):
             raise e
         finally:
             conn.close()
-
-
-

@@ -59,7 +59,7 @@ class StkWeeklyMonthlyCollector(BaseCollector):
             return 0
         rows = []
         source_val = "stk_weekly_monthly"
-        for _, r in df.iterrows():
+        for r in df.to_dict(orient="records"):
             rows.append((
                 r["ts_code"], trade_date, freq,
                 self._safe_float(r.get("open")), self._safe_float(r.get("high")),
@@ -73,10 +73,10 @@ class StkWeeklyMonthlyCollector(BaseCollector):
         conn = get_db_conn()
         try:
             with conn.cursor() as cur:
-                psycopg2.extras.execute_batch(cur, """
+                psycopg2.extras.execute_values(cur, """
                     INSERT INTO stk_weekly_monthly
                         (ts_code, trade_date, freq, open, high, low, close, pre_close, "change", pct_chg, vol, amount, source)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES %s
                     ON CONFLICT (ts_code, trade_date, freq) DO UPDATE SET
                         open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, close=EXCLUDED.close,
                         pre_close=EXCLUDED.pre_close, "change"=EXCLUDED."change", pct_chg=EXCLUDED.pct_chg,
@@ -94,7 +94,7 @@ class StkWeeklyMonthlyCollector(BaseCollector):
             return 0
         rows = []
         source_val = "weekly"
-        for _, r in df.iterrows():
+        for r in df.to_dict(orient="records"):
             v = self._safe_float(r.get("vol"))
             a = self._safe_float(r.get("amount"))
             vol_wan = round(v / 10000, 2) if v else None
@@ -111,10 +111,10 @@ class StkWeeklyMonthlyCollector(BaseCollector):
         conn = get_db_conn()
         try:
             with conn.cursor() as cur:
-                psycopg2.extras.execute_batch(cur, """
+                psycopg2.extras.execute_values(cur, """
                     INSERT INTO stk_weekly_monthly
                         (ts_code, trade_date, freq, open, high, low, close, pre_close, "change", pct_chg, vol, amount, source)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES %s
                     ON CONFLICT (ts_code, trade_date, freq) DO UPDATE SET
                         open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, close=EXCLUDED.close,
                         pre_close=EXCLUDED.pre_close, "change"=EXCLUDED."change", pct_chg=EXCLUDED.pct_chg,
@@ -132,7 +132,7 @@ class StkWeeklyMonthlyCollector(BaseCollector):
             return 0
         rows = []
         source_val = "monthly"
-        for _, r in df.iterrows():
+        for r in df.to_dict(orient="records"):
             v = self._safe_float(r.get("vol"))
             a = self._safe_float(r.get("amount"))
             vol_wan = round(v / 10000, 2) if v else None
@@ -149,10 +149,10 @@ class StkWeeklyMonthlyCollector(BaseCollector):
         conn = get_db_conn()
         try:
             with conn.cursor() as cur:
-                psycopg2.extras.execute_batch(cur, """
+                psycopg2.extras.execute_values(cur, """
                     INSERT INTO stk_weekly_monthly
                         (ts_code, trade_date, freq, open, high, low, close, pre_close, "change", pct_chg, vol, amount, source)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    VALUES %s
                     ON CONFLICT (ts_code, trade_date, freq) DO UPDATE SET
                         open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, close=EXCLUDED.close,
                         pre_close=EXCLUDED.pre_close, "change"=EXCLUDED."change", pct_chg=EXCLUDED.pct_chg,
@@ -171,6 +171,8 @@ def backfill_2026():
     from collectors.stock.market.suspend_d import SuspendDCollector
     c = SuspendDCollector()
     start = "20260101"
-    end = date.today().strftime("%Y%m%d")
+    from service.clock import business_today
+
+    end = business_today().strftime("%Y%m%d")
     # ... 省略，保留旧逻辑
     pass

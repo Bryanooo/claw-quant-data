@@ -1,182 +1,454 @@
-#!/usr/bin/env python3
-"""
-采集器一键测试工具
-=================
-用法：
-  python3 tools/test_collectors.py                    # 全量测试
-  python3 tools/test_collectors.py block_trade        # 只测某个采集器
-  python3 tools/test_collectors.py daily daily        # 只测 market/daily
-"""
+import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-import sys, os, logging, importlib, time
+import pandas as pd
+import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(message)s")
-
-# ── 待测采集器清单（路径, 模块路径, 类名）──
-TEST_CASES = [
-    # reference
-    ("reference/block_trade", "collectors.stock.reference.block_trade", "BlockTradeCollector"),
-    ("reference/pledge_detail", "collectors.stock.reference.pledge_detail", "PledgeDetailCollector"),
-    ("reference/pledge_stat", "collectors.stock.reference.pledge_stat", "PledgeStatCollector"),
-    ("reference/repurchase", "collectors.stock.reference.repurchase", "RepurchaseCollector"),
-    ("reference/share_float", "collectors.stock.reference.share_float", "ShareFloatCollector"),
-    ("reference/stk_alert", "collectors.stock.reference.stk_alert", "StkAlertCollector"),
-    ("reference/stk_high_shock", "collectors.stock.reference.stk_high_shock", "StkHighShockCollector"),
-    ("reference/stk_holdernumber", "collectors.stock.reference.stk_holdernumber", "StkHoldernumberCollector"),
-    ("reference/stk_holdertrade", "collectors.stock.reference.stk_holdertrade", "StkHoldertradeCollector"),
-    ("reference/stk_shock", "collectors.stock.reference.stk_shock", "StkShockCollector"),
-    ("reference/top10_floatholders", "collectors.stock.reference.top10_floatholders", "Top10FloatholdersCollector"),
-    ("reference/top10_holders", "collectors.stock.reference.top10_holders", "Top10HoldersCollector"),
-    # board
-    ("board/hm_list", "collectors.stock.board.hm_list", "HmListCollector"),
-    ("board/dc_concept", "collectors.stock.board.dc_concept", "DcConceptCollector"),
-    ("board/dc_concept_cons", "collectors.stock.board.dc_concept_cons", "DcConceptConsCollector"),
-    ("board/dc_daily", "collectors.stock.board.dc_daily", "DcDailyCollector"),
-    ("board/dc_hot", "collectors.stock.board.dc_hot", "DcHotCollector"),
-    ("board/dc_index", "collectors.stock.board.dc_index", "DcIndexCollector"),
-    ("board/dc_member", "collectors.stock.board.dc_member", "DcMemberCollector"),
-    ("board/kpl_list", "collectors.stock.board.kpl_list", "KplListCollector"),
-    ("board/limit_list_d", "collectors.stock.board.limit_list_d", "LimitListDCollector"),
-    ("board/limit_step", "collectors.stock.board.limit_step", "LimitStepCollector"),
-    ("board/stk_auction", "collectors.stock.board.stk_auction", "StkAuctionCollector"),
-    ("board/tdx_daily", "collectors.stock.board.tdx_daily", "TdxDailyCollector"),
-    ("board/tdx_index", "collectors.stock.board.tdx_index", "TdxIndexCollector"),
-    ("board/tdx_member", "collectors.stock.board.tdx_member", "TdxMemberCollector"),
-    ("board/ths_daily", "collectors.stock.board.ths_daily", "ThsDailyCollector"),
-    ("board/ths_hot", "collectors.stock.board.ths_hot", "ThsHotCollector"),
-    ("board/ths_index", "collectors.stock.board.ths_index", "ThsIndexCollector"),
-    ("board/ths_member", "collectors.stock.board.ths_member", "ThsMemberCollector"),
-    ("board/top_inst", "collectors.stock.board.top_inst", "TopInstCollector"),
-    ("board/top_list", "collectors.stock.board.top_list", "TopListCollector"),
-    # extra
-    ("extra/ccass_hold", "collectors.stock.extra.ccass_hold", "CcassHoldCollector"),
-    ("extra/ccass_hold_detail", "collectors.stock.extra.ccass_hold_detail", "CcassHoldDetailCollector"),
-    ("extra/hk_hold", "collectors.stock.extra.hk_hold", "HkHoldCollector"),
-    ("extra/cyq_chips", "collectors.stock.extra.cyq_chips", "CyqChipsCollector"),
-    ("extra/cyq_perf", "collectors.stock.extra.cyq_perf", "CyqPerfCollector"),
-    ("extra/stk_auction_c", "collectors.stock.extra.stk_auction_c", "StkAuctionCCollector"),
-    ("extra/stk_auction_o", "collectors.stock.extra.stk_auction_o", "StkAuctionOCollector"),
-    ("extra/stk_surv", "collectors.stock.extra.stk_surv", "StkSurvCollector"),
-    ("extra/report_rc", "collectors.stock.extra.report_rc", "ReportRcCollector"),
-    ("extra/stk_ah_comparison", "collectors.stock.extra.stk_ah_comparison", "StkAhComparisonCollector"),
-    ("extra/stk_nineturn", "collectors.stock.extra.stk_nineturn", "StkNineturnCollector"),
-    ("extra/broker_recommend", "collectors.stock.extra.broker_recommend", "BrokerRecommendCollector"),
-    ("extra/stk_factor_pro", "collectors.stock.extra.stk_factor_pro", "StkFactorProCollector"),
-    # moneyflow
-    ("moneyflow/moneyflow", "collectors.stock.moneyflow.moneyflow", "MoneyflowCollector"),
-    ("moneyflow/moneyflow_dc", "collectors.stock.moneyflow.moneyflow_dc", "MoneyflowDcCollector"),
-    ("moneyflow/moneyflow_ths", "collectors.stock.moneyflow.moneyflow_ths", "MoneyflowThsCollector"),
-    ("moneyflow/moneyflow_hsgt", "collectors.stock.moneyflow.moneyflow_hsgt", "MoneyflowHsgtCollector"),
-    ("moneyflow/moneyflow_ind_ths", "collectors.stock.moneyflow.moneyflow_ind_ths", "MoneyflowIndThsCollector"),
-    ("moneyflow/moneyflow_cnt_ths", "collectors.stock.moneyflow.moneyflow_cnt_ths", "MoneyflowCntThsCollector"),
-    ("moneyflow/moneyflow_mkt_dc", "collectors.stock.moneyflow.moneyflow_mkt_dc", "MoneyflowMktDcCollector"),
-    ("moneyflow/moneyflow_ind_dc", "collectors.stock.moneyflow.moneyflow_ind_dc", "MoneyflowIndDcCollector"),
-    # basic
-    ("basic/bak_basic", "collectors.stock.basic.bak_basic", "BakBasicCollector"),
-    ("basic/bse_mapping", "collectors.stock.basic.bse_mapping", "BseMappingCollector"),
-    ("basic/new_share", "collectors.stock.basic.new_share", "NewShareCollector"),
-    ("basic/stock_basic", "collectors.stock.basic.stock_basic", "StockBasicCollector"),
-    ("basic/stock_company", "collectors.stock.basic.stock_company", "StockCompanyCollector"),
-    ("basic/stock_hsgt", "collectors.stock.basic.stock_hsgt", "StockHsgtCollector"),
-    ("basic/stock_namechange", "collectors.stock.basic.stock_namechange", "StockNamechangeCollector"),
-    ("basic/stock_st", "collectors.stock.basic.stock_st", "StockStCollector"),
-    ("basic/stk_managers", "collectors.stock.basic.stk_managers", "StkManagersCollector"),
-    ("basic/stk_rewards", "collectors.stock.basic.stk_rewards", "StkRewardsCollector"),
-    ("basic/trade_cal", "collectors.stock.basic.trade_cal", "TradeCalCollector"),
-    # margin
-    ("margin/margin (Margin)", "collectors.stock.margin.margin", "MarginCollector"),
-    ("margin/margin (MarginDetail)", "collectors.stock.margin.margin", "MarginDetailCollector"),
-    ("margin/margin (MarginSecs)", "collectors.stock.margin.margin", "MarginSecsCollector"),
-    ("margin/margin (SlbLen)", "collectors.stock.margin.margin", "SlbLenCollector"),
-    # market
-    ("market/daily", "collectors.stock.market.daily", "DailyCollector"),
-    ("market/ggt_daily", "collectors.stock.market.ggt_daily", "GgtDailyCollector"),
-    ("market/ggt_monthly", "collectors.stock.market.ggt_monthly", "GgtMonthlyCollector"),
-    ("market/ggt_top10", "collectors.stock.market.ggt_top10", "GgtTop10Collector"),
-    ("market/hsgt_top10", "collectors.stock.market.hsgt_top10", "HsgtTop10Collector"),
-    ("market/stk_limit", "collectors.stock.market.stk_limit", "StkLimitCollector"),
-    ("market/stk_weekly_monthly", "collectors.stock.market.stk_weekly_monthly", "StkWeeklyMonthlyCollector"),
-    ("market/suspend_d", "collectors.stock.market.suspend_d", "SuspendDCollector"),
-    # sge
-    ("sge/sge_basic", "collectors.sge.sge_basic", "SgeBasicCollector"),
-    ("sge/sge_daily", "collectors.sge.sge_daily", "SgeDailyCollector"),
-    # index
-    ("index/basic", "collectors.index.basic", "IndexBasicCollector"),
-    ("index/daily", "collectors.index.daily", "IndexDailyCollector"),
-    ("index/weekly", "collectors.index.weekly", "IndexWeeklyCollector"),
-    ("index/monthly", "collectors.index.monthly", "IndexMonthlyCollector"),
-    ("index/dailybasic", "collectors.index.dailybasic", "IndexDailybasicCollector"),
-    ("index/global_index", "collectors.index.global_index", "IndexGlobalCollector"),
-    ("index/ths_daily", "collectors.index.ths_daily", "ThsDailyCollector"),
-    ("index/ths_member", "collectors.index.ths_member", "ThsMemberCollector"),
-]
+from collectors.base import (
+    BaseCollector,
+    CollectorRateLimitError,
+    NonRetryableCollectorError,
+    PartialCollectionError,
+    sanitize_postgres_value,
+)
+from collectors.contracts import CollectorRequest, CollectorResult
+from collectors.stock.market.daily import _fix_date
 
 
-def run_test(label, module_path, class_name):
-    """测试单个采集器"""
-def run_test(label, module_path, class_name):
-    """测试单个采集器（只测试初始化和 fetch，不调实际 API 避免频率限制）"""
-    import time as _time
-    try:
-        mod = importlib.import_module(module_path)
-        cls = getattr(mod, class_name)
-        c = cls()
-
-        results = {"init": "✅", "fetch": "—", "collect": "—"}
-
-        # fetch 测试（用最快的方式确认 API 可访问——空参或少量数据）
-        df = None
-        # 不同接口需要不同参数，统一用空参加5秒超时保护
-        _time.sleep(0.05)  # 避免同一时间密集调用
-        df = c.fetch()
-        if df is not None and len(df) > 0:
-            results["fetch"] = f"✅({len(df)}行)"
-        elif df is not None:
-            results["fetch"] = "✅(0行)"
-
-        # collect(skip_store) 测试
-        try:
-            rows = c.collect(skip_store=True)
-            results["collect"] = f"✅({rows}行)"
-        except Exception:
-            results["collect"] = "⚠️"
-
-        return results
-
-    except Exception as e:
-        return {"init": f"❌({str(e)[:60]})", "fetch": "—", "collect": "—"}
+class ExampleCollector(BaseCollector):
+    API_NAME = "example"
+    table_name = "example"
+    pk_columns = ["id"]
 
 
-# ── 入口 ──
-if __name__ == "__main__":
-    filter_name = sys.argv[1] if len(sys.argv) > 1 else None
-    filter_folder = sys.argv[2] if len(sys.argv) > 2 else None
+def _collector_without_init():
+    collector = ExampleCollector.__new__(ExampleCollector)
+    collector.logger = logging.getLogger("test-collector")
+    collector.retry_max = 3
+    collector.retry_interval = 0
+    return collector
 
-    passed = 0
-    failed = 0
-    skipped = 0
 
-    for label, mod_path, cls_name in TEST_CASES:
-        # 过滤
-        if filter_name and filter_name not in label:
-            skipped += 1
-            continue
-        if filter_folder and filter_folder not in label:
-            skipped += 1
-            continue
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("20260726", "2026-07-26"),
+        ("2026-07-26", "2026-07-26"),
+        ("", None),
+        (None, None),
+        (float("nan"), None),
+        ("invalid", None),
+    ],
+)
+def test_fix_date(value, expected):
+    assert _fix_date(value) == expected
 
-        result = run_test(label, mod_path, cls_name)
-        status = result["init"]
-        if "❌" in status or "⚠️" in status:
-            print(f"❌ {label:40s} init={status} fetch={result['fetch']} collect={result['collect']}")
-            failed += 1
-        else:
-            print(f"✅ {label:40s} init=✅ fetch={result['fetch']:20s} collect={result['collect']}")
-            passed += 1
 
-    total = len(TEST_CASES) - skipped
-    print(f"\n{'='*60}")
-    print(f"总计: {total} 个 | 通过: {passed} | 失败: {failed} | 跳过: {skipped}")
+def test_collect_runs_fetch_transform_and_store(monkeypatch):
+    collector = _collector_without_init()
+    source = pd.DataFrame([{"id": 1, "value": 2}])
+    monkeypatch.setattr(collector, "fetch", lambda **params: source)
+    monkeypatch.setattr(
+        collector, "transform", lambda frame: frame.assign(value=frame["value"] * 2)
+    )
+    stored = {}
+
+    def fake_store(frame):
+        stored["frame"] = frame
+        return len(frame)
+
+    monkeypatch.setattr(collector, "store", fake_store)
+
+    assert collector.collect(trade_date="20260726") == 1
+    assert stored["frame"].to_dict(orient="records") == [{"id": 1, "value": 4}]
+
+
+def test_run_returns_structured_collection_evidence(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **params: pd.DataFrame([{"id": 1}, {"id": 2}]),
+    )
+    monkeypatch.setattr(collector, "store", lambda frame: len(frame))
+
+    result = collector.run(
+        CollectorRequest({"trade_date": "20260829"}, partition_key="20260829")
+    )
+
+    assert isinstance(result, CollectorResult)
+    assert result.api_name == "example"
+    assert result.fetched_rows == 2
+    assert result.stored_rows == 2
+    assert result.partitions == ("20260829",)
+    assert result.empty_reason is None
+
+
+def test_run_records_empty_response_without_claiming_completeness(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(collector, "fetch", lambda **params: pd.DataFrame())
+
+    result = collector.run(trade_date="20260829")
+
+    assert result.is_empty
+    assert result.empty_reason == "upstream_returned_no_rows"
+    assert result.evidence["empty_policy"] == "requires_verification"
+
+
+def test_transport_retry_is_visible_and_counted_by_collector_runtime(monkeypatch):
+    class FakePro:
+        def query(self, api_name, **_parameters):
+            assert api_name == "example"
+            return pd.DataFrame([{"id": 1}])
+
+        def example(self, **parameters):
+            return self.query("example", **parameters)
+
+    fake_pro = FakePro()
+    monkeypatch.setattr("collectors.base.get_env_tushare_token", lambda: "test-token")
+    monkeypatch.setattr(
+        "collectors.base.get_config",
+        lambda key, default=None: default,
+    )
+    monkeypatch.setattr("tushare.set_token", lambda _token: None)
+    monkeypatch.setattr("tushare.pro_api", lambda: fake_pro)
+    monkeypatch.setattr(
+        "service.tushare_rate_limit.reserve_tushare_request",
+        lambda *_args, **_kwargs: 0,
+    )
+
+    collector = ExampleCollector()
+    result = collector.run(skip_store=True)
+
+    assert result.request_count == 1
+    assert collector.pro._DataApi__session.adapters["https://"].max_retries.total == 0
+
+
+def test_collect_retries_then_succeeds(monkeypatch):
+    collector = _collector_without_init()
+    attempts = {"count": 0}
+
+    def flaky_fetch(**params):
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise ConnectionError("temporary failure")
+        return pd.DataFrame([{"id": 1}])
+
+    monkeypatch.setattr(collector, "fetch", flaky_fetch)
+    monkeypatch.setattr(collector, "store", lambda frame: len(frame))
+    monkeypatch.setattr("collectors.base.time.sleep", lambda seconds: None)
+
+    assert collector.collect() == 1
+    assert attempts["count"] == 3
+
+
+@pytest.mark.parametrize(
+    ("message", "error_type"),
+    [
+        ("必填参数, trade_date", NonRetryableCollectorError),
+        ("抱歉，您没有接口访问权限", NonRetryableCollectorError),
+        ("访问接口频率超限(1次/小时)", CollectorRateLimitError),
+    ],
+)
+def test_collect_does_not_blindly_retry_permanent_tushare_errors(
+    monkeypatch, message, error_type
+):
+    collector = _collector_without_init()
+    attempts = {"count": 0}
+
+    def reject(**_params):
+        attempts["count"] += 1
+        raise Exception(message)
+
+    monkeypatch.setattr(collector, "fetch", reject)
+
+    with pytest.raises(error_type):
+        collector.collect()
+    assert attempts["count"] == 1
+
+
+def test_rate_limit_error_exposes_retry_delay(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **_params: (_ for _ in ()).throw(Exception("频率超限(2次/分钟)")),
+    )
+
+    with pytest.raises(CollectorRateLimitError) as captured:
+        collector.collect()
+    assert captured.value.retry_after_seconds == 30
+
+
+def test_daily_quota_waits_until_next_shanghai_reset(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        "collectors.base.business_now",
+        lambda: datetime(2026, 8, 31, 20, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **_params: (_ for _ in ()).throw(Exception("频率超限(1000次/天)")),
+    )
+
+    with pytest.raises(CollectorRateLimitError) as captured:
+        collector.collect()
+    assert captured.value.retry_after_seconds == 4 * 3600 + 5 * 60
+
+
+def test_postgres_sanitizer_is_recursive_and_counted():
+    value, count = sanitize_postgres_value(
+        {"name": "概念\x00板块", "nested": ["a\x00", {"x\x00": "b\x00"}]}
+    )
+
+    assert value == {"name": "概念板块", "nested": ["a", {"x": "b"}]}
+    assert count == 4
+
+
+def test_collect_skip_store(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector, "fetch", lambda **params: pd.DataFrame([{"id": 1}, {"id": 2}])
+    )
+    monkeypatch.setattr(
+        collector,
+        "store",
+        lambda frame: pytest.fail("store must not run when skip_store=True"),
+    )
+
+    assert collector.collect(skip_store=True) == 2
+
+
+def test_specialized_offset_pagination_exhausts_and_aggregates(monkeypatch):
+    collector = _collector_without_init()
+    page_sizes = {0: 2, 2: 2, 4: 1}
+    calls = []
+
+    def fetch(**params):
+        calls.append(params)
+        offset = params["offset"]
+        return pd.DataFrame(
+            [{"id": offset + index} for index in range(page_sizes[offset])]
+        )
+
+    monkeypatch.setattr(collector, "fetch", fetch)
+    monkeypatch.setattr(collector, "store", lambda frame: len(frame))
+
+    result = collector.run_offset_paginated(
+        page_size=2,
+        max_pages=5,
+        trade_date="20260831",
+    )
+
+    assert [call["offset"] for call in calls] == [0, 2, 4]
+    assert result.fetched_rows == 5
+    assert result.stored_rows == 5
+    assert result.request_count == 3
+    assert result.partitions == ("20260831",)
+    assert result.evidence["verified"] is True
+    assert result.evidence["exhausted"] is True
+    assert result.evidence["pages_completed"] == 3
+
+
+def test_specialized_offset_pagination_fails_closed_at_max_pages(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **params: pd.DataFrame(
+            [{"id": params["offset"]}, {"id": params["offset"] + 1}]
+        ),
+    )
+    monkeypatch.setattr(collector, "store", lambda frame: len(frame))
+
+    with pytest.raises(PartialCollectionError) as captured:
+        collector.run_offset_paginated(page_size=2, max_pages=2)
+
+    assert captured.value.rows_inserted == 4
+    assert captured.value.rows_fetched == 4
+    assert captured.value.completion_evidence["exhausted"] is False
+
+
+def test_specialized_offset_pagination_detects_ignored_offset(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **_params: pd.DataFrame([{"id": 1}, {"id": 2}]),
+    )
+    monkeypatch.setattr(collector, "store", lambda frame: len(frame))
+
+    with pytest.raises(PartialCollectionError, match="ignore offset"):
+        collector.run_offset_paginated(page_size=2, max_pages=5)
+
+
+def test_dividend_forwards_the_scheduler_partition_to_upstream():
+    from collectors.stock.finance.dividend import DividendCollector
+
+    calls = []
+
+    class FakePro:
+        def dividend(self, **parameters):
+            calls.append(parameters)
+            return pd.DataFrame()
+
+    collector = DividendCollector.__new__(DividendCollector)
+    collector.pro = FakePro()
+
+    collector.fetch(ann_date="20260828")
+
+    assert len(calls) == 2
+    assert all(item["ann_date"] == "20260828" for item in calls)
+    assert {item["div_proc"] for item in calls} == {"实施", "预案"}
+
+
+def test_partitioned_history_fails_closed_when_any_partition_fails(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector,
+        "collect",
+        lambda **_params: (_ for _ in ()).throw(ConnectionError("upstream down")),
+    )
+    monkeypatch.setattr("collectors.base.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(PartialCollectionError) as captured:
+        collector.collect_all_history("20260101", "20260131")
+
+    assert captured.value.rows_inserted == 0
+    assert len(captured.value.failures) == 1
+
+
+def test_ggt_monthly_is_derived_from_daily_data():
+    from collectors.stock.market.ggt_monthly import GgtMonthlyCollector
+
+    class FakePro:
+        def ggt_daily(self, **_params):
+            return pd.DataFrame(
+                [
+                    {"trade_date": "20260803", "buy_amount": 10, "buy_volume": 2, "sell_amount": 8, "sell_volume": 1},
+                    {"trade_date": "20260804", "buy_amount": 20, "buy_volume": 4, "sell_amount": 12, "sell_volume": 3},
+                ]
+            )
+
+    collector = object.__new__(GgtMonthlyCollector)
+    collector.pro = FakePro()
+    result = collector.fetch(start_month="202608", end_month="202608")
+
+    assert result.to_dict(orient="records") == [
+        {
+            "month": "202608",
+            "day_buy_amt": 15.0,
+            "day_buy_vol": 3.0,
+            "day_sell_amt": 10.0,
+            "day_sell_vol": 2.0,
+            "total_buy_amt": 30,
+            "total_buy_vol": 6,
+            "total_sell_amt": 20,
+            "total_sell_vol": 4,
+        }
+    ]
+
+
+def test_finance_pagination_detects_non_adjacent_cycles():
+    from collectors.stock.finance.base import BaseFinanceCollector
+    from collectors.tushare_raw import PaginationStalledError
+
+    class FinanceCollector(BaseFinanceCollector):
+        INTERFACE_NAME = "finance_vip"
+        TABLE_NAME = "finance"
+        CORE_FIELDS = ["ts_code", "end_date", "report_type"]
+        PK_COLUMNS = ["ts_code", "end_date", "report_type"]
+
+    pages = {
+        0: [("000001.SZ", "20260630", 1), ("000002.SZ", "20260630", 1)],
+        2: [("000003.SZ", "20260630", 1), ("000004.SZ", "20260630", 1)],
+        4: [("000001.SZ", "20260630", 1), ("000002.SZ", "20260630", 1)],
+    }
+
+    class FakePro:
+        def finance_vip(self, **params):
+            return pd.DataFrame(
+                pages[params["offset"]],
+                columns=["ts_code", "end_date", "report_type"],
+            )
+
+    collector = object.__new__(FinanceCollector)
+    collector.pro = FakePro()
+
+    with pytest.raises(PaginationStalledError):
+        collector._fetch_paginated("20260630", page_size=2, max_pages=4)
+
+
+def test_disclosure_date_uses_end_date_partition_and_exhausts():
+    from collectors.stock.finance.disclosure_date import DisclosureDateCollector
+
+    calls = []
+
+    class FakePro:
+        def disclosure_date(self, **params):
+            calls.append(params)
+            if params["offset"]:
+                return pd.DataFrame(columns=["ts_code", "end_date"])
+            return pd.DataFrame([{"ts_code": "000001.SZ", "end_date": "20251231"}])
+
+    collector = object.__new__(DisclosureDateCollector)
+    collector.pro = FakePro()
+    result = collector._fetch_paginated("20251231", page_size=1, max_pages=3)
+
+    assert len(result) == 1
+    assert [item["end_date"] for item in calls] == ["20251231", "20251231"]
+    assert all("period" not in item for item in calls)
+    proof = collector.partition_completion_evidence()
+    assert proof["verified"] is True
+    assert proof["pages_completed"] == 1
+    assert proof["scopes"][0]["parameter"] == "end_date"
+
+
+def test_finance_pagination_rejects_ignored_period_parameter():
+    from collectors.stock.finance.base import BaseFinanceCollector
+    from collectors.tushare_raw import IncompleteCollectionError
+
+    class FinanceCollector(BaseFinanceCollector):
+        INTERFACE_NAME = "finance_vip"
+        TABLE_NAME = "finance"
+        CORE_FIELDS = ["ts_code", "end_date"]
+        PK_COLUMNS = ["ts_code", "end_date"]
+
+    class FakePro:
+        def finance_vip(self, **_params):
+            return pd.DataFrame([{"ts_code": "000001.SZ", "end_date": "19901231"}])
+
+    collector = object.__new__(FinanceCollector)
+    collector.pro = FakePro()
+
+    with pytest.raises(IncompleteCollectionError, match="ignored period"):
+        collector._fetch_paginated("20251231", page_size=1000, max_pages=2)
+
+
+def test_main_business_collector_paginates_each_classification(monkeypatch):
+    from collectors.stock.finance.fina_mainbz import FinaMainbzCollector
+
+    collector = object.__new__(FinaMainbzCollector)
+    calls = []
+
+    def fetch_scope(period, *, extra_params, **_options):
+        calls.append((period, extra_params))
+        return pd.DataFrame(
+            [{
+                "ts_code": "000001.SZ",
+                "end_date": period,
+                "bz_item": extra_params["type"],
+                "bz_code": extra_params["type"],
+            }]
+        )
+
+    monkeypatch.setattr(collector, "_fetch_paginated", fetch_scope)
+    result = collector.fetch_period("20261231")
+
+    assert calls == [
+        ("20261231", {"type": "I"}),
+        ("20261231", {"type": "P"}),
+    ]
+    assert len(result) == 2

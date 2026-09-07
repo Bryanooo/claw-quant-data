@@ -1,0 +1,196 @@
+x-app-build: &app-build
+  context: .
+  target: runtime
+
+x-app-service: &app-service
+  image: claw-quant-data:app
+  build: *app-build
+  restart: unless-stopped
+  environment: &app-environment
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_NAME: ${DB_NAME:-tushare_db}
+    DB_USER: ${DB_USER:-tushare}
+    DB_PASSWORD: ${DB_PASSWORD:-tushare_dev}
+    TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+    TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS: ${TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS:-0.5}
+    APP_REVISION: ${APP_REVISION:-0.1.0}
+    NOTIFIER_TYPE: ${NOTIFIER_TYPE:-log}
+    DINGTALK_USER_ID: ${DINGTALK_USER_ID:-}
+    API_DB_POOL_MIN: ${API_DB_POOL_MIN:-1}
+    API_DB_POOL_MAX: ${API_DB_POOL_MAX:-10}
+    API_DB_CONNECT_RETRIES: ${API_DB_CONNECT_RETRIES:-12}
+    API_DB_CONNECT_RETRY_SECONDS: ${API_DB_CONNECT_RETRY_SECONDS:-5}
+    JOB_POLL_INTERVAL_SECONDS: ${JOB_POLL_INTERVAL_SECONDS:-2}
+    JOB_STALE_AFTER_SECONDS: ${JOB_STALE_AFTER_SECONDS:-21600}
+    JOB_EXECUTION_TIMEOUT_SECONDS: ${JOB_EXECUTION_TIMEOUT_SECONDS:-1800}
+    JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-120}
+    JOB_RECLAIM_INTERVAL_SECONDS: ${JOB_RECLAIM_INTERVAL_SECONDS:-60}
+    SCHEDULE_RECONCILE_LOOKBACK_DAYS: ${SCHEDULE_RECONCILE_LOOKBACK_DAYS:-8}
+    COVERAGE_POLL_INTERVAL_SECONDS: ${COVERAGE_POLL_INTERVAL_SECONDS:-5}
+    COVERAGE_STALE_AFTER_SECONDS: ${COVERAGE_STALE_AFTER_SECONDS:-3600}
+    COVERAGE_AUTO_REPAIR_ENABLED: ${COVERAGE_AUTO_REPAIR_ENABLED:-true}
+    COVERAGE_AUTO_REPAIR_LIMIT: ${COVERAGE_AUTO_REPAIR_LIMIT:-10}
+    SERVICE_HEARTBEAT_MAX_AGE_SECONDS: ${SERVICE_HEARTBEAT_MAX_AGE_SECONDS:-90}
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tushare_db}
+      POSTGRES_USER: ${DB_USER:-tushare}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tushare_dev}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tushare} -d ${DB_NAME:-tushare_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${DB_NAME:-tushare_db}
+      PGUSER: ${DB_USER:-tushare}
+      PGPASSWORD: ${DB_PASSWORD:-tushare_dev}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup_loop.sh:/scripts/backup_loop.sh:ro
+    command: ["/bin/sh", "/scripts/backup_loop.sh"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /backups/.last-success && test $$(( $$(date +%s) - $$(cat /backups/.last-success) )) -lt $$(( $${BACKUP_INTERVAL_SECONDS} + 3600 ))"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  migrate:
+    image: claw-quant-data:app
+    build: *app-build
+    environment: *app-environment
+    command: ["python", "scripts/migrate.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  scheduler:
+    <<: *app-service
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "scheduler"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    <<: *app-service
+    environment:
+      <<: *app-environment
+      WORKER_COMPONENT: worker
+      WORKER_RESOURCE_CLASSES: ${ROUTINE_WORKER_RESOURCE_CLASSES:-scheduled,generic,reference,market,moneyflow,finance,catalog,default}
+    command:
+      - python
+      - -m
+      - service.collection_jobs.worker
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker-fanout:
+    <<: *app-service
+    environment:
+      <<: *app-environment
+      WORKER_COMPONENT: worker-fanout
+      WORKER_RESOURCE_CLASSES: ${FANOUT_WORKER_RESOURCE_CLASSES:-fanout}
+    command: ["python", "-m", "service.collection_jobs.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-fanout"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker-backfill:
+    <<: *app-service
+    environment:
+      <<: *app-environment
+      WORKER_COMPONENT: worker-backfill
+      WORKER_RESOURCE_CLASSES: ${BACKFILL_WORKER_RESOURCE_CLASSES:-initialization,backfill}
+    command: ["python", "-m", "service.collection_jobs.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-backfill"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  auditor:
+    <<: *app-service
+    command:
+      - python
+      - -m
+      - service.data_coverage.worker
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "auditor"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  api:
+    <<: *app-service
+    command:
+      - uvicorn
+      - service.api.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "${API_BIND_HOST:-127.0.0.1}:${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  test:
+    build:
+      context: .
+      target: test
+    environment: *app-environment
+    command: ["python", "-m", "pytest", "-q"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    profiles: ["test"]
+
+volumes:
+  postgres_data:

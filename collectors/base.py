@@ -20,33 +20,105 @@ claw-quant-v2 采集基类
 """
 
 import logging
+import hashlib
+import math
+import re
 import time
 import sys
 import os
 from abc import ABC
+from datetime import timedelta
 from typing import Optional, List, Dict, Any
 import calendar
 
 import pandas as pd
 import psycopg2
 import psycopg2.extras
+from service.config import DB_CONFIG, get_env_tushare_token
+from service.collection_jobs.context import is_durable_job_active
+from service.clock import business_now
+from service.tushare_rate_limit import install_distributed_rate_limit
+from collectors.contracts import (
+    CollectorRequest,
+    CollectorResult,
+    CollectorSpec,
+    EmptyPolicy,
+    PaginationMode,
+    ResourceClass,
+    WriteMode,
+)
 
 # ──────────────────────────────────────────────
 # 项目根目录，方便后续 import
 # ──────────────────────────────────────────────
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ──────────────────────────────────────────────
-# 数据库连接（直接从环境变量或默认参数获取）
-# ──────────────────────────────────────────────
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "127.0.0.1"),
-    "port": int(os.getenv("DB_PORT", 5432)),
-    "dbname": os.getenv("DB_NAME", "tushare_db"),
-    "user": os.getenv("DB_USER", "tushare"),
-    "password": os.getenv("DB_PASSWORD", "ClawQuant2026!"),
-}
 
+class CollectorError(RuntimeError):
+    """Base error carrying retry semantics for schedulers and workers."""
+
+    retryable = True
+    retry_after_seconds: int | None = None
+
+
+class NonRetryableCollectorError(CollectorError):
+    retryable = False
+
+
+class CollectorRateLimitError(CollectorError):
+    def __init__(self, message: str, retry_after_seconds: int):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+class PartialCollectionError(CollectorError):
+    """At least one partition failed, so the overall result is incomplete."""
+
+    completion_status = "incomplete"
+
+    def __init__(self, failures: list[str], rows_inserted: int = 0):
+        self.failures = tuple(failures)
+        self.rows_inserted = rows_inserted
+        preview = "; ".join(failures[:5])
+        suffix = f"; and {len(failures) - 5} more" if len(failures) > 5 else ""
+        super().__init__(
+            f"{len(failures)} collection partition(s) failed after "
+            f"{rows_inserted} stored rows: {preview}{suffix}"
+        )
+
+
+def _tushare_error(error: Exception) -> CollectorError | None:
+    """Classify HTTP-200 Tushare errors that should not use blind retries."""
+    message = str(error)
+    if "频率超限" in message or "访问频率" in message:
+        match = re.search(r"(\d+)次/(分钟|小时|天)", message)
+        if not match:
+            retry_after = 60
+        elif match.group(2) == "天":
+            # “N次/天” is a hard daily allocation, not a request-spacing rule.
+            # Retrying after 86400/N seconds creates a retry storm once the
+            # allocation is exhausted. Defer until the next Shanghai day with
+            # a small buffer so the durable queue can safely try again.
+            now = business_now()
+            reset_at = (now + timedelta(days=1)).replace(
+                hour=0, minute=5, second=0, microsecond=0
+            )
+            retry_after = max(math.ceil((reset_at - now).total_seconds()), 60)
+        else:
+            count = max(int(match.group(1)), 1)
+            window = {"分钟": 60, "小时": 3600}[match.group(2)]
+            retry_after = max(window // count, 1)
+        return CollectorRateLimitError(message, retry_after)
+    permanent_markers = (
+        "没有接口",
+        "访问权限",
+        "参数校验失败",
+        "必填参数",
+        "正确的接口名",
+    )
+    if any(marker in message for marker in permanent_markers):
+        return NonRetryableCollectorError(message)
+    return None
 
 def get_db_conn():
     """获取数据库连接"""
@@ -94,6 +166,7 @@ def set_config(key: str, value: str, updated_by: str = "collector"):
 # ──────────────────────────────────────────────
 def setup_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
+    logger.propagate = False
     if not logger.handlers:
         logger.setLevel(logging.INFO)
         handler = logging.StreamHandler(sys.stdout)
@@ -159,6 +232,45 @@ def _is_nan(v):
     return False
 
 
+def sanitize_postgres_value(value: Any) -> tuple[Any, int]:
+    """Remove NUL bytes that PostgreSQL text/JSON cannot represent.
+
+    Tushare occasionally returns embedded ``\\x00`` bytes in descriptive
+    strings. PostgreSQL rejects those bytes in both text and jsonb values. The
+    sanitizer preserves the rest of the value and returns a count so every
+    collection result can expose auditable cleaning evidence.
+    """
+    if isinstance(value, str):
+        count = value.count("\x00")
+        return value.replace("\x00", ""), count
+    if isinstance(value, dict):
+        cleaned: dict[Any, Any] = {}
+        total = 0
+        for key, item in value.items():
+            clean_key, key_count = sanitize_postgres_value(key)
+            clean_item, item_count = sanitize_postgres_value(item)
+            cleaned[clean_key] = clean_item
+            total += key_count + item_count
+        return cleaned, total
+    if isinstance(value, list):
+        cleaned_list = []
+        total = 0
+        for item in value:
+            clean_item, count = sanitize_postgres_value(item)
+            cleaned_list.append(clean_item)
+            total += count
+        return cleaned_list, total
+    if isinstance(value, tuple):
+        cleaned_tuple = []
+        total = 0
+        for item in value:
+            clean_item, count = sanitize_postgres_value(item)
+            cleaned_tuple.append(clean_item)
+            total += count
+        return tuple(cleaned_tuple), total
+    return value, 0
+
+
 # ──────────────────────────────────────────────
 # 采集基类
 # ──────────────────────────────────────────────
@@ -188,6 +300,31 @@ class BaseCollector(ABC):
 
     # ── 是否支持按月范围查询 ──
     supports_range_query: bool = True  # 少数接口只支持单日查询时设 False
+    write_mode = WriteMode.UPSERT
+    pagination_mode = PaginationMode.DATE_RANGE
+    empty_policy = EmptyPolicy.REQUIRES_VERIFICATION
+    resource_class = ResourceClass.MARKET
+    collector_version = "1"
+    required_parameters: tuple[str, ...] = ()
+
+    @classmethod
+    def spec(cls) -> CollectorSpec:
+        """Return static metadata without constructing an SDK/DB client."""
+        api_name = getattr(cls, "API_NAME", "") or getattr(cls, "INTERFACE_NAME", "")
+        table_name = getattr(cls, "table_name", "") or getattr(cls, "TABLE_NAME", "")
+        primary_keys = getattr(cls, "pk_columns", ()) or getattr(cls, "PK_COLUMNS", ())
+        return CollectorSpec(
+            qualified_name=f"{cls.__module__}.{cls.__name__}",
+            api_name=api_name,
+            table_name=table_name,
+            primary_keys=tuple(primary_keys),
+            write_mode=WriteMode(cls.write_mode),
+            pagination_mode=PaginationMode(cls.pagination_mode),
+            empty_policy=EmptyPolicy(cls.empty_policy),
+            resource_class=ResourceClass(cls.resource_class),
+            version=str(cls.collector_version),
+            required_parameters=tuple(cls.required_parameters),
+        )
 
     def __init__(self):
         # ── 兼容旧属性映射 ──
@@ -201,13 +338,23 @@ class BaseCollector(ABC):
         self._old_style = hasattr(self.__class__, "INTERFACE_NAME") or hasattr(self.__class__, "TABLE_NAME")
 
         self.logger = setup_logger(self.__class__.__name__)
+        self._sanitization_nul_characters = 0
+        self._sanitization_fields: set[str] = set()
 
-        # ── 从 sys_config 读取配置 ──
-        token = get_config("tushare.token")
+        # Environment configuration is convenient for containers and CI.
+        # Keep sys_config as a backwards-compatible fallback for deployments
+        # that already store the token in PostgreSQL.
+        token = get_env_tushare_token() or get_config("tushare.token")
         if not token:
-            raise RuntimeError("❌ sys_config 中未找到 tushare.token，请先写入")
+            raise RuntimeError(
+                "❌ 未配置 Tushare Token，请设置 TUSHARE_TOKEN 或写入 "
+                "sys_config['tushare.token']"
+            )
 
-        self.retry_max = int(get_config("collector.retry_max", "3"))
+        # The durable queue owns whole-job retries. Inside a worker, avoid
+        # multiplying them by another collector-level retry loop.
+        retry_default = "1" if is_durable_job_active() else "3"
+        self.retry_max = int(get_config("collector.retry_max", retry_default))
         self.retry_interval = int(get_config("collector.retry_interval", "30"))
 
         # ── 初始化 Tushare ──
@@ -216,19 +363,27 @@ class BaseCollector(ABC):
         ts.set_token(token)
         self.pro = ts.pro_api()
 
-        # ── 给底层 HTTP Session 加超时和重试 ──
+        # Tushare dynamically routes every SDK endpoint through query().
+        # Wrapping it once means dedicated and catalog collectors participate
+        # in the same token-wide, cross-process rate limit.
+        install_distributed_rate_limit(self.pro)
+        self._distributed_rate_limit_installed = True
+        self._request_count = 0
+        rate_limited_query = self.pro.query
+
+        def counted_query(api_name, *args, **kwargs):
+            self._request_count += 1
+            return rate_limited_query(api_name, *args, **kwargs)
+
+        self.pro.query = counted_query
+
+        # Transport retries are intentionally disabled here. Every real
+        # Tushare attempt must pass through query(), reserve a distributed
+        # rate-limit slot, and be observed by the collector/worker retry loop.
         import requests
         from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry
-
         session = requests.Session()
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=2,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["POST"],
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
+        adapter = HTTPAdapter(max_retries=0)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         self.pro._DataApi__session = session
@@ -236,6 +391,25 @@ class BaseCollector(ABC):
         self.pro._DataApi__http_session = session
 
         self.logger.info(f"✅ {self.__class__.__name__} 初始化完成")
+
+    def _database_safe_value(self, value: Any, field: str) -> Any:
+        cleaned, count = sanitize_postgres_value(value)
+        if count:
+            self._sanitization_nul_characters = (
+                getattr(self, "_sanitization_nul_characters", 0) + count
+            )
+            fields = getattr(self, "_sanitization_fields", set())
+            fields.add(field)
+            self._sanitization_fields = fields
+        return cleaned
+
+    def _sanitization_evidence(self) -> dict[str, Any]:
+        return {
+            "nul_characters_removed": getattr(
+                self, "_sanitization_nul_characters", 0
+            ),
+            "affected_fields": sorted(getattr(self, "_sanitization_fields", set())),
+        }
 
     # ─────────────── fetch：从 Tushare 获取数据 ───────────────
     def fetch(self, **params) -> pd.DataFrame:
@@ -269,6 +443,19 @@ class BaseCollector(ABC):
         if not self.pk_columns:
             raise ValueError("❌ 子类必须定义 pk_columns，或覆盖 store()")
 
+        present_keys = [key for key in self.pk_columns if key in df.columns]
+        if len(present_keys) == len(self.pk_columns):
+            duplicate_mask = df.duplicated(subset=present_keys, keep="last")
+            duplicate_count = int(duplicate_mask.sum())
+            if duplicate_count:
+                logger = getattr(self, "logger", logging.getLogger(__name__))
+                logger.warning(
+                    "⚠️  %s: 上游批次包含 %s 个重复主键，保留每组最后一条",
+                    self.table_name,
+                    duplicate_count,
+                )
+                df = df.loc[~duplicate_mask].copy()
+
         conn = get_db_conn()
         try:
             with conn.cursor() as cur:
@@ -277,24 +464,49 @@ class BaseCollector(ABC):
                     return 0
 
                 columns = list(rows[0].keys())
-                rows = [{c: None if _is_nan(r.get(c)) else r.get(c) for c in columns} for r in rows]
-                placeholders = ",".join(["%s"] * len(columns))
-                col_names = ",".join(columns)
+                rows = [
+                    {
+                        c: (
+                            None
+                            if _is_nan(r.get(c))
+                            else self._database_safe_value(r.get(c), c)
+                        )
+                        for c in columns
+                    }
+                    for r in rows
+                ]
+                quote = lambda value: psycopg2.extensions.quote_ident(value, conn)
+                col_names = ",".join(quote(c) for c in columns)
 
                 update_cols = [c for c in columns if c not in self.pk_columns]
                 if update_cols:
-                    update_set = ", ".join([f"{c} = EXCLUDED.{c}" for c in update_cols])
-                    conflict_sql = f"ON CONFLICT ({', '.join(self.pk_columns)}) DO UPDATE SET {update_set}"
+                    update_set = ", ".join(
+                        f"{quote(c)} = EXCLUDED.{quote(c)}" for c in update_cols
+                    )
+                    conflict_columns = ", ".join(quote(c) for c in self.pk_columns)
+                    conflict_sql = (
+                        f"ON CONFLICT ({conflict_columns}) DO UPDATE SET {update_set} "
+                        "WHERE "
+                        + " OR ".join(
+                            f"target.{quote(c)} IS DISTINCT FROM EXCLUDED.{quote(c)}"
+                            for c in update_cols
+                        )
+                    )
                 else:
                     conflict_sql = "ON CONFLICT DO NOTHING"
 
                 insert_sql = (
-                    f"INSERT INTO {self.table_name} ({col_names}) "
-                    f"VALUES ({placeholders}) {conflict_sql}"
+                    f"INSERT INTO {quote(self.table_name)} AS target ({col_names}) "
+                    f"VALUES %s {conflict_sql}"
                 )
 
-                values = [[r.get(c) for c in columns] for r in rows]
-                psycopg2.extras.execute_batch(cur, insert_sql, values)
+                values = [tuple(r.get(c) for c in columns) for r in rows]
+                psycopg2.extras.execute_values(
+                    cur,
+                    insert_sql,
+                    values,
+                    page_size=1000,
+                )
 
             conn.commit()
             return len(rows)
@@ -305,48 +517,340 @@ class BaseCollector(ABC):
         finally:
             conn.close()
 
-    # ─────────────── collect：单次采集流程（带重试） ───────────────
-    def collect(self, skip_store: bool = False, **params) -> int:
+    def store_snapshot(self, df: pd.DataFrame) -> int:
+        """Atomically merge a complete snapshot without taking a TRUNCATE lock.
+
+        Rows are validated in a session-local staging table, then upserted and
+        stale keys are deleted in one transaction. An empty upstream response
+        is always fail-safe and never clears the target table.
         """
-        采集主流程：fetch → transform → [store]
+        if df is None or df.empty:
+            return 0
+        if not self.table_name or not self.pk_columns:
+            raise ValueError("snapshot collector requires table_name and pk_columns")
 
-        参数：
-          skip_store: True 时不入库（用于调试/预览），返回 DataFrame 行数
-          **params:   传给 fetch 的参数（如 trade_date='20260513'）
+        rows = df.to_dict(orient="records")
+        columns = list(rows[0])
+        missing_keys = [key for key in self.pk_columns if key not in columns]
+        if missing_keys:
+            raise ValueError(
+                f"snapshot for {self.table_name} is missing keys: {missing_keys}"
+            )
+        normalized = [
+            tuple(
+                None
+                if _is_nan(row.get(column))
+                else self._database_safe_value(row.get(column), column)
+                for column in columns
+            )
+            for row in rows
+        ]
+        connection = get_db_conn()
+        try:
+            quote = lambda value: psycopg2.extensions.quote_ident(value, connection)
+            target = quote(self.table_name)
+            staging_name = quote(f"cq_stage_{self.table_name}"[:60])
+            column_sql = ",".join(quote(column) for column in columns)
+            updates = [column for column in columns if column not in self.pk_columns]
+            if updates:
+                update_sql = ", ".join(
+                    f"{quote(column)} = EXCLUDED.{quote(column)}" for column in updates
+                )
+                distinct_sql = " OR ".join(
+                    f"target.{quote(column)} IS DISTINCT FROM EXCLUDED.{quote(column)}"
+                    for column in updates
+                )
+                conflict_sql = (
+                    f"ON CONFLICT ({','.join(quote(key) for key in self.pk_columns)}) "
+                    f"DO UPDATE SET {update_sql} WHERE {distinct_sql}"
+                )
+            else:
+                conflict_sql = "ON CONFLICT DO NOTHING"
+            key_match = " AND ".join(
+                f"target.{quote(key)} = stage.{quote(key)}" for key in self.pk_columns
+            )
 
-        返回：入库行数（skip_store=True 时返回 DataFrame 行数）
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"CREATE TEMP TABLE {staging_name} "
+                    f"(LIKE {target} INCLUDING DEFAULTS) ON COMMIT DROP"
+                )
+                psycopg2.extras.execute_values(
+                    cursor,
+                    f"INSERT INTO {staging_name} ({column_sql}) VALUES %s",
+                    normalized,
+                    page_size=1000,
+                )
+                cursor.execute(
+                    f"INSERT INTO {target} AS target ({column_sql}) "
+                    f"SELECT {column_sql} FROM {staging_name} {conflict_sql}"
+                )
+                cursor.execute(
+                    f"DELETE FROM {target} AS target "
+                    f"WHERE NOT EXISTS (SELECT 1 FROM {staging_name} AS stage "
+                    f"WHERE {key_match})"
+                )
+            connection.commit()
+            return len(rows)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    # ─────────────── run：统一采集流程（带重试） ───────────────
+    def run(
+        self,
+        request: CollectorRequest | None = None,
+        *,
+        skip_store: bool = False,
+        **params,
+    ) -> CollectorResult:
+        """Execute fetch → transform → store and return structured evidence."""
+        if request is not None and (params or skip_store):
+            raise ValueError("pass either CollectorRequest or keyword parameters")
+        effective = request or CollectorRequest(params, skip_store=skip_store)
+        missing = [
+            name for name in self.required_parameters
+            if effective.parameters.get(name) in (None, "")
+        ]
+        if missing:
+            raise NonRetryableCollectorError(
+                f"{self.API_NAME} missing required parameters: {', '.join(missing)}"
+            )
+
+        spec = self.spec()
+        """
+        The retry loop lives at this boundary so each attempt repeats the
+        complete, rate-limited SDK request rather than retrying invisibly in
+        requests/urllib3.
         """
         last_error = None
+        self._request_count = 0
+        self._sanitization_nul_characters = 0
+        self._sanitization_fields = set()
         for attempt in range(1, self.retry_max + 1):
             try:
                 self.logger.info(f"📡 正在获取 {self.table_name} 数据... (第{attempt}次)")
-                df = self.fetch(**params)
+                df = self.fetch(**dict(effective.parameters))
 
                 if df is None or df.empty:
                     self.logger.warning(f"⚠️  {self.table_name}: 无数据返回")
-                    return 0
+                    return CollectorResult(
+                        collector_name=spec.qualified_name,
+                        collector_version=spec.version,
+                        api_name=spec.api_name,
+                        table_name=spec.table_name,
+                        fetched_rows=0,
+                        stored_rows=0,
+                        request_count=max(
+                            int(getattr(self, "_request_count", 0)), attempt
+                        ),
+                        partitions=((effective.partition_key,) if effective.partition_key else ()),
+                        empty_reason="upstream_returned_no_rows",
+                        evidence={
+                            "empty_policy": spec.empty_policy.value,
+                            "sanitization": self._sanitization_evidence(),
+                        },
+                    )
 
                 df = self.transform(df)
+                fetched_rows = len(df)
+                # Keep only a deterministic digest as pagination evidence. It
+                # lets the outer paginator detect endpoints that silently
+                # ignore ``offset`` without retaining or exposing payloads.
+                try:
+                    page_signature = hashlib.sha256(
+                        df.to_json(
+                            orient="split",
+                            date_format="iso",
+                            default_handler=str,
+                        ).encode("utf-8")
+                    ).hexdigest()
+                except Exception:
+                    page_signature = hashlib.sha256(
+                        repr(df.to_dict(orient="records")).encode("utf-8")
+                    ).hexdigest()
 
-                if skip_store:
+                if effective.skip_store:
                     self.logger.info(f"🔍 {self.table_name}: 获取 {len(df)} 行（skip_store，未入库）")
-                    return len(df)
+                    rows = 0
+                else:
+                    rows = self.store(df)
+                    self.logger.info(f"✅ {self.table_name}: 入库 {rows} 行")
 
-                rows = self.store(df)
-                self.logger.info(f"✅ {self.table_name}: 入库 {rows} 行")
-                return rows
+                return CollectorResult(
+                    collector_name=spec.qualified_name,
+                    collector_version=spec.version,
+                    api_name=spec.api_name,
+                    table_name=spec.table_name,
+                    fetched_rows=fetched_rows,
+                    stored_rows=rows,
+                    request_count=max(
+                        int(getattr(self, "_request_count", 0)), attempt
+                    ),
+                    partitions=((effective.partition_key,) if effective.partition_key else ()),
+                    evidence={
+                        "write_mode": spec.write_mode.value,
+                        "pagination_mode": spec.pagination_mode.value,
+                        "skip_store": effective.skip_store,
+                        "page_signature": page_signature,
+                        "sanitization": self._sanitization_evidence(),
+                    },
+                )
 
             except Exception as e:
                 last_error = e
                 self.logger.error(f"❌ 第{attempt}次失败: {e}")
+                classified = _tushare_error(e)
+                if classified is not None:
+                    classified.retry_count = attempt - 1
+                    raise classified from e
                 if attempt < self.retry_max:
                     wait = self.retry_interval * attempt
                     self.logger.info(f"⏳ 等待 {wait}s 后重试...")
                     time.sleep(wait)
 
-        raise RuntimeError(
+        error = CollectorError(
             f"❌ {self.table_name} 采集失败（已重试 {self.retry_max} 次）: {last_error}"
         )
+        error.retry_count = max(self.retry_max - 1, 0)
+        raise error from last_error
+
+    def run_offset_paginated(
+        self,
+        *,
+        page_size: int = 1000,
+        max_pages: int = 100,
+        skip_store: bool = False,
+        **params,
+    ) -> CollectorResult:
+        """Exhaust one offset-capable logical partition, failing closed.
+
+        Each page goes through :meth:`run`, preserving collector retries,
+        transforms and idempotent writes. Completion is claimed only after a
+        short page (including an empty first page) proves exhaustion.
+        """
+        if "limit" in params or "offset" in params:
+            raise ValueError("limit and offset are managed by run_offset_paginated")
+        if page_size < 1 or page_size > 10_000:
+            raise ValueError("page_size must be between 1 and 10000")
+        if max_pages < 1 or max_pages > 1_000:
+            raise ValueError("max_pages must be between 1 and 1000")
+
+        spec = self.spec()
+        fetched_total = 0
+        stored_total = 0
+        request_total = 0
+        pages_completed = 0
+        signatures: set[str] = set()
+        nul_characters_removed = 0
+        affected_fields: set[str] = set()
+        warnings: list[str] = []
+
+        for page in range(max_pages):
+            offset = page * page_size
+            result = self.run(
+                skip_store=skip_store,
+                **params,
+                limit=page_size,
+                offset=offset,
+            )
+            request_total += result.request_count
+            sanitization = result.evidence.get("sanitization", {})
+            nul_characters_removed += int(
+                sanitization.get("nul_characters_removed", 0)
+            )
+            affected_fields.update(sanitization.get("affected_fields", ()))
+            warnings.extend(result.warnings)
+
+            if result.fetched_rows:
+                signature = str(result.evidence.get("page_signature", ""))
+                if signature and signature in signatures:
+                    error = PartialCollectionError(
+                        [
+                            f"{self.API_NAME} repeated an earlier page at offset "
+                            f"{offset}; upstream may ignore offset"
+                        ],
+                        stored_total,
+                    )
+                    error.rows_fetched = fetched_total
+                    raise error
+                if signature:
+                    signatures.add(signature)
+                fetched_total += result.fetched_rows
+                stored_total += result.stored_rows
+                pages_completed += 1
+
+            if result.fetched_rows < page_size:
+                partition = next(
+                    (
+                        str(params[name])
+                        for name in (
+                            "trade_date",
+                            "date",
+                            "cal_date",
+                            "ann_date",
+                            "period",
+                        )
+                        if params.get(name) not in (None, "")
+                    ),
+                    None,
+                )
+                return CollectorResult(
+                    collector_name=spec.qualified_name,
+                    collector_version=spec.version,
+                    api_name=spec.api_name,
+                    table_name=spec.table_name,
+                    fetched_rows=fetched_total,
+                    stored_rows=stored_total,
+                    request_count=request_total,
+                    partitions=((partition,) if partition else ()),
+                    empty_reason=(
+                        "upstream_returned_no_rows" if fetched_total == 0 else None
+                    ),
+                    warnings=tuple(dict.fromkeys(warnings)),
+                    evidence={
+                        "verified": True,
+                        "verification_type": "offset_exhaustion",
+                        "mode": "offset",
+                        "page_size": page_size,
+                        "pages_completed": pages_completed,
+                        "rows_fetched": fetched_total,
+                        "rows_stored": stored_total,
+                        "exhausted": True,
+                        "skip_store": skip_store,
+                        "sanitization": {
+                            "nul_characters_removed": nul_characters_removed,
+                            "affected_fields": sorted(affected_fields),
+                        },
+                    },
+                )
+
+        error = PartialCollectionError(
+            [
+                f"{self.API_NAME} reached max_pages={max_pages} before "
+                "offset exhaustion"
+            ],
+            stored_total,
+        )
+        error.rows_fetched = fetched_total
+        error.completion_evidence = {
+            "verified": False,
+            "mode": "offset",
+            "page_size": page_size,
+            "pages_completed": pages_completed,
+            "rows_fetched": fetched_total,
+            "rows_stored": stored_total,
+            "exhausted": False,
+        }
+        raise error
+
+    # ─────────────── collect：兼容旧调用方的整数返回值 ───────────────
+    def collect(self, skip_store: bool = False, **params) -> int:
+        """Compatibility wrapper; new runtime code should call :meth:`run`."""
+        result = self.run(skip_store=skip_store, **params)
+        return result.fetched_rows if skip_store else result.stored_rows
 
     # ─────────────── collect_all_history：按月补齐历史 ───────────────
     DEFAULT_START = "20200101"
@@ -368,7 +872,7 @@ class BaseCollector(ABC):
         if start_date is None:
             start_date = self.DEFAULT_START
         if end_date is None:
-            end_date = datetime.now().strftime("%Y%m%d")
+            end_date = business_now().strftime("%Y%m%d")
 
         total = 0
         s = datetime.strptime(start_date, "%Y%m%d")
@@ -377,6 +881,7 @@ class BaseCollector(ABC):
         if self.supports_range_query:
             # ── 按月范围查询 ──
             cur = s.replace(day=1)
+            failures: list[str] = []
             while cur <= e:
                 _, ld = calendar.monthrange(cur.year, cur.month)
                 month_end = min(cur.replace(day=ld), e)
@@ -388,6 +893,7 @@ class BaseCollector(ABC):
                     self.logger.info(f"  {s_str}~{e_str}: {rows} 行")
                 except Exception as ex:
                     self.logger.warning(f"  {s_str}~{e_str}: {ex}")
+                    failures.append(f"{s_str}~{e_str}: {ex}")
                 # 下个月
                 if cur.month == 12:
                     cur = cur.replace(year=cur.year + 1, month=1)
@@ -397,6 +903,7 @@ class BaseCollector(ABC):
         else:
             # ── 逐日查询（ccass_hold_detail 等不支持范围查询的接口） ──
             d = s
+            failures = []
             while d <= e:
                 ds = d.strftime("%Y%m%d")
                 try:
@@ -404,8 +911,11 @@ class BaseCollector(ABC):
                     total += rows
                 except Exception as ex:
                     self.logger.warning(f"  {ds}: {ex}")
+                    failures.append(f"{ds}: {ex}")
                 d += timedelta(days=1)
                 time.sleep(0.3)
 
+        if failures:
+            raise PartialCollectionError(failures, total)
         self.logger.info(f"🏁 {self.table_name} 历史补齐完成，合计 {total} 行")
         return total

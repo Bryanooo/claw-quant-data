@@ -2,14 +2,12 @@
 指数周线行情采集器
 接口：index_weekly（tushare pro）
 
-注意：
-  index_weekly 不支持 start_date/end_date 范围查询，只支持单日 trade_date 参数。
-  且只有周五才有数据。
-  因此 supports_range_query = False，基类的 collect_all_history 会自动降级为逐日查询。
+完整性策略：按最后交易日分区，并使用 Tushare 标准 limit/offset 穷尽全市场。
 """
 
 import pandas as pd
 from collectors.base import BaseCollector
+from collectors.contracts import PaginationMode
 
 
 class IndexWeeklyCollector(BaseCollector):
@@ -20,6 +18,8 @@ class IndexWeeklyCollector(BaseCollector):
     pk_columns = ["ts_code", "trade_date"]
 
     supports_range_query = True  # 支持 start_date/end_date 范围查询
+    pagination_mode = PaginationMode.OFFSET
+    collector_version = "2"
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """数据清洗"""

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Query tushare index API field definitions and sample data."""
-import tushare as ts
 import json
+import os
 
-TOKEN = '320cefaeb385963f1f4e8ed084a65229d72a44e3f3a042bb2a334543'
-ts.set_token(TOKEN)
+import tushare as ts
+
+token = os.getenv("TUSHARE_TOKEN", "").strip()
+if not token:
+    raise SystemExit("TUSHARE_TOKEN is required")
+
+ts.set_token(token)
 pro = ts.pro_api()
 
 # API to query with field definitions

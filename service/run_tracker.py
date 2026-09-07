@@ -17,6 +17,7 @@ sys_collector_run 任务运行记录管理器
 """
 
 import json
+import logging
 import traceback
 from datetime import datetime, timezone
 from functools import wraps
@@ -26,6 +27,16 @@ import psycopg2
 import psycopg2.extras
 
 from service.db import DB_CONFIG
+from service.clock import business_today
+
+logger = logging.getLogger(__name__)
+
+
+class CollectorAlreadyRunningError(RuntimeError):
+    """A dedicated collector lock is held; durable workers should retry later."""
+
+    retryable = True
+    retry_after_seconds = 60
 
 
 def _get_next_trade_date() -> Optional[str]:
@@ -37,11 +48,14 @@ def _get_next_trade_date() -> Optional[str]:
         conn = psycopg2.connect(**DB_CONFIG)
         try:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT cal_date FROM trade_cal
-                    WHERE cal_date <= CURRENT_DATE AND is_open = 1
+                    WHERE cal_date <= %s AND is_open = 1
                     ORDER BY cal_date DESC LIMIT 1
-                """)
+                    """,
+                    (business_today(),),
+                )
                 row = cur.fetchone()
                 return str(row[0]) if row else None
         finally:
@@ -143,19 +157,61 @@ def track_run(task_id: str, task_name: str, trigger_type: str = "cron"):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            run_id = start_run(task_id, task_name, trigger_type)
-            retry_count = 0
+            lock_connection = psycopg2.connect(**DB_CONFIG)
+            acquired = False
             try:
-                result = func(*args, **kwargs, _run_id=run_id) if hasattr(func, '__code__') and '_run_id' in func.__code__.co_varnames else func(*args, **kwargs)
-                rows = result if isinstance(result, int) else 0
-                finish_run(run_id, status="success", rows_inserted=rows)
-            except Exception as e:
-                retry_count = getattr(e, 'retry_count', 0)
-                error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
-                finish_run(run_id, status="failed", rows_inserted=0,
-                          retry_count=retry_count, error_message=error_msg)
-                raise
-            return result
+                with lock_connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT pg_try_advisory_lock(hashtextextended(%s, 0))",
+                        (f"collector:{task_id}",),
+                    )
+                    acquired = cursor.fetchone()[0]
+
+                run_id = start_run(task_id, task_name, trigger_type)
+                if not acquired:
+                    logger.warning("task %s is already running; skipping overlap", task_id)
+                    finish_run(
+                        run_id,
+                        status="skipped",
+                        extra_info={"reason": "already_running"},
+                    )
+                    raise CollectorAlreadyRunningError(
+                        f"collector task {task_id} is already running"
+                    )
+
+                retry_count = 0
+                try:
+                    result = (
+                        func(*args, **kwargs, _run_id=run_id)
+                        if hasattr(func, "__code__")
+                        and "_run_id" in func.__code__.co_varnames
+                        else func(*args, **kwargs)
+                    )
+                    rows = result if isinstance(result, int) else 0
+                    finish_run(run_id, status="success", rows_inserted=rows)
+                except Exception as e:
+                    retry_count = getattr(e, "retry_count", 0)
+                    error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+                    finish_run(
+                        run_id,
+                        status="failed",
+                        rows_inserted=0,
+                        retry_count=retry_count,
+                        error_message=error_msg,
+                    )
+                    raise
+                return result
+            finally:
+                if acquired and not lock_connection.closed:
+                    try:
+                        with lock_connection.cursor() as cursor:
+                            cursor.execute(
+                                "SELECT pg_advisory_unlock(hashtextextended(%s, 0))",
+                                (f"collector:{task_id}",),
+                            )
+                    except psycopg2.Error:
+                        logger.warning("could not explicitly release lock for %s", task_id)
+                lock_connection.close()
         return wrapper
     return decorator
 
@@ -226,19 +282,29 @@ def check_timeout_tasks(timeout_minutes: int = 30) -> list[dict]:
 
 def count_failed_tasks(since_hours: int = 24) -> list[dict]:
     """
-    统计最近 N 小时内各任务的失败次数。
+    返回最近 N 小时内仍未恢复的任务。
+
+    Durable jobs may invoke the same tracked collector again after a transient
+    failure. Alerting every failed attempt for the full window produces a
+    false alarm even after a later run succeeds, so only each task's newest
+    run in the window represents its current health.
     """
     conn = psycopg2.connect(**DB_CONFIG)
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT task_id, task_name, status, count(*) as cnt
-                FROM sys_collector_run
-                WHERE started_at > NOW() - INTERVAL '%s hours'
-                  AND status IN ('failed', 'timeout')
-                GROUP BY task_id, task_name, status
-                ORDER BY cnt DESC
+                WITH latest AS (
+                    SELECT DISTINCT ON (task_id)
+                           task_id, task_name, status, started_at, run_id
+                    FROM sys_collector_run
+                    WHERE started_at > NOW() - INTERVAL '%s hours'
+                    ORDER BY task_id, started_at DESC, run_id DESC
+                )
+                SELECT task_id, task_name, status, 1::bigint AS cnt
+                FROM latest
+                WHERE status IN ('failed', 'timeout')
+                ORDER BY started_at DESC
                 """,
                 (since_hours,)
             )

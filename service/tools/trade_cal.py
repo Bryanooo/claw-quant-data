@@ -21,6 +21,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Union
 
 from service.db import query
+from service.clock import business_today
 
 # ──────────────────────────────────────────────
 # 日期工具
@@ -62,7 +63,7 @@ def is_trade_day(d: Union[str, date, datetime] = None,
       is_trade_day("20250101")     → False（元旦）
     """
     if d is None:
-        d = date.today()
+        d = business_today()
     day = _fmt(d)
     rows = query(
         "SELECT is_open FROM trade_cal "
@@ -124,7 +125,7 @@ def get_last_trade_day(
       get_last_trade_day("20260510")  # → "20260509"（周一→上周五）
     """
     if d is None:
-        d = date.today()
+        d = business_today()
     day = _fmt(d)
     rows = query(
         "SELECT pretrade_date FROM trade_cal "
@@ -155,7 +156,7 @@ def get_next_trade_day(
       get_next_trade_day("20260509")  # → "20260510"（周五→下周一）
     """
     if d is None:
-        d = date.today()
+        d = business_today()
     day = _fmt(d)
     rows = query(
         "SELECT cal_date FROM trade_cal "
@@ -186,7 +187,7 @@ def get_trade_calendar(
       get_trade_calendar(2026)
     """
     if year is None:
-        year = date.today().year
+        year = business_today().year
     start = f"{year}-01-01"
     end = f"{year}-12-31"
     rows = query(

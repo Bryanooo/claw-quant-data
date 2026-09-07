@@ -42,4 +42,9 @@ class StkHoldertradeCollector(BaseCollector):
             df["holder_name"] = df["holder_name"].apply(
                 lambda v: v[:128] if isinstance(v, str) and len(v) > 128 else v
             )
+        keys = self.pk_columns
+        before = len(df)
+        df = df.dropna(subset=keys).drop_duplicates(subset=keys, keep="last")
+        if len(df) < before:
+            self.logger.warning("过滤或合并 %s 行主键不完整/重复记录", before - len(df))
         return df

@@ -8,7 +8,7 @@
 
 用法（不直接使用，通过 Notifier 入口）：
     from service.notifier import Notifier
-    Notifier.init(type="dingtalk", user_id="1830664110642027")
+    Notifier.init(type="dingtalk", user_id="your-user-id")
 """
 
 import json
@@ -20,13 +20,13 @@ from service.notifier import BaseNotifier
 
 logger = logging.getLogger("notifier.dingtalk")
 
-_DEFAULT_USER_ID = os.getenv("DINGTALK_USER_ID", "1830664110642027")
+_DEFAULT_USER_ID = os.getenv("DINGTALK_USER_ID")
 
 
 class DingtalkNotifier(BaseNotifier):
     """钉钉通知器，复用 OpenClaw 的 message send 命令。"""
 
-    def __init__(self, user_id: str = _DEFAULT_USER_ID):
+    def __init__(self, user_id: str | None = _DEFAULT_USER_ID):
         self.user_id = user_id
 
     def send(self, content: str, title: str = "通知") -> bool:
@@ -39,6 +39,10 @@ class DingtalkNotifier(BaseNotifier):
         Returns:
             bool: 是否发送成功
         """
+        if not self.user_id:
+            logger.error("未配置 DINGTALK_USER_ID，无法发送钉钉通知")
+            return False
+
         full_content = f"**{title}**\n\n{content}"
         try:
             result = subprocess.run(

@@ -31,16 +31,16 @@ def _fix_date(val):
 class StkRewardsCollector(BaseCollector):
     API_NAME = "stk_rewards"
     table_name = "stk_rewards"
-    pk_columns = ["ts_code", "name", "ann_date"]
+    pk_columns = ["ts_code", "name", "end_date"]
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         for col in ["ann_date", "end_date"]:
             if col in df.columns:
                 df[col] = df[col].apply(_fix_date)
-        # 过滤 ann_date 为空的记录（主键不能为空）
+        # 报告期是数据库主键的一部分，公告日允许为空。
         before = len(df)
-        df = df.dropna(subset=["ann_date"], how="any")
+        df = df.dropna(subset=["ts_code", "name", "end_date"], how="any")
         if len(df) < before:
-            self.logger.warning(f"过滤掉 {before - len(df)} 行（ann_date 为空）")
+            self.logger.warning(f"过滤掉 {before - len(df)} 行（薪酬主键不完整）")
         return df

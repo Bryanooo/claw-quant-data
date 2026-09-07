@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS index_basic (
 -- 2. 指数日线行情
 CREATE TABLE IF NOT EXISTS index_daily (
     ts_code     VARCHAR(50) NOT NULL,
-    trade_date  VARCHAR(8) NOT NULL,
+    trade_date  DATE NOT NULL,
     open        NUMERIC(16,2),
     high        NUMERIC(16,2),
     low         NUMERIC(16,2),
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS index_daily (
 -- 3. 指数周线行情
 CREATE TABLE IF NOT EXISTS index_weekly (
     ts_code     VARCHAR(50) NOT NULL,
-    trade_date  VARCHAR(8) NOT NULL,
+    trade_date  DATE NOT NULL,
     open        NUMERIC(16,2),
     high        NUMERIC(16,2),
     low         NUMERIC(16,2),
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS index_weekly (
 -- 4. 指数月线行情
 CREATE TABLE IF NOT EXISTS index_monthly (
     ts_code     VARCHAR(50) NOT NULL,
-    trade_date  VARCHAR(8) NOT NULL,
+    trade_date  DATE NOT NULL,
     open        NUMERIC(16,2),
     high        NUMERIC(16,2),
     low         NUMERIC(16,2),
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS index_monthly (
 -- 5. 大盘指数每日指标
 CREATE TABLE IF NOT EXISTS index_dailybasic (
     ts_code         VARCHAR(50) NOT NULL,
-    trade_date      VARCHAR(8) NOT NULL,
+    trade_date      DATE NOT NULL,
     total_mv        NUMERIC(20,2),
     float_mv        NUMERIC(20,2),
     total_share     NUMERIC(20,2),
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS index_dailybasic (
 -- 6. 国际指数行情
 CREATE TABLE IF NOT EXISTS index_global (
     ts_code     VARCHAR(50) NOT NULL,
-    trade_date  VARCHAR(8) NOT NULL,
+    trade_date  DATE NOT NULL,
     open        NUMERIC(16,2),
     close       NUMERIC(16,2),
     high        NUMERIC(16,2),
@@ -97,30 +97,8 @@ CREATE TABLE IF NOT EXISTS index_global (
     PRIMARY KEY (ts_code, trade_date)
 );
 
--- 7. 申万行业日线行情
-CREATE TABLE IF NOT EXISTS ths_daily (
-    ts_code        VARCHAR(50) NOT NULL,
-    trade_date     VARCHAR(8) NOT NULL,
-    open           NUMERIC(16,2),
-    high           NUMERIC(16,2),
-    low            NUMERIC(16,2),
-    close          NUMERIC(16,2),
-    pre_close      NUMERIC(16,2),
-    avg_price      NUMERIC(16,4),
-    change         NUMERIC(16,2),
-    pct_change     NUMERIC(10,4),
-    vol            NUMERIC(20,2),
-    turnover_rate  NUMERIC(10,4),
-    PRIMARY KEY (ts_code, trade_date)
-);
-
--- 8. 申万行业成分构成
-CREATE TABLE IF NOT EXISTS ths_member (
-    ts_code    VARCHAR(50) NOT NULL,
-    con_code   VARCHAR(50) NOT NULL,
-    con_name   VARCHAR(100),
-    PRIMARY KEY (ts_code, con_code)
-);
+-- ths_daily / ths_member 的唯一表定义位于 init_board.sql，避免初始化
+-- 顺序决定字段集合。完整初始化始终执行全部 sql/init_*.sql。
 
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_index_daily_date ON index_daily(trade_date);

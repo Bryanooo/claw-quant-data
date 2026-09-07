@@ -13,8 +13,7 @@
 -- =============================================================================
 
 -- 1. 个股资金流向
-DROP TABLE IF EXISTS moneyflow;
-CREATE TABLE moneyflow (
+CREATE TABLE IF NOT EXISTS moneyflow (
     ts_code         VARCHAR(16)     NOT NULL,
     trade_date      DATE            NOT NULL,
     buy_sm_vol      DECIMAL(20,4),
@@ -61,8 +60,7 @@ COMMENT ON COLUMN moneyflow.net_mf_amount IS '净流量（万元）';
 
 
 -- 2. 个股资金流向（同花顺）
-DROP TABLE IF EXISTS moneyflow_ths;
-CREATE TABLE moneyflow_ths (
+CREATE TABLE IF NOT EXISTS moneyflow_ths (
     trade_date          DATE            NOT NULL,
     ts_code             VARCHAR(16)     NOT NULL,
     name                VARCHAR(32),
@@ -95,8 +93,7 @@ COMMENT ON COLUMN moneyflow_ths.buy_sm_amount_rate IS '小单买入占比';
 
 
 -- 3. 个股资金流向（东方财富 DC）
-DROP TABLE IF EXISTS moneyflow_dc;
-CREATE TABLE moneyflow_dc (
+CREATE TABLE IF NOT EXISTS moneyflow_dc (
     trade_date          DATE            NOT NULL,
     ts_code             VARCHAR(16)     NOT NULL,
     name                VARCHAR(32),
@@ -133,8 +130,7 @@ COMMENT ON COLUMN moneyflow_dc.buy_sm_amount_rate IS '小单占比';
 
 
 -- 4. 同花顺概念板块资金流向
-DROP TABLE IF EXISTS moneyflow_cnt_ths;
-CREATE TABLE moneyflow_cnt_ths (
+CREATE TABLE IF NOT EXISTS moneyflow_cnt_ths (
     trade_date          DATE            NOT NULL,
     ts_code             VARCHAR(16)     NOT NULL,
     name                VARCHAR(64),
@@ -165,8 +161,7 @@ COMMENT ON COLUMN moneyflow_cnt_ths.net_amount IS '净流入额（万元）';
 
 
 -- 5. 同花顺行业资金流向
-DROP TABLE IF EXISTS moneyflow_ind_ths;
-CREATE TABLE moneyflow_ind_ths (
+CREATE TABLE IF NOT EXISTS moneyflow_ind_ths (
     trade_date          DATE            NOT NULL,
     ts_code             VARCHAR(16)     NOT NULL,
     industry            VARCHAR(64),
@@ -197,8 +192,7 @@ COMMENT ON COLUMN moneyflow_ind_ths.net_amount IS '净流入额（万元）';
 
 
 -- 6. 东财板块资金流向（行业+概念，由 content_type 区分）
-DROP TABLE IF EXISTS moneyflow_ind_dc;
-CREATE TABLE moneyflow_ind_dc (
+CREATE TABLE IF NOT EXISTS moneyflow_ind_dc (
     trade_date              DATE            NOT NULL,
     content_type            VARCHAR(16)     NOT NULL,
     ts_code                 VARCHAR(16)     NOT NULL,
@@ -215,7 +209,7 @@ CREATE TABLE moneyflow_ind_dc (
     buy_md_amount_rate      DECIMAL(10,4),
     buy_sm_amount           DECIMAL(20,4),
     buy_sm_amount_rate      DECIMAL(10,4),
-    buy_sm_amount_stock     DECIMAL(20,4),
+    buy_sm_amount_stock     TEXT,
     rank                    INTEGER,
     PRIMARY KEY (ts_code, trade_date, content_type)
 );
@@ -236,13 +230,12 @@ COMMENT ON COLUMN moneyflow_ind_dc.buy_md_amount IS '中单净额（万元）';
 COMMENT ON COLUMN moneyflow_ind_dc.buy_md_amount_rate IS '中单占比';
 COMMENT ON COLUMN moneyflow_ind_dc.buy_sm_amount IS '小单净额（万元）';
 COMMENT ON COLUMN moneyflow_ind_dc.buy_sm_amount_rate IS '小单占比';
-COMMENT ON COLUMN moneyflow_ind_dc.buy_sm_amount_stock IS '小单净额股票（万元）';
+COMMENT ON COLUMN moneyflow_ind_dc.buy_sm_amount_stock IS '当日主力净流入最大股（上游文本字段）';
 COMMENT ON COLUMN moneyflow_ind_dc.rank IS '排名';
 
 
 -- 7. 大盘资金流向（东方财富 DC）
-DROP TABLE IF EXISTS moneyflow_mkt_dc;
-CREATE TABLE moneyflow_mkt_dc (
+CREATE TABLE IF NOT EXISTS moneyflow_mkt_dc (
     trade_date              DATE            NOT NULL PRIMARY KEY,
     close_sh                DECIMAL(16,4),
     pct_change_sh           DECIMAL(10,2),
@@ -278,8 +271,7 @@ COMMENT ON COLUMN moneyflow_mkt_dc.buy_sm_amount_rate IS '小单占比';
 
 
 -- 8. 沪深港通资金流向
-DROP TABLE IF EXISTS moneyflow_hsgt;
-CREATE TABLE moneyflow_hsgt (
+CREATE TABLE IF NOT EXISTS moneyflow_hsgt (
     trade_date      DATE            NOT NULL PRIMARY KEY,
     ggt_ss          DECIMAL(20,4),
     ggt_sz          DECIMAL(20,4),

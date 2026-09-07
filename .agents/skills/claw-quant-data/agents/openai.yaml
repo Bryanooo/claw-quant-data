@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant Data"
+  short_description: "Query trusted market data with health and coverage checks"
+  default_prompt: "Use $claw-quant-data to answer this market-data question with freshness and coverage evidence."

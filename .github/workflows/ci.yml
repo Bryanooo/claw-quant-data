@@ -27,6 +27,11 @@ jobs:
       DB_NAME: tushare_db
       DB_USER: tushare
       DB_PASSWORD: test-password
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: tushare_db
+      PGUSER: tushare
+      PGPASSWORD: test-password
       RUN_DB_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +46,5 @@ jobs:
             psql -v ON_ERROR_STOP=1 -f "$file"
           done
           python scripts/migrate.py
-        env:
-          PGPASSWORD: test-password
       - run: PYTHONPYCACHEPREFIX=/tmp/claw-quant-pycache python -m compileall -q collectors service scripts tests
       - run: pytest -q

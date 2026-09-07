@@ -21,3 +21,4 @@ CREATE INDEX IF NOT EXISTS idx_tushare_raw_record_payload
 
 COMMENT ON TABLE tushare_raw_record IS
     'Catalog-driven Tushare interface records; payload preserves upstream JSON';
+

@@ -18,3 +18,4 @@ END $$;
 DROP INDEX IF EXISTS idx_collection_job_queue;
 CREATE INDEX idx_collection_job_queue
     ON sys_collection_job(status, available_at, priority DESC, created_at);
+

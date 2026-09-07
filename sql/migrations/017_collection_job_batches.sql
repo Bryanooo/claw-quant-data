@@ -118,3 +118,4 @@ DROP TRIGGER IF EXISTS trg_refresh_collection_job_batch ON sys_collection_job;
 CREATE TRIGGER trg_refresh_collection_job_batch
 AFTER INSERT OR UPDATE OR DELETE ON sys_collection_job
 FOR EACH ROW EXECUTE FUNCTION trigger_refresh_collection_job_batch();
+

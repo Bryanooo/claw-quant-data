@@ -53,14 +53,14 @@ CREATE TABLE IF NOT EXISTS ggt_daily (
 -- ggt_monthly: 港股通每月成交统计
 CREATE TABLE IF NOT EXISTS ggt_monthly (
     month           VARCHAR(6)   NOT NULL PRIMARY KEY,
-    day_buy_amt     NUMERIC(12, 2),
-    day_buy_vol     NUMERIC(12, 2),
-    day_sell_amt    NUMERIC(12, 2),
-    day_sell_vol    NUMERIC(12, 2),
-    total_buy_amt   NUMERIC(12, 2),
-    total_buy_vol   NUMERIC(12, 2),
-    total_sell_amt  NUMERIC(12, 2),
-    total_sell_vol  NUMERIC(12, 2),
+    day_buy_amt     NUMERIC(20, 4),
+    day_buy_vol     NUMERIC(20, 4),
+    day_sell_amt    NUMERIC(20, 4),
+    day_sell_vol    NUMERIC(20, 4),
+    total_buy_amt   NUMERIC(20, 4),
+    total_buy_vol   NUMERIC(20, 4),
+    total_sell_amt  NUMERIC(20, 4),
+    total_sell_vol  NUMERIC(20, 4),
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 

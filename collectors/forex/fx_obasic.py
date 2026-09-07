@@ -16,13 +16,19 @@ class FxObasicCollector(BaseCollector):
     CORE_FIELDS = _FIELDS
     pk_columns = ["ts_code"]
 
+    def transform(self, df):
+        """Normalize the misspelled field currently returned by Tushare."""
+        if "traget_spread" in df.columns and "target_spread" not in df.columns:
+            return df.rename(columns={"traget_spread": "target_spread"})
+        return df
+
     def collect_full(self):
         """全量采集：获取所有分类的外汇基础信息"""
         total = 0
         for classify in ["FX","INDEX","COMMODITY","METAL","BUND","CRYPTO","FX_BASKET"]:
             df = self.fetch(exchange="FXCM", classify=classify)
             if df is not None and len(df) > 0:
-                self.store(df)
+                self.store(self.transform(df))
                 total += len(df)
         self.logger.info(f"✅ fx_obasic: 全量采集 {total} 行")
         return total

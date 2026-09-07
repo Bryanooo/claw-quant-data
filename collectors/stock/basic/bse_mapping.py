@@ -9,44 +9,21 @@
 描述：北交所股票代码变更后新旧代码映射表，总量约 300 条。
 权限：120积分，单次最大1000条
 
-运行模式：全量拉取，TRUNCATE+INSERT覆盖
+运行模式：全量拉取，staging + 原子快照合并
 """
 
 import pandas as pd
-import psycopg2
-import psycopg2.extras
-from collectors.base import BaseCollector, get_db_conn
+from collectors.base import BaseCollector
+from collectors.contracts import ResourceClass, WriteMode
 
 
 class BseMappingCollector(BaseCollector):
+    write_mode = WriteMode.SNAPSHOT
+    resource_class = ResourceClass.REFERENCE
     API_NAME = "bse_mapping"
     table_name = "bse_mapping"
     pk_columns = ["o_code"]
 
     def store(self, df: pd.DataFrame) -> int:
-        """
-        全量覆盖模式：先 TRUNCATE 再 INSERT。
-        基类通用 UPSERT 虽然也能用，但 TRUNCATE+INSERT 性能更好且适合全量快照。
-        """
-        conn = get_db_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(f"TRUNCATE TABLE {self.table_name}")
-                rows = df.to_dict(orient="records")
-                if not rows:
-                    return 0
-                columns = list(rows[0].keys())
-                ph = ",".join(["%s"] * len(columns))
-                sql = f"INSERT INTO {self.table_name} ({','.join(columns)}) VALUES ({ph})"
-                vals = [[r.get(c) for c in columns] for r in rows]
-                psycopg2.extras.execute_batch(cur, sql, vals)
-            conn.commit()
-            return len(rows)
-        except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            conn.close()
-
-
-
+        """Merge a complete snapshot atomically without an ACCESS EXCLUSIVE lock."""
+        return self.store_snapshot(df)

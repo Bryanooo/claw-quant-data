@@ -9,7 +9,7 @@
 import time
 import logging
 from datetime import datetime, timedelta
-from collectors.base import BaseCollector, get_db_conn
+from collectors.base import BaseCollector, PartialCollectionError, get_db_conn
 
 logger = logging.getLogger("collector.stk_factor_pro")
 
@@ -43,33 +43,11 @@ class StkFactorProCollector(BaseCollector):
         return v
 
     def store(self, df):
-        """批量upsert（基类通用 store 的 _is_nan 对 numpy 类型也兼容，但保留自定义以处理 numpy 特殊类型）"""
+        """Normalize numpy/container values, then use the shared bulk sink."""
         if df is None or len(df) == 0:
             return 0
-        df = df.copy()
-        conn = get_db_conn()
-        try:
-            ac = list(df.columns)
-            cs = ",".join(ac)
-            ph = ",".join(["%s"] * len(ac))
-            upk = ", ".join(self.pk_columns)
-            dc = [c for c in ac if c not in self.pk_columns]
-            upd = ", ".join(f"{c}=EXCLUDED.{c}" for c in dc)
-            sql = f"INSERT INTO {self.table_name} ({cs}) VALUES ({ph}) ON CONFLICT ({upk}) DO UPDATE SET {upd}"
-            with conn.cursor() as cur:
-                import psycopg2.extras as pg_extras
-                rows = []
-                for _, r in df.iterrows():
-                    rows.append(tuple(self._clean_val(r[c]) for c in ac))
-                pg_extras.execute_batch(cur, sql, rows)
-            conn.commit()
-            return len(df)
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"_store 错误: {e}")
-            return 0
-        finally:
-            conn.close()
+        normalized = df.map(self._clean_val)
+        return super().store(normalized)
 
     def collect_all_history(self, start_date="20260101", end_date="20260513"):
         """采集全量历史数据（逐个股票拉2026年数据）"""
@@ -81,6 +59,7 @@ class StkFactorProCollector(BaseCollector):
         conn.close()
 
         total = 0
+        failures = []
         for i, code in enumerate(codes):
             try:
                 df = self.fetch(ts_code=code, start_date=start_date, end_date=end_date)
@@ -88,7 +67,10 @@ class StkFactorProCollector(BaseCollector):
                     total += self.store(df)
             except Exception as e:
                 logger.warning(f"  [{i+1}/{len(codes)}] {code}: {e}")
+                failures.append(f"{code}: {e}")
             if (i + 1) % 200 == 0:
                 logger.info(f"  [{i+1}/{len(codes)}] {total}行")
+        if failures:
+            raise PartialCollectionError(failures, total)
         logger.info(f"✅ stk_factor_pro: 历史补齐 {total} 行")
         return total

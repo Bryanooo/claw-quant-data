@@ -6,7 +6,7 @@
 import time
 import logging
 from datetime import datetime, timedelta
-from collectors.base import BaseCollector, get_db_conn
+from collectors.base import BaseCollector, PartialCollectionError, get_db_conn
 
 logger = logging.getLogger("collector.broker_recommend")
 
@@ -24,6 +24,7 @@ class BrokerRecommendCollector(BaseCollector):
         e = datetime.strptime(end_date, "%Y%m%d")
         current = s.replace(day=1)
         end_month = e.replace(day=1)
+        failures = []
         while current <= end_month:
             month_str = current.strftime("%Y%m")
             try:
@@ -31,10 +32,13 @@ class BrokerRecommendCollector(BaseCollector):
                 total += rows
             except Exception as ex:
                 self.logger.warning(f"  {month_str}: {ex}")
+                failures.append(f"{month_str}: {ex}")
             if current.month == 12:
                 current = current.replace(year=current.year + 1, month=1)
             else:
                 current = current.replace(month=current.month + 1)
             time.sleep(0.3)
+        if failures:
+            raise PartialCollectionError(failures, total)
         self.logger.info(f"🏁 broker_recommend: 历史补齐 {total} 行")
         return total

@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS repurchase (
     ts_code    VARCHAR(16)  NOT NULL,
     ann_date   DATE         NOT NULL,
     end_date   DATE,
-    proc       NUMERIC(10,4),
+    proc       VARCHAR(32),
     exp_date   DATE,
     vol        NUMERIC(20,4),
     amount     NUMERIC(20,4),
@@ -142,14 +142,14 @@ CREATE INDEX IF NOT EXISTS idx_repurchase_ann ON repurchase (ann_date);
 -- 9. share_float: 限售股解禁
 CREATE TABLE IF NOT EXISTS share_float (
     ts_code     VARCHAR(16)  NOT NULL,
-    ann_date    DATE,
+    ann_date    DATE         NOT NULL,
     float_date  DATE         NOT NULL,
     float_share NUMERIC(20,4),
     float_ratio NUMERIC(10,4),
     holder_name VARCHAR(128) NOT NULL,
     share_type  VARCHAR(16)  NOT NULL,
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (ts_code, float_date, holder_name, share_type)
+    PRIMARY KEY (ts_code, ann_date, float_date, holder_name, share_type)
 );
 
 CREATE INDEX IF NOT EXISTS idx_share_float_date ON share_float (float_date);
@@ -197,10 +197,10 @@ CREATE TABLE IF NOT EXISTS stk_holdertrade (
     after_ratio    NUMERIC(10,4),
     avg_price      NUMERIC(12,4),
     total_share    NUMERIC(20,4),
-    begin_date     DATE          NOT NULL,
+    begin_date     DATE,
     close_date     DATE,
     created_at     TIMESTAMP     NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (ts_code, ann_date, holder_name, begin_date)
+    PRIMARY KEY (ts_code, ann_date, holder_name)
 );
 
 CREATE INDEX IF NOT EXISTS idx_stk_holdertrade_code ON stk_holdertrade (ts_code);

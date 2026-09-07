@@ -20,7 +20,7 @@
     --message "$(python3.11 scripts/check_collector_status.py)" \\
     --announce \\
     --channel "clawdbot-dingtalk" \\
-    --to "1830664110642027"
+    --to "$DINGTALK_USER_ID"
 """
 
 import sys, os
@@ -28,6 +28,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from datetime import datetime, timedelta, timezone
 from service.run_tracker import check_timeout_tasks, count_failed_tasks, get_latest_runs
+
+
+EXPECTED_TASK_MAX_AGE_HOURS = {
+    "trade_cal_daily": 48,
+    "daily_daily": 96,
+    "bak_basic_daily": 96,
+    "index_daily_daily": 96,
+    "fx_daily_daily": 120,
+    "sge_daily_daily": 120,
+}
 
 
 def check(alert_on_fail: int = 1) -> str:
@@ -72,8 +82,21 @@ def check(alert_on_fail: int = 1) -> str:
         if r["status"] == "failed":
             messages.append(f"⚠️ bak_basic 盘后采集失败")
 
-    # 5. 检查今日交易日是否有核心任务未触发
-    # （可做但先简单一点）
+    # 5. 核心任务从未成功或最近成功时间超过容许窗口。
+    now_utc = datetime.now(timezone.utc)
+    for task_id, max_age_hours in EXPECTED_TASK_MAX_AGE_HOURS.items():
+        successful_runs = get_latest_runs(task_id=task_id, status="success", limit=1)
+        if not successful_runs:
+            messages.append(f"🚨 核心任务缺跑：{task_id} 尚无成功记录")
+            continue
+        started_at = successful_runs[0]["started_at"]
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        age_hours = (now_utc - started_at).total_seconds() / 3600
+        if age_hours > max_age_hours:
+            messages.append(
+                f"🚨 核心任务陈旧：{task_id} 已 {age_hours:.0f} 小时未成功"
+            )
 
     if messages:
         header = f"📊 数据巡检报告 ({today})\n{'─'*30}\n"

@@ -1,0 +1,2625 @@
+{
+  "generated_at": "2026-09-06T00:50:21.049783+08:00",
+  "summary": {
+    "collectable_interfaces": 200,
+    "implemented_interfaces": 200,
+    "automatically_scheduled_interfaces": 178,
+    "interfaces_with_positive_rows": 179,
+    "interfaces_without_positive_row_evidence": 21
+  },
+  "interfaces": [
+    {
+      "api_name": "adj_factor",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 487495,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:02.883038+00:00",
+      "last_raw_at": "2026-09-04T11:15:01.572794+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bak_basic",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "bak_basic"
+      ],
+      "normalized_rows": 138490,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bak_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 487207,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:11.719774+00:00",
+      "last_raw_at": "2026-09-04T11:15:11.604309+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "balancesheet",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "balancesheet"
+      ],
+      "normalized_rows": 47850,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "balancesheet_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "balancesheet"
+      ],
+      "normalized_rows": 47850,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bc_bestotcqt",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 6462,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:12.739442+00:00",
+      "last_raw_at": "2026-09-04T11:15:12.553198+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bc_otcqt",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 43811,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4562,
+      "last_success_at": "2026-09-04T12:19:57.097719+00:00",
+      "last_raw_at": "2026-09-04T12:19:57.080636+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "block_trade",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 182,
+      "normalized_tables": [
+        "block_trade"
+      ],
+      "normalized_rows": 528,
+      "successful_jobs": 9,
+      "last_success_at": "2026-09-04T11:15:13.480851+00:00",
+      "last_raw_at": "2026-08-28T17:36:28.859173+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bond_blk",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 10,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 15,
+      "last_success_at": "2026-09-04T11:15:14.490481+00:00",
+      "last_raw_at": "2026-09-04T11:15:14.458448+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bond_blk_detail",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 19,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 15,
+      "last_success_at": "2026-09-04T11:15:15.490228+00:00",
+      "last_raw_at": "2026-09-04T11:15:15.471152+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "broker_recommend",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 308,
+      "normalized_tables": [
+        "broker_recommend"
+      ],
+      "normalized_rows": 544,
+      "successful_jobs": 4,
+      "last_success_at": "2026-09-03T15:34:49.834698+00:00",
+      "last_raw_at": "2026-08-28T17:22:30.453418+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "bse_mapping",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 248,
+      "normalized_tables": [
+        "bse_mapping"
+      ],
+      "normalized_rows": 248,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:09:38.704188+00:00",
+      "last_raw_at": "2026-08-28T17:31:59.338919+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cashflow",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "cashflow"
+      ],
+      "normalized_rows": 47818,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cashflow_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "cashflow"
+      ],
+      "normalized_rows": 47818,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 2324,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:09:40.940833+00:00",
+      "last_raw_at": "2026-08-30T19:09:40.623766+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_call",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 15,
+      "last_success_at": "2026-09-04T11:15:16.440550+00:00",
+      "last_raw_at": "2026-09-04T11:15:16.421919+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 28105,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:17.971788+00:00",
+      "last_raw_at": "2026-09-04T11:15:17.901264+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_factor_pro",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 2524,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:20.512818+00:00",
+      "last_raw_at": "2026-09-04T11:15:19.229757+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_issue",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 23,
+      "last_success_at": "2026-09-05T11:15:02.302609+00:00",
+      "last_raw_at": "2026-09-01T11:15:20.889529+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_rate",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 5072,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 142,
+      "last_success_at": "2026-08-30T19:15:59.342418+00:00",
+      "last_raw_at": "2026-08-30T19:15:59.316395+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_rating",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 5959,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 142,
+      "last_success_at": "2026-08-30T19:19:09.578853+00:00",
+      "last_raw_at": "2026-08-30T19:19:09.117894+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cb_share",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 62,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 480,
+      "last_success_at": "2026-09-05T11:15:38.200626+00:00",
+      "last_raw_at": "2026-09-04T11:33:18.675707+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ccass_hold",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "ccass_hold"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "ccass_hold_detail",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "ccass_hold_detail"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "ci_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 38945,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:22.619525+00:00",
+      "last_raw_at": "2026-09-04T11:15:22.539644+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ci_index_member",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 15497,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 992,
+      "last_success_at": "2026-08-30T19:57:04.862784+00:00",
+      "last_raw_at": "2026-08-30T19:54:34.639361+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cn_cpi",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 5,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T23:15:15.390172+00:00",
+      "last_raw_at": "2026-08-30T12:28:38.691026+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cn_gdp",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 356,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:09:42.247680+00:00",
+      "last_raw_at": "2026-08-30T19:09:42.206552+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cn_m",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 3,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 7,
+      "last_success_at": "2026-09-04T23:15:15.892205+00:00",
+      "last_raw_at": "2026-08-30T12:28:39.199068+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cn_pmi",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 3,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 6,
+      "last_success_at": "2026-09-03T15:34:51.326995+00:00",
+      "last_raw_at": "2026-09-03T15:34:51.306483+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cn_ppi",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 2,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 7,
+      "last_success_at": "2026-09-04T23:15:16.416415+00:00",
+      "last_raw_at": "2026-08-30T10:34:57.708746+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cn_schedule",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 50,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-09-03T15:34:52.393455+00:00",
+      "last_raw_at": "2026-09-03T15:34:52.368740+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "cyq_chips",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "cyq_chips"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "cyq_perf",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "cyq_perf"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "daily"
+      ],
+      "normalized_rows": 901826,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "daily_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 935108,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:27.168457+00:00",
+      "last_raw_at": "2026-09-04T11:15:23.983350+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "daily_info",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1050,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 90,
+      "last_success_at": "2026-09-04T11:15:28.005898+00:00",
+      "last_raw_at": "2026-09-04T11:15:27.972424+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dc_concept",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1268,
+      "normalized_tables": [
+        "dc_concept"
+      ],
+      "normalized_rows": 3806,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:29.121470+00:00",
+      "last_raw_at": "2026-08-28T17:36:31.767247+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dc_concept_cons",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 6000,
+      "normalized_tables": [
+        "dc_concept_cons"
+      ],
+      "normalized_rows": 123851,
+      "successful_jobs": 35530,
+      "last_success_at": "2026-09-04T13:53:47.470644+00:00",
+      "last_raw_at": "2026-08-28T17:36:32.222148+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dc_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 2061,
+      "normalized_tables": [
+        "dc_daily"
+      ],
+      "normalized_rows": 88941,
+      "successful_jobs": 90,
+      "last_success_at": "2026-09-04T11:15:30.139343+00:00",
+      "last_raw_at": "2026-08-28T17:36:32.692784+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dc_hot",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1584,
+      "normalized_tables": [
+        "dc_hot"
+      ],
+      "normalized_rows": 4694,
+      "successful_jobs": 14,
+      "last_success_at": "2026-09-04T23:15:01.871312+00:00",
+      "last_raw_at": "2026-08-28T17:36:32.935955+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dc_index",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 458,
+      "normalized_tables": [
+        "dc_index"
+      ],
+      "normalized_rows": 3024,
+      "successful_jobs": 22,
+      "last_success_at": "2026-09-04T11:16:19.511460+00:00",
+      "last_raw_at": "2026-08-29T05:33:18.026743+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dc_member",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 16000,
+      "normalized_tables": [
+        "dc_member"
+      ],
+      "normalized_rows": 48000,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:32.417819+00:00",
+      "last_raw_at": "2026-08-28T17:36:33.455721+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "disclosure_date",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "disclosure_date"
+      ],
+      "normalized_rows": 5508,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "dividend",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1454,
+      "normalized_tables": [
+        "dividend"
+      ],
+      "normalized_rows": 1498,
+      "successful_jobs": 11,
+      "last_success_at": "2026-09-04T23:15:03.128191+00:00",
+      "last_raw_at": "2026-08-28T17:38:16.834411+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "eco_cal",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 433,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:34.999290+00:00",
+      "last_raw_at": "2026-09-04T11:15:34.966982+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "etf_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 3654,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:09:44.300919+00:00",
+      "last_raw_at": "2026-08-30T19:09:43.898810+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "etf_index",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1120,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:09:45.738361+00:00",
+      "last_raw_at": "2026-08-30T19:09:45.683008+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "etf_sh_cons",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 707010,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 6235,
+      "last_success_at": "2026-09-04T12:12:40.222931+00:00",
+      "last_raw_at": "2026-09-04T12:12:40.167470+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "etf_share_size",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 137250,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 94,
+      "last_success_at": "2026-09-05T01:15:02.207624+00:00",
+      "last_raw_at": "2026-09-05T01:15:01.932481+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "etf_sz_cons",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 483119,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4783,
+      "last_success_at": "2026-09-04T12:01:41.429214+00:00",
+      "last_raw_at": "2026-09-04T12:01:40.829737+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "express",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "express"
+      ],
+      "normalized_rows": 1149,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "express_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "express"
+      ],
+      "normalized_rows": 1149,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "factor_value",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 6466741,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 2433,
+      "last_success_at": "2026-09-04T11:40:19.557959+00:00",
+      "last_raw_at": "2026-09-04T11:40:18.935239+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fina_audit",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "fina_indicator",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "fina_indicator"
+      ],
+      "normalized_rows": 49494,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fina_indicator_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "fina_indicator"
+      ],
+      "normalized_rows": 49494,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fina_mainbz",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "fina_mainbz"
+      ],
+      "normalized_rows": 64450,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fina_mainbz_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "fina_mainbz"
+      ],
+      "normalized_rows": 64450,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "forecast",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "forecast"
+      ],
+      "normalized_rows": 3179,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "forecast_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "forecast"
+      ],
+      "normalized_rows": 3179,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ft_limit",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 6932,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:37.079223+00:00",
+      "last_raw_at": "2026-09-04T11:15:37.004238+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_adj",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 182201,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:40.022177+00:00",
+      "last_raw_at": "2026-09-04T11:15:39.964523+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 15000,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": "2026-08-28T17:21:45.004950+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_company",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 412,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:09:47.246733+00:00",
+      "last_raw_at": "2026-08-30T19:09:47.208507+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 180209,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:43.658851+00:00",
+      "last_raw_at": "2026-09-04T11:15:41.106131+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_div",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 121,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:44.576852+00:00",
+      "last_raw_at": "2026-09-04T11:15:44.540816+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_factor_pro",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 16890,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:49.644793+00:00",
+      "last_raw_at": "2026-09-04T11:15:46.324161+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_manager",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 169751,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:21.031094+00:00",
+      "last_raw_at": "2026-08-30T19:11:20.915046+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fund_nav",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "fund_portfolio",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "fund_share",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 167640,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:15:50.759729+00:00",
+      "last_raw_at": "2026-09-04T11:15:50.570599+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 22392,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 42,
+      "last_success_at": "2026-08-30T19:41:55.583184+00:00",
+      "last_raw_at": "2026-08-30T19:41:55.555361+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8576,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:51.671307+00:00",
+      "last_raw_at": "2026-09-04T11:15:51.572083+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_holding",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 73671,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 43,
+      "last_success_at": "2026-09-04T11:32:49.762007+00:00",
+      "last_raw_at": "2026-09-04T11:32:48.878586+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_index_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "fut_mapping",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1616,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:52.507402+00:00",
+      "last_raw_at": "2026-09-04T11:15:52.458436+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_settle",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7194,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:53.605825+00:00",
+      "last_raw_at": "2026-09-04T11:15:53.524874+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_trade_cal",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:54.483999+00:00",
+      "last_raw_at": "2026-09-04T11:15:54.453915+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_weekly_detail",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 4000,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 1,
+      "last_success_at": "2026-08-28T17:32:33.570816+00:00",
+      "last_raw_at": "2026-08-28T17:22:18.780939+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fut_weekly_monthly",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "fut_wsr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8225,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:55.666280+00:00",
+      "last_raw_at": "2026-09-04T11:15:55.563974+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fx_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "fx_daily"
+      ],
+      "normalized_rows": 506,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "fx_obasic",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "fx_obasic"
+      ],
+      "normalized_rows": 69,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ggt_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "ggt_daily",
+        "ggt_monthly"
+      ],
+      "normalized_rows": 13,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ggt_top10",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "ggt_top10"
+      ],
+      "normalized_rows": 100,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "gz_index",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1181,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 63,
+      "last_success_at": "2026-09-05T16:31:07.269187+00:00",
+      "last_raw_at": "2026-09-03T16:28:31.408031+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "hibor",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:57.461434+00:00",
+      "last_raw_at": "2026-09-04T11:15:57.436923+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "hk_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 5562,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:22.071746+00:00",
+      "last_raw_at": "2026-08-30T19:11:21.875756+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "hk_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "hk_hold",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "hk_hold"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "hk_tradecal",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:15:58.438212+00:00",
+      "last_raw_at": "2026-09-04T11:15:58.422503+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "hm_list",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 113,
+      "normalized_tables": [
+        "hm_list"
+      ],
+      "normalized_rows": 113,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:22.705768+00:00",
+      "last_raw_at": "2026-08-28T17:32:34.196298+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "hsgt_top10",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "hsgt_top10"
+      ],
+      "normalized_rows": 100,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "idx_anns",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 23,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 14,
+      "last_success_at": "2026-09-05T11:15:03.810871+00:00",
+      "last_raw_at": "2026-09-02T11:17:03.498782+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "idx_factor_pro",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 324910,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:16:07.073750+00:00",
+      "last_raw_at": "2026-09-04T11:16:01.374218+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "income",
+      "implementation_mode": "equivalent_specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "income"
+      ],
+      "normalized_rows": 47852,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "income_vip",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "income"
+      ],
+      "normalized_rows": 47852,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_basic",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "index_basic"
+      ],
+      "normalized_rows": 8129,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_classify",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1064,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 5,
+      "last_success_at": "2026-08-30T19:11:23.856432+00:00",
+      "last_raw_at": "2026-08-30T19:11:23.811814+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "index_daily"
+      ],
+      "normalized_rows": 881938,
+      "successful_jobs": 156,
+      "last_success_at": "2026-09-04T08:05:05.207954+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_dailybasic",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "index_dailybasic"
+      ],
+      "normalized_rows": 1042,
+      "successful_jobs": 72,
+      "last_success_at": "2026-08-30T14:06:05.145274+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_global",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "index_global"
+      ],
+      "normalized_rows": 176,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_member_all",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 11560,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 891,
+      "last_success_at": "2026-08-30T19:57:25.134756+00:00",
+      "last_raw_at": "2026-08-30T19:57:25.109325+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_monthly",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "index_monthly"
+      ],
+      "normalized_rows": 122247,
+      "successful_jobs": 8174,
+      "last_success_at": "2026-09-03T15:34:57.503696+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_weekly",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 2000,
+      "normalized_tables": [
+        "index_weekly"
+      ],
+      "normalized_rows": 496389,
+      "successful_jobs": 8172,
+      "last_success_at": "2026-09-03T15:34:49.369726+00:00",
+      "last_raw_at": "2026-08-28T17:36:42.842859+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "index_weight",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "kpl_concept_cons",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 6000,
+      "normalized_tables": [
+        "kpl_concept_cons"
+      ],
+      "normalized_rows": 4360159,
+      "successful_jobs": 475,
+      "last_success_at": "2026-09-04T11:16:12.368060+00:00",
+      "last_raw_at": "2026-08-28T17:36:43.218591+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "kpl_list",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 78,
+      "normalized_tables": [
+        "kpl_list"
+      ],
+      "normalized_rows": 398,
+      "successful_jobs": 22,
+      "last_success_at": "2026-09-05T05:15:02.715235+00:00",
+      "last_raw_at": "2026-08-28T17:21:15.130719+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "libor",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 35716,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 215,
+      "last_success_at": "2026-09-05T16:31:09.812271+00:00",
+      "last_raw_at": "2026-09-03T16:29:53.331042+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "limit_cpt_list",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 40,
+      "normalized_tables": [
+        "limit_cpt_list"
+      ],
+      "normalized_rows": 120,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:14.983412+00:00",
+      "last_raw_at": "2026-08-28T17:36:44.054548+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "limit_list_d",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 196,
+      "normalized_tables": [
+        "limit_list_d"
+      ],
+      "normalized_rows": 581,
+      "successful_jobs": 9,
+      "last_success_at": "2026-09-04T11:16:15.980633+00:00",
+      "last_raw_at": "2026-08-28T17:36:44.209492+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "limit_list_ths",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 546,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:17.065386+00:00",
+      "last_raw_at": "2026-09-04T11:16:17.031331+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "limit_step",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 33,
+      "normalized_tables": [
+        "limit_step"
+      ],
+      "normalized_rows": 83,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:17.942956+00:00",
+      "last_raw_at": "2026-08-28T17:36:44.559985+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "major_news",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 11,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 12,
+      "last_success_at": "2026-09-04T11:16:19.016461+00:00",
+      "last_raw_at": "2026-09-04T11:16:18.986302+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "margin",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 3,
+      "normalized_tables": [
+        "margin"
+      ],
+      "normalized_rows": 259,
+      "successful_jobs": 102,
+      "last_success_at": "2026-09-05T16:28:26.073692+00:00",
+      "last_raw_at": "2026-08-28T17:21:16.117358+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "margin_detail",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 4435,
+      "normalized_tables": [
+        "margin_detail"
+      ],
+      "normalized_rows": 379769,
+      "successful_jobs": 100,
+      "last_success_at": "2026-09-05T16:28:27.706285+00:00",
+      "last_raw_at": "2026-08-28T17:21:16.490121+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "margin_secs",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 8925,
+      "normalized_tables": [
+        "margin_secs"
+      ],
+      "normalized_rows": 26792,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:22.391559+00:00",
+      "last_raw_at": "2026-08-28T17:36:45.182010+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "mkt_idx_bmk",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 282,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:24.731508+00:00",
+      "last_raw_at": "2026-08-30T19:11:24.695607+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 11094,
+      "normalized_tables": [
+        "moneyflow"
+      ],
+      "normalized_rows": 859138,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:23.820523+00:00",
+      "last_raw_at": "2026-08-28T17:36:45.851019+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow_cnt_ths",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 774,
+      "normalized_tables": [
+        "moneyflow_cnt_ths"
+      ],
+      "normalized_rows": 33477,
+      "successful_jobs": 89,
+      "last_success_at": "2026-09-04T11:16:24.496257+00:00",
+      "last_raw_at": "2026-08-28T17:36:46.441148+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow_dc",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 12000,
+      "normalized_tables": [
+        "moneyflow_dc"
+      ],
+      "normalized_rows": 34790,
+      "successful_jobs": 35530,
+      "last_success_at": "2026-09-04T13:54:37.314362+00:00",
+      "last_raw_at": "2026-08-28T17:36:46.950704+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow_hsgt",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "moneyflow_hsgt"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "moneyflow_ind_dc",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 2062,
+      "normalized_tables": [
+        "moneyflow_ind_dc"
+      ],
+      "normalized_rows": 88956,
+      "successful_jobs": 90,
+      "last_success_at": "2026-09-04T11:16:25.708236+00:00",
+      "last_raw_at": "2026-08-28T17:36:47.615505+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow_ind_ths",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 180,
+      "normalized_tables": [
+        "moneyflow_ind_ths"
+      ],
+      "normalized_rows": 7830,
+      "successful_jobs": 89,
+      "last_success_at": "2026-09-04T11:16:26.485283+00:00",
+      "last_raw_at": "2026-08-28T17:36:47.897520+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow_mkt_dc",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 2,
+      "normalized_tables": [
+        "moneyflow_mkt_dc"
+      ],
+      "normalized_rows": 87,
+      "successful_jobs": 89,
+      "last_success_at": "2026-09-04T11:16:27.463813+00:00",
+      "last_raw_at": "2026-08-28T17:36:48.018142+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "moneyflow_ths",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 10422,
+      "normalized_tables": [
+        "moneyflow_ths"
+      ],
+      "normalized_rows": 452855,
+      "successful_jobs": 89,
+      "last_success_at": "2026-09-04T11:16:29.001732+00:00",
+      "last_raw_at": "2026-08-28T17:36:48.551948+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "monthly",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stk_weekly_monthly"
+      ],
+      "normalized_rows": 33494,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "namechange",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 5,
+      "normalized_tables": [
+        "namechange"
+      ],
+      "normalized_rows": 11,
+      "successful_jobs": 11,
+      "last_success_at": "2026-09-04T11:16:29.986185+00:00",
+      "last_raw_at": "2026-08-28T17:36:48.902844+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "new_share",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "new_share"
+      ],
+      "normalized_rows": 37,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "opt_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 24000,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:27.764351+00:00",
+      "last_raw_at": "2026-08-30T19:11:26.492196+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "opt_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 151246,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 43,
+      "last_success_at": "2026-09-04T11:32:46.517775+00:00",
+      "last_raw_at": "2026-09-04T11:32:46.150213+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "p_get",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "p_list",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 10,
+      "last_success_at": "2026-09-05T15:15:03.446958+00:00",
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "pledge_detail",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 79,
+      "normalized_tables": [
+        "pledge_detail"
+      ],
+      "normalized_rows": 138,
+      "successful_jobs": 12,
+      "last_success_at": "2026-09-04T11:16:30.953916+00:00",
+      "last_raw_at": "2026-08-28T17:36:50.686355+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "pledge_stat",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 3000,
+      "normalized_tables": [
+        "pledge_stat"
+      ],
+      "normalized_rows": 1733559,
+      "successful_jobs": 11845,
+      "last_success_at": "2026-08-31T17:35:38.145385+00:00",
+      "last_raw_at": "2026-08-28T17:32:37.032708+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "repo_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 330,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:32.091681+00:00",
+      "last_raw_at": "2026-09-04T11:16:32.059063+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "report_rc",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 2864,
+      "normalized_tables": [
+        "report_rc"
+      ],
+      "normalized_rows": 3078,
+      "successful_jobs": 14,
+      "last_success_at": "2026-09-04T23:15:06.047757+00:00",
+      "last_raw_at": "2026-08-28T17:36:51.779504+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "repurchase",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 75,
+      "normalized_tables": [
+        "repurchase"
+      ],
+      "normalized_rows": 240,
+      "successful_jobs": 10,
+      "last_success_at": "2026-09-04T11:16:34.510554+00:00",
+      "last_raw_at": "2026-08-28T17:36:51.935943+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "sf_month",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 2,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 7,
+      "last_success_at": "2026-09-04T23:15:16.880392+00:00",
+      "last_raw_at": "2026-08-30T10:34:58.698953+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "sge_basic",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "sge_basic"
+      ],
+      "normalized_rows": 13,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "sge_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "sge_daily"
+      ],
+      "normalized_rows": 390,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "share_float",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 136,
+      "normalized_tables": [
+        "share_float"
+      ],
+      "normalized_rows": 356,
+      "successful_jobs": 9,
+      "last_success_at": "2026-09-04T11:16:35.560046+00:00",
+      "last_raw_at": "2026-08-28T17:36:52.055794+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "shibor",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:36.481176+00:00",
+      "last_raw_at": "2026-09-04T11:16:36.454206+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "shibor_lpr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1538,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 40,
+      "last_success_at": "2026-09-05T16:31:10.296081+00:00",
+      "last_raw_at": "2026-09-05T16:31:10.255026+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "shibor_quote",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 137,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:38.491408+00:00",
+      "last_raw_at": "2026-09-04T11:16:38.461589+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "slb_len",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "slb_len"
+      ],
+      "normalized_rows": 2811,
+      "successful_jobs": 203,
+      "last_success_at": "2026-09-05T16:31:11.809590+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "slb_len_mm",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 55345,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 203,
+      "last_success_at": "2026-09-05T16:31:12.340261+00:00",
+      "last_raw_at": "2026-09-03T16:36:17.136641+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "slb_sec",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 2289413,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 203,
+      "last_success_at": "2026-09-05T16:31:12.867684+00:00",
+      "last_raw_at": "2026-09-03T17:01:28.018954+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "slb_sec_detail",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1044757,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 203,
+      "last_success_at": "2026-09-05T16:31:13.343514+00:00",
+      "last_raw_at": "2026-09-03T17:13:14.662002+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "st",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stock_st"
+      ],
+      "normalized_rows": 1015,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_account",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 189,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 38,
+      "last_success_at": "2026-09-05T16:31:10.751351+00:00",
+      "last_raw_at": "2026-09-03T16:30:17.826331+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_ah_comparison",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 406,
+      "normalized_tables": [
+        "stk_ah_comparison"
+      ],
+      "normalized_rows": 1218,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:44.923732+00:00",
+      "last_raw_at": "2026-08-28T17:36:53.161022+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_alert",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [
+        "stk_alert"
+      ],
+      "normalized_rows": 13,
+      "successful_jobs": 10,
+      "last_success_at": "2026-09-04T11:16:45.516091+00:00",
+      "last_raw_at": "2026-08-28T17:36:53.376187+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_auction",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 15842,
+      "normalized_tables": [
+        "stk_auction"
+      ],
+      "normalized_rows": 681000,
+      "successful_jobs": 89,
+      "last_success_at": "2026-09-04T11:16:46.968060+00:00",
+      "last_raw_at": "2026-08-28T17:36:53.840102+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_auction_c",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 11101,
+      "normalized_tables": [
+        "stk_auction_c"
+      ],
+      "normalized_rows": 33320,
+      "successful_jobs": 14,
+      "last_success_at": "2026-09-04T23:15:09.580179+00:00",
+      "last_raw_at": "2026-08-28T17:36:54.611296+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_auction_o",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 11020,
+      "normalized_tables": [
+        "stk_auction_o"
+      ],
+      "normalized_rows": 33160,
+      "successful_jobs": 14,
+      "last_success_at": "2026-09-04T23:15:10.212372+00:00",
+      "last_raw_at": "2026-08-28T17:36:55.373755+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_factor",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 485763,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:16:53.940256+00:00",
+      "last_raw_at": "2026-09-04T11:16:50.270727+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_factor_pro",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 11093,
+      "normalized_tables": [
+        "stk_factor_pro"
+      ],
+      "normalized_rows": 464457,
+      "successful_jobs": 90,
+      "last_success_at": "2026-09-04T11:16:56.694380+00:00",
+      "last_raw_at": "2026-08-28T17:37:00.956452+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_high_shock",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1,
+      "normalized_tables": [
+        "stk_high_shock"
+      ],
+      "normalized_rows": 2,
+      "successful_jobs": 19,
+      "last_success_at": "2026-09-05T11:15:12.331181+00:00",
+      "last_raw_at": "2026-08-28T17:37:05.593920+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_holdernumber",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1594,
+      "normalized_tables": [
+        "stk_holdernumber"
+      ],
+      "normalized_rows": 1494,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:16:58.480265+00:00",
+      "last_raw_at": "2026-08-28T17:37:05.721634+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_holdertrade",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 74,
+      "normalized_tables": [
+        "stk_holdertrade"
+      ],
+      "normalized_rows": 194,
+      "successful_jobs": 15,
+      "last_success_at": "2026-09-04T11:16:59.482112+00:00",
+      "last_raw_at": "2026-08-28T17:37:05.888131+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_limit",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stk_limit"
+      ],
+      "normalized_rows": 1245041,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_managers",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 124,
+      "normalized_tables": [
+        "stk_managers"
+      ],
+      "normalized_rows": 131,
+      "successful_jobs": 16,
+      "last_success_at": "2026-09-05T05:15:06.921541+00:00",
+      "last_raw_at": "2026-08-28T17:37:06.006494+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_mins",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "stk_nineturn",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 11093,
+      "normalized_tables": [
+        "stk_nineturn"
+      ],
+      "normalized_rows": 33267,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:17:01.392002+00:00",
+      "last_raw_at": "2026-08-28T17:37:06.478114+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_rewards",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stk_rewards"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "stk_shock",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 22,
+      "normalized_tables": [
+        "stk_shock"
+      ],
+      "normalized_rows": 88,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:17:02.000058+00:00",
+      "last_raw_at": "2026-08-28T17:37:07.012141+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_surv",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stk_surv"
+      ],
+      "normalized_rows": 168,
+      "successful_jobs": 24,
+      "last_success_at": "2026-09-05T11:15:13.280125+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_week_month_adj",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "stk_weekly_monthly",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stk_weekly_monthly"
+      ],
+      "normalized_rows": 33494,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stock_basic",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stock_basic"
+      ],
+      "normalized_rows": 5895,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stock_company",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stock_company"
+      ],
+      "normalized_rows": 6294,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stock_hsgt",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stock_hsgt"
+      ],
+      "normalized_rows": 71320,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stock_st",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stock_st"
+      ],
+      "normalized_rows": 1015,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "suspend_d",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "suspend_d"
+      ],
+      "normalized_rows": 39,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "sw_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 38632,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 88,
+      "last_success_at": "2026-09-04T11:17:04.128286+00:00",
+      "last_raw_at": "2026-09-04T11:17:04.043706+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "sz_daily_info",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 1232,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 90,
+      "last_success_at": "2026-09-04T11:17:04.976894+00:00",
+      "last_raw_at": "2026-09-04T11:17:04.946073+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "tdx_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1232,
+      "normalized_tables": [
+        "tdx_daily"
+      ],
+      "normalized_rows": 53589,
+      "successful_jobs": 89,
+      "last_success_at": "2026-09-04T11:17:06.178770+00:00",
+      "last_raw_at": "2026-08-28T17:37:07.738929+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "tdx_index",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1228,
+      "normalized_tables": [
+        "tdx_index"
+      ],
+      "normalized_rows": 53188,
+      "successful_jobs": 92,
+      "last_success_at": "2026-09-04T11:17:07.040870+00:00",
+      "last_raw_at": "2026-08-28T17:37:07.944160+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "tdx_member",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 6000,
+      "normalized_tables": [
+        "tdx_member"
+      ],
+      "normalized_rows": 501965,
+      "successful_jobs": 3729,
+      "last_success_at": "2026-09-04T12:03:30.395880+00:00",
+      "last_raw_at": "2026-08-28T17:37:08.192645+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ths_daily",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "ths_daily"
+      ],
+      "normalized_rows": 185514,
+      "successful_jobs": 71,
+      "last_success_at": "2026-08-31T16:30:34.385992+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ths_hot",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1046,
+      "normalized_tables": [
+        "ths_hot"
+      ],
+      "normalized_rows": 40771,
+      "successful_jobs": 96,
+      "last_success_at": "2026-09-04T23:15:11.947063+00:00",
+      "last_raw_at": "2026-08-28T17:37:08.554308+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ths_index",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 2517,
+      "normalized_tables": [
+        "ths_index"
+      ],
+      "normalized_rows": 2517,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:29.828809+00:00",
+      "last_raw_at": "2026-08-28T17:32:37.402734+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "ths_member",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "ths_member"
+      ],
+      "normalized_rows": 6000,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "top10_cb_holders",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "top10_floatholders",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "top10_floatholders"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "top10_holders",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": false,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "top10_holders"
+      ],
+      "normalized_rows": 0,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "no_positive_row_evidence"
+    },
+    {
+      "api_name": "top_inst",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 1290,
+      "normalized_tables": [
+        "top_inst"
+      ],
+      "normalized_rows": 3415,
+      "successful_jobs": 9,
+      "last_success_at": "2026-09-04T11:17:09.000922+00:00",
+      "last_raw_at": "2026-08-28T17:37:08.728009+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "top_list",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 119,
+      "normalized_tables": [
+        "top_list"
+      ],
+      "normalized_rows": 364,
+      "successful_jobs": 9,
+      "last_success_at": "2026-09-04T11:17:09.971934+00:00",
+      "last_raw_at": "2026-08-28T17:37:09.025715+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "trade_cal",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "trade_cal"
+      ],
+      "normalized_rows": 26626,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_basic",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 48463,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 4,
+      "last_success_at": "2026-08-30T19:11:55.010586+00:00",
+      "last_raw_at": "2026-08-30T19:11:54.859978+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_tbr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 16,
+      "last_success_at": "2026-09-04T23:15:12.391732+00:00",
+      "last_raw_at": "2026-09-04T23:15:12.364052+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_tltr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 16,
+      "last_success_at": "2026-09-04T23:15:12.911439+00:00",
+      "last_raw_at": "2026-09-04T23:15:12.885287+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_tradecal",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 8,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 8,
+      "last_success_at": "2026-09-04T11:17:13.043119+00:00",
+      "last_raw_at": "2026-09-04T11:17:13.015189+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_trltr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 16,
+      "last_success_at": "2026-09-04T23:15:13.377907+00:00",
+      "last_raw_at": "2026-09-04T23:15:13.356483+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_trycr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 16,
+      "last_success_at": "2026-09-04T23:15:13.928056+00:00",
+      "last_raw_at": "2026-09-04T23:15:13.902955+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_tycr",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 7,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 16,
+      "last_success_at": "2026-09-04T23:15:14.442292+00:00",
+      "last_raw_at": "2026-09-04T23:15:14.417326+00:00",
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "weekly",
+      "implementation_mode": "specialized",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "stk_weekly_monthly"
+      ],
+      "normalized_rows": 33494,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "wz_index",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 2324,
+      "normalized_tables": [],
+      "normalized_rows": 0,
+      "successful_jobs": 41,
+      "last_success_at": "2026-09-05T16:31:11.270730+00:00",
+      "last_raw_at": "2026-09-03T16:30:27.458025+00:00",
+      "data_status": "positive_rows"
+    }
+  ]
+}

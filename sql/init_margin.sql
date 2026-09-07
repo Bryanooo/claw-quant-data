@@ -1,8 +1,7 @@
 -- 两融数据（4个接口）
 -- margin, margin_detail, margin_secs, slb_len
 
-DROP TABLE IF EXISTS margin CASCADE;
-CREATE TABLE margin (
+CREATE TABLE IF NOT EXISTS margin (
     trade_date   VARCHAR(10) NOT NULL,
     exchange_id  VARCHAR(10) NOT NULL,
     rzye         NUMERIC,
@@ -16,8 +15,7 @@ CREATE TABLE margin (
 );
 COMMENT ON TABLE margin IS '融资融券交易汇总';
 
-DROP TABLE IF EXISTS margin_detail CASCADE;
-CREATE TABLE margin_detail (
+CREATE TABLE IF NOT EXISTS margin_detail (
     trade_date  VARCHAR(10) NOT NULL,
     ts_code     VARCHAR(20) NOT NULL,
     name        VARCHAR(50),
@@ -33,8 +31,7 @@ CREATE TABLE margin_detail (
 );
 COMMENT ON TABLE margin_detail IS '融资融券交易明细';
 
-DROP TABLE IF EXISTS margin_secs CASCADE;
-CREATE TABLE margin_secs (
+CREATE TABLE IF NOT EXISTS margin_secs (
     trade_date  VARCHAR(10) NOT NULL,
     ts_code     VARCHAR(20) NOT NULL,
     name        VARCHAR(50),
@@ -43,8 +40,7 @@ CREATE TABLE margin_secs (
 );
 COMMENT ON TABLE margin_secs IS '融资融券标的';
 
-DROP TABLE IF EXISTS slb_len CASCADE;
-CREATE TABLE slb_len (
+CREATE TABLE IF NOT EXISTS slb_len (
     trade_date   VARCHAR(10) NOT NULL PRIMARY KEY,
     ob           NUMERIC,
     auc_amount   NUMERIC,

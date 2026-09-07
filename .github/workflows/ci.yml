@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: tushare_db
+          POSTGRES_USER: tushare
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tushare -d tushare_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: tushare_db
+      DB_USER: tushare
+      DB_PASSWORD: test-password
+      RUN_DB_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Initialize schema
+        run: |
+          for file in sql/init_*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done
+          python scripts/migrate.py
+        env:
+          PGPASSWORD: test-password
+      - run: PYTHONPYCACHEPREFIX=/tmp/claw-quant-pycache python -m compileall -q collectors service scripts tests
+      - run: pytest -q

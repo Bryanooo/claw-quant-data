@@ -9,6 +9,7 @@
 
 import pandas as pd
 from collectors.base import BaseCollector
+from collectors.contracts import PaginationMode
 
 
 class IndexDailyCollector(BaseCollector):
@@ -19,6 +20,8 @@ class IndexDailyCollector(BaseCollector):
     pk_columns = ["ts_code", "trade_date"]
 
     supports_range_query = True  # 支持 start_date/end_date 范围查询
+    pagination_mode = PaginationMode.OFFSET
+    collector_version = "2"
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """数据清洗"""

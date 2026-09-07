@@ -5,6 +5,7 @@
 
 import time
 from collectors.base import BaseCollector
+from service.clock import business_now
 
 _FIELDS = [
     "ts_code","trade_date","bid_open","bid_close","bid_high","bid_low",
@@ -35,8 +36,8 @@ class FxDailyCollector(BaseCollector):
         from datetime import datetime, timedelta
         from service.db import query
         codes = query("SELECT ts_code FROM fx_obasic")
-        end = datetime.now().strftime("%Y%m%d")
-        start = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+        end = business_now().strftime("%Y%m%d")
+        start = (business_now() - timedelta(days=days)).strftime("%Y%m%d")
         total = 0
         for r in codes:
             rows = self.collect(start_date=start, end_date=end, ts_code=r["ts_code"])

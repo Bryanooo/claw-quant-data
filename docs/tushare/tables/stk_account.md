@@ -1,0 +1,47 @@
+# `stk_account` 标准化表契约
+
+- 功能：获取股票账户开户数据，统计周期为一周
+- PostgreSQL 表：`tushare_norm_stk_account`
+- 契约版本：`1`
+- 技术主键：`_record_hash`（原始 payload SHA-256）
+- 主日期字段：`date`
+- 必填身份字段：`date`
+- 业务身份字段：`date`
+- 业务身份可信度：`heuristic`
+- 当前数据视图：未创建（业务身份仍为启发式，REST 保留全部 payload 版本）
+- 原始数据表：`tushare_raw_record`（`api_name=stk_account`）
+- REST：`GET /api/v1/datasets/stk_account/records`
+- 接口 REST：`GET /api/v1/interfaces/stk_account/records`
+- 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
+
+## 业务字段
+
+| 字段 | 上游类型 | PostgreSQL 类型 | 说明 |
+|---|---|---|---|
+| `date` | `str` | `DATE` | 统计周期 |
+| `weekly_new` | `float` | `NUMERIC` | 本周新增（万） |
+| `total` | `float` | `NUMERIC` | 期末总账户数（万） |
+| `weekly_hold` | `float` | `NUMERIC` | 本周持仓账户数（万） |
+| `weekly_trade` | `float` | `NUMERIC` | 本周参与交易账户数（万） |
+
+## 系统字段
+
+| 字段 | PostgreSQL 类型 | 说明 |
+|---|---|---|
+| `_record_hash` | `CHAR(64)` | 原始 payload 的 SHA-256 技术主键 |
+| `_request_hash` | `CHAR(64)` | 去除分页参数后的请求 SHA-256 |
+| `_source_doc_id` | `INTEGER` | Tushare 官方文档编号 |
+| `_source_collected_at` | `TIMESTAMPTZ` | 原始数据采集时间 |
+| `_first_seen_at` | `TIMESTAMPTZ` | 首次标准化时间 |
+| `_last_seen_at` | `TIMESTAMPTZ` | 最近一次标准化时间 |
+| `_schema_version` | `INTEGER` | 标准化契约版本 |
+| `_extra_payload` | `JSONB` | 契约外字段，保留且触发 Schema Drift |
+
+## 稳定性契约
+
+- 原始记录先提交，标准化失败不会造成上游响应丢失。
+- 同一 payload 使用 `_record_hash` 幂等 UPSERT，重复采集只更新最近观测时间。
+- 契约外字段完整保存在 `_extra_payload` 并登记 Schema Drift。
+- 类型转换失败的整行进入隔离表，修复契约后可以从原始层重放。
+- 未经确认的业务键不会被猜测成唯一约束；当前主键是可验证的技术主键。
+- `contract_reviewed` 接口的 REST 查询使用 `tushare_current_*` 视图；原始标准表仍保留全部版本。

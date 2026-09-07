@@ -31,16 +31,16 @@ def _fix_date(val):
 class StkManagersCollector(BaseCollector):
     API_NAME = "stk_managers"
     table_name = "stk_managers"
-    pk_columns = ["ts_code", "name", "ann_date"]
+    pk_columns = ["ts_code", "name", "begin_date"]
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         for col in ["ann_date", "begin_date", "end_date"]:
             if col in df.columns:
                 df[col] = df[col].apply(_fix_date)
-        # 过滤 ann_date 为空的记录（主键不能为空）
+        # 任职开始日期是数据库主键的一部分，空值无法可靠去重。
         before = len(df)
-        df = df.dropna(subset=["ann_date"], how="any")
+        df = df.dropna(subset=["ts_code", "name", "begin_date"], how="any")
         if len(df) < before:
-            self.logger.warning(f"过滤掉 {before - len(df)} 行（ann_date 为空）")
+            self.logger.warning(f"过滤掉 {before - len(df)} 行（管理层主键不完整）")
         return df

@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Claw Quant · 采集控制台</title>
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CLAW QUANT / DATA OPS</p>
+        <h1>采集控制台</h1>
+      </div>
+      <div class="header-actions">
+        <span id="lastUpdated" class="last-updated">尚未连接</span>
+        <button id="dispatchButton" class="button button-secondary">立即补采</button>
+        <button id="refreshButton" class="button button-primary">刷新状态</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="connectionNotice" class="notice hidden" role="status"></section>
+
+      <section class="summary-grid" aria-label="采集概况">
+        <article class="metric-card metric-primary">
+          <span>自动编排</span><strong id="automatedCount">—</strong>
+          <small id="coverageText">等待加载</small>
+        </article>
+        <article class="metric-card">
+          <span>严格完成</span><strong id="completeCount">—</strong>
+          <small>已通过完整性判定</small>
+        </article>
+        <article class="metric-card">
+          <span>运行 / 重试</span><strong id="runningCount">—</strong>
+          <small>队列正在处理</small>
+        </article>
+        <article class="metric-card metric-alert">
+          <span>真实异常</span><strong id="attentionCount">—</strong>
+          <small>自动任务未恢复或覆盖不完整</small>
+        </article>
+        <article class="metric-card">
+          <span>手工尝试异常</span><strong id="manualAttentionCount">—</strong>
+          <small>保留诊断记录，不计入自动采集故障</small>
+        </article>
+        <article class="metric-card">
+          <span>待验证</span><strong id="unverifiedCount">—</strong>
+          <small>任务成功，但尚无严格完整性证据</small>
+        </article>
+        <article class="metric-card">
+          <span>已验证空结果</span><strong id="emptyCount">—</strong>
+          <small>请求成功且已穷尽，不等同于失败</small>
+        </article>
+      </section>
+
+      <nav class="console-tabs" aria-label="控制台分区" role="tablist">
+        <button class="console-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="overviewView" data-view="overview">
+          <span>运行总览</span><small id="healthTabCount">健康状态</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="interfacesView" data-view="interfaces">
+          <span>接口任务</span><small id="interfaceTabCount">—</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="fanoutView" data-view="fanout">
+          <span>扇出活动</span><small id="fanoutTabCount">—</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="coverageView" data-view="coverage">
+          <span>覆盖审计</span><small id="coverageTabCount">—</small>
+        </button>
+      </nav>
+
+      <div id="overviewView" class="view-panel" role="tabpanel" data-view-panel="overview">
+      <section class="workspace data-health-workspace" aria-label="数据资产健康">
+        <div class="workspace-head">
+          <div>
+            <p class="section-kicker">DATA ASSET HEALTH</p>
+            <h2>数据缺失与可信度</h2>
+            <p id="dataHealthSummary" class="section-summary">正在汇总采集、时效、历史覆盖和初始化状态…</p>
+          </div>
+          <select id="dataIssueFilter" aria-label="数据问题类型">
+            <option value="confirmed">已确认问题</option>
+            <option value="missing">无数据 / 未首采</option>
+            <option value="unknown">尚不能证明完整</option>
+            <option value="all">全部问题</option>
+          </select>
+        </div>
+        <div class="health-grid">
+          <article><span>已确认问题</span><strong id="confirmedIssueCount">—</strong><small>初始化中断、缺口、过期或未恢复失败</small></article>
+          <article><span>空数据集</span><strong id="emptyDatasetCount">—</strong><small>标准数据服务当前没有记录</small></article>
+          <article><span>尚未首采接口</span><strong id="neverCollectedCount">—</strong><small>有权限，但没有采集记录</small></article>
+          <article><span>完整性未知</span><strong id="unknownIssueCount">—</strong><small>待验证或周期覆盖尚未审计</small></article>
+        </div>
+        <div class="history-health" id="historyHealth">
+          <strong>历史初始化</strong><span>正在读取…</span>
+        </div>
+        <div class="table-wrap">
+          <table class="health-table">
+            <thead>
+              <tr>
+                <th>对象</th>
+                <th>问题类型</th>
+                <th>影响范围</th>
+                <th>证据 / 原因</th>
+                <th>建议动作</th>
+              </tr>
+            </thead>
+            <tbody id="dataHealthRows">
+              <tr><td colspan="5" class="empty-state">正在读取数据健康状态…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="table-footer">
+          <span id="dataHealthResultCount">0 个问题</span>
+          <div class="pager" aria-label="数据问题分页">
+            <button class="row-action" type="button" data-page-key="health" data-page-delta="-1">上一页</button>
+            <span data-page-info="health">第 1 / 1 页</span>
+            <button class="row-action" type="button" data-page-key="health" data-page-delta="1">下一页</button>
+          </div>
+        </footer>
+      </section>
+
+      <section class="initialization-panel" aria-label="系统初始化">
+        <div>
+          <p class="section-kicker">SYSTEM LIFECYCLE</p>
+          <h2>初始采集</h2>
+          <p id="initializationSummary" class="section-summary">正在读取运行模式…</p>
+          <div id="initializationProgress" class="initialization-progress hidden">
+            <span id="initializationProgressBar"></span>
+          </div>
+        </div>
+        <div class="initialization-actions">
+          <select id="initializationProfile" aria-label="初始化范围">
+            <option value="standard">标准 · 最近 1 年</option>
+            <option value="quick">快速 · 最近 30 天</option>
+            <option value="research">研究 · 最近 3 年</option>
+            <option value="full">全部历史 · 按可靠起点</option>
+          </select>
+          <button id="initializationDetailButton" class="button button-secondary" disabled>查看步骤</button>
+          <button id="initializationActionButton" class="button button-primary">开始初始化</button>
+        </div>
+      </section>
+      </div>
+
+      <div id="fanoutView" class="view-panel hidden" role="tabpanel" data-view-panel="fanout">
+      <section class="workspace fanout-workspace" aria-label="全量扇出活动">
+        <div class="workspace-head">
+          <div>
+            <p class="section-kicker">WHOLE-UNIVERSE CAMPAIGNS</p>
+            <h2>全量扇出活动</h2>
+            <p id="fanoutCampaignSummary" class="section-summary">正在读取活动状态…</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>接口 / 活动</th>
+                <th>完成判定</th>
+                <th>依赖宇宙进度</th>
+                <th>分页</th>
+                <th>数据量</th>
+                <th>最近更新</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="fanoutCampaignRows">
+              <tr><td colspan="7" class="empty-state">正在读取全量活动…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="table-footer">
+          <span id="fanoutResultCount">0 个活动</span>
+          <div class="pager" aria-label="扇出活动分页">
+            <button class="row-action" type="button" data-page-key="fanout" data-page-delta="-1">上一页</button>
+            <span data-page-info="fanout">第 1 / 1 页</span>
+            <button class="row-action" type="button" data-page-key="fanout" data-page-delta="1">下一页</button>
+          </div>
+        </footer>
+      </section>
+      </div>
+
+      <div id="interfacesView" class="view-panel hidden" role="tabpanel" data-view-panel="interfaces">
+      <section class="workspace">
+        <div class="workspace-head">
+          <div>
+            <p class="section-kicker">INTERFACE LEDGER</p>
+            <h2>接口采集清单</h2>
+          </div>
+          <div class="filters">
+            <label class="search-field">
+              <span class="sr-only">搜索接口</span>
+              <input id="searchInput" type="search" placeholder="搜索接口名或功能…" />
+            </label>
+            <select id="cadenceFilter" aria-label="更新周期">
+              <option value="all">全部周期</option>
+              <option value="daily">每日</option>
+              <option value="weekly">每周</option>
+              <option value="monthly">每月</option>
+              <option value="quarterly">每季度</option>
+              <option value="manual">手动</option>
+            </select>
+            <select id="statusFilter" aria-label="完成状态">
+              <option value="all">全部状态</option>
+              <option value="complete">严格完成</option>
+              <option value="active">运行 / 重试</option>
+              <option value="attention">需要关注</option>
+              <option value="unverified">待验证（不等同失败）</option>
+              <option value="empty">已验证空结果</option>
+              <option value="pending">尚未运行</option>
+            </select>
+            <select id="modeFilter" aria-label="编排方式">
+              <option value="all">全部方式</option>
+              <option value="policy">策略队列</option>
+              <option value="dedicated">专项调度</option>
+              <option value="fanout">全量扇出</option>
+              <option value="manual">手动</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>接口 / 功能</th>
+                <th>编排</th>
+                <th>周期</th>
+                <th>完成判定</th>
+                <th>数据量</th>
+                <th>最近完成</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="interfaceRows">
+              <tr><td colspan="7" class="empty-state">正在读取采集状态…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="table-footer">
+          <span id="resultCount">0 个接口</span>
+          <div class="pager" aria-label="接口任务分页">
+            <button class="row-action" type="button" data-page-key="interfaces" data-page-delta="-1">上一页</button>
+            <span data-page-info="interfaces">第 1 / 1 页</span>
+            <button class="row-action" type="button" data-page-key="interfaces" data-page-delta="1">下一页</button>
+          </div>
+        </footer>
+      </section>
+      </div>
+
+      <div id="coverageView" class="view-panel hidden" role="tabpanel" data-view-panel="coverage">
+      <section class="workspace coverage-workspace">
+        <div class="workspace-head">
+          <div>
+            <p class="section-kicker">DATA COVERAGE</p>
+            <h2>日期与报告期覆盖</h2>
+            <p id="coverageSummary" class="section-summary">等待读取覆盖状态</p>
+          </div>
+          <button id="coverageAuditButton" class="button button-secondary">立即审计</button>
+        </div>
+        <div class="table-wrap">
+          <table class="coverage-table">
+            <thead>
+              <tr>
+                <th>数据集</th>
+                <th>预期规则</th>
+                <th>审计区间</th>
+                <th>覆盖状态</th>
+                <th>日期分区</th>
+                <th>最近缺失日期</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="coverageRows">
+              <tr><td colspan="7" class="empty-state">正在读取覆盖状态…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="table-footer">
+          <span id="coverageResultCount">0 个数据集</span>
+          <div class="pager" aria-label="覆盖审计分页">
+            <button class="row-action" type="button" data-page-key="coverage" data-page-delta="-1">上一页</button>
+            <span data-page-info="coverage">第 1 / 1 页</span>
+            <button class="row-action" type="button" data-page-key="coverage" data-page-delta="1">下一页</button>
+          </div>
+        </footer>
+      </section>
+      </div>
+    </main>
+
+    <dialog id="coverageDialog" class="coverage-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="section-kicker">PARTITION DETAIL</p>
+          <h2 id="coverageDialogTitle">日期分区</h2>
+        </div>
+        <button id="coverageDialogClose" class="row-action" aria-label="关闭">关闭</button>
+      </div>
+      <div id="coveragePartitions" class="partition-grid"></div>
+      <footer class="dialog-footer">
+        <span data-page-range="coveragePartitions">0 条</span>
+        <div class="pager" aria-label="日期分区分页">
+          <button class="row-action" type="button" data-page-key="coveragePartitions" data-page-delta="-1">上一页</button>
+          <span data-page-info="coveragePartitions">第 1 / 1 页</span>
+          <button class="row-action" type="button" data-page-key="coveragePartitions" data-page-delta="1">下一页</button>
+        </div>
+      </footer>
+    </dialog>
+
+    <dialog id="batchDialog" class="coverage-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="section-kicker">DURABLE BATCH</p>
+          <h2 id="batchDialogTitle">批次子任务</h2>
+        </div>
+        <button id="batchDialogClose" class="row-action" aria-label="关闭">关闭</button>
+      </div>
+      <div id="batchChildren" class="batch-children"></div>
+      <footer class="dialog-footer">
+        <span data-page-range="batchChildren">0 条</span>
+        <div class="pager" aria-label="批次子任务分页">
+          <button class="row-action" type="button" data-page-key="batchChildren" data-page-delta="-1">上一页</button>
+          <span data-page-info="batchChildren">第 1 / 1 页</span>
+          <button class="row-action" type="button" data-page-key="batchChildren" data-page-delta="1">下一页</button>
+        </div>
+      </footer>
+    </dialog>
+
+    <dialog id="initializationDialog" class="coverage-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="section-kicker">INITIALIZATION STEPS</p>
+          <h2 id="initializationDialogTitle">初始化步骤</h2>
+        </div>
+        <button id="initializationDialogClose" class="row-action" aria-label="关闭">关闭</button>
+      </div>
+      <div id="initializationSteps" class="batch-children"></div>
+      <footer class="dialog-footer">
+        <span data-page-range="initializationSteps">0 条</span>
+        <div class="pager" aria-label="初始化步骤分页">
+          <button class="row-action" type="button" data-page-key="initializationSteps" data-page-delta="-1">上一页</button>
+          <span data-page-info="initializationSteps">第 1 / 1 页</span>
+          <button class="row-action" type="button" data-page-key="initializationSteps" data-page-delta="1">下一页</button>
+        </div>
+      </footer>
+    </dialog>
+
+    <dialog id="fanoutDialog" class="coverage-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="section-kicker">FAN-OUT PAGE EVIDENCE</p>
+          <h2 id="fanoutDialogTitle">全量扇出活动</h2>
+        </div>
+        <button id="fanoutDialogClose" class="row-action" aria-label="关闭">关闭</button>
+      </div>
+      <div id="fanoutPages" class="batch-children"></div>
+      <footer class="dialog-footer">
+        <span data-page-range="fanoutPages">0 条</span>
+        <div class="pager" aria-label="扇出分页明细分页">
+          <button class="row-action" type="button" data-page-key="fanoutPages" data-page-delta="-1">上一页</button>
+          <span data-page-info="fanoutPages">第 1 / 1 页</span>
+          <button class="row-action" type="button" data-page-key="fanoutPages" data-page-delta="1">下一页</button>
+        </div>
+      </footer>
+    </dialog>
+
+    <script src="/dashboard-assets/dashboard.js" defer></script>
+  </body>
+</html>

@@ -3,6 +3,7 @@
 """
 
 from service.db import query
+from service.clock import business_today
 
 
 # ── 业绩预告 ──
@@ -99,8 +100,8 @@ def get_upcoming_disclosures(end_date: str) -> list[dict]:
 
 def get_next_earnings(days: int = 7) -> list[dict]:
     """查询未来N天内的财报披露"""
-    from datetime import date, timedelta
-    start = date.today()
+    from datetime import timedelta
+    start = business_today()
     end = start + timedelta(days=days)
     sql = (
         "SELECT * FROM disclosure_date "

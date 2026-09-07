@@ -1,0 +1,1492 @@
+{
+  "generated_at": "2026-08-30T10:23:41.807583+00:00",
+  "semantics": {
+    "technical_primary_key": "_record_hash",
+    "storage": "versioned_payload",
+    "identity_fields": "logical version-grouping fields; uniqueness is not assumed",
+    "safety": "unique constraints or current-row views require independent upstream-contract proof in addition to this observed-data audit"
+  },
+  "summary": {
+    "contracts": 94,
+    "with_data": 68,
+    "unique_in_observed_data": 52,
+    "non_unique_observed_identity": 12,
+    "nullable_business_identity": 4,
+    "empty": 26
+  },
+  "datasets": [
+    {
+      "api_name": "adj_factor",
+      "table": "tushare_norm_adj_factor",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 11129,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 11129,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "bak_daily",
+      "table": "tushare_norm_bak_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 11124,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 11124,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "bc_bestotcqt",
+      "table": "tushare_norm_bc_bestotcqt",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1438,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1438,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "bc_otcqt",
+      "table": "tushare_norm_bc_otcqt",
+      "identity_fields": [
+        "trade_date",
+        "qt_time",
+        "bank",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 6000,
+      "null_identity_rows": 4000,
+      "distinct_identity_groups": 5995,
+      "conflicting_groups": 5,
+      "extra_rows_in_conflicting_groups": 5,
+      "max_group_size": 2,
+      "evidence_status": "nullable_business_identity"
+    },
+    {
+      "api_name": "bond_blk",
+      "table": "tushare_norm_bond_blk",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "bond_blk_detail",
+      "table": "tushare_norm_bond_blk_detail",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "cb_basic",
+      "table": "tushare_norm_cb_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 2324,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1162,
+      "conflicting_groups": 1162,
+      "extra_rows_in_conflicting_groups": 1162,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "cb_call",
+      "table": "tushare_norm_cb_call",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cb_daily",
+      "table": "tushare_norm_cb_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 949,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 633,
+      "conflicting_groups": 316,
+      "extra_rows_in_conflicting_groups": 316,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "cb_factor_pro",
+      "table": "tushare_norm_cb_factor_pro",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 633,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 633,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cb_issue",
+      "table": "tushare_norm_cb_issue",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "cb_rate",
+      "table": "tushare_norm_cb_rate",
+      "identity_fields": [
+        "ts_code",
+        "rate_start_date",
+        "rate_end_date"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 1017,
+      "null_identity_rows": 200,
+      "distinct_identity_groups": 1017,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "nullable_business_identity"
+    },
+    {
+      "api_name": "cb_rating",
+      "table": "tushare_norm_cb_rating",
+      "identity_fields": [
+        "ts_code",
+        "rating_date",
+        "rating_com_name",
+        "rating_type"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 776,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 776,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cb_share",
+      "table": "tushare_norm_cb_share",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "ci_daily",
+      "table": "tushare_norm_ci_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 933,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 933,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "ci_index_member",
+      "table": "tushare_norm_ci_index_member",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 5000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 5000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cn_cpi",
+      "table": "tushare_norm_cn_cpi",
+      "identity_fields": [
+        "month"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 3,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 3,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cn_gdp",
+      "table": "tushare_norm_cn_gdp",
+      "identity_fields": [
+        "quarter"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 178,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 178,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cn_m",
+      "table": "tushare_norm_cn_m",
+      "identity_fields": [
+        "month"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cn_pmi",
+      "table": "tushare_norm_cn_pmi",
+      "identity_fields": [
+        "month"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cn_ppi",
+      "table": "tushare_norm_cn_ppi",
+      "identity_fields": [
+        "month"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "cn_schedule",
+      "table": "tushare_norm_cn_schedule",
+      "identity_fields": [
+        "month",
+        "publish_date",
+        "title"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 18,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 18,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "daily_basic",
+      "table": "tushare_norm_daily_basic",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 16641,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 11094,
+      "conflicting_groups": 5547,
+      "extra_rows_in_conflicting_groups": 5547,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "daily_info",
+      "table": "tushare_norm_daily_info",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 24,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 24,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "eco_cal",
+      "table": "tushare_norm_eco_cal",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "etf_basic",
+      "table": "tushare_norm_etf_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1825,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1825,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "etf_index",
+      "table": "tushare_norm_etf_index",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 560,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 560,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "etf_sh_cons",
+      "table": "tushare_norm_etf_sh_cons",
+      "identity_fields": [
+        "trade_date",
+        "ts_code",
+        "con_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 6000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 6000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "etf_share_size",
+      "table": "tushare_norm_etf_share_size",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 4217,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 3295,
+      "conflicting_groups": 922,
+      "extra_rows_in_conflicting_groups": 922,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "etf_sz_cons",
+      "table": "tushare_norm_etf_sz_cons",
+      "identity_fields": [
+        "trade_date",
+        "ts_code",
+        "con_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 6000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 6000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "factor_value",
+      "table": "tushare_norm_factor_value",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "fina_audit",
+      "table": "tushare_norm_fina_audit",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "ft_limit",
+      "table": "tushare_norm_ft_limit",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1734,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1734,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fund_adj",
+      "table": "tushare_norm_fund_adj",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 4271,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 4271,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fund_basic",
+      "table": "tushare_norm_fund_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 15000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 15000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fund_company",
+      "table": "tushare_norm_fund_company",
+      "identity_fields": [
+        "name"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 412,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 206,
+      "conflicting_groups": 206,
+      "extra_rows_in_conflicting_groups": 206,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "fund_daily",
+      "table": "tushare_norm_fund_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 4225,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 4225,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fund_div",
+      "table": "tushare_norm_fund_div",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 15,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 15,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fund_factor_pro",
+      "table": "tushare_norm_fund_factor_pro",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 4224,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 4224,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fund_manager",
+      "table": "tushare_norm_fund_manager",
+      "identity_fields": [
+        "ts_code",
+        "name",
+        "begin_date"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 84840,
+      "null_identity_rows": 687,
+      "distinct_identity_groups": 84840,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "nullable_business_identity"
+    },
+    {
+      "api_name": "fund_nav",
+      "table": "tushare_norm_fund_nav",
+      "identity_fields": [
+        "nav_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "fund_portfolio",
+      "table": "tushare_norm_fund_portfolio",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "fund_share",
+      "table": "tushare_norm_fund_share",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 5199,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 3465,
+      "conflicting_groups": 1734,
+      "extra_rows_in_conflicting_groups": 1734,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "fut_basic",
+      "table": "tushare_norm_fut_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 15225,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 11196,
+      "conflicting_groups": 4029,
+      "extra_rows_in_conflicting_groups": 4029,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "fut_daily",
+      "table": "tushare_norm_fut_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 3216,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2144,
+      "conflicting_groups": 1072,
+      "extra_rows_in_conflicting_groups": 1072,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "fut_holding",
+      "table": "tushare_norm_fut_holding",
+      "identity_fields": [
+        "trade_date",
+        "symbol",
+        "broker"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 12000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 8000,
+      "conflicting_groups": 4000,
+      "extra_rows_in_conflicting_groups": 4000,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "fut_index_daily",
+      "table": "tushare_norm_fut_index_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "fut_mapping",
+      "table": "tushare_norm_fut_mapping",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 404,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 404,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fut_settle",
+      "table": "tushare_norm_fut_settle",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 2733,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1822,
+      "conflicting_groups": 911,
+      "extra_rows_in_conflicting_groups": 911,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "fut_trade_cal",
+      "table": "tushare_norm_fut_trade_cal",
+      "identity_fields": [
+        "cal_date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fut_weekly_detail",
+      "table": "tushare_norm_fut_weekly_detail",
+      "identity_fields": [
+        "week",
+        "exchange",
+        "prd"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 4000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 4000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "fut_weekly_monthly",
+      "table": "tushare_norm_fut_weekly_monthly",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "fut_wsr",
+      "table": "tushare_norm_fut_wsr",
+      "identity_fields": [
+        "trade_date",
+        "symbol",
+        "warehouse",
+        "wh_id",
+        "grade",
+        "brand",
+        "place"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 3092,
+      "null_identity_rows": 3092,
+      "distinct_identity_groups": 2675,
+      "conflicting_groups": 413,
+      "extra_rows_in_conflicting_groups": 417,
+      "max_group_size": 4,
+      "evidence_status": "nullable_business_identity"
+    },
+    {
+      "api_name": "gz_index",
+      "table": "tushare_norm_gz_index",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "hibor",
+      "table": "tushare_norm_hibor",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "hk_basic",
+      "table": "tushare_norm_hk_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2781,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2781,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "hk_daily",
+      "table": "tushare_norm_hk_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "hk_tradecal",
+      "table": "tushare_norm_hk_tradecal",
+      "identity_fields": [
+        "cal_date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "idx_anns",
+      "table": "tushare_norm_idx_anns",
+      "identity_fields": [
+        "title"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 8,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 8,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "idx_factor_pro",
+      "table": "tushare_norm_idx_factor_pro",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 6946,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 6946,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "index_classify",
+      "table": "tushare_norm_index_classify",
+      "identity_fields": [
+        "index_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 359,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 359,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "index_member_all",
+      "table": "tushare_norm_index_member_all",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 3000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 3000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "index_weight",
+      "table": "tushare_norm_index_weight",
+      "identity_fields": [
+        "trade_date",
+        "index_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "libor",
+      "table": "tushare_norm_libor",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "limit_list_ths",
+      "table": "tushare_norm_limit_list_ths",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 239,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 158,
+      "conflicting_groups": 81,
+      "extra_rows_in_conflicting_groups": 81,
+      "max_group_size": 2,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "major_news",
+      "table": "tushare_norm_major_news",
+      "identity_fields": [
+        "title"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "mkt_idx_bmk",
+      "table": "tushare_norm_mkt_idx_bmk",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 141,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 141,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "opt_basic",
+      "table": "tushare_norm_opt_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 12000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 12000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "opt_daily",
+      "table": "tushare_norm_opt_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 30000,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 30000,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "p_get",
+      "table": "tushare_norm_p_get",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "p_list",
+      "table": "tushare_norm_p_list",
+      "identity_fields": [
+        "id"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "repo_daily",
+      "table": "tushare_norm_repo_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 89,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 89,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "sf_month",
+      "table": "tushare_norm_sf_month",
+      "identity_fields": [
+        "month"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 1,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 1,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "shibor",
+      "table": "tushare_norm_shibor",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "shibor_lpr",
+      "table": "tushare_norm_shibor_lpr",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "shibor_quote",
+      "table": "tushare_norm_shibor_quote",
+      "identity_fields": [
+        "date",
+        "bank"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 35,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 35,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "slb_len_mm",
+      "table": "tushare_norm_slb_len_mm",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "slb_sec",
+      "table": "tushare_norm_slb_sec",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "slb_sec_detail",
+      "table": "tushare_norm_slb_sec_detail",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "stk_account",
+      "table": "tushare_norm_stk_account",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "stk_factor",
+      "table": "tushare_norm_stk_factor",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 11093,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 11093,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "stk_mins",
+      "table": "tushare_norm_stk_mins",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "stk_week_month_adj",
+      "table": "tushare_norm_stk_week_month_adj",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "sw_daily",
+      "table": "tushare_norm_sw_daily",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 878,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 878,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "sz_daily_info",
+      "table": "tushare_norm_sz_daily_info",
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 28,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 28,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "top10_cb_holders",
+      "table": "tushare_norm_top10_cb_holders",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    },
+    {
+      "api_name": "us_basic",
+      "table": "tushare_norm_us_basic",
+      "identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "total_rows": 24230,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 24176,
+      "conflicting_groups": 52,
+      "extra_rows_in_conflicting_groups": 54,
+      "max_group_size": 4,
+      "evidence_status": "non_unique_observed_identity"
+    },
+    {
+      "api_name": "us_tbr",
+      "table": "tushare_norm_us_tbr",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "us_tltr",
+      "table": "tushare_norm_us_tltr",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "us_tradecal",
+      "table": "tushare_norm_us_tradecal",
+      "identity_fields": [
+        "cal_date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "us_trltr",
+      "table": "tushare_norm_us_trltr",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "us_trycr",
+      "table": "tushare_norm_us_trycr",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "us_tycr",
+      "table": "tushare_norm_us_tycr",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 2,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 2,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 1,
+      "evidence_status": "unique_in_observed_data"
+    },
+    {
+      "api_name": "wz_index",
+      "table": "tushare_norm_wz_index",
+      "identity_fields": [
+        "date"
+      ],
+      "identity_confidence": "heuristic",
+      "total_rows": 0,
+      "null_identity_rows": 0,
+      "distinct_identity_groups": 0,
+      "conflicting_groups": 0,
+      "extra_rows_in_conflicting_groups": 0,
+      "max_group_size": 0,
+      "evidence_status": "empty"
+    }
+  ]
+}

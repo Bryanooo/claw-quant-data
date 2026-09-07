@@ -10,5 +10,5 @@ from collectors.base import BaseCollector
 class CcassHoldDetailCollector(BaseCollector):
     API_NAME = "ccass_hold_detail"
     table_name = "ccass_hold_detail"
-    pk_columns = ["trade_date", "ts_code", "member_id"]
+    pk_columns = ["ts_code", "trade_date", "col_participant_id"]
     supports_range_query = False  # 不支持范围查询，需逐日拉取

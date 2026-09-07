@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS stock_basic (
     symbol          VARCHAR(8),
     name            VARCHAR(32),
     area            VARCHAR(32),
-    industry        VARCHAR(64),
-    fullname        VARCHAR(128),
-    enname          VARCHAR(128),
+    industry        TEXT,
+    fullname        TEXT,
+    enname          TEXT,
     cnspell         VARCHAR(16),
     market          VARCHAR(16),
     exchange        VARCHAR(8),
@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS stock_basic (
     list_date       VARCHAR(16),
     delist_date     VARCHAR(16),
     is_hs           VARCHAR(4),
-    act_name        VARCHAR(64),
-    act_ent_type    VARCHAR(64)
+    act_name        TEXT,
+    act_ent_type    TEXT
 );
 
 -- 3. 交易日历
@@ -54,6 +54,11 @@ CREATE TABLE IF NOT EXISTS stock_st (
     trade_date      DATE NOT NULL,
     type            VARCHAR(16),
     type_name       VARCHAR(64),
+    pub_date        DATE,
+    imp_date        DATE,
+    st_type         VARCHAR(32),
+    st_reason       TEXT,
+    st_explain      TEXT,
     PRIMARY KEY (ts_code, trade_date)
 );
 
@@ -96,13 +101,13 @@ CREATE TABLE IF NOT EXISTS stock_company (
     com_name        VARCHAR(128),
     com_id          VARCHAR(32),
     exchange        VARCHAR(8),
-    chairman        VARCHAR(32),
-    manager         VARCHAR(32),
-    secretary       VARCHAR(32),
+    chairman        TEXT,
+    manager         TEXT,
+    secretary       TEXT,
     reg_capital     DECIMAL(20,2),
     setup_date      DATE,
-    province        VARCHAR(32),
-    city            VARCHAR(32),
+    province        TEXT,
+    city            TEXT,
     introduction    TEXT,
     website         VARCHAR(256),
     email           VARCHAR(128),

@@ -89,9 +89,10 @@ CREATE TABLE IF NOT EXISTS limit_list_d (
     first_time     VARCHAR(8),
     last_time      VARCHAR(8),
     open_times     INTEGER,
-    up_stat        VARCHAR(4),
+    up_stat        VARCHAR(16),
     limit_times    INTEGER,
-    limit          VARCHAR(2),
+    "limit"        VARCHAR(2),
+    limit_type     VARCHAR(4) DEFAULT 'D',
     PRIMARY KEY (ts_code, trade_date, limit_type)
 );
 COMMENT ON TABLE  limit_list_d          IS '涨跌停列表';
@@ -112,7 +113,7 @@ COMMENT ON COLUMN limit_list_d.last_time  IS '最后封板时间';
 COMMENT ON COLUMN limit_list_d.open_times IS '炸板次数';
 COMMENT ON COLUMN limit_list_d.up_stat    IS '涨停状态';
 COMMENT ON COLUMN limit_list_d.limit_times IS '连板数';
-COMMENT ON COLUMN limit_list_d.limit      IS '涨跌停类型';
+COMMENT ON COLUMN limit_list_d."limit"    IS '涨跌停类型';
 
 -- Add limit_type column to limit_list_d for PK
 ALTER TABLE limit_list_d ADD COLUMN IF NOT EXISTS limit_type VARCHAR(4) DEFAULT 'D';
@@ -141,7 +142,7 @@ CREATE TABLE IF NOT EXISTS limit_cpt_list (
     ts_code    VARCHAR(16) NOT NULL,
     name       VARCHAR(64),
     days       INTEGER,
-    up_stat    VARCHAR(4),
+    up_stat    VARCHAR(32),
     cons_nums  INTEGER,
     up_nums    INTEGER,
     pct_chg    NUMERIC(8,3),
@@ -183,19 +184,19 @@ COMMENT ON COLUMN ths_index.type      IS '类型 N/S/I/R/ST/TH/BB';
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ths_daily (
     ts_code      VARCHAR(16) NOT NULL,
-    trade_date   VARCHAR(8)  NOT NULL,
-    close        NUMERIC(12,2),
-    open         NUMERIC(12,2),
-    high         NUMERIC(12,2),
-    low          NUMERIC(12,2),
-    pre_close    NUMERIC(12,2),
-    avg_price    NUMERIC(12,2),
-    change       NUMERIC(12,2),
-    pct_change   NUMERIC(8,3),
-    vol          NUMERIC(18,2),
-    turnover_rate NUMERIC(8,3),
-    total_mv     NUMERIC(18,2),
-    float_mv     NUMERIC(18,2),
+    trade_date   DATE NOT NULL,
+    close        NUMERIC(24,6),
+    open         NUMERIC(24,6),
+    high         NUMERIC(24,6),
+    low          NUMERIC(24,6),
+    pre_close    NUMERIC(24,6),
+    avg_price    NUMERIC(24,6),
+    change       NUMERIC(24,6),
+    pct_change   NUMERIC(24,6),
+    vol          NUMERIC(24,6),
+    turnover_rate NUMERIC(24,6),
+    total_mv     NUMERIC(24,6),
+    float_mv     NUMERIC(24,6),
     PRIMARY KEY (ts_code, trade_date)
 );
 COMMENT ON TABLE  ths_daily          IS '同花顺板块指数行情';
@@ -222,8 +223,8 @@ CREATE TABLE IF NOT EXISTS ths_member (
     con_code VARCHAR(16) NOT NULL,
     con_name VARCHAR(64),
     weight   NUMERIC(8,3),
-    in_date  VARCHAR(8),
-    out_date VARCHAR(8),
+    in_date  DATE,
+    out_date DATE,
     is_new   VARCHAR(4),
     PRIMARY KEY (ts_code, con_code)
 );
@@ -243,7 +244,7 @@ CREATE TABLE IF NOT EXISTS dc_index (
     trade_date   VARCHAR(8)  NOT NULL,
     ts_code      VARCHAR(16) NOT NULL,
     name         VARCHAR(64),
-    leading      VARCHAR(64),
+    "leading"    VARCHAR(64),
     leading_code VARCHAR(16),
     pct_change   NUMERIC(8,3),
     leading_pct  NUMERIC(8,3),
@@ -259,7 +260,7 @@ COMMENT ON TABLE  dc_index              IS '东方财富概念板块';
 COMMENT ON COLUMN dc_index.trade_date    IS '交易日期';
 COMMENT ON COLUMN dc_index.ts_code       IS '板块代码';
 COMMENT ON COLUMN dc_index.name          IS '板块名称';
-COMMENT ON COLUMN dc_index.leading       IS '领涨股名称';
+COMMENT ON COLUMN dc_index."leading"     IS '领涨股名称';
 COMMENT ON COLUMN dc_index.leading_code  IS '领涨股代码';
 COMMENT ON COLUMN dc_index.pct_change    IS '板块涨幅%';
 COMMENT ON COLUMN dc_index.leading_pct   IS '领涨股涨幅%';
@@ -302,6 +303,7 @@ CREATE TABLE IF NOT EXISTS dc_daily (
     amount       NUMERIC(18,2),
     swing        NUMERIC(8,3),
     turnover_rate NUMERIC(8,3),
+    category      TEXT,
     PRIMARY KEY (ts_code, trade_date)
 );
 COMMENT ON TABLE  dc_daily          IS '东财概念板块行情';
@@ -349,12 +351,12 @@ COMMENT ON COLUMN stk_auction.float_share   IS '流通股本';
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS hm_list (
     name VARCHAR(64) NOT NULL PRIMARY KEY,
-    desc TEXT,
+    descr TEXT,
     orgs TEXT
 );
 COMMENT ON TABLE  hm_list    IS '游资名录';
 COMMENT ON COLUMN hm_list.name IS '游资名称';
-COMMENT ON COLUMN hm_list.desc IS '描述';
+COMMENT ON COLUMN hm_list.descr IS '描述';
 COMMENT ON COLUMN hm_list.orgs IS '关联营业部';
 
 -- =============================================================================
@@ -371,8 +373,8 @@ CREATE TABLE IF NOT EXISTS ths_hot (
     pct_change    NUMERIC(8,3),
     current_price NUMERIC(12,2),
     concept       VARCHAR(256),
-    rank_reason   VARCHAR(512),
-    hot           NUMERIC(10,2),
+    rank_reason   TEXT,
+    hot           NUMERIC(20,4),
     rank_time     VARCHAR(20) NOT NULL DEFAULT '',
     PRIMARY KEY (trade_date, ts_code, rank, data_type, rank_time)
 );
@@ -400,6 +402,8 @@ CREATE TABLE IF NOT EXISTS dc_hot (
     rank          INTEGER     NOT NULL,
     pct_change    NUMERIC(8,3),
     current_price NUMERIC(12,2),
+    hot           NUMERIC(18,4),
+    concept       TEXT,
     rank_time     VARCHAR(20) NOT NULL DEFAULT '',
     PRIMARY KEY (trade_date, ts_code, rank, data_type, rank_time)
 );
@@ -411,6 +415,8 @@ COMMENT ON COLUMN dc_hot.ts_name       IS '股票名称';
 COMMENT ON COLUMN dc_hot.rank          IS '排名';
 COMMENT ON COLUMN dc_hot.pct_change    IS '涨跌幅%';
 COMMENT ON COLUMN dc_hot.current_price IS '当前价格';
+COMMENT ON COLUMN dc_hot.hot           IS '热度值（上游扩展字段）';
+COMMENT ON COLUMN dc_hot.concept       IS '关联概念（上游扩展字段）';
 COMMENT ON COLUMN dc_hot.rank_time     IS '排名时间';
 
 -- =============================================================================
@@ -553,10 +559,10 @@ CREATE TABLE IF NOT EXISTS kpl_list (
     lu_desc       VARCHAR(128),
     tag           VARCHAR(16) NOT NULL DEFAULT '',
     theme         VARCHAR(64),
-    net_change    NUMERIC(8,3),
+    net_change    NUMERIC(18,2),
     bid_amount    NUMERIC(18,2),
     status        VARCHAR(8),
-    bid_change    NUMERIC(8,3),
+    bid_change    NUMERIC(18,2),
     bid_turnover  NUMERIC(8,3),
     lu_bid_vol    NUMERIC(18,2),
     pct_chg       NUMERIC(8,3),
@@ -580,10 +586,10 @@ COMMENT ON COLUMN kpl_list.last_time     IS '最后封板时间';
 COMMENT ON COLUMN kpl_list.lu_desc       IS '涨停描述';
 COMMENT ON COLUMN kpl_list.tag           IS '标签';
 COMMENT ON COLUMN kpl_list.theme         IS '题材';
-COMMENT ON COLUMN kpl_list.net_change    IS '涨跌幅%';
+COMMENT ON COLUMN kpl_list.net_change    IS '主力净额(元)';
 COMMENT ON COLUMN kpl_list.bid_amount    IS '竞价金额';
 COMMENT ON COLUMN kpl_list.status        IS '状态';
-COMMENT ON COLUMN kpl_list.bid_change    IS '竞价涨跌幅%';
+COMMENT ON COLUMN kpl_list.bid_change    IS '竞价净额(元)';
 COMMENT ON COLUMN kpl_list.bid_turnover  IS '竞价换手%';
 COMMENT ON COLUMN kpl_list.lu_bid_vol    IS '涨停封单量';
 COMMENT ON COLUMN kpl_list.pct_chg       IS '涨跌幅%';
@@ -604,7 +610,7 @@ CREATE TABLE IF NOT EXISTS kpl_concept_cons (
     con_name  VARCHAR(64),
     con_code  VARCHAR(16) NOT NULL,
     trade_date VARCHAR(8) NOT NULL,
-    desc      VARCHAR(512),
+    "desc"    VARCHAR(512),
     hot_num   INTEGER,
     PRIMARY KEY (ts_code, con_code, trade_date)
 );
@@ -614,7 +620,7 @@ COMMENT ON COLUMN kpl_concept_cons.name      IS '题材名称';
 COMMENT ON COLUMN kpl_concept_cons.con_name  IS '成分股名称';
 COMMENT ON COLUMN kpl_concept_cons.con_code  IS '成分股代码';
 COMMENT ON COLUMN kpl_concept_cons.trade_date IS '交易日期';
-COMMENT ON COLUMN kpl_concept_cons.desc      IS '描述';
+COMMENT ON COLUMN kpl_concept_cons."desc"    IS '描述';
 COMMENT ON COLUMN kpl_concept_cons.hot_num   IS '热度';
 
 -- =============================================================================

@@ -69,7 +69,7 @@ class Notifier:
 
     用法：
         # 初始化（应用启动时调用一次）
-        Notifier.init("dingtalk", user_id="1830664110642027")
+        Notifier.init("dingtalk", user_id="your-user-id")
 
         # 或者在 init 中传入自定义 notifier
         Notifier.init(custom_notifier=MyNotifier())

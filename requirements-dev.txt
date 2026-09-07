@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest>=8,<9
+starlette[full]>=1.3,<2

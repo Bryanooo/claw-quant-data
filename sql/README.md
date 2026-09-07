@@ -35,6 +35,12 @@ python scripts/migrate.py
 - 已有数据卷必须通过 `scripts/migrate.py` 升级
 - 迁移按三位数字前缀排序，并记录版本、SHA-256 校验和和应用时间
 - 已应用迁移不得修改；结构变更必须新增迁移文件
+- `migrations/checksums.sha256` 固化所有已发布迁移的文件校验和；迁移程序会在
+  连接数据库前校验文件集合和内容，CI 也会阻止漏登记、新增后未更新清单或
+  格式化工具改写历史文件
+- 新增迁移后必须执行
+  `shasum -a 256 sql/migrations/[0-9][0-9][0-9]_*.sql > sql/migrations/checksums.sha256`
+  并一并提交；不要对已有迁移执行去尾空白、换行符转换等批量格式化
 - 迁移在单事务和 PostgreSQL advisory lock 内执行
 - 主键/唯一约束确保幂等性（配合 UPSERT 写入）
 - `tushare_norm_*` 保留所有不同 payload 版本；经过接口契约复核的数据集通过

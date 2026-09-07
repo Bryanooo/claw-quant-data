@@ -1,0 +1,7 @@
+# These five published migrations intentionally retain their original trailing
+# blank line because their byte-level SHA-256 values are already in databases.
+sql/migrations/003_tushare_raw_record.sql whitespace=-blank-at-eof
+sql/migrations/004_tushare_collection_checkpoint.sql whitespace=-blank-at-eof
+sql/migrations/016_collection_job_priority.sql whitespace=-blank-at-eof
+sql/migrations/017_collection_job_batches.sql whitespace=-blank-at-eof
+sql/migrations/024_specialized_job_handler.sql whitespace=-blank-at-eof

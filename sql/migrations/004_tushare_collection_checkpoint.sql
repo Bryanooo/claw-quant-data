@@ -27,3 +27,4 @@ CREATE TABLE IF NOT EXISTS sys_tushare_collection_checkpoint (
 
 CREATE INDEX IF NOT EXISTS idx_tushare_checkpoint_status
     ON sys_tushare_collection_checkpoint(status, updated_at);
+

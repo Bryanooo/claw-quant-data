@@ -660,6 +660,125 @@ def test_fanout_scope_is_reused_across_backfill_and_daily_cadence():
                 connection.close()
 
 
+def test_fanout_newer_complete_scope_is_reused_for_initialization():
+    suffix = uuid4().hex
+    api_name = f"scope_newer_{suffix[:12]}"
+    repository = FanoutCampaignRepository()
+    request = {"api_name": api_name}
+    campaign_ids = []
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        recent, created = repository.create(
+            api_name=api_name,
+            request=request,
+            page_size=200,
+            idempotency_key=f"integration-scope-recent-{suffix}",
+            initialization_id=None,
+            cadence="weekly",
+            period_key="2026-W36",
+            expected_for=date(2026, 9, 6),
+            plan_version=2,
+            reuse_scope=True,
+        )
+        assert created is True
+        campaign_ids.append(recent["campaign_id"])
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_fanout_campaign
+                SET status='success', completion_status='complete',
+                    finished_at=NOW()
+                WHERE campaign_id=%s
+                """,
+                (recent["campaign_id"],),
+            )
+        connection.commit()
+
+        initialization, created = repository.create(
+            api_name=api_name,
+            request=request,
+            page_size=100,
+            idempotency_key=f"integration-scope-initial-{suffix}",
+            initialization_id=999999,
+            cadence="initialization",
+            period_key="initial-2026-09-05",
+            expected_for=date(2026, 9, 5),
+            plan_version=1,
+            reuse_scope=True,
+        )
+        assert created is False
+        assert initialization["campaign_id"] == recent["campaign_id"]
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_collection_fanout_campaign "
+                "WHERE campaign_id = ANY(%s)",
+                (campaign_ids,),
+            )
+        connection.commit()
+        connection.close()
+
+
+def test_complete_fanout_resolves_older_market_wide_failure():
+    suffix = uuid4().hex
+    api_name = f"fanout_recovery_{suffix[:10]}"
+    connection = psycopg2.connect(**DB_CONFIG)
+    campaign_id = None
+    collection_job_id = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_fanout_campaign(
+                    api_name, request, page_size, idempotency_key, cadence,
+                    period_key, expected_for, plan_version, status,
+                    completion_status, finished_at
+                ) VALUES (
+                    %s, jsonb_build_object('api_name', %s), 200, %s,
+                    'weekly', '2026-W36', DATE '2026-09-06', 2,
+                    'success', 'complete', NOW() - INTERVAL '1 hour'
+                ) RETURNING campaign_id
+                """,
+                (api_name, api_name, f"fanout-recovery-{suffix}"),
+            )
+            campaign_id = cursor.fetchone()[0]
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_job(
+                    task_name, api_name, parameters, status, period_key,
+                    expected_for, completion_status, error_message, finished_at
+                ) VALUES (
+                    'tushare_interface', %s,
+                    jsonb_build_object(
+                        'api_name', %s, 'parameters', '{}'::jsonb
+                    ),
+                    'failed', 'initial-2026-09-05', DATE '2026-09-05',
+                    'incomplete', 'unsafe market-wide request', NOW()
+                ) RETURNING job_id
+                """,
+                (api_name, api_name),
+            )
+            collection_job_id = cursor.fetchone()[0]
+        connection.commit()
+
+        unresolved = CollectionMonitorRepository().unresolved_partition_failures()
+        assert api_name not in unresolved
+    finally:
+        with connection.cursor() as cursor:
+            if collection_job_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_collection_job WHERE job_id=%s",
+                    (collection_job_id,),
+                )
+            if campaign_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_collection_fanout_campaign WHERE campaign_id=%s",
+                    (campaign_id,),
+                )
+        connection.commit()
+        connection.close()
+
+
 def test_dataset_repository_applies_direction_to_every_order_column():
     table_name = f"dataset_order_{uuid4().hex[:12]}"
     connection = psycopg2.connect(**DB_CONFIG)

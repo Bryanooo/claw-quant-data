@@ -9,6 +9,7 @@ from threading import Event, Thread
 from uuid import uuid4
 
 from service.db import execute
+from service.config import APP_REVISION
 
 logger = logging.getLogger("service-heartbeat")
 
@@ -24,7 +25,7 @@ class Heartbeat:
         self.component = component
         self.instance_id = f"{os.uname().nodename}-{uuid4().hex[:8]}"
         self.interval_seconds = interval_seconds
-        self.details = dict(details or {})
+        self.details = {"app_revision": APP_REVISION, **dict(details or {})}
         self._stop = Event()
         self._thread: Thread | None = None
 

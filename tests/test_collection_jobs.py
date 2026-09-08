@@ -10,6 +10,7 @@ from service.api.dependencies import (
 )
 from service.collection_jobs.models import (
     JobConflictError,
+    JobHandlerUnavailableError,
     JobHandlerMismatchError,
     TaskExecutionResult,
 )
@@ -718,6 +719,25 @@ def test_task_registry_rejects_changed_persisted_handler():
     )
     with pytest.raises(JobHandlerMismatchError, match="does not match"):
         TASKS.assert_handler_compatible(job)
+
+
+def test_task_registry_defers_job_created_by_newer_handler(monkeypatch):
+    job = make_job(
+        task_name="scheduled_collector",
+        parameters={
+            "schedule_id": "daily_daily",
+            "scheduled_for": "2026-09-08T16:00:00+08:00",
+        },
+        handler_type="dedicated",
+        handler_key="schedule:daily_daily",
+        handler_version="3",
+    )
+
+    with pytest.raises(JobHandlerUnavailableError, match="older") as failure:
+        TASKS.assert_handler_compatible(job)
+
+    assert failure.value.defer_without_failure is True
+    assert failure.value.retry_after_seconds == 30
 
 
 def test_manual_api_defaults_to_three_attempts():

@@ -292,8 +292,13 @@ class InitializationService:
             )
             if self._step_state(step) == "failed"
         ]
+        missing_fanout_steps = (
+            campaign["status"] == "running"
+            and campaign["phase_name"] == "fanout_baseline"
+            and campaign["materialized_steps"] < campaign["logical_total_steps"]
+        )
         if campaign["status"] not in {"paused", "attention"} and not (
-            campaign["status"] == "running" and failed
+            campaign["status"] == "running" and (failed or missing_fanout_steps)
         ):
             raise JobConflictError(
                 "only a paused/attention initialization or a running "
@@ -307,6 +312,12 @@ class InitializationService:
             for step in failed:
                 self._repository.delete_step(step["step_id"])
         self._repository.set_status(initialization_id, "running")
+        if failed or missing_fanout_steps:
+            # ``reconcile`` intentionally waits for a materialized batch to
+            # settle. Repair planning is different: missing fanout-baseline
+            # steps must be recreated immediately so independent workers can
+            # make progress instead of waiting hours for sibling campaigns.
+            self._plan_phase(self._repository.get(initialization_id))
         return self.reconcile(initialization_id)
 
     def activate(self, initialization_id: int) -> dict:

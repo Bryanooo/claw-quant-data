@@ -677,10 +677,15 @@ def test_running_initialization_can_rebuild_only_failed_steps():
         ],
     )
 
-    result = service_with(repository).resume(9)
+    service = service_with(repository)
+    planned = []
+    service._plan_phase = lambda current: planned.append(current) or True
+
+    result = service.resume(9)
 
     assert repository.deleted_steps == [41]
     assert repository.value["verification_round"] == 2
+    assert len(planned) == 1
     assert result["status"] == "running"
     assert result["current_phase"] == 5
 

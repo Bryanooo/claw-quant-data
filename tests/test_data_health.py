@@ -391,6 +391,48 @@ def test_never_collected_alias_suppresses_duplicate_empty_dataset():
     assert [item["kind"] for item in result["issues"]] == ["never_collected"]
 
 
+def test_existing_shared_dataset_is_not_reported_as_never_collected():
+    collection = {
+        "summary": {
+            "interfaces": 1, "collectable": 1, "complete": 0,
+            "pending": 1, "unverified": 0, "unresolved_failures": 0,
+        },
+        "interfaces": [{
+            "api_name": "express_vip", "collectable": True,
+            "automatic_safe": False, "latest": None,
+            "unresolved_failure": None,
+        }],
+    }
+    coverage = {
+        "summary": {
+            "datasets": 1, "auditable": 0, "audited": 0,
+            "with_gaps": 0, "missing_partitions": 0,
+            "partial_partitions": 0,
+        },
+        "datasets": [{"dataset": "express", "auditable": False, "latest": None}],
+    }
+    service = DataHealthService(
+        collection_service=Stub(collection),
+        coverage_service=Stub(coverage),
+        data_service=Stub(
+            [{
+                "dataset": "express", "status": "event_driven",
+                "latest_date": "2026-06-30", "estimated_rows": 128,
+            }],
+            "freshness",
+        ),
+        initialization_service=Stub({"active": None, "latest": None}),
+    )
+
+    result = service.overview()
+
+    assert result["summary"]["never_collected_interfaces"] == 0
+    assert [item["kind"] for item in result["issues"]] == [
+        "collection_lineage_missing"
+    ]
+    assert result["issues"][0]["severity"] == "info"
+
+
 def test_full_initialization_marks_safe_fanout_first_collection_as_planned():
     collection = {
         "summary": {

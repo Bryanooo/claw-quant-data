@@ -26,6 +26,10 @@ from service.history_baselines import (
     INITIALIZATION_TRANSPORT_VERIFIED_DATASETS,
     catalog_history_partitions,
 )
+from service.config import (
+    INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS,
+    INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS,
+)
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -47,6 +51,7 @@ PROFILE_DAYS = {
 }
 PLANNING_BATCH_SIZE = 500
 CORE_TASKS = ("stock_daily", "stock_daily_basic", "moneyflow", "stock_limit")
+TRANSIENT_AUTO_RECOVERY_CATEGORIES = frozenset({"network", "timeout", "quota"})
 FULL_HISTORY_DATASET_STARTS = {
     "stock_daily": FULL_HISTORY_START,
     "stock_daily_basic": FULL_HISTORY_START,
@@ -294,9 +299,66 @@ class InitializationService:
 
     def reconcile_active(self) -> dict | None:
         campaign = self._repository.active()
-        if not campaign or campaign["status"] != "running":
+        if not campaign:
             return campaign
+        if campaign["status"] == "attention":
+            recovered = self._auto_recover_transient_attention(campaign)
+            if recovered is not None:
+                return recovered
+        if campaign["status"] != "running":
+            return self._decorate(campaign)
         return self.reconcile(campaign["initialization_id"])
+
+    def _auto_recover_transient_attention(self, campaign: dict) -> dict | None:
+        """Resume only a settled phase made up solely of transient failures.
+
+        Completeness, permission, request, deployment and verification failures
+        remain fail-closed in ``attention``. This narrowly scoped recovery is
+        intended for incidents such as a temporary DNS outage, where requiring
+        a human click leaves most of a deterministic history plan unmaterialized.
+        """
+        steps = self._repository.phase_steps(
+            campaign["initialization_id"], campaign["current_phase"]
+        )
+        states = [self._step_state(step) for step in steps]
+        if not states or "running" in states:
+            return None
+        failed = [
+            step for step, state in zip(steps, states, strict=True)
+            if state == "failed"
+        ]
+        if not failed or any(step.get("resource_type") != "collection" for step in failed):
+            return None
+        failures = [
+            (step.get("completion_evidence") or {}).get("failure") or {}
+            for step in failed
+        ]
+        if any(
+            evidence.get("retryable") is not True
+            or evidence.get("category") not in TRANSIENT_AUTO_RECOVERY_CATEGORIES
+            for evidence in failures
+        ):
+            return None
+        finished = [
+            step.get("collection_finished_at")
+            for step in failed
+            if step.get("collection_finished_at") is not None
+        ]
+        if len(finished) != len(failed):
+            return None
+        latest_failure = max(finished)
+        if latest_failure.tzinfo is None:
+            latest_failure = latest_failure.replace(tzinfo=SHANGHAI)
+        age_seconds = (datetime.now(SHANGHAI) - latest_failure).total_seconds()
+        if age_seconds < INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS:
+            return None
+        claimed = self._repository.claim_transient_auto_recovery(
+            campaign["initialization_id"],
+            max_recoveries=INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS,
+        )
+        if claimed is None:
+            return None
+        return self.resume(campaign["initialization_id"])
 
     def reconcile(self, initialization_id: int) -> dict:
         campaign = self._repository.get(initialization_id)

@@ -1,7 +1,9 @@
 """Use cases shared by REST and the future MCP adapter."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from html import unescape
 from math import ceil
+import re
 from typing import Any
 
 from service.data_service.models import (
@@ -135,6 +137,211 @@ class DataService:
             },
         }
 
+    def stock_research_pack(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 180,
+        benchmark: str = "399006.SZ",
+        financial_periods: int = 8,
+        as_of: date | None = None,
+    ) -> dict:
+        """Aggregate governed source records needed by a stock-research Agent.
+
+        This endpoint deliberately does not calculate factors, forecasts, ratings or
+        trading advice.  It removes repetitive data-access plumbing while keeping
+        derived research in the Agent layer.
+        """
+        if lookback_days < 30 or lookback_days > 730:
+            raise InvalidQueryError("lookback_days must be between 30 and 730")
+        if financial_periods < 1 or financial_periods > 12:
+            raise InvalidQueryError("financial_periods must be between 1 and 12")
+
+        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        start_date = effective_as_of - timedelta(days=lookback_days - 1)
+        basic_rows = self._latest_rows("stock_basic", {"ts_code": ts_code}, limit=1)
+        if not basic_rows:
+            raise RecordNotFoundError(f"stock not found: {ts_code}")
+
+        datasets: dict[str, list[dict]] = {}
+        provenance: list[dict] = []
+
+        def load(
+            name: str,
+            *,
+            filters: dict[str, str] | None = None,
+            start: date | None = None,
+            end: date | None = None,
+            limit: int = 100,
+        ) -> list[dict]:
+            dataset = self._registry.get(name)
+            rows = self._rows(
+                name,
+                filters or {"ts_code": ts_code},
+                start_date=start,
+                end_date=end,
+                limit=limit,
+            )
+            datasets[name] = rows
+            observed_dates = (
+                [row[dataset.date_column] for row in rows if row.get(dataset.date_column)]
+                if dataset.date_column
+                else []
+            )
+            provenance.append(
+                {
+                    "dataset": name,
+                    "source": dataset.source,
+                    "returned": len(rows),
+                    "date_column": dataset.date_column,
+                    "latest_value_in_pack": max(observed_dates) if observed_dates else None,
+                    "earliest_value_in_pack": min(observed_dates) if observed_dates else None,
+                }
+            )
+            return rows
+
+        profile = {
+            "basic": basic_rows[0],
+            "company": self._first_or_none(load("stock_company", limit=1)),
+        }
+        market = {
+            "daily": load(
+                "stock_daily", start=start_date, end=effective_as_of, limit=730
+            ),
+            "daily_basic": load(
+                "stock_daily_basic", start=start_date, end=effective_as_of, limit=730
+            ),
+            "adjustment_factors": load(
+                "adj_factor", start=start_date, end=effective_as_of, limit=730
+            ),
+            "moneyflow": load(
+                "moneyflow", start=start_date, end=effective_as_of, limit=730
+            ),
+            "cyq_performance": load(
+                "cyq_perf", start=start_date, end=effective_as_of, limit=730
+            ),
+            "margin": load(
+                "margin_detail", start=start_date, end=effective_as_of, limit=730
+            ),
+            "northbound_holding": load(
+                "hk_hold", start=start_date, end=effective_as_of, limit=730
+            ),
+            "block_trades": load(
+                "block_trade", start=start_date, end=effective_as_of, limit=200
+            ),
+            "limits": load(
+                "stock_limit", start=start_date, end=effective_as_of, limit=730
+            ),
+            "suspensions": load(
+                "stock_suspend", start=start_date, end=effective_as_of, limit=200
+            ),
+            "benchmark_daily": load(
+                "index_daily",
+                filters={"ts_code": benchmark},
+                start=start_date,
+                end=effective_as_of,
+                limit=730,
+            ),
+        }
+        fundamentals = {
+            "indicators": load("financial_indicator", limit=financial_periods),
+            "income": load("income", limit=financial_periods),
+            "balance_sheet": load("balancesheet", limit=financial_periods),
+            "cash_flow": load("cashflow", limit=financial_periods),
+            "forecasts": load("forecast", limit=financial_periods),
+            "express_reports": load("express", limit=financial_periods),
+        }
+        ownership_and_events = {
+            "holder_count": load("stk_holdernumber", limit=financial_periods * 2),
+            "holder_trades": load("stk_holdertrade", limit=100),
+            "top_holders": load("top10_holders", limit=financial_periods * 10),
+            "top_float_holders": load(
+                "top10_floatholders", limit=financial_periods * 10
+            ),
+            "pledge": load("pledge_stat", limit=financial_periods),
+            "repurchases": load("repurchase", limit=100),
+            "dividends": load("dividend", limit=financial_periods * 2),
+        }
+        news_dataset = self._registry.get("major_news")
+        news_terms = tuple(
+            dict.fromkeys(
+                value
+                for value in (
+                    str(profile["basic"].get("name") or "").strip(),
+                    str(profile["basic"].get("enname") or "").strip(),
+                    ts_code,
+                )
+                if value
+            )
+        )
+        news_rows = self._repository.search_news(
+            news_dataset,
+            terms=news_terms,
+            start_date=start_date,
+            end_date=effective_as_of,
+            limit=30,
+        )
+        related_news = []
+        for row in news_rows:
+            plain_content = re.sub(r"<[^>]+>", " ", str(row.get("content") or ""))
+            related_news.append(
+                {
+                    **row,
+                    "content": re.sub(r"\s+", " ", unescape(plain_content)).strip()[:600],
+                }
+            )
+        ownership_and_events["related_news"] = related_news
+        news_dates = [row["pub_time"] for row in related_news if row.get("pub_time")]
+        provenance.append(
+            {
+                "dataset": "major_news",
+                "source": news_dataset.source,
+                "returned": len(related_news),
+                "date_column": "pub_time",
+                "latest_value_in_pack": max(news_dates) if news_dates else None,
+                "earliest_value_in_pack": min(news_dates) if news_dates else None,
+                "search_terms": list(news_terms),
+            }
+        )
+        gaps = [
+            {
+                "dataset": item["dataset"],
+                "reason": "no_rows_in_requested_scope",
+            }
+            for item in provenance
+            if item["returned"] == 0
+        ]
+
+        return {
+            "data": {
+                "profile": profile,
+                "market": market,
+                "fundamentals": fundamentals,
+                "ownership_and_events": ownership_and_events,
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "benchmark": benchmark,
+                "as_of": effective_as_of,
+                "start_date": start_date,
+                "lookback_days": lookback_days,
+                "financial_periods": financial_periods,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": provenance,
+                "gaps": gaps,
+                "external_data_needed": [
+                    {
+                        "topic": "official_company_announcements",
+                        "reason": (
+                            "related_news is a keyword search over media data; "
+                            "claw-quant-data currently has no exchange/company "
+                            "announcement document search contract"
+                        ),
+                    }
+                ],
+            },
+        }
+
     def _latest_rows(
         self,
         dataset_name: str,
@@ -142,12 +349,29 @@ class DataService:
         *,
         limit: int = 1,
     ) -> list[dict]:
+        return self._rows(
+            dataset_name,
+            filters,
+            start_date=None,
+            end_date=None,
+            limit=limit,
+        )
+
+    def _rows(
+        self,
+        dataset_name: str,
+        filters: dict[str, str],
+        *,
+        start_date: date | None,
+        end_date: date | None,
+        limit: int,
+    ) -> list[dict]:
         result = self.query_dataset(
             dataset_name,
             exact_filters=filters,
             date_value=None,
-            start_date=None,
-            end_date=None,
+            start_date=start_date.isoformat() if start_date else None,
+            end_date=end_date.isoformat() if end_date else None,
             limit=limit,
             offset=0,
             include_total=False,

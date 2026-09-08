@@ -29,15 +29,34 @@ _DATASET_INTERFACE_ALIASES = {
     "stock_limit": "stk_limit",
     "stock_suspend": "suspend_d",
 }
+_INTERFACE_DATASET_ALIASES = {
+    "disclosure_date": {"disclosure_date"},
+    "express": {"express"},
+    "express_vip": {"express"},
+    "fina_mainbz": {"fina_mainbz"},
+    "fina_mainbz_vip": {"fina_mainbz"},
+    "forecast": {"forecast"},
+    "forecast_vip": {"forecast"},
+}
 
 
 def _dataset_names_for_interface(api_name: str) -> set[str]:
     """Return public dataset names that are backed by one upstream API."""
-    return {api_name} | {
+    return {api_name} | _INTERFACE_DATASET_ALIASES.get(api_name, set()) | {
         dataset
         for dataset, interface in _DATASET_INTERFACE_ALIASES.items()
         if interface == api_name
     }
+
+
+def _interface_has_stored_data(
+    api_name: str, freshness_by_dataset: dict[str, dict[str, Any]]
+) -> bool:
+    return any(
+        bool(item.get("latest_date")) or int(item.get("estimated_rows") or 0) > 0
+        for dataset in _dataset_names_for_interface(api_name)
+        if (item := freshness_by_dataset.get(dataset)) is not None
+    )
 
 
 class DataHealthService:
@@ -60,6 +79,7 @@ class DataHealthService:
         freshness = self._effective_freshness(
             collection, self._data.freshness()
         )
+        freshness_by_dataset = {item["dataset"]: item for item in freshness}
         initialization = self._initialization.overview()
         issues = self._issues(collection, coverage, freshness, initialization)
 
@@ -120,7 +140,11 @@ class DataHealthService:
                 "not_applicable": freshness_counts["not_applicable"],
                 "strictly_complete_interfaces": collection_summary["complete"],
                 "never_collected_interfaces": sum(
-                    not item.get("latest") for item in collectable_interfaces
+                    not item.get("latest")
+                    and not _interface_has_stored_data(
+                        item["api_name"], freshness_by_dataset
+                    )
+                    for item in collectable_interfaces
                 ),
                 "unverified_interfaces": sum(
                     (item.get("latest") or {}).get("completion_status")
@@ -254,6 +278,7 @@ class DataHealthService:
         initialization_running = bool(
             campaign and campaign.get("status") == "running"
         )
+        freshness_by_dataset = {item["dataset"]: item for item in freshness}
         if campaign and campaign.get("status") in {"attention", "paused"}:
             issues.append(
                 {
@@ -309,7 +334,11 @@ class DataHealthService:
                     }
                 )
             elif not latest and item.get("collectable"):
-                explained_dataset_names.update(_dataset_names_for_interface(api_name))
+                interface_datasets = _dataset_names_for_interface(api_name)
+                explained_dataset_names.update(interface_datasets)
+                stored_data_exists = _interface_has_stored_data(
+                    api_name, freshness_by_dataset
+                )
                 pending_initialization = bool(
                     initialization_running
                     and (
@@ -319,13 +348,23 @@ class DataHealthService:
                 )
                 issues.append(
                     {
-                        "severity": "info" if pending_initialization else "warning",
+                        "severity": (
+                            "info"
+                            if pending_initialization or stored_data_exists
+                            else "warning"
+                        ),
                         "confidence": (
-                            "planned" if pending_initialization else "unknown"
+                            "planned"
+                            if pending_initialization
+                            else "observed"
+                            if stored_data_exists
+                            else "unknown"
                         ),
                         "kind": (
                             "initialization_pending"
                             if pending_initialization
+                            else "collection_lineage_missing"
+                            if stored_data_exists
                             else "never_collected"
                         ),
                         "resource_type": "interface",
@@ -334,11 +373,15 @@ class DataHealthService:
                         "detail": (
                             "有权限接口将在当前全量初始化的后续基线阶段首采"
                             if pending_initialization
+                            else "标准数据表已有记录，但缺少可关联的持久化采集任务谱系"
+                            if stored_data_exists
                             else "有权限接口尚无任何采集任务记录"
                         ),
                         "action": (
                             "等待初始化进入最新基线阶段"
                             if pending_initialization
+                            else "后续任务已写入规范接口标识；保留现有数据并补齐任务谱系"
+                            if stored_data_exists
                             else "配置安全参数或扇出策略后执行首采"
                         ),
                         "api_name": api_name,

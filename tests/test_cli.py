@@ -192,6 +192,43 @@ def test_interface_query_preserves_date_field_and_normalizes_name(capsys):
     ]
 
 
+def test_stock_research_pack_cli_forwards_bounded_scope(capsys):
+    path = "/v1/stocks/300750.SZ/research-pack"
+    client = FakeClient({path: {"data": {}, "meta": {"ts_code": "300750.SZ"}}})
+
+    exit_code, captured = run_cli(
+        [
+            "stock",
+            "research-pack",
+            "300750.sz",
+            "--lookback-days",
+            "90",
+            "--benchmark",
+            "399006.sz",
+            "--financial-periods",
+            "4",
+            "--as-of",
+            "2026-09-08",
+        ],
+        client,
+        capsys,
+    )
+
+    assert exit_code == 0
+    assert json.loads(captured.out)["meta"]["ts_code"] == "300750.SZ"
+    assert client.calls == [
+        (
+            path,
+            {
+                "lookback_days": 90,
+                "benchmark": "399006.SZ",
+                "financial_periods": 4,
+                "as_of": "2026-09-08",
+            },
+        )
+    ]
+
+
 def test_list_commands_support_deterministic_client_side_filters(capsys):
     client = FakeClient(
         {

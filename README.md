@@ -15,6 +15,11 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 本项目负责数据采集、存储、质量状态和数据服务，**不包含选股策略、因子研究、
 回测、组合管理或实盘交易**。
 
+面向研究 Agent 的只读入口包括单数据集查询、股票快照和
+`/api/v1/stocks/{ts_code}/research-pack`。Research Pack 只聚合带来源信息的原始
+研究材料，并显式返回缺失项；其中 `major_news` 会按证券名称/代码做有界关键词
+检索，交易所公告正文仍需官方外部来源补齐。预测、评级和操作建议仍属于上层 Agent。
+
 ## 先看结论
 
 截至 2026-09-06，系统的实际建设状态如下：
@@ -51,6 +56,8 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 最近一次真实数据库审计确认：当前核心日频窗口连续，但全历史初始化尚未执行完成；
 采集时效、历史缺口和控制台真实失败口径见
 [历史完整性、采集时效与告警真实性审计](reports/history_and_timeliness_audit_2026-09-06.md)。
+2026-09-08 的共享 DNS 故障、漏报原因和治理验证见
+[历史补采 DNS 故障复盘](reports/history_backfill_dns_incident_2026-09-08.md)。
 
 ### 为什么 200 个接口只有 98 个采集器类
 
@@ -247,7 +254,10 @@ Tushare 接口契约 → 有界请求 / 分页 → JSONB 原始层 → 类型校
 - 任意已出现页面再次出现都会立即停止，避免上游忽略或循环处理 `offset` 后死循环；
 - 相同接口和业务请求范围只允许一个分页任务运行，防止并发 Worker 互相覆盖 checkpoint；
 - 通用和专项采集的每次 SDK 请求都同时预留 Token 全局时间槽和接口时间槽；
-- 参数和权限错误不盲目重试，临时网络错误指数退避；
+- 参数和权限错误不盲目重试；临时网络错误按 60、300、900 秒指数退避，并同步
+  暂停同一资源池的待执行任务，避免一次 DNS 故障批量耗尽历史任务的重试机会；
+- 初始化进入 `attention` 后，只有全部失败步骤都带有可重试的网络、超时或配额
+  证据时才会冷却后自动恢复，最多自动恢复 3 轮；完整性、权限和契约错误保持阻断；
 - Worker 单任务默认 1,800 秒超时，避免网络调用永久占住进程。
 - 每个运行任务持有短租约并周期续租；Worker 失联后，其他 Worker 会自动回收，
   耗尽尝试次数的任务进入最终失败状态；
@@ -838,6 +848,10 @@ docker compose down
 | `JOB_EXECUTION_TIMEOUT_SECONDS` | `1800` | 单任务执行超时 |
 | `JOB_LEASE_SECONDS` | `120` | 运行任务租约时长；Worker 在执行期间自动续租 |
 | `JOB_RECLAIM_INTERVAL_SECONDS` | `60` | Worker 与 Auditor 周期回收失联任务的间隔 |
+| `JOB_NETWORK_RETRY_BASE_SECONDS` | `60` | 网络故障首次退避秒数，后续按 5 倍增长 |
+| `JOB_NETWORK_RETRY_MAX_SECONDS` | `900` | 网络故障单次退避与同资源池暂停的上限 |
+| `INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS` | `300` | 初始化仅对可重试瞬态故障自动恢复前的冷却时间 |
+| `INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS` | `3` | 单次初始化最多自动恢复的瞬态故障轮数，与人工验收轮次独立 |
 | `ROUTINE_WORKER_RESOURCE_CLASSES` | `scheduled,generic,reference,market,moneyflow,finance,catalog,default` | 日常 Worker 允许领取的资源类别 |
 | `FANOUT_WORKER_RESOURCE_CLASSES` | `fanout` | 周期扇出 Worker 允许领取的资源类别 |
 | `BACKFILL_WORKER_RESOURCE_CLASSES` | `initialization,backfill` | 初始化/回填 Worker 允许领取的资源类别 |

@@ -27,6 +27,15 @@ physical tables, raw SQL, or undocumented response fields.
 6. State the dataset, requested date range, latest available partition, and any
    relevant health or coverage limitation in the answer.
 
+For a single-stock multi-role research workflow, prefer
+`./clawq stock research-pack <TS_CODE>` as the first bounded data read after health
+checks. Inspect `meta.provenance`, `meta.gaps`, and `meta.external_data_needed`; use
+individual dataset queries only to drill into a section or paginate beyond the pack.
+Treat `ownership_and_events.related_news` as keyword-matched media material, not an
+official filing; use the declared external-data gap to retrieve exchange/company
+announcements from an official source.
+Never present the pack itself as a rating or trading recommendation.
+
 Use `./clawq interfaces describe <api_name>` and `interfaces query` when the request is
 about a Tushare interface contract or normalized interface records rather than a named
 public dataset. Never guess an interface's input fields.

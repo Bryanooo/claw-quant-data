@@ -101,6 +101,22 @@ def build_parser() -> argparse.ArgumentParser:
     stock_snapshot = stock_commands.add_parser("snapshot", help="get a stock snapshot")
     stock_snapshot.add_argument("ts_code", type=_ts_code)
     stock_snapshot.set_defaults(handler=_stock_snapshot)
+    stock_research = stock_commands.add_parser(
+        "research-pack",
+        help="get a governed multi-dataset stock research pack",
+    )
+    stock_research.add_argument("ts_code", type=_ts_code)
+    stock_research.add_argument(
+        "--lookback-days", type=_bounded_integer(30, 730), default=180
+    )
+    stock_research.add_argument(
+        "--benchmark", type=_ts_code, default="399006.SZ"
+    )
+    stock_research.add_argument(
+        "--financial-periods", type=_bounded_integer(1, 12), default=8
+    )
+    stock_research.add_argument("--as-of")
+    stock_research.set_defaults(handler=_stock_research_pack)
 
     interfaces = commands.add_parser("interfaces", help="discover Tushare interfaces")
     interface_commands = interfaces.add_subparsers(
@@ -294,6 +310,20 @@ def _freshness(client: ApiClient, args: argparse.Namespace) -> Any:
 
 def _stock_snapshot(client: ApiClient, args: argparse.Namespace) -> Any:
     return client.get(f"/v1/stocks/{args.ts_code.upper()}/snapshot")
+
+
+def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "lookback_days": args.lookback_days,
+        "benchmark": args.benchmark.upper(),
+        "financial_periods": args.financial_periods,
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/stocks/{args.ts_code.upper()}/research-pack",
+        params=params,
+    )
 
 
 def _interfaces_list(client: ApiClient, args: argparse.Namespace) -> list[dict[str, Any]]:

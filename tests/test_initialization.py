@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -38,6 +38,15 @@ class FakeRepository:
         self.value = value
         self.steps = steps
         self.activated = False
+        self.deleted_steps = []
+        self.auto_recovery_count = int(
+            (self.value.get("options") or {}).get(
+                "transient_auto_recovery_count", 0
+            )
+        )
+
+    def active(self):
+        return dict(self.value)
 
     def get(self, _initialization_id):
         return dict(self.value)
@@ -73,6 +82,23 @@ class FakeRepository:
         assert self.value["status"] == "ready"
         self.value["status"] = "completed"
         self.activated = True
+
+    def delete_step(self, step_id):
+        self.deleted_steps.append(step_id)
+        self.steps = [step for step in self.steps if step.get("step_id") != step_id]
+
+    def increment_round(self, _initialization_id):
+        self.value["verification_round"] += 1
+        return self.value["verification_round"]
+
+    def claim_transient_auto_recovery(self, _initialization_id, *, max_recoveries):
+        if self.auto_recovery_count >= max_recoveries:
+            return None
+        self.auto_recovery_count += 1
+        self.value.setdefault("options", {})[
+            "transient_auto_recovery_count"
+        ] = self.auto_recovery_count
+        return self.auto_recovery_count
 
 
 def service_with(repository):
@@ -592,6 +618,99 @@ def test_reconcile_stops_for_attention_on_failed_step():
     assert result["status"] == "attention"
     assert result["failed_steps"] == 1
     assert "require attention" in result["error_message"]
+
+
+def test_reconcile_active_auto_recovers_settled_network_failures(monkeypatch):
+    import service.initialization.service as initialization_module
+
+    repository = FakeRepository(
+        campaign(status="attention"),
+        [
+            collection_step(
+                "failed",
+                step_id=17,
+                collection_status="failed",
+                completion_evidence={
+                    "failure": {"category": "network", "retryable": True}
+                },
+                collection_finished_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
+        ],
+    )
+    service = service_with(repository)
+    service._plan_phase = lambda _campaign: False
+    monkeypatch.setattr(
+        initialization_module, "INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS", 300
+    )
+    monkeypatch.setattr(
+        initialization_module, "INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS", 3
+    )
+
+    result = service.reconcile_active()
+
+    assert result["status"] == "running"
+    assert repository.deleted_steps == [17]
+    assert repository.value["verification_round"] == 2
+    assert repository.auto_recovery_count == 1
+
+
+def test_reconcile_active_keeps_completeness_failure_in_attention(monkeypatch):
+    import service.initialization.service as initialization_module
+
+    repository = FakeRepository(
+        campaign(status="attention"),
+        [
+            collection_step(
+                "incomplete",
+                step_id=18,
+                collection_status="failed",
+                completion_evidence={
+                    "failure": {"category": "completeness", "retryable": True}
+                },
+                collection_finished_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        initialization_module, "INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS", 3
+    )
+
+    result = service_with(repository).reconcile_active()
+
+    assert result["status"] == "attention"
+    assert repository.deleted_steps == []
+
+
+def test_reconcile_active_stops_after_bounded_transient_recoveries(monkeypatch):
+    import service.initialization.service as initialization_module
+
+    repository = FakeRepository(
+        campaign(
+            status="attention",
+            verification_round=11,
+            options={"transient_auto_recovery_count": 3},
+        ),
+        [
+            collection_step(
+                "failed",
+                step_id=19,
+                collection_status="failed",
+                completion_evidence={
+                    "failure": {"category": "network", "retryable": True}
+                },
+                collection_finished_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        initialization_module, "INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS", 3
+    )
+
+    result = service_with(repository).reconcile_active()
+
+    assert result["status"] == "attention"
+    assert repository.deleted_steps == []
+    assert repository.value["verification_round"] == 11
 
 
 def test_reconcile_waits_for_whole_batch_before_escalating_failure():

@@ -235,6 +235,38 @@ class InitializationRepository:
             )
             return int(cursor.fetchone()[0])
 
+    def claim_transient_auto_recovery(
+        self, initialization_id: int, *, max_recoveries: int
+    ) -> int | None:
+        """Atomically reserve one bounded transient-recovery attempt."""
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_initialization
+                SET options = jsonb_set(
+                        COALESCE(options, '{}'::jsonb),
+                        '{transient_auto_recovery_count}',
+                        to_jsonb(
+                            COALESCE(
+                                (options->>'transient_auto_recovery_count')::integer,
+                                0
+                            ) + 1
+                        ),
+                        TRUE
+                    ),
+                    updated_at = NOW()
+                WHERE initialization_id=%s AND status='attention'
+                  AND COALESCE(
+                        (options->>'transient_auto_recovery_count')::integer,
+                        0
+                      ) < %s
+                RETURNING (options->>'transient_auto_recovery_count')::integer
+                """,
+                (initialization_id, max_recoveries),
+            )
+            row = cursor.fetchone()
+            return int(row[0]) if row else None
+
     def add_coverage_step(
         self,
         initialization_id: int,
@@ -297,6 +329,7 @@ class InitializationRepository:
                        collection.completion_evidence,
                        collection.rows_fetched, collection.rows_inserted,
                        collection.error_message AS collection_error,
+                       collection.finished_at AS collection_finished_at,
                        coverage.status AS coverage_status,
                        audit.status AS audit_status,
                        audit.missing_partitions, audit.partial_partitions,

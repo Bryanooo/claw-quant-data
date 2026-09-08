@@ -102,11 +102,11 @@ _DEFINITIONS = (
     ),
     FanoutDefinition(
         "fut_weekly_monthly", "static", "freq", "date_window", 1,
-        ("week", "month"),
+        ("week", "month"), 7,
     ),
     FanoutDefinition(
         "stk_week_month_adj", "static", "freq", "date_window", 1,
-        ("week", "month"),
+        ("week", "month"), 7,
     ),
     FanoutDefinition(
         "dc_index", "static", "idx_type", "trade_date", 1, ("概念板块",),

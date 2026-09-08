@@ -286,15 +286,23 @@ class InitializationService:
 
     def resume(self, initialization_id: int) -> dict:
         campaign = self.get(initialization_id)
-        if campaign["status"] not in {"paused", "attention"}:
-            raise JobConflictError("only a paused or attention initialization can resume")
-        if campaign["status"] == "attention":
-            failed = [
-                step for step in self._repository.phase_steps(
-                    initialization_id, campaign["current_phase"]
-                )
-                if self._step_state(step) == "failed"
-            ]
+        failed = [
+            step for step in self._repository.phase_steps(
+                initialization_id, campaign["current_phase"]
+            )
+            if self._step_state(step) == "failed"
+        ]
+        if campaign["status"] not in {"paused", "attention"} and not (
+            campaign["status"] == "running" and failed
+        ):
+            raise JobConflictError(
+                "only a paused/attention initialization or a running "
+                "initialization with failed steps can resume"
+            )
+        if failed:
+            # Repair only settled failures. Other fan-outs in this phase can
+            # keep running safely while corrected jobs are rebuilt in a new
+            # verification round; successful work is never discarded.
             self._repository.increment_round(initialization_id)
             for step in failed:
                 self._repository.delete_step(step["step_id"])
@@ -903,7 +911,7 @@ class InitializationService:
             if (
                 not contract.collectable
                 or contract.api_name in DEDICATED_SCHEDULED_APIS
-                or contract.api_name in FULL_FANOUT_BASELINES
+                or contract.api_name in FULL_INITIALIZATION_BASELINES
             ):
                 continue
             policy = policies.get(contract.api_name)

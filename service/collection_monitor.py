@@ -483,6 +483,7 @@ class CollectionMonitorService:
             recipe.api_name: recipe for recipe in SCHEDULED_FANOUT_RECIPES
         }
         interfaces = []
+        ignored_manual_attention = 0
 
         for contract in TushareInterfaceCatalog().list():
             policy = policies.get(contract.api_name)
@@ -554,7 +555,30 @@ class CollectionMonitorService:
             elif policy.automatic_safe:
                 automation_mode = "policy"
                 job = jobs.get(contract.api_name)
-                if job:
+                # Exploratory/manual probes are useful audit records but must
+                # never replace the production signal for an automated
+                # interface or turn the dashboard red with a false failure.
+                if job and job.get("cadence") == "manual":
+                    if (
+                        job.get("status") == "failed"
+                        or job.get("completion_status") in {"failed", "incomplete"}
+                    ):
+                        ignored_manual_attention += 1
+                    job = None
+                campaign = campaigns.get(contract.api_name)
+                if campaign and not job:
+                    latest = _fanout_latest(campaign)
+                elif campaign and job:
+                    campaign_time = (
+                        campaign.get("updated_at") or campaign.get("created_at")
+                    )
+                    job_time = job.get("finished_at") or job.get("created_at")
+                    latest = (
+                        _fanout_latest(campaign)
+                        if campaign_time and job_time and campaign_time > job_time
+                        else _queue_latest(job)
+                    )
+                elif job:
                     latest = _queue_latest(job)
             elif contract.api_name in campaigns:
                 # An ad-hoc campaign remains visible for manual interfaces,
@@ -633,7 +657,7 @@ class CollectionMonitorService:
             "automated": sum(item["automation_mode"] != "manual" for item in interfaces),
             "complete": 0,
             "attention": 0,
-            "manual_attention": 0,
+            "manual_attention": ignored_manual_attention,
             "unverified": 0,
             "pending": 0,
             "running": 0,

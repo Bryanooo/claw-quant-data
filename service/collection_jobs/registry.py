@@ -526,16 +526,24 @@ class TaskRegistry:
         if not persisted_key and not persisted_version:  # legacy row
             return
         current = self.handler_metadata(job["task_name"], job["parameters"])
-        if (
+        same_handler = (
             persisted_key == current.handler_key
             and job.get("handler_type") == current.handler_type
-            and _is_newer_handler_version(persisted_version, current.handler_version)
-        ):
-            raise JobHandlerUnavailableError(
-                "worker handler is older than the persisted job: "
-                f"{persisted_key}@{persisted_version} > "
-                f"{current.handler_key}@{current.handler_version}"
-            )
+        )
+        if same_handler:
+            if _is_newer_handler_version(persisted_version, current.handler_version):
+                raise JobHandlerUnavailableError(
+                    "worker handler is older than the persisted job: "
+                    f"{persisted_key}@{persisted_version} > "
+                    f"{current.handler_key}@{current.handler_version}"
+                )
+            if persisted_version == current.handler_version or _is_newer_handler_version(
+                current.handler_version, persisted_version
+            ):
+                # Numeric handler versions are backward compatible. This lets
+                # an atomic deployment finish already-queued work while older
+                # workers still fail closed on jobs created by newer code.
+                return
         if (
             persisted_key != current.handler_key
             or persisted_version != current.handler_version
@@ -656,7 +664,7 @@ TASKS = TaskRegistry(
             TushareInterfaceParameters,
             _run_tushare_interface,
             handler_type="generic",
-            handler_version="3",
+            handler_version="4",
         ),
     ]
 )

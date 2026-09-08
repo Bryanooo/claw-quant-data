@@ -308,10 +308,15 @@ def test_every_public_dataset_has_an_explicit_coverage_classification():
 def test_only_proven_rules_are_automatically_scheduled():
     scheduled = COVERAGE_RULES.scheduled()
 
-    assert len(scheduled) == 44
+    assert len(scheduled) == 49
     assert all(item.auditable for item in scheduled)
     assert COVERAGE_RULES.get("adj_factor").scheduled is True
     assert COVERAGE_RULES.get("adj_factor").coverage_level == "expected_partitions"
+    assert COVERAGE_RULES.get("ccass_hold").coverage_level == "observed_partitions"
+    assert COVERAGE_RULES.get("ccass_hold").entity_column == "ts_code"
+    assert COVERAGE_RULES.get("ccass_hold_detail").scheduled is False
+    assert COVERAGE_RULES.get("ccass_hold_detail").entity_column == "ts_code"
+    assert COVERAGE_RULES.get("hk_daily").scheduled is True
 
 
 def test_scheduled_coverage_uses_distinct_pre_and_post_release_keys(monkeypatch):

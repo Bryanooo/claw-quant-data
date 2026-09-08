@@ -109,6 +109,9 @@ _EMPTY_RECHECK_POLICIES = {
 # morning.  Do not consume a bounded empty-recheck generation before their
 # documented publication window has closed.
 _NEXT_MORNING_RELEASES = {
+    # doc 295: the previous trading day's CCASS aggregate is normally
+    # published before 09:00 on the next trading day.
+    "ccass_hold": time(9, 15),
     "etf_share_size": time(9, 15),
     "margin": time(9, 15),
     "margin_detail": time(9, 15),

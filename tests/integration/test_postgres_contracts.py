@@ -24,6 +24,7 @@ from service.data_coverage.models import (
     CoverageStrategy,
 )
 from service.data_coverage.repository import CoverageRepository
+from service.data_coverage.registry import COVERAGE_RULES
 from service.data_service.registry import DATASETS
 from service.data_service.database import Database
 from service.data_service.models import DatasetQuery, DatasetSpec, DateStorage
@@ -38,6 +39,89 @@ pytestmark = pytest.mark.skipif(
     os.getenv("RUN_DB_INTEGRATION") != "1",
     reason="set RUN_DB_INTEGRATION=1 to run PostgreSQL contract tests",
 )
+
+
+def test_every_coverage_rule_references_real_source_columns():
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                """
+            )
+            columns: dict[str, set[str]] = {}
+            for table_name, column_name in cursor.fetchall():
+                columns.setdefault(table_name, set()).add(column_name)
+    finally:
+        connection.close()
+
+    for rule in COVERAGE_RULES.list():
+        assert rule.table in columns, rule.dataset_name
+        if rule.date_column:
+            assert rule.date_column in columns[rule.table], rule.dataset_name
+        if rule.entity_column:
+            assert rule.entity_column in columns[rule.table], rule.dataset_name
+
+
+def test_coverage_queue_counts_only_unresolved_failures():
+    suffix = uuid4().hex
+    dataset_name = "stock_daily"
+    repository = CoverageRepository()
+    failed, _ = repository.create_job(
+        dataset_name,
+        date(2026, 8, 27),
+        date(2026, 8, 28),
+        idempotency_key=f"integration-coverage-failed-{suffix}",
+        max_attempts=1,
+    )
+    recovered = None
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        baseline = repository.queue_counts()["failed"]
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_data_coverage_job
+                SET status='failed', attempt=1, finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (failed["job_id"],),
+            )
+        connection.commit()
+        assert repository.queue_counts()["failed"] == baseline + 1
+
+        recovered, _ = repository.create_job(
+            dataset_name,
+            date(2026, 8, 27),
+            date(2026, 8, 28),
+            idempotency_key=f"integration-coverage-recovered-{suffix}",
+            max_attempts=1,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_data_coverage_job
+                SET status='success', attempt=1, finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (recovered["job_id"],),
+            )
+        connection.commit()
+        assert repository.queue_counts()["failed"] == baseline
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_data_coverage_job WHERE job_id = ANY(%s)",
+                ([item for item in (
+                    failed["job_id"],
+                    recovered["job_id"] if recovered else None,
+                ) if item is not None],),
+            )
+        connection.commit()
+        connection.close()
 
 
 def test_physical_partition_does_not_hide_known_incomplete_collection():
@@ -236,6 +320,66 @@ def test_long_quota_delay_defers_sibling_interface_jobs():
             connection.commit()
         finally:
             connection.close()
+
+
+def test_future_rate_slot_releases_lease_without_consuming_attempt():
+    suffix = uuid4().hex
+    resource_class = f"slot-test-{suffix[:8]}"
+    repository = JobRepository()
+    job_id = None
+    try:
+        job, created = repository.create(
+            "tushare_interface",
+            {"api_name": "hk_daily", "parameters": {"trade_date": "20260907"}},
+            max_attempts=3,
+            idempotency_key=f"integration-rate-slot-defer-{suffix}",
+            api_name="hk_daily",
+            resource_class=resource_class,
+        )
+        assert created
+        job_id = job["job_id"]
+        claimed = repository.claim_next(
+            "integration-rate-slot-worker",
+            resource_classes=(resource_class,),
+        )
+        assert claimed["attempt"] == 1
+
+        repository.defer_running(
+            claimed,
+            retry_after_seconds=1200,
+            reason="known future rate slot",
+        )
+
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT status, completion_status, attempt,
+                           available_at > NOW() + INTERVAL '1100 seconds',
+                           worker_id, error_message
+                    FROM sys_collection_job WHERE job_id = %s
+                    """,
+                    (job_id,),
+                )
+                row = cursor.fetchone()
+            assert row == (
+                "queued", "retrying", 0, True, None, "known future rate slot"
+            )
+        finally:
+            connection.close()
+    finally:
+        if job_id:
+            connection = psycopg2.connect(**DB_CONFIG)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM sys_collection_job WHERE job_id = %s",
+                        (job_id,),
+                    )
+                connection.commit()
+            finally:
+                connection.close()
 
 
 def test_network_failure_defers_the_whole_worker_resource_pool():

@@ -398,6 +398,30 @@ def test_worker_does_not_retry_permanent_collection_errors(monkeypatch):
     assert failure["completion_evidence"]["failure"]["retryable"] is False
 
 
+def test_worker_releases_rate_slot_wait_without_recording_a_failure(monkeypatch):
+    repository = WorkerRepository()
+    deferred = {}
+
+    class FutureRateSlot(RuntimeError):
+        defer_without_failure = True
+        retry_after_seconds = 1200
+
+    def defer_running(job, **options):
+        deferred.update(job=job, **options)
+        return "queued"
+
+    repository.defer_running = defer_running
+    monkeypatch.setattr(
+        TASKS,
+        "run",
+        lambda *_args: (_ for _ in ()).throw(FutureRateSlot("wait")),
+    )
+
+    assert JobWorker(repository, worker_id="test-worker").run_once() is True
+    assert deferred["retry_after_seconds"] == 1200
+    assert "FutureRateSlot: wait" in deferred["reason"]
+
+
 @pytest.mark.parametrize(("attempt", "expected_delay"), [(1, 60), (2, 300), (3, 900)])
 def test_worker_applies_shared_exponential_backoff_to_network_failures(
     monkeypatch, attempt, expected_delay
@@ -787,6 +811,29 @@ def test_static_fanout_needs_no_dependency_table_and_is_bounded():
         "DCE", "CZCE"
     ]
     assert parameters["plan"]["next_offset"] == 3
+
+
+def test_futures_index_static_fanout_uses_one_code_per_request():
+    repository = FanoutRepository([])
+    FanoutPlanner(repository, TASKS).create_batch(
+        {
+            "api_name": "fut_index_daily",
+            "trade_date": date(2026, 9, 7),
+            "offset": 0,
+            "max_children": 56,
+        },
+        idempotency_key="futures-index-complete-static-universe",
+    )
+
+    parameters, children, _options = repository.created
+    assert parameters["plan"]["batch_size"] == 1
+    assert parameters["plan"]["entities_selected"] == 56
+    assert len(children) == 56
+    assert all("," not in child.parameters["parameters"]["ts_code"] for child in children)
+    assert all(
+        child.parameters["parameters"]["trade_date"] == "20260907"
+        for child in children
+    )
 
 
 def test_stk_rewards_batches_the_official_multi_code_parameter():

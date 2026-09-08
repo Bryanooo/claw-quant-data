@@ -12,6 +12,9 @@ from service.config import PROJECT_ROOT
 
 
 CONTRACTS_PATH = PROJECT_ROOT / "docs" / "tushare" / "contracts.json"
+CONTRACT_SUPPLEMENTS_PATH = (
+    PROJECT_ROOT / "docs" / "tushare" / "official_contract_supplements.json"
+)
 
 
 class InterfaceCatalogError(ValueError):
@@ -99,8 +102,21 @@ def load_contracts() -> tuple[TushareInterfaceContract, ...]:
             "run scripts/audit_tushare_interfaces.py"
         )
     payload = json.loads(CONTRACTS_PATH.read_text(encoding="utf-8"))
+    contracts = {
+        item["api_name"]: item for item in payload["interfaces"]
+    }
+    # A small number of official pages are intermittently absent from the
+    # JavaScript navigation tree used by the reproducible catalog crawler.
+    # Keep their reviewed contracts separately so a later catalog refresh
+    # cannot silently demote supported APIs to undocumented project extensions.
+    if CONTRACT_SUPPLEMENTS_PATH.exists():
+        supplements = json.loads(
+            CONTRACT_SUPPLEMENTS_PATH.read_text(encoding="utf-8")
+        )
+        for item in supplements.get("interfaces", []):
+            contracts[item["api_name"]] = item
     return tuple(
-        TushareInterfaceContract.from_dict(item) for item in payload["interfaces"]
+        TushareInterfaceContract.from_dict(item) for item in contracts.values()
     )
 
 

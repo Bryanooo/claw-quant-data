@@ -478,6 +478,7 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "cb_rating",
         "ci_index_member",
         "fut_basic",
+        "fut_index_daily",
         "index_member_all",
         "pledge_stat",
         "top10_cb_holders",
@@ -492,11 +493,12 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "stk_week_month_adj",
     ]
     assert all(call[0]["page_size"] == 200 for call in fanout.calls)
-    assert repository.steps[:16] == [
+    assert repository.steps[:17] == [
         "fanout:cb_rate",
         "fanout:cb_rating",
         "fanout:ci_index_member",
         "fanout:fut_basic",
+        "fanout:fut_index_daily",
         "fanout:index_member_all",
         "fanout:pledge_stat",
         "fanout:top10_cb_holders",
@@ -542,7 +544,7 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
     progress = service._decorate(
         campaign(profile="full", current_phase=5, phase_name="fanout_baseline")
     )
-    assert progress["logical_total_steps"] == 383
+    assert progress["logical_total_steps"] == 384
 
 
 def test_non_full_initialization_skips_expensive_whole_universe_fanouts():

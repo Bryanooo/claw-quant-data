@@ -131,7 +131,9 @@ def test_data_health_keeps_confirmed_gaps_separate_from_unknown_coverage():
     assert result["status"] == "critical"
     assert result["summary"]["critical_issue_count"] == 2
     assert result["summary"]["confirmed_issue_count"] == 2
-    assert result["summary"]["never_collected_interfaces"] == 1
+    assert result["summary"]["never_collected_interfaces"] == 0
+    assert result["summary"]["backfill_pending_interfaces"] == 1
+    assert result["summary"]["scope_required_interfaces"] == 0
     assert result["summary"]["unaudited_datasets"] == 1
     assert result["history"]["complete"] is False
     assert "initialization_blocked" in kinds
@@ -356,7 +358,7 @@ def test_optional_coverage_rule_is_classified_but_not_an_incident():
     assert result["summary"]["optional_unaudited_datasets"] == 1
 
 
-def test_never_collected_alias_suppresses_duplicate_empty_dataset():
+def test_manual_scope_requirement_suppresses_duplicate_empty_dataset():
     collection = {
         "summary": {
             "interfaces": 1, "collectable": 1, "complete": 0,
@@ -388,7 +390,10 @@ def test_never_collected_alias_suppresses_duplicate_empty_dataset():
 
     result = service.overview()
 
-    assert [item["kind"] for item in result["issues"]] == ["never_collected"]
+    assert [item["kind"] for item in result["issues"]] == [
+        "manual_scope_required"
+    ]
+    assert result["issues"][0]["severity"] == "info"
 
 
 def test_existing_shared_dataset_is_not_reported_as_never_collected():
@@ -539,3 +544,53 @@ def test_recent_verified_empty_event_keeps_dataset_fresh(monkeypatch):
         "verified_empty_collection"
     )
     assert not any(item["kind"] == "stale_dataset" for item in result["issues"])
+
+
+def test_pending_first_collection_is_not_reported_as_confirmed_empty():
+    collection = {
+        "summary": {
+            "interfaces": 1, "collectable": 1, "complete": 0,
+            "pending": 1, "unverified": 0, "unresolved_failures": 0,
+        },
+        "interfaces": [{
+            "api_name": "hk_daily", "collectable": True,
+            "automatic_safe": True,
+            "latest": {
+                "status": "queued", "completion_status": "retrying",
+                "period_key": "2026-09-07",
+            },
+            "unresolved_failure": None,
+        }],
+    }
+    coverage = {
+        "summary": {
+            "datasets": 1, "auditable": 1, "audited": 0,
+            "with_gaps": 0, "missing_partitions": 0,
+            "partial_partitions": 0,
+        },
+        "datasets": [{
+            "dataset": "hk_daily", "auditable": True,
+            "scheduled": False, "latest": None,
+        }],
+    }
+    service = DataHealthService(
+        collection_service=Stub(collection),
+        coverage_service=Stub(coverage),
+        data_service=Stub(
+            [{
+                "dataset": "hk_daily", "status": "empty",
+                "latest_date": None, "estimated_rows": 0,
+            }],
+            "freshness",
+        ),
+        initialization_service=Stub({"active": None, "latest": None}),
+    )
+
+    result = service.overview()
+
+    assert result["summary"]["backfill_pending_interfaces"] == 1
+    assert result["summary"]["confirmed_data_issue_count"] == 0
+    assert [item["kind"] for item in result["issues"]] == [
+        "collection_pending"
+    ]
+    assert result["issues"][0]["severity"] == "info"

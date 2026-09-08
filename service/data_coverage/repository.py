@@ -708,8 +708,19 @@ class CoverageRepository:
                 """
                 SELECT count(*) FILTER (WHERE status = 'queued') AS queued,
                        count(*) FILTER (WHERE status = 'running') AS running,
-                       count(*) FILTER (WHERE status = 'failed') AS failed
-                FROM sys_data_coverage_job
+                       count(*) FILTER (
+                           WHERE status = 'failed'
+                             AND NOT EXISTS (
+                                 SELECT 1
+                                 FROM sys_data_coverage_job AS recovered
+                                 WHERE recovered.dataset_name = job.dataset_name
+                                   AND recovered.status = 'success'
+                                   AND recovered.job_id > job.job_id
+                                   AND recovered.start_date <= job.start_date
+                                   AND recovered.end_date >= job.end_date
+                             )
+                       ) AS failed
+                FROM sys_data_coverage_job AS job
                 """
             )
             return dict(cursor.fetchone())

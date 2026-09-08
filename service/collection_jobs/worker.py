@@ -175,6 +175,20 @@ class JobWorker:
             ):
                 result = TASKS.run(job["task_name"], job["parameters"])
         except Exception as exc:
+            if getattr(exc, "defer_without_failure", False):
+                retry_after_seconds = max(
+                    int(getattr(exc, "retry_after_seconds", 1)), 1
+                )
+                status = self._repository.defer_running(
+                    job,
+                    retry_after_seconds=retry_after_seconds,
+                    reason=f"{type(exc).__name__}: {exc}",
+                )
+                logger.info(
+                    "job %s deferred to %s for %s seconds without consuming an attempt",
+                    job["job_id"], status, retry_after_seconds,
+                )
+                return True
             logger.exception("job %s failed", job["job_id"])
             retryable = getattr(exc, "retryable", True)
             retry_after_seconds = getattr(exc, "retry_after_seconds", None)

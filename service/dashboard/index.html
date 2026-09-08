@@ -85,10 +85,10 @@
           </select>
         </div>
         <div class="health-grid">
-          <article><span>已确认问题</span><strong id="confirmedIssueCount">—</strong><small>初始化中断、缺口、过期或未恢复失败</small></article>
-          <article><span>空数据集</span><strong id="emptyDatasetCount">—</strong><small>标准数据服务当前没有记录</small></article>
-          <article><span>尚未首采接口</span><strong id="neverCollectedCount">—</strong><small>有权限，但没有采集记录</small></article>
-          <article><span>完整性未知</span><strong id="unknownIssueCount">—</strong><small>待验证或周期覆盖尚未审计</small></article>
+          <article><span>已有数据</span><strong id="datasetsWithDataCount">—</strong><small>标准数据服务中至少有一条记录</small></article>
+          <article><span>等待采集 / 补采</span><strong id="backfillPendingCount">—</strong><small>任务已入队或纳入初始化，不视为故障</small></article>
+          <article><span>已验证空结果</span><strong id="verifiedEmptyInterfaceCount">—</strong><small>请求已穷尽但该周期无数据</small></article>
+          <article><span>确认数据问题</span><strong id="confirmedDataIssueCount">—</strong><small>真实缺口、过期或自动采集失败</small></article>
         </div>
         <div class="history-health" id="historyHealth">
           <strong>历史初始化</strong><span>正在读取…</span>

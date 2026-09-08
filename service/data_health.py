@@ -91,6 +91,40 @@ class DataHealthService:
         collectable_interfaces = [
             item for item in collection["interfaces"] if item.get("collectable")
         ]
+        initialization_running = bool(
+            (initialization.get("active") or {}).get("status")
+            in {"running", "attention", "paused"}
+        )
+        interfaces_without_evidence = [
+            item
+            for item in collectable_interfaces
+            if not item.get("latest")
+            and not _interface_has_stored_data(
+                item["api_name"], freshness_by_dataset
+            )
+        ]
+        pending_without_data = [
+            item
+            for item in collectable_interfaces
+            if (item.get("latest") or {}).get("status")
+            in {"queued", "running", "retrying"}
+            and not _interface_has_stored_data(
+                item["api_name"], freshness_by_dataset
+            )
+        ]
+        backfill_pending = sum(
+            initialization_running
+            and (
+                item.get("automatic_safe")
+                or item["api_name"] in FULL_INITIALIZATION_BASELINES
+            )
+            for item in interfaces_without_evidence
+        ) + len(pending_without_data)
+        scope_required = sum(
+            not item.get("automatic_safe")
+            and item["api_name"] not in FULL_INITIALIZATION_BASELINES
+            for item in interfaces_without_evidence
+        )
         freshness_counts = {
             status: sum(item["status"] == status for item in freshness)
             for status in (
@@ -120,6 +154,14 @@ class DataHealthService:
         critical = sum(issue["severity"] == "critical" for issue in issues)
         informational = sum(issue["severity"] == "info" for issue in issues)
         actionable = sum(issue["severity"] != "info" for issue in issues)
+        confirmed_data_issues = sum(
+            issue["confidence"] == "confirmed"
+            and issue["kind"] in {
+                "coverage_gap", "dataset_empty", "stale_dataset",
+                "collection_failed", "truncated", "incomplete",
+            }
+            for issue in issues
+        )
         overall_status = (
             "critical"
             if critical or initialization_attention
@@ -141,14 +183,19 @@ class DataHealthService:
                 "freshness_unconfigured": freshness_counts["not_configured"],
                 "event_driven_datasets": freshness_counts["event_driven"],
                 "not_applicable": freshness_counts["not_applicable"],
+                "datasets_with_data": sum(
+                    int(item.get("estimated_rows") or 0) > 0
+                    for item in freshness
+                ),
                 "strictly_complete_interfaces": collection_summary["complete"],
                 "never_collected_interfaces": sum(
-                    not item.get("latest")
-                    and not _interface_has_stored_data(
-                        item["api_name"], freshness_by_dataset
-                    )
-                    for item in collectable_interfaces
+                    bool(item.get("automatic_safe"))
+                    and not initialization_running
+                    for item in interfaces_without_evidence
                 ),
+                "backfill_pending_interfaces": backfill_pending,
+                "scope_required_interfaces": scope_required,
+                "verified_empty_interfaces": collection_summary.get("empty", 0),
                 "unverified_interfaces": sum(
                     (item.get("latest") or {}).get("completion_status")
                     == "unverified"
@@ -168,6 +215,7 @@ class DataHealthService:
                 "actionable_issue_count": actionable,
                 "informational_issue_count": informational,
                 "confirmed_issue_count": confirmed,
+                "confirmed_data_issue_count": confirmed_data_issues,
                 "unknown_issue_count": unknown,
             },
             "history": self._history(initialization),
@@ -279,7 +327,8 @@ class DataHealthService:
         }
         campaign = initialization.get("active") or initialization.get("latest")
         initialization_running = bool(
-            campaign and campaign.get("status") == "running"
+            campaign
+            and campaign.get("status") in {"running", "attention", "paused"}
         )
         freshness_by_dataset = {item["dataset"]: item for item in freshness}
         if campaign and campaign.get("status") in {"attention", "paused"}:
@@ -336,6 +385,26 @@ class DataHealthService:
                         ),
                     }
                 )
+            elif latest.get("status") in {"queued", "running", "retrying"}:
+                interface_datasets = _dataset_names_for_interface(api_name)
+                explained_dataset_names.update(interface_datasets)
+                issues.append(
+                    {
+                        "severity": "info",
+                        "confidence": "planned",
+                        "kind": "collection_pending",
+                        "resource_type": "interface",
+                        "resource": api_name,
+                        "scope": latest.get("period_key") or "待执行任务",
+                        "detail": (
+                            "采集任务正在执行"
+                            if latest.get("status") == "running"
+                            else "采集任务已入队，等待可用 Worker 或接口请求窗口"
+                        ),
+                        "action": "等待任务完成；超出任务 SLA 后再升级为故障",
+                        "api_name": api_name,
+                    }
+                )
             elif not latest and item.get("collectable"):
                 interface_datasets = _dataset_names_for_interface(api_name)
                 explained_dataset_names.update(interface_datasets)
@@ -349,11 +418,19 @@ class DataHealthService:
                         or api_name in FULL_INITIALIZATION_BASELINES
                     )
                 )
+                manual_scope_required = bool(
+                    not item.get("automatic_safe")
+                    and api_name not in FULL_INITIALIZATION_BASELINES
+                )
                 issues.append(
                     {
                         "severity": (
                             "info"
-                            if pending_initialization or stored_data_exists
+                            if (
+                                pending_initialization
+                                or stored_data_exists
+                                or manual_scope_required
+                            )
                             else "warning"
                         ),
                         "confidence": (
@@ -361,6 +438,8 @@ class DataHealthService:
                             if pending_initialization
                             else "observed"
                             if stored_data_exists
+                            else "configuration"
+                            if manual_scope_required
                             else "unknown"
                         ),
                         "kind": (
@@ -368,6 +447,8 @@ class DataHealthService:
                             if pending_initialization
                             else "collection_lineage_missing"
                             if stored_data_exists
+                            else "manual_scope_required"
+                            if manual_scope_required
                             else "never_collected"
                         ),
                         "resource_type": "interface",
@@ -378,6 +459,8 @@ class DataHealthService:
                             if pending_initialization
                             else "标准数据表已有记录，但缺少可关联的持久化采集任务谱系"
                             if stored_data_exists
+                            else item.get("automatic_reason")
+                            if manual_scope_required
                             else "有权限接口尚无任何采集任务记录"
                         ),
                         "action": (
@@ -385,6 +468,8 @@ class DataHealthService:
                             if pending_initialization
                             else "后续任务已写入规范接口标识；保留现有数据并补齐任务谱系"
                             if stored_data_exists
+                            else "先配置明确且有界的标的或日期范围，再执行人工采集"
+                            if manual_scope_required
                             else "配置安全参数或扇出策略后执行首采"
                         ),
                         "api_name": api_name,

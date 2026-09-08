@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "reviewed_date": "2026-09-08",
+  "reason": "Official pages that may be absent from the documentation navigation tree",
+  "interfaces": [
+    {
+      "api_name": "ccass_hold",
+      "title": "中央结算系统持股汇总",
+      "category": "特色数据",
+      "category_path": "股票数据/特色数据",
+      "description": "获取中央结算系统持股汇总数据，覆盖全部历史数据，通常于下一交易日早上9点前更新",
+      "doc_ids": [295],
+      "official_urls": ["https://tushare.pro/document/2?doc_id=295"],
+      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "read_only": true,
+      "collectable": true,
+      "input_parameters": [
+        {"name": "ts_code", "type": "str", "required": "N", "description": "股票代码"},
+        {"name": "hk_code", "type": "str", "required": "N", "description": "港交所代码"},
+        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
+        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
+        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"}
+      ],
+      "output_parameters": [
+        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
+        {"name": "ts_code", "type": "str", "default": "Y", "description": "股票代码"},
+        {"name": "name", "type": "str", "default": "Y", "description": "股票名称"},
+        {"name": "shareholding", "type": "str", "default": "Y", "description": "中央结算系统持股量"},
+        {"name": "hold_nums", "type": "str", "default": "Y", "description": "参与者数目"},
+        {"name": "hold_ratio", "type": "str", "default": "Y", "description": "持股占比"}
+      ],
+      "example_parameters": {"trade_date": "20260907"},
+      "code_examples": ["df = pro.ccass_hold(trade_date='20260907')"],
+      "response_examples": [],
+      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "5000积分每分钟300次，8000积分以上每分钟500次", "probed_code": 0, "probed_message": ""},
+      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/extra/ccass_hold.py:CcassHoldCollector"]}
+    },
+    {
+      "api_name": "ccass_hold_detail",
+      "title": "中央结算系统持股明细",
+      "category": "特色数据",
+      "category_path": "股票数据/特色数据",
+      "description": "获取中央结算系统机构席位持股明细；全市场单日数据量可超过百万行，必须使用受控范围",
+      "doc_ids": [274],
+      "official_urls": ["https://tushare.pro/document/2?doc_id=274"],
+      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "read_only": true,
+      "collectable": true,
+      "input_parameters": [
+        {"name": "ts_code", "type": "str", "required": "N", "description": "股票代码"},
+        {"name": "hk_code", "type": "str", "required": "N", "description": "港交所代码"},
+        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
+        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
+        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"}
+      ],
+      "output_parameters": [
+        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
+        {"name": "ts_code", "type": "str", "default": "Y", "description": "股票代码"},
+        {"name": "name", "type": "str", "default": "Y", "description": "股票名称"},
+        {"name": "col_participant_id", "type": "str", "default": "Y", "description": "参与者编号"},
+        {"name": "col_participant_name", "type": "str", "default": "Y", "description": "机构名称"},
+        {"name": "col_shareholding", "type": "str", "default": "Y", "description": "持股量"},
+        {"name": "col_shareholding_percent", "type": "str", "default": "Y", "description": "持股占比"}
+      ],
+      "example_parameters": {"ts_code": "600519.SH", "trade_date": "20260907"},
+      "code_examples": ["df = pro.ccass_hold_detail(ts_code='600519.SH', trade_date='20260907')"],
+      "response_examples": [],
+      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "8000积分可调取，每分钟300次", "probed_code": 0, "probed_message": ""},
+      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/extra/ccass_hold_detail.py:CcassHoldDetailCollector"]}
+    },
+    {
+      "api_name": "hk_hold",
+      "title": "沪深港股通持股明细",
+      "category": "特色数据",
+      "category_path": "股票数据/特色数据",
+      "description": "获取沪深港股通持股明细；北向日度披露自2024-08-20停止，南向数据仍可返回",
+      "doc_ids": [188],
+      "official_urls": ["https://tushare.pro/document/2?doc_id=188"],
+      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "read_only": true,
+      "collectable": true,
+      "input_parameters": [
+        {"name": "code", "type": "str", "required": "N", "description": "交易所代码"},
+        {"name": "ts_code", "type": "str", "required": "N", "description": "TS股票代码"},
+        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
+        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
+        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"},
+        {"name": "exchange", "type": "str", "required": "N", "description": "SH/SZ/HK"}
+      ],
+      "output_parameters": [
+        {"name": "code", "type": "str", "default": "Y", "description": "原始代码"},
+        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
+        {"name": "ts_code", "type": "str", "default": "Y", "description": "TS代码"},
+        {"name": "name", "type": "str", "default": "Y", "description": "股票名称"},
+        {"name": "vol", "type": "int", "default": "Y", "description": "持股数量"},
+        {"name": "ratio", "type": "float", "default": "Y", "description": "持股占比"},
+        {"name": "exchange", "type": "str", "default": "Y", "description": "SH/SZ/HK"}
+      ],
+      "example_parameters": {"trade_date": "20260907"},
+      "code_examples": ["df = pro.hk_hold(trade_date='20260907')"],
+      "response_examples": [],
+      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "2000积分可正常使用", "probed_code": 0, "probed_message": ""},
+      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/extra/hk_hold.py:HkHoldCollector"]}
+    },
+    {
+      "api_name": "moneyflow_hsgt",
+      "title": "沪深港通资金流向",
+      "category": "资金流向数据",
+      "category_path": "股票数据/资金流向数据",
+      "description": "获取沪股通、深股通、港股通每日资金流向数据",
+      "doc_ids": [47],
+      "official_urls": ["https://tushare.pro/document/2?doc_id=47"],
+      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "read_only": true,
+      "collectable": true,
+      "input_parameters": [
+        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
+        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
+        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"}
+      ],
+      "output_parameters": [
+        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
+        {"name": "ggt_ss", "type": "float", "default": "Y", "description": "港股通（上海）"},
+        {"name": "ggt_sz", "type": "float", "default": "Y", "description": "港股通（深圳）"},
+        {"name": "hgt", "type": "float", "default": "Y", "description": "沪股通"},
+        {"name": "sgt", "type": "float", "default": "Y", "description": "深股通"},
+        {"name": "north_money", "type": "float", "default": "Y", "description": "北向资金"},
+        {"name": "south_money", "type": "float", "default": "Y", "description": "南向资金"}
+      ],
+      "example_parameters": {"trade_date": "20260907"},
+      "code_examples": ["df = pro.moneyflow_hsgt(trade_date='20260907')"],
+      "response_examples": [],
+      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "2000积分起，5000积分每分钟500次", "probed_code": 0, "probed_message": ""},
+      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/moneyflow/moneyflow_hsgt.py:MoneyflowHsgtCollector"]}
+    }
+  ]
+}

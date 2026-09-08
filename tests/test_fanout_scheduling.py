@@ -40,6 +40,7 @@ def test_daily_fanout_recipes_use_closed_and_bounded_scopes(monkeypatch):
     requests = {call[0]["api_name"]: call[0] for call in service.calls[:daily_count]}
     assert requests["dc_index"]["trade_date"] == date(2026, 8, 28)
     assert requests["dc_index"]["page_size"] == 1
+    assert requests["fut_index_daily"]["page_size"] == 56
     assert requests["cb_share"]["ann_date"] == date(2026, 8, 29)
     factor_options = next(
         options for request, options in service.calls[:daily_count]

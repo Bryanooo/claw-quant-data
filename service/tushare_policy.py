@@ -62,6 +62,11 @@ _PAGE_SIZE_OVERRIDES = {
     # Live gateway verification: requests above 3,000 are capped to 3,000,
     # while 3,000 + matching offsets exhaust the endpoint without gaps.
     "kpl_concept_cons": 3000,
+    # Live exact-date probes on 2026-09-08 proved standard offset exhaustion:
+    # 5,000 + 3,316 distinct rows for ccass_hold and a 3,800-row documented
+    # page boundary for hk_hold.
+    "ccass_hold": 5000,
+    "hk_hold": 3800,
 }
 
 # Some official pages keep the call limit in a separate "调取说明" block that
@@ -98,6 +103,10 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     "fund_nav": "ts_code_fanout",
     "fund_portfolio": "ts_code_fanout",
     "fut_index_daily": "ts_code_fanout",
+    # A market-wide ccass_hold_detail date contains more than one million
+    # institution-seat rows. It must remain an explicitly scoped query rather
+    # than silently creating an unbounded daily workload.
+    "ccass_hold_detail": "manual",
     # Live collection proved that one market-wide partition reaches an upstream
     # cap. Keep these interfaces implemented, but do not automate them until
     # their dependency fan-out has an authoritative universe.
@@ -188,7 +197,14 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # probe exhausted 13,463 rows in 14 pages.  A capped 3,000-row request is
     # therefore recoverable without an inferred concept universe.
     "kpl_concept_cons",
+    "ccass_hold",
+    "hk_hold",
 }
+
+# hk_daily is a separately purchased, one-request-per-hour interface. A single
+# exact-date request per business day is bounded and the distributed limiter
+# guarantees that manual/retry activity cannot violate the provider interval.
+_SAFE_LOW_FREQUENCY_APIS = {"hk_daily"}
 
 
 def _parameter_names(contract: TushareInterfaceContract) -> set[str]:
@@ -319,13 +335,18 @@ def derive_policy(contract: TushareInterfaceContract) -> TushareCollectionPolicy
             "report_period",
             "week",
         }
-        and contract.api_name not in _RATE_LIMIT_SECONDS
+        and (
+            contract.api_name not in _RATE_LIMIT_SECONDS
+            or contract.api_name in _SAFE_LOW_FREQUENCY_APIS
+        )
         and not unsupported_required
     )
     if not contract.collectable:
         reason = "interface is not collectable"
     elif not contract.document_ids:
         reason = "project extension lacks a complete official input contract"
+    elif contract.api_name in _SAFE_LOW_FREQUENCY_APIS:
+        reason = "safe exact-date daily request with distributed low-frequency pacing"
     elif contract.api_name in _RATE_LIMIT_SECONDS:
         reason = "requires dedicated low-frequency scheduling"
     elif strategy in {"ts_code_fanout", "dependency_fanout"}:

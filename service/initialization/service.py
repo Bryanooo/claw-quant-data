@@ -90,6 +90,7 @@ FULL_FANOUT_BASELINES = (
     "cb_rating",
     "ci_index_member",
     "fut_basic",
+    "fut_index_daily",
     "index_member_all",
     "pledge_stat",
     # Parameterized interfaces that cannot be safely represented by one

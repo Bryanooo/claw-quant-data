@@ -16,7 +16,10 @@ from service.clock import business_now
 from service.collection_monitor import CollectionMonitorService
 from service.data_coverage.service import CoverageService
 from service.data_service.service import DataService
-from service.initialization.service import FULL_FANOUT_BASELINES, InitializationService
+from service.initialization.service import (
+    FULL_INITIALIZATION_BASELINES,
+    InitializationService,
+)
 
 
 _SEVERITY_ORDER = {"critical": 0, "warning": 1, "unknown": 2, "info": 3}
@@ -343,7 +346,7 @@ class DataHealthService:
                     initialization_running
                     and (
                         item.get("automatic_safe")
-                        or api_name in FULL_FANOUT_BASELINES
+                        or api_name in FULL_INITIALIZATION_BASELINES
                     )
                 )
                 issues.append(
@@ -405,7 +408,7 @@ class DataHealthService:
             elif latest.get("completion_status") == "failed":
                 explained_dataset_names.update(_dataset_names_for_interface(api_name))
                 pending_initialization = bool(
-                    initialization_running and api_name in FULL_FANOUT_BASELINES
+                    initialization_running and api_name in FULL_INITIALIZATION_BASELINES
                 )
                 issues.append(
                     {

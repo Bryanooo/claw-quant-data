@@ -217,6 +217,16 @@ def test_kpl_concept_cons_uses_live_verified_offset_pagination():
     assert policy.automatic_safe is True
 
 
+@pytest.mark.parametrize("api_name", ["stk_limit", "index_daily"])
+def test_market_wide_daily_interfaces_use_live_verified_large_pages(api_name):
+    policy = TusharePolicyRegistry().get(api_name)
+
+    assert policy.parameter_strategy == "trade_date"
+    assert policy.pagination_mode == "offset"
+    assert policy.page_size == 5000
+    assert policy.automatic_safe is True
+
+
 def test_margin_detail_uses_offset_before_market_coverage_verification():
     policy = TusharePolicyRegistry().get("margin_detail")
 

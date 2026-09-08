@@ -67,7 +67,7 @@ FULL_HISTORY_DATASET_STARTS = {
     "kpl_concept_cons": date(2024, 10, 14),
 }
 CORE_INTERFACE_HISTORY = ("index_daily", "kpl_concept_cons")
-CORE_INTERFACE_PAGE_SIZES = {"index_daily": 1000, "kpl_concept_cons": 3000}
+CORE_INTERFACE_PAGE_SIZES = {"index_daily": 5000, "kpl_concept_cons": 3000}
 FINANCE_TASKS = (
     "income_period",
     "balancesheet_period",
@@ -102,16 +102,19 @@ FULL_FANOUT_BASELINES = (
     "stk_rewards",
     "top10_floatholders",
     "top10_holders",
-    "fund_nav",
-    "fund_portfolio",
     "index_weight",
     "fut_weekly_monthly",
     "stk_week_month_adj",
 )
+FULL_INITIALIZATION_BASELINES = (
+    *FULL_FANOUT_BASELINES,
+    "fund_nav",
+    "fund_portfolio",
+)
 _EMPTY_FANOUT_BASELINES = {
     "top10_cb_holders", "cyq_chips", "cyq_perf", "fina_audit",
-    "stk_rewards", "top10_floatholders", "top10_holders", "fund_nav",
-    "fund_portfolio", "index_weight", "fut_weekly_monthly",
+    "stk_rewards", "top10_floatholders", "top10_holders", "index_weight",
+    "fut_weekly_monthly",
     "stk_week_month_adj",
 }
 
@@ -608,6 +611,61 @@ class InitializationService:
                 allow_empty=api_name in _EMPTY_FANOUT_BASELINES,
             )
             existing_steps.add(step_key)
+
+        # These two fund interfaces accept a whole-market date/period scope
+        # and reliable limit/offset pagination. Querying that bounded scope is
+        # equivalent to per-fund fan-out but reduces tens of thousands of HTTP
+        # requests to a few hundred exhaustively paginated partitions.
+        end = campaign["history_end"]
+        nav_start = max(campaign["history_start"], end - timedelta(days=365))
+        cursor = nav_start
+        while cursor <= end:
+            compact = cursor.strftime("%Y%m%d")
+            step_key = f"market:fund_nav:{compact}"
+            if step_key not in existing_steps:
+                self._submit_collection(
+                    campaign,
+                    step_key,
+                    "tushare_interface",
+                    {
+                        "api_name": "fund_nav",
+                        "parameters": {"nav_date": compact},
+                        "complete": True,
+                        "page_size": 5000,
+                        "max_pages": 100,
+                        "resume": True,
+                    },
+                    allow_empty=True,
+                    require_verified=True,
+                    period_key=compact,
+                    expected_for=cursor,
+                    existing_steps=existing_steps,
+                )
+            cursor += timedelta(days=1)
+
+        periods = _published_quarter_ends(FULL_HISTORY_START, end)
+        if not periods:
+            raise JobConflictError("no published fund portfolio period exists")
+        period = periods[-1]
+        compact_period = period.strftime("%Y%m%d")
+        self._submit_collection(
+            campaign,
+            f"market:fund_portfolio:{compact_period}",
+            "tushare_interface",
+            {
+                "api_name": "fund_portfolio",
+                "parameters": {"period": compact_period},
+                "complete": True,
+                "page_size": 5000,
+                "max_pages": 500,
+                "resume": True,
+            },
+            allow_empty=False,
+            require_verified=True,
+            period_key=compact_period,
+            expected_for=period,
+            existing_steps=existing_steps,
+        )
         return True
 
     @staticmethod
@@ -849,6 +907,7 @@ class InitializationService:
 
         excluded = {
             "trade_cal_daily", "stock_basic_daily", "index_basic_weekly",
+            "index_daily_finalize",
             "ths_member_weekly", "daily_daily", "bak_basic_daily",
             "stk_limit_daily", "income_quarterly", "income_annual_update",
             "balancesheet_quarterly", "balancesheet_annual",
@@ -1025,7 +1084,11 @@ class InitializationService:
                 catalog_history_partitions(start, end)
             )
         if phase == 5:
-            return len(FULL_FANOUT_BASELINES) if profile == "full" else 0
+            if profile != "full":
+                return 0
+            nav_start = max(start, end - timedelta(days=365))
+            fund_partitions = (end - nav_start).days + 2  # daily NAV + one portfolio
+            return len(FULL_FANOUT_BASELINES) + fund_partitions
         if phase == 6:
             return len(VERIFICATION_DATASETS) if profile != "quick" else 2
         return None

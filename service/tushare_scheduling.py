@@ -56,7 +56,7 @@ DEDICATED_RUN_IDS: dict[str, tuple[str, ...]] = {
     "income": ("income_quarterly",),
     "income_vip": ("income_quarterly",),
     "index_basic": ("index_basic_weekly",),
-    "index_daily": ("index_daily_daily",),
+    "index_daily": ("index_daily_daily", "index_daily_finalize"),
     "index_dailybasic": ("index_dailybasic_daily",),
     "index_global": ("index_global_daily",),
     "monthly": ("stk_monthly_monthly_eom",),

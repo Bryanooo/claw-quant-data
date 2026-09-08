@@ -79,6 +79,7 @@ _SCHEDULED_COLLECTION_FUNCTION_NAMES = {
     "income_quarterly": "run_income",
     "index_basic_weekly": "run_index_basic",
     "index_daily_daily": "run_index_daily",
+    "index_daily_finalize": "run_index_daily_finalize",
     "index_dailybasic_daily": "run_index_dailybasic",
     "index_global_daily": "run_index_global",
     "mainbz_annual": "run_mainbz",
@@ -815,13 +816,50 @@ def run_index_daily():
     if not _is_trade_day(trade_date):
         logger.info(f"⏭️  非交易日({trade_date})，跳过 index_daily")
         return 0
+    from service.tushare_policy import TusharePolicyRegistry
+
+    policy = TusharePolicyRegistry().get("index_daily")
     result = IndexDailyCollector().run_offset_paginated(
         trade_date=trade_date,
-        page_size=1000,
-        max_pages=100,
+        page_size=policy.page_size,
+        max_pages=policy.max_pages,
     )
     logger.info(
         "  ✅ index_daily(%s): %s 行 / %s 页（已穷尽）",
+        trade_date,
+        result.stored_rows,
+        result.evidence["pages_completed"],
+    )
+    return result.stored_rows
+
+
+@track_run(
+    task_id="index_daily_finalize",
+    task_name="指数日线行情-T+1稳定性复采",
+    trigger_type="cron",
+)
+def run_index_daily_finalize():
+    """Recollect the latest closed partition after all index venues publish.
+
+    Same-day offset exhaustion only proves completeness at request time. Some
+    index venues publish hundreds of rows later in the evening or next
+    morning, so one durable T+1 pass is required before treating the partition
+    as stable.
+    """
+    from collectors.index.daily import IndexDailyCollector
+    from service.tushare_policy import TusharePolicyRegistry
+    from service.tushare_scheduling import _latest_trade_date
+
+    previous_day = business_now().date() - timedelta(days=1)
+    trade_date = _latest_trade_date(previous_day)
+    policy = TusharePolicyRegistry().get("index_daily")
+    result = IndexDailyCollector().run_offset_paginated(
+        trade_date=trade_date,
+        page_size=policy.page_size,
+        max_pages=policy.max_pages,
+    )
+    logger.info(
+        "  ✅ index_daily T+1(%s): %s 行 / %s 页（已穷尽）",
         trade_date,
         result.stored_rows,
         result.evidence["pages_completed"],
@@ -1553,6 +1591,18 @@ def create_scheduler() -> BackgroundScheduler:
         name="指数日线行情-盘后增量",
         replace_existing=True,
         misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        run_index_daily_finalize,
+        trigger="cron",
+        hour=9,
+        minute=35,
+        day_of_week="mon-fri",
+        id="index_daily_finalize",
+        name="指数日线行情-T+1稳定性复采",
+        replace_existing=True,
+        misfire_grace_time=4 * 3600,
     )
 
     scheduler.add_job(

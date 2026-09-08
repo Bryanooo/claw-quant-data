@@ -54,6 +54,11 @@ _RATE_LIMIT_SECONDS = {
 }
 
 _PAGE_SIZE_OVERRIDES = {
+    # Live gateway probes on 2026-09-08 returned the exact same unique rows
+    # with 1,000- and 5,000-row offset pagination.  The larger page cuts
+    # current market-wide requests from 6/10 pages to 2 pages respectively.
+    "stk_limit": 5000,
+    "index_daily": 5000,
     # Live gateway verification: requests above 3,000 are capped to 3,000,
     # while 3,000 + matching offsets exhaust the endpoint without gaps.
     "kpl_concept_cons": 3000,

@@ -79,6 +79,8 @@ def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkey
     monkeypatch.setattr("collectors.base.get_config", lambda _key, default=None: default)
     monkeypatch.setattr("tushare.set_token", lambda _token: None)
     monkeypatch.setattr("tushare.pro_api", lambda: fake_pro)
+    monkeypatch.setattr("collectors.base.TUSHARE_CONNECT_TIMEOUT_SECONDS", 4.0)
+    monkeypatch.setattr("collectors.base.TUSHARE_READ_TIMEOUT_SECONDS", 45.0)
     monkeypatch.setattr(
         "service.tushare_rate_limit.reserve_tushare_request",
         lambda api_name: reservations.append(api_name),
@@ -94,3 +96,4 @@ def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkey
 
     assert reservations == ["daily"]
     assert upstream_calls == [("daily", (), {"trade_date": "20260828"})]
+    assert fake_pro._DataApi__timeout == (4.0, 45.0)

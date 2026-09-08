@@ -539,7 +539,7 @@ def test_stock_limit_uses_offset_exhaustion_for_round_historical_count(monkeypat
     result = TASKS.run("stock_limit", {"trade_date": "20101222"})
 
     assert observed == {
-        "page_size": 1000,
+        "page_size": 5000,
         "max_pages": 100,
         "trade_date": "20101222",
     }
@@ -645,12 +645,13 @@ class FanoutRepository:
         self.values = values
         self.created = None
 
-    def list_fanout_values(self, source):
+    def list_fanout_values(self, source, *, as_of=None):
         assert source in {
             "stock", "convertible_bond", "fund", "index", "pro_data",
             "ci_index", "sw_l3_index", "bc_bond", "etf_sh", "etf_sz",
             "tdx_index", "factor_name",
         }
+        self.as_of = as_of
         return self.values
 
     def create_batch(self, parameters, children, **options):
@@ -682,6 +683,21 @@ def test_fanout_planner_batches_entities_and_records_resume_cursor():
     assert parameters["plan"]["has_more"] is True
     assert options["idempotency_key"].startswith("fanout:cb_rate:")
     assert all(child.handler.handler_key == "catalog_typed:cb_rate" for child in children)
+
+
+def test_fanout_planner_filters_dependency_universe_at_campaign_boundary():
+    repository = FanoutRepository(["000001.SZ"])
+    planner = FanoutPlanner(repository, TASKS)
+
+    planner.create_batch(
+        {"api_name": "pledge_stat", "offset": 0, "max_children": 1},
+        idempotency_key="point-in-time-stock-universe",
+        expected_for_override=date(2026, 9, 5),
+    )
+
+    parameters, _children, _options = repository.created
+    assert repository.as_of == date(2026, 9, 5)
+    assert parameters["plan"]["universe_as_of"] == "2026-09-05"
 
 
 def test_fanout_planner_requires_bounded_scope_and_rejects_wide_window():
@@ -771,6 +787,28 @@ def test_static_fanout_needs_no_dependency_table_and_is_bounded():
         "DCE", "CZCE"
     ]
     assert parameters["plan"]["next_offset"] == 3
+
+
+def test_stk_rewards_batches_the_official_multi_code_parameter():
+    values = [f"{index:06d}.SZ" for index in range(40)]
+    repository = FanoutRepository(values)
+    FanoutPlanner(repository, TASKS).create_batch(
+        {
+            "api_name": "stk_rewards",
+            "period": date(2026, 6, 30),
+            "offset": 0,
+            "max_children": 2,
+        },
+        idempotency_key="stk-rewards-multi-code",
+    )
+
+    parameters, children, _options = repository.created
+    assert parameters["plan"]["batch_size"] == 20
+    assert len(children) == 2
+    assert all(
+        len(child.parameters["parameters"]["ts_code"].split(",")) == 20
+        for child in children
+    )
 
 
 def test_dc_index_uses_verified_upstream_enum_not_numeric_placeholders():

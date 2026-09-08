@@ -42,7 +42,10 @@ _DEFINITIONS = (
     FanoutDefinition("fina_audit", "stock", "ts_code", "period"),
     FanoutDefinition("fina_indicator", "stock", "ts_code", "period"),
     FanoutDefinition("fina_mainbz", "stock", "ts_code", "period"),
-    FanoutDefinition("stk_rewards", "stock", "ts_code", "period"),
+    # The official contract explicitly supports comma-separated stock codes.
+    # Twenty companies for one report period remain comfortably below the
+    # response cap and avoid thousands of unnecessary one-code requests.
+    FanoutDefinition("stk_rewards", "stock", "ts_code", "period", 20),
     FanoutDefinition("top10_floatholders", "stock", "ts_code", "period"),
     FanoutDefinition("top10_holders", "stock", "ts_code", "period"),
     FanoutDefinition("fund_nav", "fund", "ts_code", "date_window", 1, (), 366),
@@ -156,7 +159,9 @@ class FanoutPlanner:
             values = (
                 list(definition.static_values)
                 if definition.source == "static"
-                else self._repository.list_fanout_values(definition.source)
+                else self._repository.list_fanout_values(
+                    definition.source, as_of=expected_for_override or expected_for
+                )
             )
         else:
             if universe_source != definition.source:
@@ -186,6 +191,11 @@ class FanoutPlanner:
         plan = {
             "api_name": api_name,
             "universe_source": definition.source,
+            "universe_as_of": (
+                (expected_for_override or expected_for).isoformat()
+                if expected_for_override or expected_for
+                else None
+            ),
             "universe_total": len(values),
             "universe_digest": _digest(values),
             "entity_offset": offset,

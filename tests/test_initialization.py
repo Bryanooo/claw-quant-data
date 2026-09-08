@@ -115,6 +115,7 @@ class PlanningRepository:
     def __init__(self, trade_dates=()):
         self.dates = list(trade_dates)
         self.steps = []
+        self.collection_step_options = []
 
     def trade_dates(self, _start_date, _end_date):
         return self.dates
@@ -123,6 +124,13 @@ class PlanningRepository:
         self, initialization_id, phase, step_key, job_id, *, allow_empty, require_verified
     ):
         self.steps.append(step_key)
+        self.collection_step_options.append(
+            {
+                "step_key": step_key,
+                "allow_empty": allow_empty,
+                "require_verified": require_verified,
+            }
+        )
 
     def add_coverage_step(self, initialization_id, phase, step_key, coverage_job_id):
         self.steps.append(step_key)
@@ -317,6 +325,16 @@ def test_full_history_collects_kpl_concepts_from_contract_start():
         and parameters["api_name"] == "kpl_concept_cons"
     )
     assert kpl_payload["page_size"] == 3000
+    kpl_step = next(
+        item
+        for item in repository.collection_step_options
+        if item["step_key"] == "core:kpl_concept_cons:20241014"
+    )
+    assert kpl_step == {
+        "step_key": "core:kpl_concept_cons:20241014",
+        "allow_empty": True,
+        "require_verified": True,
+    }
 
 
 def test_finance_history_includes_verified_auxiliary_period_collectors():
@@ -505,6 +523,7 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "fut_basic",
         "fut_index_daily",
         "index_member_all",
+        "ths_member",
         "pledge_stat",
         "top10_cb_holders",
         "cyq_chips",
@@ -518,13 +537,14 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "stk_week_month_adj",
     ]
     assert all(call[0]["page_size"] == 200 for call in fanout.calls)
-    assert repository.steps[:17] == [
+    assert repository.steps[:18] == [
         "fanout:cb_rate",
         "fanout:cb_rating",
         "fanout:ci_index_member",
         "fanout:fut_basic",
         "fanout:fut_index_daily",
         "fanout:index_member_all",
+        "fanout:ths_member",
         "fanout:pledge_stat",
         "fanout:top10_cb_holders",
         "fanout:cyq_chips",
@@ -569,7 +589,7 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
     progress = service._decorate(
         campaign(profile="full", current_phase=5, phase_name="fanout_baseline")
     )
-    assert progress["logical_total_steps"] == 384
+    assert progress["logical_total_steps"] == 385
 
 
 def test_non_full_initialization_skips_expensive_whole_universe_fanouts():
@@ -624,6 +644,19 @@ def test_step_completion_is_fail_closed():
     assert InitializationService._step_state(collection_step("empty")) == "failed"
     assert InitializationService._step_state(
         collection_step("empty", allow_empty=True)
+    ) == "complete"
+    assert InitializationService._step_state(
+        collection_step(
+            "empty",
+            allow_empty=True,
+            completion_evidence={},
+        )
+    ) == "failed"
+    assert InitializationService._step_state(
+        collection_step(
+            "empty",
+            collection_api_name="kpl_concept_cons",
+        )
     ) == "complete"
     assert InitializationService._step_state(collection_step("unverified")) == "failed"
     assert InitializationService._step_state(
@@ -694,6 +727,26 @@ def test_reconcile_active_auto_recovers_settled_network_failures(monkeypatch):
     assert repository.deleted_steps == [17]
     assert repository.value["verification_round"] == 2
     assert repository.auto_recovery_count == 1
+
+
+def test_reconcile_active_resumes_when_attention_is_no_longer_actionable():
+    repository = FakeRepository(
+        campaign(status="attention"),
+        [
+            collection_step(
+                "empty",
+                step_id=16,
+                collection_api_name="kpl_concept_cons",
+            )
+        ],
+    )
+
+    result = service_with(repository).reconcile_active()
+
+    assert result["status"] == "running"
+    assert result["current_phase"] == 1
+    assert repository.deleted_steps == []
+    assert repository.value["verification_round"] == 1
 
 
 def test_reconcile_active_keeps_completeness_failure_in_attention(monkeypatch):

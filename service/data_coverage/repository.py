@@ -173,6 +173,74 @@ class CoverageRepository:
             )
             return cursor.rowcount
 
+    def requeue_stale_rule_audits(
+        self,
+        dataset_name: str,
+        *,
+        rule_revision: int,
+        limit: int = 500,
+    ) -> int:
+        """Re-run obsolete gap audits without another upstream collection.
+
+        Only successful collection jobs with an explicit transport-completeness
+        proof are eligible. The coverage job and its linked collection job are
+        transitioned in one transaction, so the dashboard cannot mistake an
+        obsolete audit for a current failure while the replacement is queued.
+        """
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                WITH candidates AS (
+                    SELECT coverage.job_id, coverage.collection_job_id
+                    FROM sys_data_coverage_job AS coverage
+                    JOIN sys_data_coverage_audit AS audit
+                      ON audit.job_id=coverage.job_id
+                    JOIN sys_collection_job AS collection
+                      ON collection.job_id=coverage.collection_job_id
+                    WHERE audit.dataset_name=%s
+                      AND audit.status='gaps'
+                      AND CASE
+                            WHEN COALESCE(audit.evidence->>'rule_revision', '')
+                                 ~ '^[0-9]+$'
+                            THEN (audit.evidence->>'rule_revision')::integer
+                            ELSE 0
+                          END < %s
+                      AND coverage.status IN ('success', 'failed')
+                      AND collection.status='success'
+                      AND collection.completion_status='incomplete'
+                      AND collection.completion_evidence->>'verified'='true'
+                    ORDER BY coverage.job_id
+                    FOR UPDATE OF coverage, collection SKIP LOCKED
+                    LIMIT %s
+                ), reset_audits AS (
+                    UPDATE sys_data_coverage_job AS coverage
+                    SET status='queued', attempt=0, available_at=NOW(),
+                        started_at=NULL, finished_at=NULL, worker_id=NULL,
+                        error_message=NULL
+                    FROM candidates
+                    WHERE coverage.job_id=candidates.job_id
+                    RETURNING coverage.job_id, coverage.collection_job_id
+                )
+                UPDATE sys_collection_job AS collection
+                SET completion_status='verifying',
+                    completion_evidence=jsonb_set(
+                        jsonb_set(
+                            collection.completion_evidence,
+                            '{verification,status}',
+                            '"queued"'::jsonb,
+                            TRUE
+                        ),
+                        '{verification,requested_rule_revision}',
+                        to_jsonb(%s::integer),
+                        TRUE
+                    )
+                FROM reset_audits
+                WHERE collection.job_id=reset_audits.collection_job_id
+                """,
+                (dataset_name, rule_revision, limit, rule_revision),
+            )
+            return cursor.rowcount
+
     @staticmethod
     def _date_expression(rule: CoverageRule) -> sql.Composed:
         column = sql.Identifier(rule.date_column)
@@ -399,6 +467,9 @@ class CoverageRepository:
                 SELECT count(*) FROM index_basic
                 WHERE NULLIF(list_date, '') IS NOT NULL
                   AND to_date(list_date, 'YYYYMMDD') <= %s
+                  -- Tushare's index_daily contract explicitly excludes SW
+                  -- industry indexes; those are collected by sw_daily.
+                  AND COALESCE(market, '') <> 'SW'
             """,
             "ths_index": """
                 SELECT count(*) FROM ths_index

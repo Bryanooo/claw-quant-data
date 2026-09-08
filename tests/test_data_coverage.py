@@ -45,7 +45,9 @@ def test_index_daily_rule_requires_a_market_entity_baseline():
 
     assert rule.strategy is CoverageStrategy.TRADING_DAILY
     assert rule.entity_reference == "index_basic"
-    assert rule.min_entity_ratio == 0.90
+    assert rule.min_entity_ratio == 0.85
+    assert rule.revision == 4
+    assert rule.entity_reference_max_age_days == 120
 
 
 def test_margin_rules_detect_staggered_exchange_publication():
@@ -208,6 +210,55 @@ def test_market_audit_marks_thin_cross_section_as_partial():
     assert result.partial_partitions == 1
     assert result.partitions[0].status == "partial"
     assert result.partitions[0].entity_coverage_ratio == 0.5
+    assert result.evidence["rule_revision"] == 1
+
+
+def test_index_daily_allows_cross_market_holiday_but_rejects_page_loss():
+    checked_rule = COVERAGE_RULES.get("index_daily")
+
+    holiday = CoverageCalculator(FakeCoverageRepository(
+        actual=[ActualPartition(date(2026, 7, 1), 9269, 9269)],
+        expected=[date(2026, 7, 1)],
+        expected_entities=10616,
+    )).audit(
+        checked_rule,
+        date(2026, 7, 1),
+        date(2026, 7, 1),
+        as_of=date(2026, 7, 3),
+        entity_reference_as_of=date(2026, 9, 8),
+    )
+    truncated = CoverageCalculator(FakeCoverageRepository(
+        actual=[ActualPartition(date(2026, 7, 1), 8000, 8000)],
+        expected=[date(2026, 7, 1)],
+        expected_entities=10616,
+    )).audit(
+        checked_rule,
+        date(2026, 7, 1),
+        date(2026, 7, 1),
+        as_of=date(2026, 7, 3),
+        entity_reference_as_of=date(2026, 9, 8),
+    )
+
+    assert holiday.status == "complete"
+    assert truncated.status == "gaps"
+
+
+def test_index_daily_old_history_uses_transport_partition_not_current_universe():
+    checked_rule = COVERAGE_RULES.get("index_daily")
+    result = CoverageCalculator(FakeCoverageRepository(
+        actual=[ActualPartition(date(1993, 1, 29), 3, 3)],
+        expected=[date(1993, 1, 29)],
+        expected_entities=6,
+    )).audit(
+        checked_rule,
+        date(1993, 1, 29),
+        date(1993, 1, 29),
+        as_of=date(1993, 1, 31),
+        entity_reference_as_of=date(2026, 9, 8),
+    )
+
+    assert result.status == "complete"
+    assert result.partitions[0].expected_entity_count is None
 
 
 def test_tiny_early_stock_market_allows_one_legitimate_non_trading_symbol():

@@ -68,6 +68,10 @@ FULL_HISTORY_DATASET_STARTS = {
 }
 CORE_INTERFACE_HISTORY = ("index_daily", "kpl_concept_cons")
 CORE_INTERFACE_PAGE_SIZES = {"index_daily": 5000, "kpl_concept_cons": 3000}
+# KPL occasionally has no published concept constituents on an otherwise open
+# SSE date.  An exhausted offset request is authoritative for that empty scope;
+# other core datasets must still fail closed when an expected date is empty.
+VERIFIED_EMPTY_CORE_INTERFACES = frozenset({"kpl_concept_cons"})
 FINANCE_TASKS = (
     "income_period",
     "balancesheet_period",
@@ -92,6 +96,7 @@ FULL_FANOUT_BASELINES = (
     "fut_basic",
     "fut_index_daily",
     "index_member_all",
+    "ths_member",
     "pledge_stat",
     # Parameterized interfaces that cannot be safely represented by one
     # market-wide request.  Full initialization freezes their local entity
@@ -306,6 +311,17 @@ class InitializationService:
         if not campaign:
             return campaign
         if campaign["status"] == "attention":
+            # A deployment can make an old attention classification resolvable
+            # (for example, a newly recognized but strictly verified empty
+            # partition). Re-evaluate the durable steps before requiring an
+            # operator retry; no task is deleted or duplicated on this path.
+            steps = self._repository.phase_steps(
+                campaign["initialization_id"], campaign["current_phase"]
+            )
+            states = [self._step_state(step) for step in steps]
+            if states and "running" not in states and "failed" not in states:
+                self._repository.set_status(campaign["initialization_id"], "running")
+                return self.reconcile(campaign["initialization_id"])
             recovered = self._auto_recover_transient_attention(campaign)
             if recovered is not None:
                 return recovered
@@ -571,7 +587,7 @@ class InitializationService:
                     existing_steps=existing_steps,
                 )
         scheduled_for = datetime.combine(end, datetime.min.time(), SHANGHAI).replace(hour=20)
-        for schedule_id in ("index_basic_weekly", "ths_member_weekly"):
+        for schedule_id in ("index_basic_weekly",):
             self._submit_collection(
                 campaign,
                 f"foundation:{schedule_id}",
@@ -764,7 +780,7 @@ class InitializationService:
                             "page_size": CORE_INTERFACE_PAGE_SIZES[api_name],
                             "resume": True,
                         },
-                        allow_empty=False,
+                        allow_empty=api_name in VERIFIED_EMPTY_CORE_INTERFACES,
                         require_verified=True,
                         period_key=compact,
                         expected_for=trade_date,
@@ -909,7 +925,7 @@ class InitializationService:
         excluded = {
             "trade_cal_daily", "stock_basic_daily", "index_basic_weekly",
             "index_daily_finalize",
-            "ths_member_weekly", "daily_daily", "bak_basic_daily",
+            "daily_daily", "bak_basic_daily",
             "stk_limit_daily", "income_quarterly", "income_annual_update",
             "balancesheet_quarterly", "balancesheet_annual",
             "cashflow_quarterly", "cashflow_annual",
@@ -989,22 +1005,32 @@ class InitializationService:
         if step["resource_type"] == "collection":
             status = step.get("collection_status")
             completion = step.get("completion_status")
+            evidence = step.get("completion_evidence") or {}
+            verification = evidence.get("verification") or {}
+            verified = (
+                evidence.get("verified") is True
+                or verification.get("verified") is True
+            )
             if status in {"queued", "running"} or completion in {
                 "pending", "running", "retrying", "verifying",
             }:
                 return "running"
             if status != "success" or completion in {"failed", "incomplete"}:
                 return "failed"
-            if completion == "empty" and not step["allow_empty"]:
-                return "failed"
+            if completion == "empty":
+                accepts_verified_empty = (
+                    step.get("collection_api_name")
+                    in VERIFIED_EMPTY_CORE_INTERFACES
+                )
+                if not step["allow_empty"] and not accepts_verified_empty:
+                    return "failed"
+                if step["require_verified"] and not verified:
+                    return "failed"
+                return "complete"
             if completion == "unverified" and step["require_verified"]:
                 return "failed"
             if completion == "complete" and step["require_verified"]:
-                evidence = step.get("completion_evidence") or {}
-                verification = evidence.get("verification") or {}
-                if evidence.get("verified") is not True and verification.get(
-                    "verified"
-                ) is not True:
+                if not verified:
                     return "failed"
             return "complete"
         coverage_status = step.get("coverage_status")

@@ -545,6 +545,7 @@ TASKS = TaskRegistry(
             "scheduled",
             ScheduledCollectorParameters,
             _run_scheduled_collector,
+            handler_version="2",
         ),
         TaskSpec(
             "trade_calendar",

@@ -39,6 +39,12 @@ class CoverageRule:
     # otherwise open market day. Only a successful, verified empty collection
     # job for the exact partition may satisfy such an expectation.
     accept_verified_empty: bool = False
+    # Increment when the meaning of an audit changes. The reconciler uses this
+    # to re-run stale database-only audits without recollecting upstream data.
+    revision: int = 1
+    # Current reference tables without full point-in-time lifecycle fields are
+    # reliable cross-sectional denominators only for a recent rolling window.
+    entity_reference_max_age_days: int | None = None
 
     @property
     def auditable(self) -> bool:

@@ -993,6 +993,98 @@ def test_unresolved_failure_is_recovered_only_by_the_same_partition():
         connection.close()
 
 
+def test_partial_result_is_not_an_incident_before_delivery_deadline():
+    suffix = uuid4().hex[:12]
+    api_name = f"deadline_{suffix}"
+    schedule_id = f"deadline_schedule_{suffix}"
+    business_date = date.today()
+    scheduled_for = datetime.now(timezone.utc) - timedelta(hours=2)
+    connection = psycopg2.connect(**DB_CONFIG)
+    job_id = None
+    delivery_plan_id = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_job(
+                    task_name, api_name, parameters, status, period_key,
+                    expected_for, completion_status, finished_at
+                ) VALUES (
+                    'tushare_interface', %s,
+                    jsonb_build_object(
+                        'schedule_id', %s,
+                        'scheduled_for', %s
+                    ),
+                    'success', %s, %s, 'incomplete', NOW()
+                ) RETURNING job_id
+                """,
+                (
+                    api_name,
+                    schedule_id,
+                    scheduled_for.isoformat(),
+                    business_date.isoformat(),
+                    business_date,
+                ),
+            )
+            job_id = cursor.fetchone()[0]
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_delivery_plan(
+                    business_date, plan_key, source_type, source_key,
+                    api_name, title, cadence, scheduled_for, due_at,
+                    expected_for, period_key
+                ) VALUES (
+                    %s, %s, 'dedicated', %s, %s, %s, 'daily',
+                    %s, NOW() + INTERVAL '1 hour', %s, %s
+                ) RETURNING delivery_plan_id
+                """,
+                (
+                    business_date,
+                    f"deadline:{suffix}",
+                    schedule_id,
+                    api_name,
+                    api_name,
+                    scheduled_for,
+                    business_date,
+                    business_date.isoformat(),
+                ),
+            )
+            delivery_plan_id = cursor.fetchone()[0]
+        connection.commit()
+
+        unresolved = CollectionMonitorRepository().unresolved_partition_failures()
+        assert api_name not in unresolved
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_delivery_plan
+                SET due_at=NOW() - INTERVAL '1 second'
+                WHERE delivery_plan_id=%s
+                """,
+                (delivery_plan_id,),
+            )
+        connection.commit()
+
+        unresolved = CollectionMonitorRepository().unresolved_partition_failures()
+        assert unresolved[api_name]["job_id"] == job_id
+    finally:
+        connection.rollback()
+        with connection.cursor() as cursor:
+            if delivery_plan_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_collection_delivery_plan WHERE delivery_plan_id=%s",
+                    (delivery_plan_id,),
+                )
+            if job_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_collection_job WHERE job_id=%s",
+                    (job_id,),
+                )
+        connection.commit()
+        connection.close()
+
+
 def test_specialized_tables_match_authorized_upstream_contracts():
     connection = psycopg2.connect(**DB_CONFIG)
     try:
@@ -1312,6 +1404,55 @@ def test_snapshot_sink_replaces_stale_keys_but_empty_input_is_fail_safe():
         with connection.cursor() as cursor:
             cursor.execute(f'SELECT id, value FROM "{table_name}" ORDER BY id')
             assert cursor.fetchall() == [(1, "new"), (3, "added")]
+    finally:
+        connection.rollback()
+        with connection.cursor() as cursor:
+            cursor.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+        connection.commit()
+        connection.close()
+
+
+def test_partition_snapshot_reconciles_only_staged_partitions():
+    table_name = f"collector_partition_{uuid4().hex[:12]}"
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'CREATE TABLE "{table_name}" '
+                '(scope TEXT NOT NULL, id INTEGER NOT NULL, value TEXT NOT NULL, '
+                'PRIMARY KEY (scope, id))'
+            )
+            cursor.execute(
+                f'INSERT INTO "{table_name}" VALUES '
+                "('a', 1, 'old'), ('a', 2, 'stale'), ('b', 1, 'preserved')"
+            )
+        connection.commit()
+
+        class PartitionCollector(BaseCollector):
+            API_NAME = "test_partition_snapshot"
+            pk_columns = ["scope", "id"]
+
+        collector = object.__new__(PartitionCollector)
+        collector.table_name = table_name
+        import pandas as pd
+
+        assert collector.store_partition_snapshot(
+            pd.DataFrame([
+                {"scope": "a", "id": 1, "value": "new"},
+                {"scope": "a", "id": 3, "value": "added"},
+            ]),
+            partition_columns=("scope",),
+        ) == 2
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'SELECT scope, id, value FROM "{table_name}" ORDER BY scope, id'
+            )
+            assert cursor.fetchall() == [
+                ("a", 1, "new"),
+                ("a", 3, "added"),
+                ("b", 1, "preserved"),
+            ]
     finally:
         connection.rollback()
         with connection.cursor() as cursor:
@@ -2404,3 +2545,193 @@ def test_coverage_audit_retry_updates_one_idempotent_record():
             connection.commit()
         finally:
             connection.close()
+
+
+def test_scheduled_completion_recovery_is_atomic_and_idempotent():
+    suffix = uuid4().hex
+    repository = JobRepository()
+    job, created = repository.create(
+        "scheduled_collector",
+        {
+            "schedule_id": "index_daily_finalize",
+            "scheduled_for": "2026-09-08T09:35:00+08:00",
+        },
+        max_attempts=3,
+        idempotency_key=f"integration-scheduled-verification-{suffix}",
+        api_name="index_daily",
+        cadence="scheduled",
+        period_key="20260908T0935+0800",
+        expected_for=date(2026, 9, 8),
+        resource_class="scheduled",
+    )
+    assert created is True
+    connection = psycopg2.connect(**DB_CONFIG)
+    coverage_job_id = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='success', completion_status='unverified',
+                    rows_fetched=100, rows_inserted=100, finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (job["job_id"],),
+            )
+        connection.commit()
+
+        verification = {
+            "dataset_name": "index_daily",
+            "start_date": date(2026, 9, 5),
+            "end_date": date(2026, 9, 5),
+            "idempotency_key": f"integration-scheduled-audit-{suffix}",
+        }
+        coverage_job_id = repository.queue_verification(job["job_id"], verification)
+        assert coverage_job_id is not None
+        assert repository.queue_verification(job["job_id"], verification) is None
+        queued = repository.get(job["job_id"])
+        assert queued["completion_status"] == "verifying"
+        assert queued["completion_evidence"]["verification"]["coverage_job_id"] == coverage_job_id
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_data_coverage_job WHERE job_id=%s",
+                (coverage_job_id,),
+            )
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET completion_status='unverified', completion_evidence='{}'::jsonb
+                WHERE job_id=%s
+                """,
+                (job["job_id"],),
+            )
+        connection.commit()
+        assert repository.apply_transport_verification(
+            job["job_id"], {"verified": True, "verification_type": "test"}
+        ) is True
+        assert repository.apply_transport_verification(
+            job["job_id"], {"verified": True}
+        ) is False
+        assert repository.get(job["job_id"])["completion_status"] == "complete"
+    finally:
+        with connection.cursor() as cursor:
+            if coverage_job_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_data_coverage_job WHERE job_id=%s",
+                    (coverage_job_id,),
+                )
+            cursor.execute(
+                "DELETE FROM sys_collection_job WHERE job_id=%s",
+                (job["job_id"],),
+            )
+        connection.commit()
+        connection.close()
+
+
+def test_coverage_rule_upgrade_requeues_only_the_database_audit_atomically():
+    suffix = uuid4().hex
+    dataset_name = f"integration_revision_{suffix}"
+    collection_repository = JobRepository()
+    coverage_repository = CoverageRepository()
+    collection, created = collection_repository.create(
+        "tushare_interface",
+        {
+            "api_name": "index_daily",
+            "parameters": {"trade_date": "20260901"},
+            "complete": True,
+        },
+        max_attempts=1,
+        idempotency_key=f"integration-revision-collection-{suffix}",
+        api_name="index_daily",
+        cadence="test",
+        period_key="20260901",
+        expected_for=date(2026, 9, 1),
+    )
+    assert created is True
+    coverage, created = coverage_repository.create_job(
+        dataset_name,
+        date(2026, 9, 1),
+        date(2026, 9, 1),
+        idempotency_key=f"integration-revision-audit-{suffix}",
+        max_attempts=2,
+        collection_job_id=collection["job_id"],
+    )
+    assert created is True
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='success', completion_status='incomplete',
+                    completion_evidence=%s::jsonb, finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (
+                    '{"verified":true,"verification":{"status":"gaps"}}',
+                    collection["job_id"],
+                ),
+            )
+            cursor.execute(
+                """
+                UPDATE sys_data_coverage_job
+                SET status='success', attempt=1, finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (coverage["job_id"],),
+            )
+            cursor.execute(
+                """
+                INSERT INTO sys_data_coverage_audit(
+                    job_id,dataset_name,strategy,start_date,end_date,
+                    expected_partitions,present_partitions,missing_partitions,
+                    observed_partitions,partial_partitions,coverage_ratio,
+                    status,evidence
+                ) VALUES (%s,%s,'trading_daily',%s,%s,1,0,0,1,1,0,'gaps',
+                          '{"rule_revision":1}'::jsonb)
+                """,
+                (
+                    coverage["job_id"],
+                    dataset_name,
+                    date(2026, 9, 1),
+                    date(2026, 9, 1),
+                ),
+            )
+        connection.commit()
+
+        assert coverage_repository.requeue_stale_rule_audits(
+            dataset_name, rule_revision=2, limit=10
+        ) == 1
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT coverage.status,coverage.attempt,
+                       collection.completion_status,
+                       collection.completion_evidence->'verification'
+                              ->>'requested_rule_revision'
+                FROM sys_data_coverage_job coverage
+                JOIN sys_collection_job collection
+                  ON collection.job_id=coverage.collection_job_id
+                WHERE coverage.job_id=%s
+                """,
+                (coverage["job_id"],),
+            )
+            assert cursor.fetchone() == ("queued", 0, "verifying", "2")
+    finally:
+        connection.rollback()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_data_coverage_audit WHERE job_id=%s",
+                (coverage["job_id"],),
+            )
+            cursor.execute(
+                "DELETE FROM sys_data_coverage_job WHERE job_id=%s",
+                (coverage["job_id"],),
+            )
+            cursor.execute(
+                "DELETE FROM sys_collection_job WHERE job_id=%s",
+                (collection["job_id"],),
+            )
+        connection.commit()
+        connection.close()

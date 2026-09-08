@@ -100,7 +100,7 @@ def test_scheduler_registers_expected_jobs_with_tracking():
     scheduler = create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}
 
-    assert len(jobs) == 45
+    assert len(jobs) == 46
     assert "delivery_plan_reconciler" in jobs
     collection_job_ids = (
         "daily_daily",
@@ -123,6 +123,10 @@ def test_scheduler_registers_expected_jobs_with_tracking():
         assert hasattr(jobs[job_id].func, "__wrapped__")
 
     assert jobs["service_heartbeat"].func is scheduler_module.run_scheduler_heartbeat
+    assert jobs["scheduled_completion_reconciler"].func is scheduler_module.run_scheduled_completion_reconciler
+    assert jobs["coverage_rule_reconciler"].func is (
+        scheduler_module.run_coverage_rule_reconciler
+    )
     assert "hour='16,19,23'" in str(jobs["daily_daily"].trigger)
     assert "hour='16,19,23'" in str(jobs["bak_basic_daily"].trigger)
     assert "hour='9', minute='35'" in str(jobs["index_daily_finalize"].trigger)

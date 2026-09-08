@@ -96,6 +96,11 @@ SCHEDULED_FANOUT_RECIPES = (
         "weekly refresh of the complete SW L3 dependency universe",
     ),
     ScheduledFanoutRecipe(
+        "ths_member", "weekly", "none", 200,
+        "fan out every locally known THS board to avoid the 6,000-row cap",
+        2,
+    ),
+    ScheduledFanoutRecipe(
         "fut_basic", "weekly", "none", 6,
         "small static exchange universe",
     ),

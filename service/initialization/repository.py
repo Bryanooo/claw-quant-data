@@ -325,6 +325,7 @@ class InitializationRepository:
                 """
                 SELECT step.*,
                        collection.status AS collection_status,
+                       collection.api_name AS collection_api_name,
                        collection.completion_status,
                        collection.completion_evidence,
                        collection.rows_fetched, collection.rows_inserted,

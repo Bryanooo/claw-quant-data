@@ -164,6 +164,31 @@ def test_month_end_zero_remains_unverified():
     ) is None
 
 
+def test_non_week_end_zero_is_a_verified_conditional_skip():
+    evidence = verify_scheduled_transport(
+        "stk_weekly_monthly_week_daily",
+        "2026-09-07T20:30:00+08:00",
+        0,
+        query=lambda _sql, params: (
+            [{"is_week_end": False}]
+            if params == (date(2026, 9, 7), date(2026, 9, 7)) else []
+        ),
+    )
+
+    assert evidence["verified"] is True
+    assert evidence["empty"] is True
+    assert evidence["skip_reason"] == "not_last_open_day_of_week"
+
+
+def test_week_end_zero_remains_unverified():
+    assert verify_scheduled_transport(
+        "stk_weekly_monthly_week_daily",
+        "2026-09-11T20:30:00+08:00",
+        0,
+        query=lambda _sql, _params: [{"is_week_end": True}],
+    ) is None
+
+
 def test_weekly_close_correction_proves_exact_source_below_official_cap():
     evidence = verify_scheduled_transport(
         "stk_weekly_weekly_fri",

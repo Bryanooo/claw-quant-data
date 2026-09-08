@@ -483,17 +483,33 @@ class DataHealthService:
                     }
                 )
             elif latest.get("completion_status") == "unverified":
+                pending_until = cls._pending_interface_deadline(
+                    api_name, latest, delivery
+                )
                 issues.append(
                     {
-                        "severity": "unknown",
-                        "confidence": "unknown",
-                        "kind": "collection_unverified",
+                        "severity": "info" if pending_until else "unknown",
+                        "confidence": "planned" if pending_until else "unknown",
+                        "kind": (
+                            "collection_verification_pending"
+                            if pending_until
+                            else "collection_unverified"
+                        ),
                         "resource_type": "interface",
                         "resource": api_name,
                         "scope": latest.get("period_key") or "最近一次任务",
-                        "detail": latest.get("completion_reason")
-                        or "任务成功，但没有严格完整性证据",
-                        "action": "补充分区、分页或标的覆盖证明",
+                        "detail": (
+                            "本轮上游尚未发布可验证数据，仍处于自动复采窗口，"
+                            f"截止时间 {pending_until}"
+                            if pending_until
+                            else latest.get("completion_reason")
+                            or "任务成功，但没有严格完整性证据"
+                        ),
+                        "action": (
+                            "等待后续计划轮次；截止后仍未验证将自动升级为故障"
+                            if pending_until
+                            else "补充分区、分页或标的覆盖证明"
+                        ),
                         "api_name": api_name,
                     }
                 )
@@ -719,3 +735,34 @@ class DataHealthService:
         if len(pending_dates) < issue_count:
             return None
         return max(deadlines) if deadlines else None
+
+    @staticmethod
+    def _pending_interface_deadline(
+        api_name: str,
+        latest: dict[str, Any],
+        delivery: dict[str, Any] | None,
+    ) -> str | None:
+        """Return the deadline for the exact still-publishable queue job.
+
+        Matching by durable work id is intentional: an unrelated future plan
+        for the same interface must never hide a genuinely unverified older
+        run.
+        """
+        if not delivery or latest.get("source") != "queue":
+            return None
+        work_id = latest.get("id")
+        if work_id is None:
+            return None
+        pending_statuses = {
+            "not_due", "queued", "running", "retrying", "waiting",
+            "unverified", "verifying",
+        }
+        for plan in delivery.get("items") or []:
+            if (
+                plan.get("api_name") == api_name
+                and plan.get("work_id") == work_id
+                and not plan.get("attention")
+                and plan.get("delivery_status") in pending_statuses
+            ):
+                return str(plan.get("due_at") or "") or None
+        return None

@@ -15,13 +15,27 @@ def test_intraday_coverage_gap_is_informational_until_delivery_deadline():
         collection_service=Stub(
             {
                 "summary": {
-                    "interfaces": 0,
-                    "collectable": 0,
+                    "interfaces": 1,
+                    "collectable": 1,
                     "complete": 0,
                     "pending": 0,
+                    "unverified": 1,
                     "unresolved_failures": 0,
                 },
-                "interfaces": [],
+                "interfaces": [
+                    {
+                        "api_name": "index_daily",
+                        "collectable": True,
+                        "automatic_safe": True,
+                        "latest": {
+                            "source": "queue",
+                            "id": 19,
+                            "completion_status": "unverified",
+                            "period_key": "20260908T1505+0800",
+                        },
+                        "unresolved_failure": None,
+                    }
+                ],
             }
         ),
         coverage_service=Stub(
@@ -58,6 +72,7 @@ def test_intraday_coverage_gap_is_informational_until_delivery_deadline():
                 "items": [
                     {
                         "api_name": "index_daily",
+                        "work_id": 19,
                         "expected_for": "2026-09-08",
                         "due_at": "2026-09-08T21:05:00+08:00",
                         "delivery_status": "waiting",
@@ -73,10 +88,19 @@ def test_intraday_coverage_gap_is_informational_until_delivery_deadline():
 
     assert result["summary"]["critical_issue_count"] == 0
     assert result["summary"]["confirmed_data_issue_count"] == 0
-    issue = next(item for item in result["issues"] if item["dataset"] == "index_daily")
+    issue = next(
+        item for item in result["issues"]
+        if item.get("dataset") == "index_daily"
+    )
     assert issue["kind"] == "coverage_pending"
     assert issue["severity"] == "info"
     assert "21:05" in issue["detail"]
+    collection_issue = next(
+        item for item in result["issues"]
+        if item.get("resource_type") == "interface"
+    )
+    assert collection_issue["kind"] == "collection_verification_pending"
+    assert collection_issue["severity"] == "info"
 
 
 def test_data_health_keeps_confirmed_gaps_separate_from_unknown_coverage():

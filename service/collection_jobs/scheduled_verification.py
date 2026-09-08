@@ -71,6 +71,25 @@ def verify_scheduled_transport(
             "skip_reason": "not_last_open_day_of_month",
             "target_date": target.isoformat(),
         }
+    if rows_fetched == 0 and schedule_id == "stk_weekly_monthly_week_daily":
+        result = query(
+            """
+            SELECT max(cal_date)=%s AS is_week_end
+            FROM trade_cal
+            WHERE exchange='SSE' AND is_open=1
+              AND date_trunc('week', cal_date)=date_trunc('week', %s::date)
+            """,
+            (target, target),
+        )[0]
+        if bool(result.get("is_week_end")):
+            return None
+        return {
+            **evidence,
+            "scope": "conditional_schedule_skip",
+            "empty": True,
+            "skip_reason": "not_last_open_day_of_week",
+            "target_date": target.isoformat(),
+        }
     if rows_fetched <= 0:
         return None
 

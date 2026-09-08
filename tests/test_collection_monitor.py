@@ -50,6 +50,9 @@ class FakeMonitorRepository:
             }
         }
 
+    def latest_scheduled_jobs(self):
+        return {}
+
     def latest_fanout_campaigns(self):
         return {}
 
@@ -102,6 +105,42 @@ def test_dedicated_monitor_prefers_durable_verified_queue_evidence():
     item = next(row for row in payload["interfaces"] if row["api_name"] == "daily")
 
     assert item["latest"]["source"] == "queue"
+    assert item["latest"]["completion_status"] == "complete"
+
+
+def test_dedicated_monitor_recovers_legacy_queue_job_by_schedule_id():
+    repository = FakeMonitorRepository()
+    now = datetime.now(timezone.utc)
+    repository.latest_scheduled_jobs = lambda: {
+        "stk_weekly_weekly_fri": {
+            "job_id": 135376,
+            "task_name": "scheduled_collector",
+            "parameters": {
+                "schedule_id": "stk_weekly_weekly_fri",
+                "scheduled_for": "2026-09-04T20:40:00+08:00",
+            },
+            "status": "success",
+            "attempt": 1,
+            "rows_inserted": 5630,
+            "rows_fetched": 5630,
+            "api_name": None,
+            "cadence": None,
+            "period_key": "20260904T2040+0800",
+            "expected_for": "2026-09-04",
+            "completion_status": "complete",
+            "completion_evidence": {"verified": True},
+            "error_message": None,
+            "created_at": now,
+            "started_at": now,
+            "finished_at": now,
+        }
+    }
+
+    payload = CollectionMonitorService(repository).overview()
+    item = next(row for row in payload["interfaces"] if row["api_name"] == "weekly")
+
+    assert item["latest"]["source"] == "queue"
+    assert item["latest"]["id"] == 135376
     assert item["latest"]["completion_status"] == "complete"
 
 

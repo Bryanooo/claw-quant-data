@@ -50,6 +50,33 @@ def test_index_daily_rule_requires_a_market_entity_baseline():
     assert rule.entity_reference_max_age_days == 120
 
 
+def test_financial_rules_only_compare_recent_point_in_time_universe():
+    for dataset_name in (
+        "income", "balancesheet", "cashflow", "financial_indicator"
+    ):
+        rule = COVERAGE_RULES.get(dataset_name)
+        assert rule.strategy is CoverageStrategy.REPORT_QUARTERLY
+        assert rule.revision == 2
+        assert rule.entity_reference_max_age_days == 1825
+
+
+def test_old_financial_history_uses_exhausted_partition_not_current_universe():
+    checked_rule = COVERAGE_RULES.get("income")
+    result = CoverageCalculator(FakeCoverageRepository(
+        actual=[ActualPartition(date(1990, 12, 31), 2, 2)],
+        expected_entities=9,
+    )).audit(
+        checked_rule,
+        date(1990, 12, 31),
+        date(1990, 12, 31),
+        as_of=date(2026, 9, 8),
+        entity_reference_as_of=date(2026, 9, 8),
+    )
+
+    assert result.status == "complete"
+    assert result.partitions[0].expected_entity_count is None
+
+
 def test_margin_rules_detect_staggered_exchange_publication():
     summary = COVERAGE_RULES.get("margin")
     detail = COVERAGE_RULES.get("margin_detail")

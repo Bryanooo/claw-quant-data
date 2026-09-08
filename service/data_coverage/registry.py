@@ -193,10 +193,34 @@ _EXPLICIT_RULES = [
         ),
         _rule("index_weekly", CoverageStrategy.TRADING_WEEKLY, grace_days=2, description="检查每个完整交易周；指数研究池尚未配置"),
         _rule("index_monthly", CoverageStrategy.TRADING_MONTHLY, grace_days=2, default_lookback_days=730, description="检查每个完整月份；指数研究池尚未配置"),
-        _rule("income", CoverageStrategy.REPORT_QUARTERLY, entity_reference="stock_basic", min_entity_ratio=0.60, grace_days=0, default_lookback_days=730, description="按披露截止日和上市公司截面检查季度报告期"),
-        _rule("balancesheet", CoverageStrategy.REPORT_QUARTERLY, entity_reference="stock_basic", min_entity_ratio=0.60, grace_days=0, default_lookback_days=730, description="按披露截止日和上市公司截面检查季度报告期"),
-        _rule("cashflow", CoverageStrategy.REPORT_QUARTERLY, entity_reference="stock_basic", min_entity_ratio=0.60, grace_days=0, default_lookback_days=730, description="按披露截止日和上市公司截面检查季度报告期"),
-        _rule("financial_indicator", CoverageStrategy.REPORT_QUARTERLY, entity_reference="stock_basic", min_entity_ratio=0.60, grace_days=0, default_lookback_days=730, description="按披露截止日和上市公司截面检查季度报告期"),
+        *[
+            _rule(
+                dataset_name,
+                CoverageStrategy.REPORT_QUARTERLY,
+                entity_reference="stock_basic",
+                min_entity_ratio=0.60,
+                grace_days=0,
+                default_lookback_days=730,
+                # stock_basic describes listing history, not the historical
+                # reporting universe retained by Tushare.  Very old reports
+                # can be sparse or retroactively populated for companies that
+                # listed later.  For those partitions, exhaustive offset
+                # pagination plus persisted partition presence is the proof;
+                # keep entity-ratio checks for recent research history.
+                entity_reference_max_age_days=1825,
+                revision=2,
+                description=(
+                    "近五年按披露截止日和上市公司截面检查；更早历史按"
+                    "分页穷尽和报告期分区存在性检查"
+                ),
+            )
+            for dataset_name in (
+                "income",
+                "balancesheet",
+                "cashflow",
+                "financial_indicator",
+            )
+        ],
         _rule("forex_daily", CoverageStrategy.OBSERVED_ONLY, description="无可靠外汇日历，仅列出实际存在日期"),
         _rule("ccass_hold", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", description="中央结算持股按香港交易日发布；当前仅审计已观测日期，避免用 SSE 日历制造假缺口"),
         _rule("ccass_hold_detail", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", scheduled=False, description="单日超过百万行且需要显式范围；仅审计人工采集到的日期"),

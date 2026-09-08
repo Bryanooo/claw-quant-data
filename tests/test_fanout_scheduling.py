@@ -90,12 +90,21 @@ def test_weekly_and_monthly_fanouts_have_stable_closed_period_identity(monkeypat
         "monthly", today=date(2026, 8, 30), service=service
     )
 
-    assert weekly["created"] == 5
+    weekly_count = sum(
+        recipe.cadence == "weekly" for recipe in scheduling.SCHEDULED_FANOUT_RECIPES
+    )
+    assert weekly["created"] == weekly_count
     assert monthly["created"] == 1
     assert all(
         options["period_key"] == "2026-W34"
-        for _, options in service.calls[:5]
+        for _, options in service.calls[:weekly_count]
     )
+    ths_request, ths_options = next(
+        (request, options) for request, options in service.calls
+        if request["api_name"] == "ths_member"
+    )
+    assert ths_request["page_size"] == 200
+    assert ths_options["plan_version"] == 2
     assert service.calls[-1][1]["period_key"] == "2026-07"
     assert service.calls[-1][1]["expected_for"] == date(2026, 7, 31)
 

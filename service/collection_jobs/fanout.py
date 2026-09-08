@@ -72,6 +72,10 @@ _DEFINITIONS = (
     FanoutDefinition("index_monthly", "index", "ts_code", "date_window", 1, (), 3660),
     FanoutDefinition("moneyflow_dc", "stock", "ts_code", "trade_date"),
     FanoutDefinition("tdx_member", "tdx_index", "ts_code", "trade_date"),
+    # ths_member is capped at 6,000 rows market-wide and the contract exposes
+    # only one board-code predicate. Live verification shows memberships for
+    # every ths_index type (including BB), so freeze the whole local universe.
+    FanoutDefinition("ths_member", "ths_index", "ts_code", "none"),
     FanoutDefinition("ci_index_member", "ci_index", "l3_code", "none"),
     FanoutDefinition("index_member_all", "sw_l3_index", "l3_code", "none"),
     FanoutDefinition("pledge_stat", "stock", "ts_code", "none"),

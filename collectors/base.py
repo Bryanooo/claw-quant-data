@@ -443,6 +443,16 @@ class BaseCollector(ABC):
         """
         return df
 
+    def validate_response(
+        self, df: pd.DataFrame, parameters: Dict[str, Any]
+    ) -> None:
+        """Validate a transformed response before any database mutation.
+
+        Specialized collectors override this hook for endpoint-specific caps
+        and partition-echo checks. Raising here guarantees a suspicious page
+        is never persisted as if it were a complete request.
+        """
+
     # ─────────────── store：通用批量写入 ───────────────
     def store(self, df: pd.DataFrame) -> int:
         """
@@ -528,7 +538,12 @@ class BaseCollector(ABC):
         finally:
             conn.close()
 
-    def store_snapshot(self, df: pd.DataFrame) -> int:
+    def store_snapshot(
+        self,
+        df: pd.DataFrame,
+        *,
+        partition_columns: tuple[str, ...] = (),
+    ) -> int:
         """Atomically merge a complete snapshot without taking a TRUNCATE lock.
 
         Rows are validated in a session-local staging table, then upserted and
@@ -546,6 +561,14 @@ class BaseCollector(ABC):
         if missing_keys:
             raise ValueError(
                 f"snapshot for {self.table_name} is missing keys: {missing_keys}"
+            )
+        missing_partitions = [
+            key for key in partition_columns if key not in columns
+        ]
+        if missing_partitions:
+            raise ValueError(
+                f"snapshot for {self.table_name} is missing partitions: "
+                f"{missing_partitions}"
             )
         normalized = [
             tuple(
@@ -580,6 +603,16 @@ class BaseCollector(ABC):
             key_match = " AND ".join(
                 f"target.{quote(key)} = stage.{quote(key)}" for key in self.pk_columns
             )
+            partition_scope = ""
+            if partition_columns:
+                partition_match = " AND ".join(
+                    f"target.{quote(key)} = scope.{quote(key)}"
+                    for key in partition_columns
+                )
+                partition_scope = (
+                    "EXISTS (SELECT 1 FROM "
+                    f"{staging_name} AS scope WHERE {partition_match}) AND "
+                )
 
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -598,7 +631,8 @@ class BaseCollector(ABC):
                 )
                 cursor.execute(
                     f"DELETE FROM {target} AS target "
-                    f"WHERE NOT EXISTS (SELECT 1 FROM {staging_name} AS stage "
+                    f"WHERE {partition_scope}"
+                    f"NOT EXISTS (SELECT 1 FROM {staging_name} AS stage "
                     f"WHERE {key_match})"
                 )
             connection.commit()
@@ -608,6 +642,14 @@ class BaseCollector(ABC):
             raise
         finally:
             connection.close()
+
+    def store_partition_snapshot(
+        self, df: pd.DataFrame, *, partition_columns: tuple[str, ...]
+    ) -> int:
+        """Atomically replace only the partitions present in ``df``."""
+        if not partition_columns:
+            raise ValueError("partition snapshot requires partition_columns")
+        return self.store_snapshot(df, partition_columns=partition_columns)
 
     # ─────────────── run：统一采集流程（带重试） ───────────────
     def run(
@@ -666,6 +708,7 @@ class BaseCollector(ABC):
                     )
 
                 df = self.transform(df)
+                self.validate_response(df, dict(effective.parameters))
                 fetched_rows = len(df)
                 # Keep only a deterministic digest as pagination evidence. It
                 # lets the outer paginator detect endpoints that silently

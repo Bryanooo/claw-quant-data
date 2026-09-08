@@ -36,7 +36,7 @@ curl -X POST 'http://api.tushare.pro' \
   "api_name": "ths_member",
   "token": "${TUSHARE_TOKEN}",
   "params": {
-    "ts_code": "000001.SZ"
+    "ts_code": "885800.TI"
   },
   "fields": ""
 }'
@@ -71,6 +71,11 @@ ts_code         con_code     con_name
 
 ## claw-quant 存储契约
 
-该接口由专用采集器写入规范化业务表，主键和字段转换以链接代码为准。
+该接口由专用采集器写入规范化业务表 `ths_member`，复合主键为
+`(ts_code, con_code)`。无参数请求会在 6,000 行处截断，系统明确禁止把它作为
+全量采集。每周任务从 `ths_index` 冻结全部板块代码（真实接口也支持行业、主题、
+宽基等非概念类型），为每个板块生成独立持久化子任务；任务可分别重试，并校验
+返回的 `ts_code` 与请求一致且未触及 6,000 行上限。2026-09-08 本地依赖宇宙为
+2,517 个板块。
 
 > 权限状态来自实际 Token 探测；示例中的 Token 仅为环境变量占位符，不包含真实密钥。

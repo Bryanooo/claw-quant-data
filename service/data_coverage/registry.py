@@ -52,6 +52,8 @@ def _rule(
     min_entity_ratio: float | None = None,
     scheduled: bool = True,
     accept_verified_empty: bool = False,
+    revision: int = 1,
+    entity_reference_max_age_days: int | None = None,
 ) -> CoverageRule:
     dataset = DATASETS.get(dataset_name)
     if not dataset.date_column:
@@ -71,6 +73,8 @@ def _rule(
         min_entity_ratio=min_entity_ratio,
         scheduled=scheduled,
         accept_verified_empty=accept_verified_empty,
+        revision=revision,
+        entity_reference_max_age_days=entity_reference_max_age_days,
     )
 
 
@@ -147,8 +151,18 @@ _EXPLICIT_RULES = [
             "index_daily",
             CoverageStrategy.TRADING_DAILY,
             entity_reference="index_basic",
-            min_entity_ratio=0.90,
-            description="按交易日及已上市指数基准截面检查全市场完整性",
+            # CSI/CNI include overseas and cross-market indexes that
+            # legitimately do not publish on some SSE open dates (for example
+            # US/HK holidays). Live adjacent-day comparisons show a valid
+            # floor near 87%; 85% retains headroom while still detecting a
+            # missing 5,000-row pagination page or the upstream 8,000-row cap.
+            min_entity_ratio=0.85,
+            description=(
+                "按交易日及 index_daily 支持的已上市指数截面检查完整性；"
+                "官方契约明确排除申万指数，申万行情由 sw_daily 独立采集"
+            ),
+            revision=4,
+            entity_reference_max_age_days=120,
         ),
         _rule(
             "industry_daily",

@@ -10,6 +10,75 @@ class Stub:
         setattr(self, method, lambda: value)
 
 
+def test_intraday_coverage_gap_is_informational_until_delivery_deadline():
+    service = DataHealthService(
+        collection_service=Stub(
+            {
+                "summary": {
+                    "interfaces": 0,
+                    "collectable": 0,
+                    "complete": 0,
+                    "pending": 0,
+                    "unresolved_failures": 0,
+                },
+                "interfaces": [],
+            }
+        ),
+        coverage_service=Stub(
+            {
+                "summary": {
+                    "datasets": 1,
+                    "auditable": 1,
+                    "audited": 1,
+                    "with_gaps": 1,
+                    "missing_partitions": 0,
+                    "partial_partitions": 1,
+                },
+                "datasets": [
+                    {
+                        "dataset": "index_daily",
+                        "auditable": True,
+                        "scheduled": True,
+                        "latest": {
+                            "status": "gaps",
+                            "start_date": "2026-05-11",
+                            "end_date": "2026-09-08",
+                            "missing_partitions": 0,
+                            "partial_partitions": 1,
+                        },
+                        "recent_missing": ["2026-09-08", "1993-01-29"],
+                    }
+                ],
+            }
+        ),
+        data_service=Stub([], "freshness"),
+        initialization_service=Stub({"active": None, "latest": None}),
+        delivery_service=Stub(
+            {
+                "items": [
+                    {
+                        "api_name": "index_daily",
+                        "expected_for": "2026-09-08",
+                        "due_at": "2026-09-08T21:05:00+08:00",
+                        "delivery_status": "waiting",
+                        "attention": False,
+                    }
+                ]
+            },
+            "today",
+        ),
+    )
+
+    result = service.overview()
+
+    assert result["summary"]["critical_issue_count"] == 0
+    assert result["summary"]["confirmed_data_issue_count"] == 0
+    issue = next(item for item in result["issues"] if item["dataset"] == "index_daily")
+    assert issue["kind"] == "coverage_pending"
+    assert issue["severity"] == "info"
+    assert "21:05" in issue["detail"]
+
+
 def test_data_health_keeps_confirmed_gaps_separate_from_unknown_coverage():
     collection = {
         "summary": {

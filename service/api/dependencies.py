@@ -102,4 +102,5 @@ def get_data_health_service(request: Request) -> DataHealthService:
         coverage_service=get_coverage_service(),
         data_service=get_data_service(request),
         initialization_service=get_initialization_service(),
+        delivery_service=get_delivery_monitor_service(),
     )

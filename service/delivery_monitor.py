@@ -272,6 +272,13 @@ class DeliveryPlanBuilder:
                 cadence = "weekly"
             elif job.id.endswith("_monthly_eom"):
                 cadence = "monthly"
+            expected_for = day
+            if job.id == "index_daily_finalize":
+                from service.tushare_scheduling import _latest_trade_date
+
+                expected_for = date.fromisoformat(
+                    _latest_trade_date(day - timedelta(days=1))
+                )
             plans.append(
                 {
                     "business_date": day,
@@ -283,8 +290,8 @@ class DeliveryPlanBuilder:
                     "cadence": cadence,
                     "scheduled_for": occurrences[0],
                     "due_at": occurrences[-1] + timedelta(hours=1),
-                    "expected_for": day,
-                    "period_key": _period_key(cadence, day),
+                    "expected_for": expected_for,
+                    "period_key": _period_key(cadence, expected_for),
                     "metadata": {
                         "schedule_id": job.id,
                         "fire_times": [item.isoformat() for item in occurrences],
@@ -440,8 +447,14 @@ class DeliveryMonitorService:
             status = "complete"
         elif completion == "empty":
             status = "empty"
-        elif completion in {"unverified", "verifying", "incomplete"}:
-            status = completion
+        elif completion in {"unverified", "verifying"}:
+            status = "incomplete" if now > item["due_at"] else completion
+        elif completion == "incomplete":
+            # Intraday publishers can expose a partial partition before their
+            # final release.  Coverage evidence should keep that delivery in
+            # the recovery window until its explicit deadline; surfacing it as
+            # an incident earlier creates a false failure on every normal day.
+            status = "incomplete" if now > item["due_at"] else "waiting"
         elif work_status == "running":
             status = "running"
         elif work_status == "queued":

@@ -49,6 +49,7 @@ class CoverageCalculator:
         end_date: date,
         *,
         as_of: date | datetime | None = None,
+        entity_reference_as_of: date | None = None,
     ) -> CoverageAuditResult:
         if not rule.auditable:
             raise ValueError(
@@ -59,6 +60,7 @@ class CoverageCalculator:
         # Runtime audits use an aware datetime so publication cut-offs can be
         # enforced without making deterministic historical audits time-sensitive.
         as_of_date = audit_time.date() if isinstance(audit_time, datetime) else audit_time
+        reference_as_of = entity_reference_as_of or business_now().date()
         before_release = bool(
             isinstance(audit_time, datetime)
             and rule.release_after
@@ -119,7 +121,15 @@ class CoverageCalculator:
             expected = partition_date in expected_set
             expected_entities = (
                 self._repository.expected_entity_count(rule, partition_date)
-                if expected and observed and rule.entity_reference
+                if expected
+                and observed
+                and rule.entity_reference
+                and (
+                    rule.entity_reference_max_age_days is None
+                    or partition_date
+                    >= reference_as_of
+                    - timedelta(days=rule.entity_reference_max_age_days - 1)
+                )
                 else None
             )
             entity_ratio = (
@@ -197,6 +207,7 @@ class CoverageCalculator:
             partitions=tuple(partitions),
             evidence={
                 "semantics": "partition_and_entity_completeness",
+                "rule_revision": rule.revision,
                 "calendar_exchange": (
                     rule.calendar_exchange if rule.detects_missing_partitions else None
                 ),
@@ -224,6 +235,10 @@ class CoverageCalculator:
                     else None
                 ),
                 "entity_reference": rule.entity_reference,
+                "entity_reference_max_age_days": (
+                    rule.entity_reference_max_age_days
+                ),
+                "entity_reference_as_of": reference_as_of.isoformat(),
                 "min_entity_ratio": rule.min_entity_ratio,
                 "small_early_market_absolute_tolerance": (
                     1

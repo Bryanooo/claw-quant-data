@@ -175,6 +175,102 @@ class JobRepository:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def list_unverified_scheduled(self, *, limit: int = 500) -> list[dict]:
+        """Return bounded recent candidates for idempotent evidence recovery."""
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT * FROM sys_collection_job
+                WHERE task_name='scheduled_collector' AND status='success'
+                  AND completion_status='unverified'
+                  AND created_at >= NOW() - INTERVAL '8 days'
+                ORDER BY created_at DESC, job_id DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def apply_transport_verification(self, job_id: int, evidence: dict) -> bool:
+        completion_status = "empty" if evidence.get("empty") else "complete"
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET completion_status=%s,
+                    completion_evidence=completion_evidence || %s::jsonb
+                WHERE job_id=%s AND status='success'
+                  AND completion_status='unverified'
+                """,
+                (
+                    completion_status,
+                    json.dumps(evidence, ensure_ascii=False),
+                    job_id,
+                ),
+            )
+            return cursor.rowcount == 1
+
+    def queue_verification(self, job_id: int, verification: dict) -> int | None:
+        """Atomically link one audit to a settled unverified job."""
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 1 FROM sys_collection_job
+                WHERE job_id=%s AND status='success'
+                  AND completion_status='unverified'
+                FOR UPDATE
+                """,
+                (job_id,),
+            )
+            if cursor.fetchone() is None:
+                return None
+            cursor.execute(
+                """
+                INSERT INTO sys_data_coverage_job
+                    (dataset_name, start_date, end_date, idempotency_key,
+                     max_attempts, collection_job_id)
+                VALUES (%s, %s, %s, %s, 2, %s)
+                ON CONFLICT (idempotency_key) DO UPDATE
+                SET collection_job_id=EXCLUDED.collection_job_id
+                RETURNING job_id
+                """,
+                (
+                    verification["dataset_name"],
+                    verification["start_date"],
+                    verification["end_date"],
+                    verification["idempotency_key"],
+                    job_id,
+                ),
+            )
+            coverage_job_id = int(cursor.fetchone()[0])
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET completion_status='verifying',
+                    completion_evidence=completion_evidence || %s::jsonb
+                WHERE job_id=%s AND completion_status='unverified'
+                """,
+                (
+                    json.dumps(
+                        {
+                            "verification": {
+                                "coverage_job_id": coverage_job_id,
+                                "dataset": verification["dataset_name"],
+                                "start_date": verification["start_date"].isoformat(),
+                                "end_date": verification["end_date"].isoformat(),
+                                "status": "queued",
+                            }
+                        },
+                        ensure_ascii=False,
+                    ),
+                    job_id,
+                ),
+            )
+            return coverage_job_id if cursor.rowcount == 1 else None
+
     def create_empty_recheck(
         self,
         root_job_id: int,
@@ -353,6 +449,11 @@ class JobRepository:
             "tdx_index": """
                 SELECT DISTINCT ts_code FROM tdx_index
                 WHERE ts_code IS NOT NULL ORDER BY ts_code
+            """,
+            "ths_index": """
+                SELECT DISTINCT ts_code FROM ths_index
+                WHERE ts_code IS NOT NULL
+                ORDER BY ts_code
             """,
             "pro_data": """
                 SELECT DISTINCT name FROM tushare_norm_p_list

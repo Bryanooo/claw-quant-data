@@ -174,6 +174,7 @@ class CollectionMonitorRepository:
                            WHEN 'trade_cal' THEN 'trade_calendar'
                            WHEN 'daily' THEN 'stock_daily'
                            WHEN 'daily_basic' THEN 'stock_daily_basic'
+                           WHEN 'bak_basic' THEN 'stock_daily_basic'
                            WHEN 'stk_limit' THEN 'stock_limit'
                            WHEN 'suspend_d' THEN 'stock_suspend'
                            WHEN 'fina_indicator' THEN 'financial_indicator'
@@ -188,7 +189,7 @@ class CollectionMonitorRepository:
                            WHEN 'forecast_vip' THEN 'forecast'
                            ELSE COALESCE(api_name, parameters->>'api_name')
                        END AS dataset_name,
-                       period_key, expected_for, parent_job_id,
+                       task_name, parameters, period_key, expected_for, parent_job_id,
                        status, completion_status, completion_evidence,
                        error_message, finished_at
                 FROM sys_collection_job
@@ -199,7 +200,19 @@ class CollectionMonitorRepository:
             ), unresolved AS (
                 SELECT failed.*
                 FROM failed
-                WHERE NOT EXISTS (
+                WHERE NOT (
+                    failed.status='success'
+                    AND failed.completion_status='incomplete'
+                    AND failed.expected_for IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM sys_collection_delivery_plan AS delivery
+                        WHERE delivery.api_name=failed.api_name
+                          AND delivery.expected_for=failed.expected_for
+                          AND NOW() <= delivery.due_at
+                    )
+                )
+                  AND NOT EXISTS (
                     SELECT 1
                     FROM sys_collection_job AS recovered
                     WHERE recovered.status='success'

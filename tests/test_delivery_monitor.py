@@ -119,6 +119,52 @@ def test_completed_delivery_is_not_reclassified_by_due_time():
     assert payload["summary"]["attention"] == 0
 
 
+def test_unverified_delivery_becomes_incomplete_after_due_time():
+    now = datetime(2026, 9, 8, 12, tzinfo=timezone.utc)
+    row = plan_row(
+        "unverified_after_deadline",
+        8,
+        10,
+        job_id=13,
+        job_status="success",
+        job_completion_status="unverified",
+        job_rows_fetched=20,
+        job_rows_inserted=20,
+    )
+    payload = DeliveryMonitorService(
+        repository=FakeRepository([row]),
+        builder=FakeBuilder(),
+        now_factory=lambda: now,
+    ).today(date(2026, 9, 8))
+
+    assert payload["items"][0]["delivery_status"] == "incomplete"
+    assert payload["items"][0]["attention"] is True
+    assert payload["summary"]["attention"] == 1
+
+
+def test_partial_intraday_delivery_waits_until_its_deadline():
+    now = datetime(2026, 9, 8, 12, tzinfo=timezone.utc)
+    row = plan_row(
+        "still_publishing",
+        8,
+        14,
+        job_id=14,
+        job_status="success",
+        job_completion_status="incomplete",
+        job_rows_fetched=1200,
+        job_rows_inserted=1200,
+    )
+    payload = DeliveryMonitorService(
+        repository=FakeRepository([row]),
+        builder=FakeBuilder(),
+        now_factory=lambda: now,
+    ).today(date(2026, 9, 8))
+
+    assert payload["items"][0]["delivery_status"] == "waiting"
+    assert payload["items"][0]["attention"] is False
+    assert payload["summary"]["attention"] == 0
+
+
 def test_policy_plan_only_schedules_daily_work_on_market_days():
     empty_scheduler = type("Scheduler", (), {"get_jobs": lambda self: []})()
     closed = DeliveryPlanBuilder(
@@ -133,3 +179,24 @@ def test_policy_plan_only_schedules_daily_work_on_market_days():
     assert not any(item["cadence"] == "daily" for item in closed)
     assert any(item["source_type"] == "policy" for item in opened)
     assert any(item["source_type"] == "fanout" for item in opened)
+
+
+def test_t_plus_one_delivery_targets_previous_trade_date(monkeypatch):
+    from collectors.scheduler import create_scheduler
+
+    monkeypatch.setattr(
+        "service.tushare_scheduling._latest_trade_date",
+        lambda _at: "20260907",
+    )
+    plans = DeliveryPlanBuilder(
+        market_open=lambda _day: True,
+        scheduler_factory=lambda: create_scheduler(
+            durabilize=False, set_active=False
+        ),
+    ).build(date(2026, 9, 8))
+    plan = next(
+        item for item in plans if item["source_key"] == "index_daily_finalize"
+    )
+
+    assert plan["expected_for"] == date(2026, 9, 7)
+    assert plan["period_key"] == "2026-09-07"

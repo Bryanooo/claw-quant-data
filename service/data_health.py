@@ -70,11 +70,13 @@ class DataHealthService:
         coverage_service: CoverageService,
         data_service: DataService,
         initialization_service: InitializationService,
+        delivery_service: Any | None = None,
     ):
         self._collection = collection_service
         self._coverage = coverage_service
         self._data = data_service
         self._initialization = initialization_service
+        self._delivery = delivery_service
 
     def overview(self) -> dict[str, Any]:
         collection = self._collection.overview()
@@ -84,7 +86,10 @@ class DataHealthService:
         )
         freshness_by_dataset = {item["dataset"]: item for item in freshness}
         initialization = self._initialization.overview()
-        issues = self._issues(collection, coverage, freshness, initialization)
+        delivery = self._delivery.today() if self._delivery is not None else None
+        issues = self._issues(
+            collection, coverage, freshness, initialization, delivery
+        )
 
         collection_summary = collection["summary"]
         coverage_summary = coverage["summary"]
@@ -319,6 +324,7 @@ class DataHealthService:
         coverage: dict[str, Any],
         freshness: list[dict[str, Any]],
         initialization: dict[str, Any],
+        delivery: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         issues: list[dict[str, Any]] = []
         auditable_names = {
@@ -545,6 +551,26 @@ class DataHealthService:
                     continue
                 missing = int(latest.get("missing_partitions") or 0)
                 partial = int(latest.get("partial_partitions") or 0)
+                pending_until = cls._pending_coverage_deadline(item, delivery)
+                if pending_until is not None:
+                    issues.append(
+                        {
+                            "severity": "info",
+                            "confidence": "planned",
+                            "kind": "coverage_pending",
+                            "resource_type": "dataset",
+                            "resource": item["dataset"],
+                            "scope": f"{latest['start_date']} → {latest['end_date']}",
+                            "detail": (
+                                "当前不完整分区仍处于上游发布与自动复采窗口，"
+                                f"截止时间 {pending_until}"
+                            ),
+                            "action": "等待后续计划轮次；截止后仍不完整将自动升级为故障",
+                            "dataset": item["dataset"],
+                            "partition_details": True,
+                        }
+                    )
+                    continue
                 issues.append(
                     {
                         "severity": "critical",
@@ -635,3 +661,61 @@ class DataHealthService:
             )
         )
         return issues
+
+    @staticmethod
+    def _pending_coverage_deadline(
+        coverage_item: dict[str, Any],
+        delivery: dict[str, Any] | None,
+    ) -> str | None:
+        """Return a deadline when all reported gaps are still publishable.
+
+        Collection-linked audits deliberately evaluate intraday partitions
+        strictly so partial data cannot be promoted as complete. The operator
+        view still respects the final delivery SLA and escalates only after
+        the automatic retry window closes.
+        """
+        if not delivery:
+            return None
+        latest = coverage_item.get("latest") or {}
+        issue_count = int(latest.get("missing_partitions") or 0) + int(
+            latest.get("partial_partitions") or 0
+        )
+        if issue_count <= 0:
+            return None
+        start = str(latest.get("start_date") or "")
+        end = str(latest.get("end_date") or "")
+        recent = {
+            str(value)
+            for value in coverage_item.get("recent_missing") or []
+            if start <= str(value) <= end
+        }
+        pending_dates: set[str] = set()
+        deadlines: list[str] = []
+        dataset = coverage_item["dataset"]
+        for plan in delivery.get("items") or []:
+            if plan.get("attention"):
+                continue
+            if plan.get("delivery_status") not in {
+                "not_due",
+                "queued",
+                "running",
+                "retrying",
+                "waiting",
+                "unverified",
+                "verifying",
+            }:
+                continue
+            expected_for = plan.get("expected_for")
+            if not expected_for:
+                continue
+            if dataset not in _dataset_names_for_interface(
+                str(plan.get("api_name") or "")
+            ):
+                continue
+            expected = str(expected_for)
+            if expected in recent:
+                pending_dates.add(expected)
+                deadlines.append(str(plan.get("due_at") or ""))
+        if len(pending_dates) < issue_count:
+            return None
+        return max(deadlines) if deadlines else None

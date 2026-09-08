@@ -13,9 +13,9 @@
 
 | 编排方式 | 接口数 | 落库方式 |
 |---|---:|---|
-| 专项采集器 | 42 | 领域业务表，按主键 UPSERT |
+| 专项采集器 | 41 | 领域业务表，按主键 UPSERT |
 | 契约策略任务 | 123 | 原始层幂等留存；94 个通用接口同步写入各自强类型标准表，专项接口路由到领域表 |
-| 周期全量扇出 | 18 | 冻结依赖宇宙，跨有界父子批次自动续跑 |
+| 周期全量扇出 | 19 | 冻结依赖宇宙，跨有界父子批次自动续跑 |
 | 暂不周期自动运行 | 17 | 高基数历史基线和需要明确范围的接口按需运行 |
 
 暂不自动运行不是权限或实现缺失，而是系统尚不能证明自动请求完整、安全：
@@ -32,6 +32,29 @@
 契约明确的代码/枚举扇出接口建立白名单规划；接口清单可由
 `GET /api/v1/collection-batches/fanout-definitions` 查询。低频权限、二维因子参数、
 缺失依赖清单或契约不足的接口仍不会进入批量队列。
+
+### 覆盖规则版本化与无损重审
+
+覆盖规则带有显式 `revision`。当参考宇宙、发布时间或完整性阈值经官方契约和真实
+数据验证后发生变化，Scheduler 会自动找出旧版本产生的 `gaps` 审计。只有采集任务
+本身已经具备 `verified=true` 的分页/范围耗尽证据时，系统才把关联 Auditor 任务原地
+重排队；这个过程不调用 Tushare、不重写业务数据，并在同一事务中把采集任务切换为
+`verifying`，避免控制台继续展示过期结论。
+
+2026-09-08 的 `index_daily` 复核确认两项契约边界：官方接口明确不包含申万指数，
+因此参考宇宙排除 `market=SW`，申万日线由 `sw_daily` 独立负责；CSI/CNI 中的海外及
+跨市场指数在部分 SSE 开市日会因当地休市不发布，相邻日真实截面验证的最低正常比例
+约为 87%，故告警阈值设为 85%。该阈值仍会拒绝 8,000 行上游截断或丢失一个 5,000
+行分页的结果。
+
+`index_basic` 没有完整的历史退市/失效字段，因此不能把今天的指数清单当作三十年前
+的精确截面。与初始化契约一致，`index_daily` 只在最近 120 天启用当前参考宇宙的
+严格截面阈值；更早的逐日历史仍必须具备成功、分页耗尽和日期回显证据，并检查日期
+分区存在，但不会因今天的指数清单变化被反向判错。
+
+周线、月线及日更周/月线任务按 `trade_date + freq + source` 精确核对落库行数，并把
+官方单次 6,000 行上限作为失败关闭边界；旧的正行数任务可由专项完成证据对账器
+无上游请求地升级，不再长期显示为 `unverified`。
 
 ## 受控父子批次
 
@@ -243,6 +266,21 @@ Worker 领取；数据库触发器在每次子任务变化后汇总数量、行�
 - 完整回归在 Docker 与真实 PostgreSQL 上通过 213 项测试；最终历史任务无
   `queued`/`running`/`failed`，历史扇出无活动或未解决状态，最近两天无疑似截断。
 
+### 2026-09-08 引用数据与概念成分截断治理
+
+- `index_basic` 官方单次上限为 8,000 行，当前 CSI 市场单独请求已经精确触顶；
+  旧的无参数周任务只能留下 5,888 条 CSI 记录。现在按市场采集，并对 CSI 使用
+  官方类别维度二次分区；发现样本必须完全包含于类别并集，任何子请求触顶或忽略
+  参数都会在写库前失败。全部分区组成一个原子快照，真实验证得到 11,707 条，
+  其中 CSI 8,941 条。
+- `ths_member` 无参数请求精确返回 6,000 行，但只覆盖两个宽基板块，不能代表完整
+  宇宙。真实数据证明该接口也返回行业、主题、宽基等非 N 类型成分，因此自动任务
+  冻结本地完整 `ths_index` 的 2,517 个板块，并以一个板块一个持久化子任务执行；
+  每个子任务验证请求分区回显且必须低于 6,000 行。
+  无 `ts_code`/`con_code` 的直接调用在发出网络请求前即被拒绝。
+- 两类修复都保留完整性保护；没有通过调高或关闭整数上限规则掩盖问题。专项快照
+  和周期扇出会分别在任务、活动及今日交付视图中展示严格完成证据。
+
 ### 2026-09-03 周/月指数周期修复
 
 旧策略把 `index_weekly` 和 `index_monthly` 当作必须逐指数代码扇出的手工接口，
@@ -446,6 +484,7 @@ PostgreSQL 的 `text` 和 `jsonb` 不能表示 NUL 字符。通用与专项采�
 - 完整采集与 checkpoint：[collectors/tushare_raw.py](../../collectors/tushare_raw.py)
 - 通用/专项共享限流：[service/tushare_rate_limit.py](../../service/tushare_rate_limit.py)
 - 采集后审计映射：[service/collection_jobs/verification.py](../../service/collection_jobs/verification.py)
+- 覆盖规则版本重审：[service/data_coverage/reconciliation.py](../../service/data_coverage/reconciliation.py)
 - 队列 Worker：[service/collection_jobs/worker.py](../../service/collection_jobs/worker.py)
 - 受控扇出规划：[service/collection_jobs/fanout.py](../../service/collection_jobs/fanout.py)
 - 全量扇出活动：[service/collection_jobs/fanout_campaigns.py](../../service/collection_jobs/fanout_campaigns.py)

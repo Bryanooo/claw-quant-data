@@ -27,7 +27,7 @@ DEDICATED_SCHEDULED_APIS = {
     "index_dailybasic", "index_global", "monthly", "new_share", "sge_basic",
     "sge_daily", "st", "stk_limit", "stk_weekly_monthly", "stock_basic",
     "stock_company", "stock_hsgt", "stock_st", "suspend_d", "ths_daily",
-    "ths_member", "trade_cal", "weekly",
+    "trade_cal", "weekly",
 }
 
 # One scheduler run can populate a normal endpoint and its VIP alias. Keeping
@@ -75,7 +75,6 @@ DEDICATED_RUN_IDS: dict[str, tuple[str, ...]] = {
     "stock_st": ("stock_st_daily",),
     "suspend_d": ("suspend_d_daily",),
     "ths_daily": ("ths_daily_daily",),
-    "ths_member": ("ths_member_weekly",),
     "trade_cal": ("trade_cal_daily",),
     "weekly": ("stk_weekly_weekly_fri",),
 }

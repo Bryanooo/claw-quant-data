@@ -37,7 +37,12 @@ _SCHEDULED_DAILY_DATASETS = {
     "bak_basic_daily": "stock_daily_basic",
     "stk_limit_daily": "stock_limit",
     "index_daily_daily": "index_daily",
+    "index_dailybasic_daily": "index_dailybasic",
     "ths_daily_daily": "industry_daily",
+}
+
+_SCHEDULED_PREVIOUS_TRADE_DATASETS = {
+    "index_daily_finalize": "index_daily",
 }
 
 _SCHEDULED_FINANCE_DATASETS = {
@@ -96,6 +101,13 @@ class CollectionVerificationPlanner:
             if schedule_id in _SCHEDULED_DAILY_DATASETS:
                 dataset_name = _SCHEDULED_DAILY_DATASETS[schedule_id]
                 target = scheduled_for.date()
+            elif schedule_id in _SCHEDULED_PREVIOUS_TRADE_DATASETS:
+                from service.tushare_scheduling import _latest_trade_date
+
+                dataset_name = _SCHEDULED_PREVIOUS_TRADE_DATASETS[schedule_id]
+                target = date.fromisoformat(
+                    _latest_trade_date(scheduled_for.date() - timedelta(days=1))
+                )
             elif schedule_id in _SCHEDULED_FINANCE_DATASETS:
                 dataset_name = _SCHEDULED_FINANCE_DATASETS[schedule_id]
                 target = _financial_period(scheduled_for.date())

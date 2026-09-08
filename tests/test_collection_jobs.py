@@ -307,6 +307,27 @@ def test_verification_planner_skips_single_security_and_maps_finance_schedule():
     assert verification.start_date.isoformat() == "2026-09-30"
 
 
+def test_verification_planner_maps_t_plus_one_schedule_to_previous_trade_date(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "service.tushare_scheduling._latest_trade_date",
+        lambda _at: "20260907",
+    )
+    verification = CollectionVerificationPlanner().plan(
+        make_job(
+            task_name="scheduled_collector",
+            parameters={
+                "schedule_id": "index_daily_finalize",
+                "scheduled_for": "2026-09-08T09:35:00+08:00",
+            },
+        )
+    )
+
+    assert verification.dataset_name == "index_daily"
+    assert verification.start_date == date(2026, 9, 7)
+
+
 def test_verification_planner_maps_complete_interface_partition():
     verification = CollectionVerificationPlanner().plan(
         make_job(
@@ -715,7 +736,7 @@ class FanoutRepository:
         assert source in {
             "stock", "convertible_bond", "fund", "index", "pro_data",
             "ci_index", "sw_l3_index", "bc_bond", "etf_sh", "etf_sz",
-            "tdx_index", "factor_name",
+            "tdx_index", "ths_index", "factor_name",
         }
         self.as_of = as_of
         return self.values
@@ -764,6 +785,28 @@ def test_fanout_planner_filters_dependency_universe_at_campaign_boundary():
     parameters, _children, _options = repository.created
     assert repository.as_of == date(2026, 9, 5)
     assert parameters["plan"]["universe_as_of"] == "2026-09-05"
+
+
+def test_ths_member_fanout_uses_one_durable_child_per_board():
+    repository = FanoutRepository(["885800.TI", "885801.TI"])
+    planner = FanoutPlanner(repository, TASKS)
+
+    planner.create_batch(
+        {"api_name": "ths_member", "offset": 0, "max_children": 2},
+        idempotency_key="ths-member-complete-concept-universe",
+    )
+
+    parameters, children, _options = repository.created
+    assert parameters["plan"]["universe_source"] == "ths_index"
+    assert parameters["plan"]["universe_total"] == 2
+    assert [
+        child.parameters["parameters"]["ts_code"] for child in children
+    ] == ["885800.TI", "885801.TI"]
+    assert all(
+        child.handler.handler_key
+        == "specialized:collectors.index.ths_member.ThsMemberCollector"
+        for child in children
+    )
 
 
 def test_fanout_planner_requires_bounded_scope_and_rejects_wide_window():

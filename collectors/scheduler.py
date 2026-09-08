@@ -60,6 +60,8 @@ _CONTROL_JOB_IDS = {
     "collection_initialization_reconciler",
     "fanout_campaign_reconciler",
     "delivery_plan_reconciler",
+    "scheduled_completion_reconciler",
+    "coverage_rule_reconciler",
 }
 _ACTIVE_SCHEDULER: BackgroundScheduler | None = None
 _SCHEDULED_COLLECTION_FUNCTION_NAMES = {
@@ -98,7 +100,6 @@ _SCHEDULED_COLLECTION_FUNCTION_NAMES = {
     "stock_st_daily": "run_stock_st",
     "suspend_d_daily": "run_suspend_d",
     "ths_daily_daily": "run_ths_daily",
-    "ths_member_weekly": "run_ths_member",
     "trade_cal_daily": "run_trade_cal",
 }
 
@@ -175,6 +176,22 @@ def execute_scheduled_collection(
         raise ValueError(f"unknown scheduled collector: {schedule_id}") from exc
     with business_time(scheduled_for):
         rows = int(task() or 0)
+    from service.collection_jobs.scheduled_verification import (
+        verify_scheduled_transport,
+    )
+
+    strict_evidence = verify_scheduled_transport(
+        schedule_id, scheduled_for, rows
+    )
+    if strict_evidence:
+        return TaskExecutionResult(
+            rows_inserted=rows,
+            rows_fetched=rows,
+            completion_status=(
+                "empty" if strict_evidence.get("empty") else "complete"
+            ),
+            completion_evidence=strict_evidence,
+        )
     return TaskExecutionResult(
         rows_inserted=rows,
         rows_fetched=rows,
@@ -296,6 +313,29 @@ def run_collection_schedule_reconciler() -> None:
     submitted = reconcile_collection_schedules()
     if submitted:
         logger.warning("♻️ 已补发 %s 个错过的专项采集任务", submitted)
+
+
+def run_scheduled_completion_reconciler() -> None:
+    from service.collection_jobs.scheduled_reconciliation import (
+        ScheduledCompletionReconciler,
+    )
+
+    result = ScheduledCompletionReconciler().reconcile()
+    if result["promoted"] or result["audits_queued"]:
+        logger.info(
+            "🔎 专项完成证据对账：严格完成 %s，进入覆盖审计 %s",
+            result["promoted"],
+            result["audits_queued"],
+        )
+
+
+def run_coverage_rule_reconciler() -> None:
+    """Re-audit results made obsolete by a versioned coverage-rule fix."""
+    from service.data_coverage.reconciliation import CoverageRuleReconciler
+
+    requeued = CoverageRuleReconciler().reconcile()
+    if requeued:
+        logger.warning("🧭 覆盖规则升级重审：%s", requeued)
 
 
 def _durabilize_collection_jobs(scheduler: BackgroundScheduler) -> None:
@@ -893,13 +933,6 @@ def run_ths_daily():
     return ThsDailyCollector().collect(trade_date=business_now().strftime("%Y%m%d"))
 
 
-@track_run(task_id="ths_member_weekly", task_name="申万行业成分构成-周更新", trigger_type="cron")
-def run_ths_member():
-    from collectors.index.ths_member import ThsMemberCollector
-
-    return ThsMemberCollector().collect()
-
-
 @track_run(task_id="fx_obasic_weekly", task_name="外汇基础信息-周更新", trigger_type="cron")
 def run_fx_obasic():
     from collectors.forex.fx_obasic import FxObasicCollector
@@ -1166,6 +1199,30 @@ def create_scheduler(
         coalesce=True,
         max_instances=1,
         next_run_time=business_now() + timedelta(seconds=5),
+    )
+
+    scheduler.add_job(
+        run_scheduled_completion_reconciler,
+        trigger="interval",
+        minutes=15,
+        id="scheduled_completion_reconciler",
+        name="专项采集完成证据对账",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        next_run_time=business_now() + timedelta(seconds=9),
+    )
+
+    scheduler.add_job(
+        run_coverage_rule_reconciler,
+        trigger="interval",
+        minutes=15,
+        id="coverage_rule_reconciler",
+        name="覆盖规则版本重审",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        next_run_time=business_now() + timedelta(seconds=2),
     )
 
     scheduler.add_job(
@@ -1658,18 +1715,6 @@ def create_scheduler(
         day_of_week="mon-fri",
         id="ths_daily_daily",
         name="申万行业日线-盘后增量",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
-
-    scheduler.add_job(
-        run_ths_member,
-        trigger="cron",
-        day_of_week="mon",
-        hour=7,
-        minute=5,
-        id="ths_member_weekly",
-        name="申万行业成分构成-周更新",
         replace_existing=True,
         misfire_grace_time=3600,
     )

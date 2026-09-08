@@ -20,4 +20,10 @@ def test_rule_reconciler_only_requeues_versioned_obsolete_audits():
     )
 
     assert result == {"index_daily": 37}
-    assert repository.calls == [("index_daily", 4, 100)]
+    assert repository.calls == [
+        ("balancesheet", 2, 100),
+        ("cashflow", 2, 100),
+        ("financial_indicator", 2, 100),
+        ("income", 2, 100),
+        ("index_daily", 4, 100),
+    ]

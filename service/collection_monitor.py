@@ -148,6 +148,32 @@ class CollectionMonitorRepository:
         )
         return {row["task_id"]: row for row in rows}
 
+    def latest_scheduled_jobs(self) -> dict[str, dict]:
+        """Return the durable queue record for each dedicated schedule.
+
+        Early scheduled jobs predate the canonical ``api_name`` column
+        population.  Their schedule identity and strict completion evidence
+        are still durable in ``parameters``.  Reading them by ``schedule_id``
+        keeps the operator view truthful without rewriting historical rows.
+        """
+        rows = query(
+            """
+            SELECT DISTINCT ON (parameters->>'schedule_id')
+                   job_id, task_name, parameters, status, attempt, max_attempts,
+                   rows_inserted, rows_fetched, api_name, cadence, period_key,
+                   expected_for, completion_status, completion_evidence,
+                   error_message, created_at, started_at, finished_at,
+                   recheck_of_job_id, recheck_root_job_id, recheck_generation,
+                   job_kind, child_total, child_queued, child_running,
+                   child_succeeded, child_failed
+            FROM sys_collection_job
+            WHERE task_name='scheduled_collector'
+              AND parameters->>'schedule_id' IS NOT NULL
+            ORDER BY parameters->>'schedule_id', created_at DESC, job_id DESC
+            """
+        )
+        return {row["parameters"]["schedule_id"]: row for row in rows}
+
     def latest_fanout_campaigns(self) -> dict[str, dict]:
         rows = query(
             """
@@ -428,6 +454,7 @@ class CollectionMonitorService:
     def overview(self) -> dict[str, Any]:
         jobs = self._repository.latest_interface_jobs()
         runs = self._repository.latest_dedicated_runs()
+        scheduled_jobs = self._repository.latest_scheduled_jobs()
         campaigns = self._repository.latest_fanout_campaigns()
         unresolved_failures = self._repository.unresolved_partition_failures()
         service_rows = self._repository.service_health()
@@ -466,6 +493,11 @@ class CollectionMonitorService:
                     for api_name in {contract.api_name, *canonical_api_names}
                     if api_name in jobs
                 ]
+                queue_candidates.extend(
+                    scheduled_jobs[task_id]
+                    for task_id in DEDICATED_RUN_IDS.get(contract.api_name, ())
+                    if task_id in scheduled_jobs
+                )
                 queue_job = (
                     max(
                         queue_candidates,

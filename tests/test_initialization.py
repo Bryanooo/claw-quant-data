@@ -6,6 +6,7 @@ from service.collection_jobs.models import InvalidTaskParametersError
 from service.initialization.service import (
     CATALOG_MONTHLY_WINDOW_HISTORY,
     CATALOG_WINDOW_HISTORY,
+    FINANCE_TASKS,
     FULL_HISTORY_START,
     InitializationService,
     PLANNING_BATCH_SIZE,
@@ -365,6 +366,43 @@ def test_finance_history_includes_verified_auxiliary_period_collectors():
         for task_name, parameters, _kwargs in jobs.calls
         if task_name == "tushare_interface"
     )
+    core_steps = [
+        item for item in repository.collection_step_options
+        if item["step_key"].startswith("finance:")
+        and not any(
+            name in item["step_key"]
+            for name in ("disclosure_date", "express", "forecast", "fina_mainbz")
+        )
+    ]
+    assert core_steps
+    assert all(item["allow_empty"] is False for item in core_steps)
+
+
+def test_old_finance_history_accepts_only_strictly_verified_empty_periods():
+    repository = PlanningRepository()
+    jobs = PlanningJobs()
+    service = InitializationService(
+        repository=repository, job_service=jobs, coverage_service=PlanningCoverage()
+    )
+
+    assert service._plan_finance_history(
+        campaign(
+            history_start=date(1990, 12, 31),
+            history_end=date(1991, 5, 1),
+            current_phase=2,
+            phase_name="finance_history",
+        ),
+        set(),
+    ) is True
+
+    core_steps = [
+        item for item in repository.collection_step_options
+        if item["step_key"].startswith("finance:")
+        and any(task_name in item["step_key"] for task_name in FINANCE_TASKS)
+    ]
+    assert core_steps
+    assert all(item["allow_empty"] is True for item in core_steps)
+    assert all(item["require_verified"] is True for item in core_steps)
 
 
 def test_large_history_planning_is_bounded_per_reconcile():

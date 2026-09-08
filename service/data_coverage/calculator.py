@@ -148,10 +148,19 @@ class CoverageCalculator:
                 and expected_entities <= 20
                 and observed.entity_count >= expected_entities - 1
             )
+            verified_empty_too_recent = bool(
+                observed
+                and observed.verified_empty
+                and rule.verified_empty_min_age_days is not None
+                and partition_date
+                >= reference_as_of
+                - timedelta(days=rule.verified_empty_min_age_days - 1)
+            )
             if expected and observed:
                 status = (
                     "partial"
                     if observed.known_incomplete
+                    or verified_empty_too_recent
                     or (
                         rule.min_entity_ratio is not None
                         and entity_ratio is not None
@@ -247,6 +256,9 @@ class CoverageCalculator:
                 ),
                 "verified_empty_partitions": sum(
                     item.verified_empty for item in actual.values()
+                ),
+                "verified_empty_min_age_days": (
+                    rule.verified_empty_min_age_days
                 ),
                 "known_incomplete_partitions": sum(
                     item.known_incomplete for item in actual.values()

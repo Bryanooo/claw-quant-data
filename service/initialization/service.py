@@ -16,6 +16,7 @@ from service.collection_jobs.models import (
     JobConflictError,
     JobNotFoundError,
 )
+from service.clock import business_now
 from service.data_coverage.service import CoverageService
 from service.initialization.repository import InitializationRepository
 from service.history_baselines import (
@@ -24,6 +25,7 @@ from service.history_baselines import (
     LIBOR_CURRENCIES,
     INITIALIZATION_STRICT_COVERAGE_LOOKBACK_DAYS,
     INITIALIZATION_TRANSPORT_VERIFIED_DATASETS,
+    FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS,
     catalog_history_partitions,
 )
 from service.config import (
@@ -806,7 +808,13 @@ class InitializationService:
                     step_key,
                     task_name,
                     {"period": compact},
-                    allow_empty=False,
+                    allow_empty=(
+                        period
+                        < business_now().date()
+                        - timedelta(
+                            days=FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS - 1
+                        )
+                    ),
                     require_verified=True,
                     period_key=compact,
                     expected_for=period,

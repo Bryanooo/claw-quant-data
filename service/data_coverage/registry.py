@@ -10,6 +10,7 @@ from service.data_coverage.models import (
 )
 from service.data_service.models import DateStorage
 from service.data_service.registry import DATASETS
+from service.history_baselines import FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS
 
 
 class CoverageRuleRegistry:
@@ -52,6 +53,7 @@ def _rule(
     min_entity_ratio: float | None = None,
     scheduled: bool = True,
     accept_verified_empty: bool = False,
+    verified_empty_min_age_days: int | None = None,
     revision: int = 1,
     entity_reference_max_age_days: int | None = None,
 ) -> CoverageRule:
@@ -73,6 +75,7 @@ def _rule(
         min_entity_ratio=min_entity_ratio,
         scheduled=scheduled,
         accept_verified_empty=accept_verified_empty,
+        verified_empty_min_age_days=verified_empty_min_age_days,
         revision=revision,
         entity_reference_max_age_days=entity_reference_max_age_days,
     )
@@ -207,8 +210,14 @@ _EXPLICIT_RULES = [
                 # listed later.  For those partitions, exhaustive offset
                 # pagination plus persisted partition presence is the proof;
                 # keep entity-ratio checks for recent research history.
-                entity_reference_max_age_days=1825,
-                revision=2,
+                entity_reference_max_age_days=(
+                    FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS
+                ),
+                accept_verified_empty=True,
+                verified_empty_min_age_days=(
+                    FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS
+                ),
+                revision=3,
                 description=(
                     "近五年按披露截止日和上市公司截面检查；更早历史按"
                     "分页穷尽和报告期分区存在性检查"

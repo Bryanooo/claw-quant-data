@@ -56,8 +56,10 @@ def test_financial_rules_only_compare_recent_point_in_time_universe():
     ):
         rule = COVERAGE_RULES.get(dataset_name)
         assert rule.strategy is CoverageStrategy.REPORT_QUARTERLY
-        assert rule.revision == 2
+        assert rule.revision == 3
         assert rule.entity_reference_max_age_days == 1825
+        assert rule.accept_verified_empty is True
+        assert rule.verified_empty_min_age_days == 1825
 
 
 def test_old_financial_history_uses_exhausted_partition_not_current_universe():
@@ -75,6 +77,38 @@ def test_old_financial_history_uses_exhausted_partition_not_current_universe():
 
     assert result.status == "complete"
     assert result.partitions[0].expected_entity_count is None
+
+
+def test_financial_verified_empty_is_only_accepted_for_old_history():
+    checked_rule = COVERAGE_RULES.get("income")
+    reference_as_of = date(2026, 9, 8)
+    old = CoverageCalculator(FakeCoverageRepository(
+        actual=[ActualPartition(
+            date(1991, 3, 31), 0, None, verified_empty=True
+        )],
+    )).audit(
+        checked_rule,
+        date(1991, 3, 31),
+        date(1991, 3, 31),
+        as_of=reference_as_of,
+        entity_reference_as_of=reference_as_of,
+    )
+    recent = CoverageCalculator(FakeCoverageRepository(
+        actual=[ActualPartition(
+            date(2025, 12, 31), 0, None, verified_empty=True
+        )],
+    )).audit(
+        checked_rule,
+        date(2025, 12, 31),
+        date(2025, 12, 31),
+        as_of=reference_as_of,
+        entity_reference_as_of=reference_as_of,
+    )
+
+    assert old.status == "complete"
+    assert old.partitions[0].status == "present"
+    assert recent.status == "gaps"
+    assert recent.partitions[0].status == "partial"
 
 
 def test_margin_rules_detect_staggered_exchange_publication():

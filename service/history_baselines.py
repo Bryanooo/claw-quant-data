@@ -28,6 +28,10 @@ LIBOR_CURRENCIES = ("USD", "EUR", "JPY", "GBP", "CHF")
 # therefore applies the stricter entity audit to its newest rolling window while
 # every older partition still has an individual transport-completeness step.
 INITIALIZATION_STRICT_COVERAGE_LOOKBACK_DAYS = 120
+# stock_basic cannot reconstruct the company universe represented by very old
+# Tushare financial statements.  A verified empty report period is acceptable
+# only outside this recent cross-sectional validation window.
+FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS = 1825
 INITIALIZATION_TRANSPORT_VERIFIED_DATASETS = frozenset(
     {
         "stock_daily",

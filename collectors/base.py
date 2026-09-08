@@ -34,7 +34,12 @@ import calendar
 import pandas as pd
 import psycopg2
 import psycopg2.extras
-from service.config import DB_CONFIG, get_env_tushare_token
+from service.config import (
+    DB_CONFIG,
+    TUSHARE_CONNECT_TIMEOUT_SECONDS,
+    TUSHARE_READ_TIMEOUT_SECONDS,
+    get_env_tushare_token,
+)
 from service.collection_jobs.context import is_durable_job_active
 from service.clock import business_now
 from service.tushare_rate_limit import install_distributed_rate_limit
@@ -387,7 +392,13 @@ class BaseCollector(ABC):
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         self.pro._DataApi__session = session
-        self.pro._DataApi__timeout = 60
+        # Requests accepts a ``(connect, read)`` timeout tuple.  A dead Docker
+        # route or DNS socket must fail quickly, while a connected Tushare
+        # response still gets enough time to return a large page.
+        self.pro._DataApi__timeout = (
+            TUSHARE_CONNECT_TIMEOUT_SECONDS,
+            TUSHARE_READ_TIMEOUT_SECONDS,
+        )
         self.pro._DataApi__http_session = session
 
         self.logger.info(f"✅ {self.__class__.__name__} 初始化完成")

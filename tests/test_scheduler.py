@@ -41,7 +41,38 @@ def test_index_daily_schedule_collects_full_market_with_offset_exhaustion(monkey
 
     assert scheduler_module.run_index_daily.__wrapped__() == 9206
     assert calls == [
-        {"trade_date": "20260903", "page_size": 1000, "max_pages": 100}
+        {"trade_date": "20260903", "page_size": 5000, "max_pages": 100}
+    ]
+
+
+def test_index_daily_t_plus_one_finalize_recollects_previous_open_day(monkeypatch):
+    import collectors.index.daily as index_daily_module
+
+    calls = []
+
+    class Result:
+        stored_rows = 9206
+        evidence = {"pages_completed": 2, "exhausted": True}
+
+    class FakeCollector:
+        def run_offset_paginated(self, **parameters):
+            calls.append(parameters)
+            return Result()
+
+    monkeypatch.setattr(index_daily_module, "IndexDailyCollector", FakeCollector)
+    monkeypatch.setattr(
+        scheduler_module,
+        "business_now",
+        lambda: datetime(2026, 9, 8, 9, 35, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    monkeypatch.setattr(
+        "service.tushare_scheduling._latest_trade_date",
+        lambda value: "20260907" if str(value) == "2026-09-07" else "unexpected",
+    )
+
+    assert scheduler_module.run_index_daily_finalize.__wrapped__() == 9206
+    assert calls == [
+        {"trade_date": "20260907", "page_size": 5000, "max_pages": 100}
     ]
 
 
@@ -69,10 +100,11 @@ def test_scheduler_registers_expected_jobs_with_tracking():
     scheduler = create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}
 
-    assert len(jobs) == 43
+    assert len(jobs) == 44
     collection_job_ids = (
         "daily_daily",
         "index_daily_daily",
+        "index_daily_finalize",
         "fx_daily_daily",
         "sge_daily_daily",
     )
@@ -92,6 +124,7 @@ def test_scheduler_registers_expected_jobs_with_tracking():
     assert jobs["service_heartbeat"].func is scheduler_module.run_scheduler_heartbeat
     assert "hour='16,19,23'" in str(jobs["daily_daily"].trigger)
     assert "hour='16,19,23'" in str(jobs["bak_basic_daily"].trigger)
+    assert "hour='9', minute='35'" in str(jobs["index_daily_finalize"].trigger)
     for job_id in (
         "income_quarterly",
         "balancesheet_quarterly",

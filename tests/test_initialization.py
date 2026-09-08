@@ -460,9 +460,10 @@ def test_full_history_verification_respects_dataset_start_dates():
 def test_full_initialization_plans_verified_whole_universe_fanouts():
     repository = PlanningRepository()
     fanout = PlanningFanout()
+    jobs = PlanningJobs()
     service = InitializationService(
         repository=repository,
-        job_service=PlanningJobs(),
+        job_service=jobs,
         coverage_service=PlanningCoverage(),
         fanout_service=fanout,
     )
@@ -486,14 +487,12 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "stk_rewards",
         "top10_floatholders",
         "top10_holders",
-        "fund_nav",
-        "fund_portfolio",
         "index_weight",
         "fut_weekly_monthly",
         "stk_week_month_adj",
     ]
     assert all(call[0]["page_size"] == 200 for call in fanout.calls)
-    assert repository.steps == [
+    assert repository.steps[:16] == [
         "fanout:cb_rate",
         "fanout:cb_rating",
         "fanout:ci_index_member",
@@ -507,8 +506,6 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "fanout:stk_rewards",
         "fanout:top10_floatholders",
         "fanout:top10_holders",
-        "fanout:fund_nav",
-        "fanout:fund_portfolio",
         "fanout:index_weight",
         "fanout:fut_weekly_monthly",
         "fanout:stk_week_month_adj",
@@ -527,7 +524,25 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "start_date": "2026-07-29",
         "end_date": "2026-08-28",
     }
-    assert requests["fund_nav"]["start_date"] == "2025-08-28"
+    market_calls = [call for call in jobs.calls if call[0] == "tushare_interface"]
+    fund_nav = [call for call in market_calls if call[1]["api_name"] == "fund_nav"]
+    assert len(fund_nav) == 366
+    assert fund_nav[0][1]["parameters"] == {"nav_date": "20250828"}
+    assert fund_nav[-1][1]["parameters"] == {"nav_date": "20260828"}
+    assert all(
+        call[1]["page_size"] == 5000 and call[1]["max_pages"] == 100
+        for call in fund_nav
+    )
+    fund_portfolio = [
+        call for call in market_calls if call[1]["api_name"] == "fund_portfolio"
+    ]
+    assert len(fund_portfolio) == 1
+    assert fund_portfolio[0][1]["parameters"] == {"period": "20260331"}
+    assert fund_portfolio[0][1]["max_pages"] == 500
+    progress = service._decorate(
+        campaign(profile="full", current_phase=5, phase_name="fanout_baseline")
+    )
+    assert progress["logical_total_steps"] == 383
 
 
 def test_non_full_initialization_skips_expensive_whole_universe_fanouts():

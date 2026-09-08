@@ -16,8 +16,5 @@ CREATE TABLE IF NOT EXISTS tushare_raw_record (
 CREATE INDEX IF NOT EXISTS idx_tushare_raw_record_api_collected
     ON tushare_raw_record (api_name, collected_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_tushare_raw_record_payload
-    ON tushare_raw_record USING GIN (payload);
-
 COMMENT ON TABLE tushare_raw_record IS
     'Catalog-driven Tushare interface records; payload preserves upstream JSON';

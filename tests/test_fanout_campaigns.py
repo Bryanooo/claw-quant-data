@@ -27,8 +27,9 @@ class SeedJobRepository:
     def __init__(self):
         self.created = None
 
-    def list_fanout_values(self, source):
+    def list_fanout_values(self, source, *, as_of=None):
         assert source == "stock"
+        assert as_of is None
         return ["000001.SZ"]
 
     def create(self, task_name, parameters, **options):

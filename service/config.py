@@ -86,6 +86,18 @@ TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS = _get_float(
     "TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS",
     0.5,
 )
+TUSHARE_CONNECT_TIMEOUT_SECONDS = _get_float(
+    "TUSHARE_CONNECT_TIMEOUT_SECONDS",
+    5.0,
+)
+TUSHARE_READ_TIMEOUT_SECONDS = _get_float(
+    "TUSHARE_READ_TIMEOUT_SECONDS",
+    60.0,
+)
+if TUSHARE_CONNECT_TIMEOUT_SECONDS <= 0:
+    raise ValueError("TUSHARE_CONNECT_TIMEOUT_SECONDS must be greater than zero")
+if TUSHARE_READ_TIMEOUT_SECONDS <= 0:
+    raise ValueError("TUSHARE_READ_TIMEOUT_SECONDS must be greater than zero")
 
 
 def get_env_tushare_token() -> str | None:

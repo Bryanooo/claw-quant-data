@@ -3,6 +3,7 @@
 import json
 from collections.abc import Callable
 from contextlib import contextmanager
+from datetime import date
 from typing import Any
 
 import psycopg2
@@ -218,16 +219,26 @@ class JobRepository:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def list_fanout_values(self, source: str) -> list[str]:
+    def list_fanout_values(
+        self, source: str, *, as_of: date | None = None
+    ) -> list[str]:
         """Return a fan-out universe from an allow-listed local dependency.
 
         SQL is intentionally selected from a closed map.  The batch API never
-        accepts table or column names from callers.
+        accepts table or column names from callers.  Point-in-time filters keep
+        full initialization from querying entities that were not yet listed or
+        were already terminated at the campaign boundary.
         """
         queries = {
             "stock": """
                 SELECT ts_code FROM stock_basic
                 WHERE ts_code IS NOT NULL
+                  AND (
+                    %s::DATE IS NULL OR (
+                      (NULLIF(list_date, '') IS NULL OR list_date <= TO_CHAR(%s::DATE, 'YYYYMMDD'))
+                      AND (NULLIF(delist_date, '') IS NULL OR delist_date >= TO_CHAR(%s::DATE, 'YYYYMMDD'))
+                    )
+                  )
                 ORDER BY ts_code
             """,
             "index": """
@@ -244,12 +255,33 @@ class JobRepository:
                 ORDER BY index_code
             """,
             "convertible_bond": """
-                SELECT DISTINCT ts_code FROM tushare_norm_cb_basic
-                WHERE ts_code IS NOT NULL ORDER BY ts_code
+                WITH latest AS (
+                  SELECT DISTINCT ON (ts_code) ts_code, list_date, delist_date
+                  FROM tushare_norm_cb_basic
+                  WHERE ts_code IS NOT NULL
+                  ORDER BY ts_code, _source_collected_at DESC
+                )
+                SELECT ts_code FROM latest
+                WHERE %s::DATE IS NULL OR (
+                  (list_date IS NULL OR list_date <= %s::DATE)
+                  AND (delist_date IS NULL OR delist_date >= %s::DATE)
+                )
+                ORDER BY ts_code
             """,
             "fund": """
-                SELECT DISTINCT ts_code FROM tushare_norm_fund_basic
-                WHERE ts_code IS NOT NULL ORDER BY ts_code
+                WITH latest AS (
+                  SELECT DISTINCT ON (ts_code)
+                    ts_code, list_date, found_date, delist_date, due_date
+                  FROM tushare_norm_fund_basic
+                  WHERE ts_code IS NOT NULL
+                  ORDER BY ts_code, _source_collected_at DESC
+                )
+                SELECT ts_code FROM latest
+                WHERE %s::DATE IS NULL OR (
+                  (COALESCE(list_date, found_date) IS NULL OR COALESCE(list_date, found_date) <= %s::DATE)
+                  AND (COALESCE(delist_date, due_date) IS NULL OR COALESCE(delist_date, due_date) >= %s::DATE)
+                )
+                ORDER BY ts_code
             """,
             "bc_bond": """
                 SELECT DISTINCT ts_code FROM tushare_norm_bc_bestotcqt
@@ -284,7 +316,10 @@ class JobRepository:
         except KeyError as exc:
             raise ValueError(f"unsupported fan-out universe: {source}") from exc
         with self._connection() as connection, connection.cursor() as cursor:
-            cursor.execute(query)
+            if source in {"stock", "convertible_bond", "fund"}:
+                cursor.execute(query, (as_of, as_of, as_of))
+            else:
+                cursor.execute(query)
             return [str(row[0]) for row in cursor.fetchall()]
 
     def create_batch(

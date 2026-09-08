@@ -810,7 +810,10 @@ class FanoutCampaignService:
                     source_values = (
                         list(definition.static_values)
                         if definition.source == "static"
-                        else self._job_repository.list_fanout_values(definition.source)
+                        else self._job_repository.list_fanout_values(
+                            definition.source,
+                            as_of=campaign.get("expected_for"),
+                        )
                     )
                     if not source_values and definition.source == "factor_name":
                         seed = self._ensure_factor_value_universe_seed(campaign)

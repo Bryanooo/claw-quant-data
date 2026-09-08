@@ -15,6 +15,7 @@ from pydantic import (
 
 from service.collection_jobs.models import (
     HandlerMetadata,
+    JobHandlerUnavailableError,
     JobHandlerMismatchError,
     InvalidTaskParametersError,
     TaskExecutionResult,
@@ -526,6 +527,16 @@ class TaskRegistry:
             return
         current = self.handler_metadata(job["task_name"], job["parameters"])
         if (
+            persisted_key == current.handler_key
+            and job.get("handler_type") == current.handler_type
+            and _is_newer_handler_version(persisted_version, current.handler_version)
+        ):
+            raise JobHandlerUnavailableError(
+                "worker handler is older than the persisted job: "
+                f"{persisted_key}@{persisted_version} > "
+                f"{current.handler_key}@{current.handler_version}"
+            )
+        if (
             persisted_key != current.handler_key
             or persisted_version != current.handler_version
             or job.get("handler_type") != current.handler_type
@@ -535,6 +546,16 @@ class TaskRegistry:
                 f"{persisted_key}@{persisted_version} != "
                 f"{current.handler_key}@{current.handler_version}"
             )
+
+
+def _is_newer_handler_version(required: str | None, available: str | None) -> bool:
+    """Compare numeric handler versions without guessing for opaque versions."""
+    try:
+        required_parts = tuple(int(item) for item in str(required).split("."))
+        available_parts = tuple(int(item) for item in str(available).split("."))
+    except (TypeError, ValueError):
+        return False
+    return required_parts > available_parts
 
 
 TASKS = TaskRegistry(

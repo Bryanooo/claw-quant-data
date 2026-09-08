@@ -142,6 +142,7 @@ def test_dedicated_monitor_recovers_legacy_queue_job_by_schedule_id():
     assert item["latest"]["source"] == "queue"
     assert item["latest"]["id"] == 135376
     assert item["latest"]["completion_status"] == "complete"
+    assert item["latest"]["expected_for"] == "2026-09-04"
 
 
 def test_collection_monitor_uses_whole_fanout_campaign_not_last_partial_page():

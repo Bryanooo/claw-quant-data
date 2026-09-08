@@ -254,9 +254,9 @@ class DataHealthService:
             )
             latest = (interfaces.get(api_name) or {}).get("latest") or {}
             evidence = latest.get("evidence") or {}
-            period_key = latest.get("period_key")
+            checked_scope = latest.get("expected_for") or latest.get("period_key")
             try:
-                checked_for = date.fromisoformat(str(period_key))
+                checked_for = date.fromisoformat(str(checked_scope))
             except (TypeError, ValueError):
                 checked_for = None
             sla_hours = item.get("freshness_sla_hours")
@@ -309,6 +309,7 @@ class DataHealthService:
             "phase_progress_ratio": campaign.get("progress_ratio", 0.0),
             "phase_completed_steps": campaign.get("completed_steps", 0),
             "phase_failed_steps": campaign.get("failed_steps", 0),
+            "completion_gate": campaign.get("completion_gate"),
             "work_window": campaign.get("work_window"),
             "message": (
                 "全量历史初始化已经完成并通过验收"

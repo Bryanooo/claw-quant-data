@@ -128,6 +128,7 @@ def test_scheduler_registers_expected_jobs_with_tracking():
         scheduler_module.run_coverage_rule_reconciler
     )
     assert "hour='16,19,23'" in str(jobs["daily_daily"].trigger)
+    assert "hour='15-23/1'" in str(jobs["index_daily_daily"].trigger)
     assert "hour='16,19,23'" in str(jobs["bak_basic_daily"].trigger)
     assert "hour='9', minute='35'" in str(jobs["index_daily_finalize"].trigger)
     for job_id in (

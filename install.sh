@@ -8,6 +8,7 @@ ENV_FILE="${PROJECT_DIR}/.env"
 NON_INTERACTIVE=0
 SKIP_TOKEN_CHECK=0
 ENV_TUSHARE_TOKEN="${TUSHARE_TOKEN:-}"
+ENV_APP_REVISION="${APP_REVISION:-}"
 
 info() {
     printf '[INFO] %s\n' "$*"
@@ -205,6 +206,27 @@ wait_for_component() {
     die "等待 ${component} 健康状态超时"
 }
 
+verify_application_images() {
+    local expected_image
+    local service
+    local container_ids
+    local container_id
+    local actual_image
+
+    expected_image="$(docker inspect --format '{{.Image}}' "$(compose ps -q api)")"
+    [[ -n "${expected_image}" ]] || die "无法读取 API 镜像标识"
+    for service in api worker worker-fanout worker-backfill auditor scheduler; do
+        container_ids="$(compose ps -q "${service}")"
+        [[ -n "${container_ids}" ]] || die "应用服务没有运行容器：${service}"
+        while IFS= read -r container_id; do
+            [[ -n "${container_id}" ]] || continue
+            actual_image="$(docker inspect --format '{{.Image}}' "${container_id}")"
+            [[ "${actual_image}" == "${expected_image}" ]] || die \
+                "应用容器镜像不一致：${service}=${actual_image}, api=${expected_image}"
+        done <<< "${container_ids}"
+    done
+}
+
 verify_token() {
     compose run --rm --no-deps scheduler python - <<'PY'
 from service.db import get_pro
@@ -292,6 +314,18 @@ main() {
     ensure_env_value "SERVICE_HEARTBEAT_MAX_AGE_SECONDS" "90"
     ensure_env_value "NOTIFIER_TYPE" "log"
 
+    if [[ -n "${ENV_APP_REVISION}" ]]; then
+        set_env_value "APP_REVISION" "${ENV_APP_REVISION}"
+    elif command -v git >/dev/null 2>&1 && git -C "${PROJECT_DIR}" rev-parse HEAD >/dev/null 2>&1; then
+        revision="$(git -C "${PROJECT_DIR}" rev-parse --short=12 HEAD)"
+        if ! git -C "${PROJECT_DIR}" diff --quiet --ignore-submodules --; then
+            revision="${revision}-dirty"
+        fi
+        set_env_value "APP_REVISION" "${revision}"
+    else
+        ensure_env_value "APP_REVISION" "0.1.0"
+    fi
+
     if [[ -n "${ENV_TUSHARE_TOKEN}" ]]; then
         set_env_value "TUSHARE_TOKEN" "${ENV_TUSHARE_TOKEN}"
         success "已从环境变量写入 Tushare Token"
@@ -348,7 +382,8 @@ main() {
     success "数据库迁移完成，共 ${table_count} 张表"
 
     info "启动 REST API、三个隔离采集 Worker、覆盖 Auditor 与调度器..."
-    compose up -d api worker worker-fanout worker-backfill auditor scheduler
+    compose up -d --force-recreate \
+        api worker worker-fanout worker-backfill auditor scheduler
 
     info "验证调度器到 PostgreSQL 的连接..."
     compose exec -T scheduler python - <<'PY'
@@ -369,6 +404,8 @@ PY
         wait_for_component "${component}"
     done
     success "Scheduler、三个 Worker 资源池、Auditor 进程心跳正常"
+    verify_application_images
+    success "所有应用容器均使用同一镜像"
 
     info "验证 REST API..."
     compose exec -T api python - <<'PY'

@@ -33,6 +33,18 @@ class JobHandlerMismatchError(CollectionJobError):
     retryable = False
 
 
+class JobHandlerUnavailableError(CollectionJobError):
+    """The claiming worker is older than the handler required by the job.
+
+    Rolling deployments can briefly leave old and new workers alive together.
+    An old worker must release a newer job without consuming an attempt so a
+    compatible worker can claim it after the deployment converges.
+    """
+
+    defer_without_failure = True
+    retry_after_seconds = 30
+
+
 class InvalidTaskParametersError(CollectionJobError):
     pass
 

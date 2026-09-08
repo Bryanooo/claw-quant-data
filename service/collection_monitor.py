@@ -265,11 +265,21 @@ class CollectionMonitorRepository:
                     WHERE failed.parent_job_id IS NULL
                       AND recovered_campaign.api_name=failed.api_name
                       AND recovered_campaign.status='success'
+                      AND recovered_campaign.completion_status='complete'
                       AND (
-                            failed.status='failed'
-                         OR recovered_campaign.completion_status='complete'
+                            failed.expected_for IS NULL
+                         OR recovered_campaign.expected_for >= failed.expected_for
                       )
-                      AND recovered_campaign.finished_at > failed.finished_at
+                      AND recovered_campaign.request @>
+                          jsonb_build_object('api_name', failed.api_name)
+                      AND (
+                            COALESCE(failed.parameters->'parameters', '{}'::jsonb)
+                                = '{}'::jsonb
+                         OR recovered_campaign.request @>
+                            COALESCE(
+                                failed.parameters->'parameters', '{}'::jsonb
+                            )
+                      )
                   )
                   AND NOT EXISTS (
                     SELECT 1
@@ -354,6 +364,11 @@ def _queue_latest(job: dict) -> dict[str, Any]:
         "id": job["job_id"],
         "task_id": job["task_name"],
         "period_key": job.get("period_key") or "",
+        "expected_for": (
+            job["expected_for"].isoformat()
+            if hasattr(job.get("expected_for"), "isoformat")
+            else job.get("expected_for")
+        ),
         "status": job["status"],
         "completion_status": completion,
         "completion_reason": reasons.get(completion, completion),

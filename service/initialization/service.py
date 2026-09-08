@@ -621,6 +621,7 @@ class InitializationService:
                 cadence="initialization",
                 period_key=f"initial-{campaign['history_end'].isoformat()}",
                 expected_for=campaign["history_end"],
+                reuse_scope=True,
             )
             self._repository.add_fanout_step(
                 initialization_id,
@@ -899,7 +900,11 @@ class InitializationService:
         catalog = TushareInterfaceCatalog()
         policies = TusharePolicyRegistry()
         for contract in catalog.list():
-            if not contract.collectable or contract.api_name in DEDICATED_SCHEDULED_APIS:
+            if (
+                not contract.collectable
+                or contract.api_name in DEDICATED_SCHEDULED_APIS
+                or contract.api_name in FULL_FANOUT_BASELINES
+            ):
                 continue
             policy = policies.get(contract.api_name)
             if not policy.automatic_safe:
@@ -1046,11 +1051,11 @@ class InitializationService:
             return "running"
         if coverage_status != "success":
             return "failed"
-        return (
-            "complete"
-            if step["audit_status"] in {"complete", "observed_only"}
-            else "failed"
-        )
+        # Historical completion is an acceptance decision, not merely proof
+        # that some rows exist.  ``observed_only`` means no strict expected
+        # partition contract was available, so it must remain visible instead
+        # of activating daily mode as if coverage had been proven.
+        return "complete" if step["audit_status"] == "complete" else "failed"
 
     def _decorate(self, campaign: dict) -> dict:
         result = dict(campaign)
@@ -1072,6 +1077,34 @@ class InitializationService:
         )
         result["phase_index"] = result["current_phase"] + 1
         result["phase_total"] = len(PHASES)
+        completed_campaign = result.get("status") == "completed"
+        final_phase_reached = (
+            int(result.get("current_phase") or 0) == len(PHASES) - 1
+        )
+        current_phase_settled = (
+            int(result.get("failed_steps") or 0) == 0
+            and completed == total
+        )
+        result["completion_gate"] = {
+            "complete": completed_campaign,
+            "requirements": [
+                {
+                    "key": "all_phases_executed",
+                    "met": final_phase_reached and current_phase_settled,
+                    "description": "七个初始化阶段均已执行且没有待处理步骤",
+                },
+                {
+                    "key": "strict_coverage_verified",
+                    "met": completed_campaign,
+                    "description": "最终覆盖审计全部为 complete，无缺失或部分分区",
+                },
+                {
+                    "key": "daily_mode_activated",
+                    "met": completed_campaign,
+                    "description": "验收通过后已原子切换到日常采集模式",
+                },
+            ],
+        }
         work_window = getattr(self._repository, "phase_work_window", None)
         result["work_window"] = (
             work_window(result["initialization_id"], result["current_phase"])

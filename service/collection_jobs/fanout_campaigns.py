@@ -121,6 +121,41 @@ class FanoutCampaignRepository:
                 reusable = cursor.fetchone()
                 if reusable:
                     return dict(reusable), False
+                # Initialization and routine schedules can use an already
+                # completed campaign when it proves the exact same upstream
+                # request with evidence at least as recent as the requested
+                # scope.  Requiring an identical period label here caused a
+                # weekly campaign (for example ``2026-W36``) to be repeated by
+                # initialization (``initial-2026-09-05``), even though both
+                # froze and exhausted the same universe.  The request equality
+                # keeps time-bounded campaigns isolated; the date and plan
+                # comparisons prevent stale or older evidence from being
+                # promoted.
+                if expected_for is not None:
+                    cursor.execute(
+                        """
+                        SELECT *
+                        FROM sys_collection_fanout_campaign
+                        WHERE api_name=%s
+                          AND request=%s::jsonb
+                          AND status='success'
+                          AND completion_status='complete'
+                          AND expected_for >= %s
+                          AND plan_version >= %s
+                        ORDER BY expected_for DESC, plan_version DESC,
+                                 campaign_id DESC
+                        LIMIT 1
+                        """,
+                        (
+                            api_name,
+                            json.dumps(request, ensure_ascii=False),
+                            expected_for,
+                            plan_version,
+                        ),
+                    )
+                    reusable = cursor.fetchone()
+                    if reusable:
+                        return dict(reusable), False
             cursor.execute(
                 """
                 INSERT INTO sys_collection_fanout_campaign(

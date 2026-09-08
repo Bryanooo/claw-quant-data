@@ -592,7 +592,8 @@ def test_recent_verified_empty_event_keeps_dataset_fresh(monkeypatch):
                 "collectable": True,
                 "latest": {
                     "completion_status": "empty",
-                    "period_key": "2026-09-04",
+                    "period_key": "initial-2026-09-05",
+                    "expected_for": "2026-09-04",
                     "evidence": {"verified": True, "bounded_partition": True},
                 },
                 "unresolved_failure": None,

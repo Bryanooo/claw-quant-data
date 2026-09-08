@@ -7,6 +7,7 @@ from service.initialization.service import (
     CATALOG_MONTHLY_WINDOW_HISTORY,
     CATALOG_WINDOW_HISTORY,
     FINANCE_TASKS,
+    FULL_FANOUT_BASELINES,
     FULL_HISTORY_START,
     InitializationService,
     PLANNING_BATCH_SIZE,
@@ -598,6 +599,7 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
     assert all(
         call[1]["cadence"] == "initialization"
         and call[1]["period_key"] == "initial-2026-08-28"
+        and call[1]["reuse_scope"] is True
         for call in fanout.calls
     )
     requests = {call[0]["api_name"]: call[0] for call in fanout.calls}
@@ -628,6 +630,29 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         campaign(profile="full", current_phase=5, phase_name="fanout_baseline")
     )
     assert progress["logical_total_steps"] == 385
+
+
+def test_latest_baseline_excludes_interfaces_owned_by_safe_fanout():
+    repository = PlanningRepository()
+    jobs = PlanningJobs()
+    service = InitializationService(
+        repository=repository,
+        job_service=jobs,
+        coverage_service=PlanningCoverage(),
+    )
+
+    assert service._plan_latest_baseline(
+        campaign(profile="full", current_phase=4, phase_name="latest_baseline"),
+        set(),
+    ) is True
+
+    catalog_calls = {
+        parameters["api_name"]
+        for task_name, parameters, _options in jobs.calls
+        if task_name == "tushare_interface"
+    }
+    assert catalog_calls
+    assert catalog_calls.isdisjoint(FULL_FANOUT_BASELINES)
 
 
 def test_non_full_initialization_skips_expensive_whole_universe_fanouts():
@@ -878,6 +903,46 @@ def test_final_verification_automatically_activates_daily_mode():
     result = service_with(repository).reconcile(9)
 
     assert repository.activated is True
+
+
+def test_final_verification_rejects_observed_only_coverage():
+    repository = FakeRepository(
+        campaign(current_phase=6, phase_name="verification"),
+        [
+            {
+                "resource_type": "coverage",
+                "coverage_status": "success",
+                "audit_status": "observed_only",
+            }
+        ],
+    )
+
+    result = service_with(repository).reconcile(9)
+
+    assert result["status"] == "attention"
+    assert result["failed_steps"] == 1
+    assert repository.activated is False
+
+
+def test_completed_initialization_exposes_a_passed_completion_gate():
+    repository = FakeRepository(
+        campaign(
+            status="completed",
+            current_phase=6,
+            phase_name="verification",
+            planned_steps=10,
+            completed_steps=10,
+        ),
+        [],
+    )
+
+    result = service_with(repository).get(9)
+
+    assert result["completion_gate"]["complete"] is True
+    assert all(
+        requirement["met"]
+        for requirement in result["completion_gate"]["requirements"]
+    )
     assert result["status"] == "completed"
 
 

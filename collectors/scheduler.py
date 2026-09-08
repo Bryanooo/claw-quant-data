@@ -1662,7 +1662,11 @@ def create_scheduler(
     scheduler.add_job(
         run_index_daily,
         trigger="cron",
-        hour="15-20/1",
+        # CSI/CNI index partitions are published in waves. Live runs have
+        # shown that 20:05 can still be materially smaller than the stable
+        # ~10k-row partition, so keep same-day recovery active through 23:05.
+        # The T+1 finalizer remains the last-resort stability pass.
+        hour="15-23/1",
         minute=5,
         day_of_week="mon-fri",
         id="index_daily_daily",

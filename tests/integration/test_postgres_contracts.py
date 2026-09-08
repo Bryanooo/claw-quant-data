@@ -295,6 +295,91 @@ def test_network_failure_defers_the_whole_worker_resource_pool():
             connection.close()
 
 
+def test_later_complete_coverage_audit_resolves_old_incomplete_job():
+    suffix = uuid4().hex
+    expected_for = date(2026, 8, 31)
+    collection_job_id = None
+    coverage_job_id = None
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        repository = JobRepository()
+        job, created = repository.create(
+            "stock_limit",
+            {"trade_date": "20260831"},
+            max_attempts=3,
+            idempotency_key=f"integration-audit-recovery-{suffix}",
+            api_name="stk_limit",
+            cadence="repair",
+            period_key="2026-08-31",
+            expected_for=expected_for,
+            resource_class=f"audit-recovery-{suffix[:8]}",
+        )
+        assert created
+        collection_job_id = job["job_id"]
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='success', completion_status='incomplete',
+                    finished_at=NOW() - INTERVAL '10 minutes'
+                WHERE job_id=%s
+                """,
+                (collection_job_id,),
+            )
+            cursor.execute(
+                """
+                INSERT INTO sys_data_coverage_job(
+                    dataset_name, start_date, end_date, status,
+                    idempotency_key, finished_at
+                ) VALUES ('stock_limit', %s, %s, 'success', %s, NOW())
+                RETURNING job_id
+                """,
+                (
+                    expected_for,
+                    expected_for,
+                    f"integration-audit-recovery-{suffix}",
+                ),
+            )
+            coverage_job_id = cursor.fetchone()[0]
+            cursor.execute(
+                """
+                INSERT INTO sys_data_coverage_audit(
+                    job_id, dataset_name, strategy, start_date, end_date,
+                    expected_partitions, present_partitions, coverage_ratio,
+                    status, finished_at
+                ) VALUES (%s, 'stock_limit', 'trading_daily', %s, %s,
+                          1, 1, 1, 'complete', NOW())
+                """,
+                (coverage_job_id, expected_for, expected_for),
+            )
+        connection.commit()
+
+        unresolved = CollectionMonitorRepository().unresolved_partition_failures()
+
+        assert not (
+            unresolved.get("stk_limit")
+            and unresolved["stk_limit"]["job_id"] == collection_job_id
+        )
+    finally:
+        with connection.cursor() as cursor:
+            if coverage_job_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_data_coverage_audit WHERE job_id=%s",
+                    (coverage_job_id,),
+                )
+                cursor.execute(
+                    "DELETE FROM sys_data_coverage_job WHERE job_id=%s",
+                    (coverage_job_id,),
+                )
+            if collection_job_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_collection_job WHERE job_id=%s",
+                    (collection_job_id,),
+                )
+        connection.commit()
+        connection.close()
+
+
 def test_failed_fanout_plan_is_only_superseded_by_verified_replacement():
     suffix = uuid4().hex
     repository = FanoutCampaignRepository()

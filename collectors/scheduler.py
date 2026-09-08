@@ -59,6 +59,7 @@ _CONTROL_JOB_IDS = {
     "collection_schedule_reconciler",
     "collection_initialization_reconciler",
     "fanout_campaign_reconciler",
+    "delivery_plan_reconciler",
 }
 _ACTIVE_SCHEDULER: BackgroundScheduler | None = None
 _SCHEDULED_COLLECTION_FUNCTION_NAMES = {
@@ -1132,7 +1133,9 @@ def run_fanout_campaign_reconciler():
 # ──────────────────────────────────────────────
 # 调度器配置
 # ──────────────────────────────────────────────
-def create_scheduler() -> BackgroundScheduler:
+def create_scheduler(
+    *, durabilize: bool = True, set_active: bool = True
+) -> BackgroundScheduler:
     global _ACTIVE_SCHEDULER
     scheduler = BackgroundScheduler(
         executors={"default": ThreadPoolExecutor(max_workers=3)},
@@ -1187,6 +1190,24 @@ def create_scheduler() -> BackgroundScheduler:
         coalesce=True,
         max_instances=1,
         next_run_time=business_now() + timedelta(seconds=7),
+    )
+
+    def reconcile_delivery_plan() -> None:
+        from service.delivery_monitor import DeliveryMonitorService
+
+        count = DeliveryMonitorService().materialize(business_now().date())
+        logger.info("📅 当日交付计划已对账：%s 项", count)
+
+    scheduler.add_job(
+        reconcile_delivery_plan,
+        trigger="interval",
+        hours=1,
+        id="delivery_plan_reconciler",
+        name="当日数据交付计划对账",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        next_run_time=business_now() + timedelta(seconds=12),
     )
 
     # 交易日历：每天 08:30 跑
@@ -1704,8 +1725,10 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=3600,
     )
 
-    _durabilize_collection_jobs(scheduler)
-    _ACTIVE_SCHEDULER = scheduler
+    if durabilize:
+        _durabilize_collection_jobs(scheduler)
+    if set_active:
+        _ACTIVE_SCHEDULER = scheduler
     return scheduler
 if __name__ == "__main__":
     # ── 初始化通知器 ──

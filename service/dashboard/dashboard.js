@@ -1,11 +1,11 @@
 const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
-  initialization: null, fanoutCampaigns: [], freshness: [],
+  initialization: null, fanoutCampaigns: [], freshness: [], delivery: null,
   dataHealth: {}, healthIssues: [], timer: null,
   coverageRangeDataset: null, coverageDetailDataset: null,
-  activeView: "overview",
+  activeView: "today",
   pages: {
-    health: 1, interfaces: 1, fanout: 1, coverage: 1,
+    delivery: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
     coveragePartitions: 1, batchChildren: 1, initializationSteps: 1, fanoutPages: 1
   },
   dialogData: {
@@ -14,7 +14,7 @@ const state = {
 };
 
 const pageSizes = {
-  health: 10, interfaces: 20, fanout: 10, coverage: 20,
+  delivery: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20,
   coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20
 };
 
@@ -28,7 +28,8 @@ const labels = {
   complete: "严格完成", empty: "空结果", incomplete: "不完整", unverified: "未验证",
   running: "运行中", retrying: "等待重试", verifying: "完整性审计中", failed: "失败", pending: "尚未运行",
   paused: "已暂停", attention: "需要处理", success: "已结束", superseded: "已由新方案替代",
-  event_driven: "按事件更新"
+  event_driven: "按事件更新", not_due: "等待发布时间", waiting: "等待任务生成",
+  queued: "已排队", overdue: "已逾期"
 };
 const coverageLabels = {
   trading_daily: "交易日", trading_weekly: "完整交易周", trading_monthly: "完整月份",
@@ -71,6 +72,95 @@ function formatTime(value) {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatClock(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit", minute: "2-digit", hour12: false
+  }).format(new Date(value));
+}
+
+function filteredDeliveryRows() {
+  const rows = state.delivery?.items || [];
+  const filter = $("deliveryStatusFilter").value;
+  if (filter === "attention") return rows.filter((item) => item.attention);
+  if (filter === "active") return rows.filter((item) =>
+    ["queued", "running", "retrying", "verifying", "unverified"].includes(item.delivery_status));
+  if (filter === "upcoming") return rows.filter((item) =>
+    ["not_due", "waiting"].includes(item.delivery_status));
+  if (filter === "complete") return rows.filter((item) =>
+    ["complete", "empty"].includes(item.delivery_status));
+  return rows;
+}
+
+function renderDelivery() {
+  const payload = state.delivery;
+  if (!payload) return;
+  const summary = payload.summary || {};
+  const rows = filteredDeliveryRows();
+  const page = pageRows(rows, "delivery");
+  const duePercent = Math.round(Number(summary.due_progress_ratio || 0) * 100);
+  const totalPercent = Math.round(Number(summary.total_progress_ratio || 0) * 100);
+  $("deliveryDueProgress").textContent = `${summary.completed_due ?? 0} / ${summary.due_now ?? 0}`;
+  $("deliveryTotalProgress").textContent = `${summary.completed_total ?? 0} / ${summary.total ?? 0}`;
+  $("deliveryActiveCount").textContent = Number(summary.queued || 0) + Number(summary.running || 0);
+  $("deliveryUnverifiedCount").textContent = summary.unverified ?? 0;
+  $("deliveryAttentionCount").textContent = summary.attention ?? 0;
+  $("deliveryNextTime").textContent = formatClock(summary.next_scheduled_for);
+  $("deliveryDueBar").style.width = `${Math.min(duePercent, 100)}%`;
+  $("deliveryTotalBar").style.width = `${Math.min(totalPercent, 100)}%`;
+  $("deliveryDuePercent").textContent = `${duePercent}%`;
+  $("deliveryTotalPercent").textContent = `${totalPercent}%`;
+  $("deliverySummary").textContent =
+    `${payload.business_date} · 当前应执行 ${summary.due_now || 0} 项，严格交付 ${summary.completed_due || 0} 项` +
+    ` · ${summary.not_due || 0} 项尚未到发布时间 · ${summary.overdue || 0} 项逾期`;
+  $("todayTabCount").textContent = summary.attention
+    ? `${summary.attention} 项异常`
+    : `${summary.completed_due || 0}/${summary.due_now || 0} 已交付`;
+  const end = Math.min(page.start + page.rows.length, rows.length);
+  $("deliveryResultCount").textContent = rows.length
+    ? `显示 ${page.start + 1}–${end}，共 ${rows.length} 项计划`
+    : "0 项计划";
+  if (!rows.length) {
+    $("deliveryRows").innerHTML = '<tr><td colspan="6" class="empty-state">当前筛选下没有交付计划</td></tr>';
+    return;
+  }
+  $("deliveryRows").innerHTML = page.rows.map((item) => {
+    const target = item.period_key || item.expected_for || "—";
+    const fetched = item.rows_fetched == null ? "—" : Number(item.rows_fetched).toLocaleString();
+    const stored = item.rows_inserted == null ? "—" : Number(item.rows_inserted).toLocaleString();
+    const finish = item.finished_at ? formatTime(item.finished_at) : "尚未完成";
+    const status = item.delivery_status || "pending";
+    const source = { dedicated: "专项调度", policy: "策略队列", fanout: "全量扇出" }[item.source_type] || item.source_type;
+    const evidence = item.error_message || (
+      status === "not_due" ? "尚未到计划发布时间" :
+      status === "waiting" ? "已到计划时间，仍在允许交付窗口内" :
+      status === "overdue" ? "超过交付截止时间且没有可验证结果" :
+      status === "empty" ? "请求已穷尽并验证为空" :
+      status === "complete" ? (item.on_time ? "按时通过完整性验证" : "已恢复并通过完整性验证") :
+      "任务正在处理或等待完整性证据"
+    );
+    return `<tr class="${item.attention ? "delivery-row-attention" : ""}">
+      <td class="number">${formatClock(item.scheduled_for)}<span class="completion-reason">${source}</span></td>
+      <td><span class="api-name">${escapeHtml(item.api_name)}</span><span class="api-title">${escapeHtml(item.title)}</span></td>
+      <td><span>${escapeHtml(target)}</span><span class="completion-reason">${labels[item.cadence] || item.cadence}</span></td>
+      <td><span class="pill status-${status}">${labels[status] || status}</span><span class="completion-reason">${escapeHtml(evidence)}</span></td>
+      <td class="number">${fetched} / ${stored}<span class="completion-reason">获取 / 写入</span></td>
+      <td>${finish}<span class="completion-reason">截止 ${formatTime(item.due_at)}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadDelivery() {
+  try {
+    const response = await fetch("/api/v1/delivery/today");
+    if (!response.ok) throw new Error(`今日交付接口返回 ${response.status}`);
+    state.delivery = await response.json();
+    renderDelivery();
+  } catch (error) {
+    notice(`暂时无法读取今日采集进度：${error.message}`);
+  }
 }
 
 function statusGroup(status) {
@@ -914,7 +1004,7 @@ async function loadCoveragePartitions() {
 }
 
 async function refreshAll() {
-  await Promise.all([loadDataHealth(), loadFanoutCampaigns()]);
+  await Promise.all([loadDelivery(), loadDataHealth(), loadFanoutCampaigns()]);
 }
 
 $("refreshButton").addEventListener("click", refreshAll);
@@ -937,6 +1027,10 @@ $("initializationDetailButton").addEventListener("click", showInitializationStep
 $("dataIssueFilter").addEventListener("change", () => {
   state.pages.health = 1;
   renderDataHealth();
+});
+$("deliveryStatusFilter").addEventListener("change", () => {
+  state.pages.delivery = 1;
+  renderDelivery();
 });
 document.querySelector(".console-tabs").addEventListener("click", (event) => {
   const button = event.target.closest("[data-view]");
@@ -968,6 +1062,7 @@ document.addEventListener("click", (event) => {
   if (!button || button.disabled) return;
   const key = button.dataset.pageKey;
   const renderers = {
+    delivery: renderDelivery,
     health: renderDataHealth,
     interfaces: render,
     fanout: renderFanoutCampaigns,

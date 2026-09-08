@@ -28,4 +28,4 @@ def test_published_migration_files_match_immutable_manifest():
 
     _validate_migration_files(paths)
 
-    assert len(_load_checksum_manifest()) == len(paths) == 44
+    assert len(_load_checksum_manifest()) == len(paths) == 45

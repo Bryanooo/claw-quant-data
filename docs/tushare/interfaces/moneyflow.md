@@ -8,6 +8,13 @@
 - HTTP：`POST http://api.tushare.pro`
 - claw-quant：已实现；代码：[collectors/stock/moneyflow/moneyflow.py:MoneyflowCollector](../../../collectors/stock/moneyflow/moneyflow.py)
 
+## 采集与完整性约束
+
+- 日常与历史任务都按单个 `trade_date` 分区，写入 `moneyflow` 标准表。
+- 分区内使用 `limit` / `offset` 连续翻页，只有取得短页或空页后才标记完整；恰好返回 5000 行不会被误判为完整，也不会被误判为永久失败。
+- 2026-09-08 使用真实接口复核 `trade_date=20230704`：第一页 5000 行、`offset=5000` 返回空页，最终以 `offset_exhaustion` 证据完成并写入 5000 行。
+- 专项任务实现：[service/collection_jobs/registry.py:_run_moneyflow](../../../service/collection_jobs/registry.py)；分页与熔断实现：[collectors/base.py:BaseCollector.run_offset_paginated](../../../collectors/base.py)。
+
 ## 输入契约
 
 | 参数 | 类型 | 必选 | 说明 |

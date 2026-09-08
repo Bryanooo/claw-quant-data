@@ -29,6 +29,7 @@ from service.data_service.registry import DATASETS
 from service.data_service.database import Database
 from service.data_service.models import DatasetQuery, DatasetSpec, DateStorage
 from service.data_service.repository import DatasetRepository
+from service.delivery_monitor import DeliveryPlanRepository
 from service.tushare_normalization import NORMALIZATION_CONTRACTS, TushareNormalizer
 from service.initialization.repository import InitializationRepository
 from service.collection_monitor import CollectionMonitorRepository
@@ -1892,6 +1893,48 @@ def test_data_coverage_tables_support_independent_audits_and_partitions():
     assert {"partition_date", "row_count", "entity_count", "expected"} <= columns[
         "sys_data_coverage_partition"
     ]
+
+
+def test_daily_delivery_plan_is_persistent_without_an_execution_job():
+    suffix = uuid4().hex[:10]
+    day = date(2099, 1, 5)
+    repository = DeliveryPlanRepository()
+    plan_key = f"policy:integration_{suffix}:daily"
+    scheduled_for = datetime(2099, 1, 5, 19, 15, tzinfo=timezone.utc)
+    try:
+        assert repository.upsert([
+            {
+                "business_date": day,
+                "plan_key": plan_key,
+                "source_type": "policy",
+                "source_key": f"integration_{suffix}",
+                "api_name": f"integration_{suffix}",
+                "title": "integration delivery",
+                "cadence": "daily",
+                "scheduled_for": scheduled_for,
+                "due_at": scheduled_for + timedelta(hours=4),
+                "expected_for": day,
+                "period_key": day.isoformat(),
+                "metadata": {"test": True},
+            }
+        ]) == 1
+
+        rows = repository.list_with_execution(day)
+        row = next(item for item in rows if item["plan_key"] == plan_key)
+        assert row["job_id"] is None
+        assert row["campaign_id"] is None
+        assert row["metadata"] == {"test": True}
+    finally:
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM sys_collection_delivery_plan WHERE plan_key=%s",
+                    (plan_key,),
+                )
+            connection.commit()
+        finally:
+            connection.close()
 
 
 def test_collection_leaves_can_be_idempotently_bulk_enqueued():

@@ -1,9 +1,15 @@
 """Interface-level collection completion overview."""
 
-from fastapi import APIRouter, Depends
+from datetime import date
 
-from service.api.dependencies import get_collection_monitor_service
+from fastapi import APIRouter, Depends, Query
+
+from service.api.dependencies import (
+    get_collection_monitor_service,
+    get_delivery_monitor_service,
+)
 from service.collection_monitor import CollectionMonitorService
+from service.delivery_monitor import DeliveryMonitorService
 
 
 router = APIRouter(prefix="/v1", tags=["collection monitoring"])
@@ -14,6 +20,14 @@ def collection_overview(
     service: CollectionMonitorService = Depends(get_collection_monitor_service),
 ) -> dict:
     return service.overview()
+
+
+@router.get("/delivery/today")
+def today_delivery_progress(
+    business_date: date | None = Query(default=None),
+    service: DeliveryMonitorService = Depends(get_delivery_monitor_service),
+) -> dict:
+    return service.today(business_date)
 
 
 @router.post("/collection-dispatch", status_code=202)

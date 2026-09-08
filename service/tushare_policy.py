@@ -157,6 +157,11 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # a legitimate 1,000-row historical cross-section from being mistaken for
     # a transport cap and remains safe if the market grows beyond 6,000 rows.
     "daily",
+    # Live verification on 2026-09-08 proved that the historical 2023-07-04
+    # partition contains exactly 5,000 rows and that offset=5,000 returns an
+    # empty page.  Exhausting the next page distinguishes a legitimate round
+    # count from a truncated response without weakening completeness checks.
+    "moneyflow",
     # Live gateway verification on 2026-09-06 proved that the documented
     # 15,000-row cap is pageable: market=O,status=L returned distinct rows at
     # offsets 0/5,000/10,000/15,000/20,000 and exhausted at 24,974 rows.

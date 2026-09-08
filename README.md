@@ -374,6 +374,7 @@ PostgreSQL 触发器根据子任务实时汇总。进程重启不会丢失批次
 | `sys_collection_job` | 每接口、每周期的持久化任务与完成证据 |
 | `sys_collection_fanout_campaign` | 全依赖宇宙扇出活动、周期身份、计划版本与严格分页进度 |
 | `sys_collection_schedule_cursor` | 专项 cron 的持久化派发游标，用于停机补发 |
+| `sys_collection_delivery_plan` | 每个上海业务日应交付的任务、发布时间和截止时间；即使尚未生成执行任务也能暴露漏调度 |
 | `sys_tushare_collection_checkpoint` | offset 分页断点和累计行数 |
 | `sys_collector_run` | 专项调度器运行历史 |
 | `sys_service_heartbeat` | Scheduler、Worker、Auditor 的真实进程心跳 |
@@ -427,8 +428,11 @@ A 股日、周、月数据使用 `trade_cal` 生成预期日期；财务数据�
 
 Dashboard 可以：
 
-- 通过“运行总览 / 接口任务 / 扇出活动 / 覆盖审计”四个页签按职责查看，避免所有模块同时铺开；
-- 在“数据缺失与可信度”区域统一查看真实缺失、空表、未首采和完整性未知；
+- 默认从“今日运营”查看截至当前与全日两套交付进度；历史补采不混入今日分母；
+- 每项今日计划显示计划时间、目标数据周期、来源、严格完成证据和交付截止时间；
+- 未到发布时间显示为等待，只有执行失败、覆盖不完整或超过截止时间才进入真实异常；
+- 通过“今日运营 / 异常中心 / 任务与接口 / 扇出活动 / 数据资产”五个页签按职责查看；
+- 在“异常与可信度中心”统一查看真实缺失、空表、未首采和完整性未知；
 - 将“已确认问题”和“尚未证明完整”分开统计，未知状态不会冒充采集失败；
 - 只把已纳入周期规则但尚无审计的数据集列为待处理；按需观察数据不制造伪故障；
 - 将没有固定发布间隔的公告/事件数据标为“按事件更新”，不会因近期无事件误报过期；
@@ -500,6 +504,7 @@ curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
 | `POST /api/v1/collection-fanout-campaigns/{id}/pause` | 暂停生成后续分页（不强杀运行中子任务） |
 | `POST /api/v1/collection-fanout-campaigns/{id}/resume` | 重排失败子任务并继续活动 |
 | `GET /api/v1/collection-overview` | 全接口采集状态与完成证据 |
+| `GET /api/v1/delivery/today` | 查询当日持久化交付计划、截至当前/全日进度、逾期和真实异常；可传 `business_date` |
 | `GET /api/v1/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
 | `POST /api/v1/collection-dispatch` | 生成最近周期补采任务 |
 | `GET /api/v1/coverage` | 数据集日期覆盖总览和最近缺失日期 |

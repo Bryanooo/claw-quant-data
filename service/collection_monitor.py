@@ -170,6 +170,24 @@ class CollectionMonitorRepository:
             WITH failed AS (
                 SELECT job_id,
                        COALESCE(api_name, parameters->>'api_name') AS api_name,
+                       CASE COALESCE(api_name, parameters->>'api_name')
+                           WHEN 'trade_cal' THEN 'trade_calendar'
+                           WHEN 'daily' THEN 'stock_daily'
+                           WHEN 'daily_basic' THEN 'stock_daily_basic'
+                           WHEN 'stk_limit' THEN 'stock_limit'
+                           WHEN 'suspend_d' THEN 'stock_suspend'
+                           WHEN 'fina_indicator' THEN 'financial_indicator'
+                           WHEN 'fina_indicator_vip' THEN 'financial_indicator'
+                           WHEN 'fx_daily' THEN 'forex_daily'
+                           WHEN 'ths_daily' THEN 'industry_daily'
+                           WHEN 'balancesheet_vip' THEN 'balancesheet'
+                           WHEN 'cashflow_vip' THEN 'cashflow'
+                           WHEN 'income_vip' THEN 'income'
+                           WHEN 'express_vip' THEN 'express'
+                           WHEN 'fina_mainbz_vip' THEN 'fina_mainbz'
+                           WHEN 'forecast_vip' THEN 'forecast'
+                           ELSE COALESCE(api_name, parameters->>'api_name')
+                       END AS dataset_name,
                        period_key, expected_for, parent_job_id,
                        status, completion_status, completion_evidence,
                        error_message, finished_at
@@ -213,6 +231,16 @@ class CollectionMonitorRepository:
                          OR recovered_campaign.completion_status='complete'
                       )
                       AND recovered_campaign.finished_at > failed.finished_at
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM sys_data_coverage_audit AS recovered_audit
+                    WHERE failed.expected_for IS NOT NULL
+                      AND recovered_audit.dataset_name=failed.dataset_name
+                      AND recovered_audit.status='complete'
+                      AND failed.expected_for BETWEEN
+                          recovered_audit.start_date AND recovered_audit.end_date
+                      AND recovered_audit.finished_at > failed.finished_at
                   )
             )
             SELECT DISTINCT ON (api_name)

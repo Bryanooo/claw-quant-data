@@ -310,10 +310,13 @@ def test_collection_dashboard_and_overview_endpoint():
     dashboard_script = (
         PROJECT_ROOT / "service" / "dashboard" / "dashboard.js"
     ).read_text(encoding="utf-8")
-    assert dashboard_script.count("window.confirm(") == 5
+    assert dashboard_script.count("window.confirm(") == 7
     assert "/api/v1/collection-fanout-campaigns" in dashboard_script
     assert "/api/v1/data-health" in dashboard_script
     assert "data-health-coverage-detail" in dashboard_script
+    assert "/api/v1/coverage/repairs" in dashboard_script
+    assert "coverageRangeStart" in page.text
+    assert "coverageDetailStatus" in page.text
     assert "数据缺失与可信度" in page.text
     assert 'role="tablist"' in page.text
     assert 'data-view-panel="interfaces"' in page.text
@@ -375,6 +378,13 @@ def test_coverage_endpoints_use_api_namespace():
                 "detects_missing_partitions": True,
                 "partitions": [],
             },
+            "submit_repairs": lambda self, dataset_name, **kwargs: {
+                "dataset": dataset_name,
+                "eligible": 1,
+                "created": 1,
+                "job_ids": [9],
+                **kwargs,
+            },
         },
     )()
     client.app.dependency_overrides[get_coverage_service] = lambda: fake
@@ -384,11 +394,21 @@ def test_coverage_endpoints_use_api_namespace():
         partitions = client.get(
             "/api/v1/coverage/datasets/stock_daily/partitions"
         )
+        repairs = client.post(
+            "/api/v1/coverage/repairs",
+            json={
+                "dataset": "stock_daily",
+                "start_date": "2026-08-28",
+                "end_date": "2026-08-29",
+            },
+        )
         old_route = client.get("/v1/datasets")
 
     assert overview.status_code == 200
     assert overview.json()["summary"]["datasets"] == 16
     assert partitions.status_code == 200
+    assert repairs.status_code == 202
+    assert repairs.json()["created"] == 1
     assert old_route.status_code == 404
 
 

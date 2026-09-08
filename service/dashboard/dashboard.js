@@ -2,6 +2,7 @@ const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
   initialization: null, fanoutCampaigns: [], freshness: [],
   dataHealth: {}, healthIssues: [], timer: null,
+  coverageRangeDataset: null, coverageDetailDataset: null,
   activeView: "overview",
   pages: {
     health: 1, interfaces: 1, fanout: 1, coverage: 1,
@@ -320,6 +321,7 @@ function renderInitialization(payload) {
     ? "日常增量模式（历史补采并行）"
     : (initializationLabels[runtime.mode] || runtime.mode);
   const action = $("initializationActionButton");
+  const workRange = $("initializationWorkRange");
   $("initializationDetailButton").disabled = !(campaign || latest);
   if (!campaign) {
     $("initializationSummary").textContent = runtime.mode === "daily" && latest
@@ -328,6 +330,7 @@ function renderInitialization(payload) {
       ? "当前为日常增量模式；这是升级实例，尚无独立的初始化活动记录。"
       : "尚未执行初始采集；日常调度会保持暂停。";
     $("initializationProgress").classList.add("hidden");
+    workRange.classList.add("hidden");
     action.textContent = runtime.mode === "daily" ? "重新初始化" : "开始初始化";
     action.dataset.action = "start";
     action.disabled = false;
@@ -342,6 +345,19 @@ function renderInitialization(payload) {
     ? Math.round(campaign.completed_steps / logicalTotal * 100)
     : 0;
   $("initializationSummary").textContent = `${mode} · 第 ${campaign.phase_index}/${campaign.phase_total} 阶段：${phase} · ${status} · 当前阶段已完成 ${Number(campaign.completed_steps || 0).toLocaleString()}/${Number(logicalTotal).toLocaleString()}，已生成 ${Number(materialized).toLocaleString()}（不是全流程完成率）`;
+  const window = campaign.work_window || {};
+  const activeRange = window.active_start && window.active_end
+    ? `${window.active_start} → ${window.active_end}`
+    : "当前没有已入队的日期任务";
+  const materializedRange = window.materialized_start && window.materialized_end
+    ? `${window.materialized_start} → ${window.materialized_end}`
+    : "无日期型步骤";
+  const resources = (window.resources || [])
+    .filter((item) => Number(item.queued || 0) + Number(item.running || 0) > 0)
+    .map((item) => item.resource)
+    .join("、") || "—";
+  workRange.innerHTML = `<span><strong>总目标</strong> ${escapeHtml(campaign.history_start)} → ${escapeHtml(campaign.history_end)}</span><span><strong>已生成日期范围</strong> ${escapeHtml(materializedRange)}</span><span><strong>当前工作范围</strong> ${escapeHtml(activeRange)}</span><span><strong>队列</strong> ${Number(window.running || 0).toLocaleString()} 运行 / ${Number(window.queued || 0).toLocaleString()} 等待</span><span><strong>正在处理</strong> ${escapeHtml(resources)}</span>`;
+  workRange.classList.remove("hidden");
   $("initializationProgress").classList.remove("hidden");
   $("initializationProgress").title = `当前阶段逻辑进度 ${percent}%；后续阶段不计入该比例`;
   $("initializationProgressBar").style.width = `${Math.min(100, percent)}%`;
@@ -634,6 +650,7 @@ function renderCoverage() {
     ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, state.coverage.length)}，共 ${state.coverage.length} 个数据集`
     : "0 个数据集";
   $("coverageTabCount").textContent = `${state.coverage.length} 个数据集`;
+  syncCoverageRangeDatasets();
   if (!state.coverage.length) {
     $("coverageRows").innerHTML = '<tr><td colspan="7" class="empty-state">暂无覆盖规则</td></tr>';
     return;
@@ -663,9 +680,63 @@ function renderCoverage() {
       <td><span class="pill coverage-${status}">${coverageLabels[status] || status}</span><span class="completion-reason">${coverage}</span></td>
       <td class="number">${partitionCounts}<span class="completion-reason">${partitionCaption}</span></td>
       <td><span class="missing-dates">${escapeHtml(recentMissing)}</span></td>
-      <td><button class="row-action" data-coverage-detail="${escapeHtml(item.dataset)}" ${item.auditable ? "" : "disabled"}>查看日期</button></td>
+      <td class="campaign-actions"><button class="row-action" data-coverage-detail="${escapeHtml(item.dataset)}" data-coverage-status="${status === "gaps" ? "problem" : ""}" ${item.auditable ? "" : "disabled"}>查看日期</button>${item.repairable ? `<button class="row-action" data-coverage-range="${escapeHtml(item.dataset)}">指定补采</button>` : ""}</td>
     </tr>`;
   }).join("");
+}
+
+function dateDaysBefore(value, days) {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  parsed.setUTCDate(parsed.getUTCDate() - days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function selectedCoverageDataset() {
+  return state.coverage.find((item) => item.dataset === $("coverageRangeDataset").value);
+}
+
+function setCoverageRangeDataset(dataset, forceDates = false) {
+  const item = state.coverage.find((candidate) => candidate.dataset === dataset);
+  if (!item) return;
+  $("coverageRangeDataset").value = dataset;
+  const changed = state.coverageRangeDataset !== dataset;
+  state.coverageRangeDataset = dataset;
+  if (changed || forceDates || !$("coverageRangeStart").value || !$("coverageRangeEnd").value) {
+    const end = item.latest?.end_date || new Date().toISOString().slice(0, 10);
+    $("coverageRangeEnd").value = end;
+    $("coverageRangeStart").value = dateDaysBefore(end, 90);
+  }
+  $("coverageRangeHint").textContent = item.repairable
+    ? `${item.dataset} 支持安全补采。审计异步识别真实缺口；补采只处理该范围内已确认的 missing / partial 日期，写入采用幂等 UPSERT。单次范围最长 10 年。`
+    : `${item.dataset} 只能审计，尚无无需猜测参数范围的安全补采器。`;
+  $("coverageRangeRepairButton").disabled = !item.repairable;
+}
+
+function syncCoverageRangeDatasets() {
+  const datasets = state.coverage
+    .filter((item) => item.repairable)
+    .sort((left, right) => {
+      if (left.dataset === "stock_daily") return -1;
+      if (right.dataset === "stock_daily") return 1;
+      return left.dataset.localeCompare(right.dataset);
+    });
+  const select = $("coverageRangeDataset");
+  const selected = datasets.some((item) => item.dataset === state.coverageRangeDataset)
+    ? state.coverageRangeDataset
+    : datasets[0]?.dataset;
+  select.innerHTML = datasets.map((item) => `<option value="${escapeHtml(item.dataset)}">${escapeHtml(item.dataset)}</option>`).join("");
+  if (selected) setCoverageRangeDataset(selected);
+}
+
+function coverageRangeValues() {
+  const dataset = $("coverageRangeDataset").value;
+  const startDate = $("coverageRangeStart").value;
+  const endDate = $("coverageRangeEnd").value;
+  if (!dataset || !startDate || !endDate) throw new Error("请选择数据集、开始日期和结束日期");
+  if (startDate > endDate) throw new Error("开始日期不能晚于结束日期");
+  const days = (new Date(`${endDate}T00:00:00Z`) - new Date(`${startDate}T00:00:00Z`)) / 86400000;
+  if (days > 3660) throw new Error("单次审计或补采范围不能超过 10 年");
+  return { dataset, startDate, endDate };
 }
 
 async function loadCoverage() {
@@ -709,11 +780,85 @@ async function runCoverageAudit() {
   }
 }
 
+async function runCoverageRangeAudit() {
+  let range;
+  try {
+    range = coverageRangeValues();
+  } catch (error) {
+    notice(error.message);
+    return;
+  }
+  if (!window.confirm(`确认审计 ${range.dataset} 在 ${range.startDate} → ${range.endDate} 的日期覆盖？该操作只读取本地业务表，不调用 Tushare。`)) return;
+  const button = $("coverageRangeAuditButton");
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/v1/coverage/audits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": `dashboard-range-audit-${Date.now()}`
+      },
+      body: JSON.stringify({
+        datasets: [range.dataset],
+        start_date: range.startDate,
+        end_date: range.endDate
+      })
+    });
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(body.error?.message || `范围审计返回 ${response.status}`);
+    }
+    notice(`${range.dataset} 的范围审计已进入队列；完成后“查看已知缺口”会显示准确日期。`);
+    window.setTimeout(loadDataHealth, 1500);
+  } catch (error) {
+    notice(`无法审计指定范围：${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function runCoverageRangeRepair() {
+  let range;
+  try {
+    range = coverageRangeValues();
+  } catch (error) {
+    notice(error.message);
+    return;
+  }
+  if (!window.confirm(`确认补采 ${range.dataset} 在 ${range.startDate} → ${range.endDate} 内已经审计确认的缺失或不完整日期？未审计日期、非交易日和正常日期不会生成任务。`)) return;
+  const button = $("coverageRangeRepairButton");
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/v1/coverage/repairs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataset: range.dataset,
+        start_date: range.startDate,
+        end_date: range.endDate
+      })
+    });
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(body.error?.message || `范围补采返回 ${response.status}`);
+    }
+    const body = await response.json();
+    notice(body.eligible
+      ? `找到 ${body.eligible} 个已确认缺口，新增 ${body.created} 个幂等补采任务；其余任务已存在或正在执行。`
+      : "该范围内没有已审计确认的缺口；如尚未审计，请先点击“审计此范围”。");
+    await loadDataHealth();
+  } catch (error) {
+    notice(`无法补采指定范围：${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderCoveragePartitions() {
   const partitions = state.dialogData.coveragePartitions;
   const page = pageRows(partitions, "coveragePartitions");
   if (!partitions.length) {
-    $("coveragePartitions").innerHTML = '<p class="empty-state">尚未执行覆盖审计</p>';
+    $("coveragePartitions").innerHTML = '<p class="empty-state">当前条件没有分区记录</p>';
     return;
   }
   $("coveragePartitions").innerHTML = page.rows.map((item) => `
@@ -724,17 +869,43 @@ function renderCoveragePartitions() {
     </div>`).join("");
 }
 
-async function showCoverageDetail(dataset) {
+async function showCoverageDetail(dataset, options = {}) {
+  state.coverageDetailDataset = dataset;
   $("coverageDialogTitle").textContent = `${dataset} · 日期分区`;
+  $("coverageDetailStart").value = options.startDate ?? "";
+  $("coverageDetailEnd").value = options.endDate ?? "";
+  $("coverageDetailStatus").value = options.status ?? "problem";
   $("coveragePartitions").innerHTML = '<p class="empty-state">正在读取…</p>';
-  $("coverageDialog").showModal();
+  if (!$("coverageDialog").open) $("coverageDialog").showModal();
+  await loadCoveragePartitions();
+}
+
+async function loadCoveragePartitions() {
+  const dataset = state.coverageDetailDataset;
+  if (!dataset) return;
   try {
-    const response = await fetch(`/api/v1/coverage/datasets/${encodeURIComponent(dataset)}/partitions?limit=400`);
+    const query = new URLSearchParams({ limit: "1000" });
+    if ($("coverageDetailStart").value) query.set("start_date", $("coverageDetailStart").value);
+    if ($("coverageDetailEnd").value) query.set("end_date", $("coverageDetailEnd").value);
+    if ($("coverageDetailStatus").value) query.set("status", $("coverageDetailStatus").value);
+    const response = await fetch(`/api/v1/coverage/datasets/${encodeURIComponent(dataset)}/partitions?${query}`);
     if (!response.ok) throw new Error(`日期明细返回 ${response.status}`);
     const payload = await response.json();
     state.dialogData.coveragePartitions = payload.partitions || [];
     state.pages.coveragePartitions = 1;
-    renderCoveragePartitions();
+    if (!state.dialogData.coveragePartitions.length) {
+      pageRows([], "coveragePartitions");
+      const onlyProblems = $("coverageDetailStatus").value === "problem";
+      const audit = payload.range_audit;
+      const message = audit?.status === "unverified"
+        ? "该范围执行过审计，但基础日历不足，暂时不能准确判断缺失。"
+        : audit
+        ? (onlyProblems ? "该范围已经完整审计，没有发现缺失或截面不完整日期。" : "该范围已经审计，但当前条件没有分区记录。")
+        : "尚无一次审计完整覆盖该查询范围，请先在主页面提交范围审计。";
+      $("coveragePartitions").innerHTML = `<p class="empty-state">${escapeHtml(message)}</p>`;
+    } else {
+      renderCoveragePartitions();
+    }
   } catch (error) {
     state.dialogData.coveragePartitions = [];
     pageRows([], "coveragePartitions");
@@ -749,6 +920,18 @@ async function refreshAll() {
 $("refreshButton").addEventListener("click", refreshAll);
 $("dispatchButton").addEventListener("click", dispatchLatest);
 $("coverageAuditButton").addEventListener("click", runCoverageAudit);
+$("coverageRangeDataset").addEventListener("change", (event) => setCoverageRangeDataset(event.target.value, true));
+$("coverageRangeInspectButton").addEventListener("click", () => {
+  try {
+    const range = coverageRangeValues();
+    showCoverageDetail(range.dataset, { startDate: range.startDate, endDate: range.endDate, status: "problem" });
+  } catch (error) {
+    notice(error.message);
+  }
+});
+$("coverageRangeAuditButton").addEventListener("click", runCoverageRangeAudit);
+$("coverageRangeRepairButton").addEventListener("click", runCoverageRangeRepair);
+$("coverageDetailQueryButton").addEventListener("click", loadCoveragePartitions);
 $("initializationActionButton").addEventListener("click", initializationAction);
 $("initializationDetailButton").addEventListener("click", showInitializationSteps);
 $("dataIssueFilter").addEventListener("change", () => {
@@ -830,7 +1013,19 @@ $("fanoutPages").addEventListener("click", (event) => {
 });
 $("coverageRows").addEventListener("click", (event) => {
   const button = event.target.closest("[data-coverage-detail]");
-  if (button) showCoverageDetail(button.dataset.coverageDetail);
+  if (button) {
+    const item = state.coverage.find((candidate) => candidate.dataset === button.dataset.coverageDetail);
+    showCoverageDetail(button.dataset.coverageDetail, {
+      startDate: item?.latest?.start_date || "",
+      endDate: item?.latest?.end_date || "",
+      status: button.dataset.coverageStatus || ""
+    });
+  }
+  const rangeButton = event.target.closest("[data-coverage-range]");
+  if (rangeButton && !rangeButton.disabled) {
+    setCoverageRangeDataset(rangeButton.dataset.coverageRange, true);
+    $("coverageRangeDataset").focus();
+  }
 });
 $("coverageDialogClose").addEventListener("click", () => $("coverageDialog").close());
 $("batchDialogClose").addEventListener("click", () => $("batchDialog").close());

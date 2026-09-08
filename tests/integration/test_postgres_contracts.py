@@ -1894,6 +1894,44 @@ def test_data_coverage_tables_support_independent_audits_and_partitions():
     ]
 
 
+def test_collection_leaves_can_be_idempotently_bulk_enqueued():
+    suffix = uuid4().hex
+    repository = JobRepository()
+    handler = TASKS.handler_metadata("stock_daily", {"trade_date": "20260828"})
+    children = [
+        BatchChildSpec(
+            task_name="stock_daily",
+            parameters={"trade_date": f"2026082{day}"},
+            idempotency_key=f"integration-bulk-{suffix}-{day}",
+            api_name="daily",
+            cadence="repair",
+            period_key=f"2026-08-2{day}",
+            expected_for=date(2026, 8, 20 + day),
+            handler=handler,
+            resource_class="integration",
+        )
+        for day in (7, 8)
+    ]
+
+    try:
+        created = repository.create_many(children)
+        duplicate = repository.create_many(children)
+
+        assert len(created) == 2
+        assert duplicate == []
+    finally:
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM sys_collection_job WHERE idempotency_key LIKE %s",
+                    (f"integration-bulk-{suffix}-%",),
+                )
+            connection.commit()
+        finally:
+            connection.close()
+
+
 def test_collection_finish_atomically_enqueues_and_applies_verification():
     key = f"integration-verification-{uuid4().hex}"
     repository = JobRepository()
@@ -2259,16 +2297,17 @@ def test_fanout_campaign_resumes_pages_and_only_completes_whole_universe(monkeyp
 
 def test_coverage_audit_retry_updates_one_idempotent_record():
     suffix = uuid4().hex
+    dataset_name = f"integration_coverage_{suffix[:8]}"
     repository = CoverageRepository()
     job, created = repository.create_job(
-        "stock_daily",
+        dataset_name,
         date(2026, 8, 28),
         date(2026, 8, 28),
         idempotency_key=f"integration-audit-{suffix}",
     )
     assert created is True
     result = CoverageAuditResult(
-        dataset_name="stock_daily",
+        dataset_name=dataset_name,
         strategy="trading_daily",
         start_date=date(2026, 8, 28),
         end_date=date(2026, 8, 28),
@@ -2286,6 +2325,16 @@ def test_coverage_audit_retry_updates_one_idempotent_record():
         first_id = repository.save_audit(job["job_id"], result)
         second_id = repository.save_audit(job["job_id"], result)
         assert second_id == first_id
+        assert repository.covering_audit(
+            dataset_name,
+            start_date=date(2026, 8, 28),
+            end_date=date(2026, 8, 28),
+        )["audit_id"] == first_id
+        assert repository.covering_audit(
+            dataset_name,
+            start_date=date(2026, 8, 27),
+            end_date=date(2026, 8, 28),
+        ) is None
 
         connection = psycopg2.connect(**DB_CONFIG)
         try:

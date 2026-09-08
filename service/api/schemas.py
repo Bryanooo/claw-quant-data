@@ -278,3 +278,9 @@ class CoverageAuditRequest(ApiModel):
     datasets: list[str] | None = Field(default=None, min_length=1, max_length=50)
     start_date: date | None = None
     end_date: date | None = None
+
+
+class CoverageRepairRequest(ApiModel):
+    dataset: str = Field(min_length=1, max_length=100)
+    start_date: date
+    end_date: date

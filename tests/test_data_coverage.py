@@ -319,6 +319,37 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert COVERAGE_RULES.get("hk_daily").scheduled is True
 
 
+def test_manual_repair_queues_only_confirmed_problem_partitions():
+    class Repository:
+        def list_partitions(self, dataset_name, **options):
+            assert dataset_name == "stock_daily"
+            assert options["status"] == "problem"
+            return [
+                {"partition_date": date(2026, 9, 1), "status": "missing"},
+                {"partition_date": date(2026, 9, 2), "status": "partial"},
+            ]
+
+    class Planner:
+        def submit_dates_bulk(self, dataset_name, dates, *, limit):
+            assert dataset_name == "stock_daily"
+            assert dates == [date(2026, 9, 1), date(2026, 9, 2)]
+            assert limit == 4000
+            return {"eligible": 2, "created": 2, "job_ids": [7, 8]}
+
+    service = coverage_service.CoverageService(
+        repository=Repository(), repair_planner=Planner()
+    )
+
+    result = service.submit_repairs(
+        "stock_daily",
+        start_date=date(2026, 9, 1),
+        end_date=date(2026, 9, 2),
+    )
+
+    assert result["created"] == 2
+    assert result["dataset"] == "stock_daily"
+
+
 def test_scheduled_coverage_uses_distinct_pre_and_post_release_keys(monkeypatch):
     keys = []
 

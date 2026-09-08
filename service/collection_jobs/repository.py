@@ -110,6 +110,59 @@ class JobRepository:
             )
             return dict(cursor.fetchone()), False
 
+    def create_many(self, children: list[BatchChildSpec]) -> list[dict]:
+        """Insert independent leaves in one transaction.
+
+        Existing idempotency keys are skipped, so overlapping repair requests
+        cannot duplicate work that is already queued for the same business day.
+        """
+        if not children:
+            return []
+        values = [
+            (
+                child.task_name,
+                json.dumps(child.parameters, ensure_ascii=False),
+                child.max_attempts,
+                child.idempotency_key,
+                child.api_name,
+                child.cadence,
+                child.period_key,
+                child.expected_for,
+                child.handler.handler_type,
+                child.handler.handler_key,
+                child.handler.handler_version,
+                child.handler.code_revision,
+                child.priority,
+                child.resource_class,
+            )
+            for child in children
+        ]
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            rows = psycopg2.extras.execute_values(
+                cursor,
+                """
+                INSERT INTO sys_collection_job (
+                    task_name, parameters, max_attempts, idempotency_key,
+                    api_name, cadence, period_key, expected_for,
+                    handler_type, handler_key, handler_version, code_revision,
+                    priority, resource_class, job_kind
+                ) VALUES %s
+                ON CONFLICT (idempotency_key) DO NOTHING
+                RETURNING *
+                """,
+                values,
+                template=(
+                    "(%s, %s::jsonb, %s, %s, %s, %s, %s, %s, "
+                    "%s, %s, %s, %s, %s, %s, 'leaf')"
+                ),
+                page_size=500,
+                fetch=True,
+            )
+            return [dict(row) for row in rows]
+
     def get(self, job_id: int) -> dict | None:
         with (
             self._connection() as connection,

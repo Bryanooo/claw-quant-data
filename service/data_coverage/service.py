@@ -9,12 +9,19 @@ from zoneinfo import ZoneInfo
 from service.data_coverage.models import InvalidCoverageRequestError
 from service.data_coverage.registry import COVERAGE_RULES, CoverageRuleRegistry
 from service.data_coverage.repository import CoverageRepository
+from service.data_coverage.repair import (
+    CoverageRepairPlanner,
+    is_safe_repair_dataset,
+)
 from service.clock import business_now
 
 
 BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
-PARTITION_STATUSES = {"present", "partial", "missing", "pending", "observed_only"}
+PARTITION_STATUSES = {
+    "present", "partial", "missing", "pending", "observed_only", "problem",
+}
 JOB_STATUSES = {"queued", "running", "success", "failed"}
+MAX_MANUAL_REPAIRS = 4000
 
 
 def local_today() -> date:
@@ -26,9 +33,11 @@ class CoverageService:
         self,
         repository: CoverageRepository | None = None,
         registry: CoverageRuleRegistry = COVERAGE_RULES,
+        repair_planner: CoverageRepairPlanner | None = None,
     ):
         self._repository = repository or CoverageRepository()
         self._registry = registry
+        self._repair_planner = repair_planner or CoverageRepairPlanner()
 
     def submit_audits(
         self,
@@ -114,6 +123,7 @@ class CoverageService:
                         else None
                     ),
                     "detects_missing_partitions": rule.detects_missing_partitions,
+                    "repairable": is_safe_repair_dataset(rule.dataset_name),
                     "latest": audit,
                     "recent_missing": missing_by_dataset.get(rule.dataset_name, []),
                 }
@@ -165,6 +175,7 @@ class CoverageService:
                 "partial_partitions": sum(
                     item["latest"].get("partial_partitions", 0) for item in audited
                 ),
+                "repairable": sum(item["repairable"] for item in datasets),
                 **queue,
             },
             "datasets": datasets,
@@ -199,6 +210,16 @@ class CoverageService:
             if rule.auditable
             else []
         )
+        covering_audit = getattr(self._repository, "covering_audit", None)
+        range_audit = (
+            covering_audit(
+                dataset_name,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            if rule.auditable and callable(covering_audit)
+            else None
+        )
         return {
             "dataset": dataset_name,
             "strategy": rule.strategy.value,
@@ -206,8 +227,59 @@ class CoverageService:
             "auditable": rule.auditable,
             "scheduled": rule.scheduled,
             "detects_missing_partitions": rule.detects_missing_partitions,
+            "range_audit": range_audit,
             "partitions": rows,
         }
+
+    def submit_repairs(
+        self,
+        dataset_name: str,
+        *,
+        start_date: date,
+        end_date: date,
+    ) -> dict:
+        """Repair only persisted audit findings inside an explicit date range."""
+        rule = self._registry.get(dataset_name)
+        if not rule.auditable or not rule.detects_missing_partitions:
+            raise InvalidCoverageRequestError(
+                f"dataset does not support missing-partition repair: {dataset_name}"
+            )
+        if not is_safe_repair_dataset(dataset_name):
+            raise InvalidCoverageRequestError(
+                f"dataset has no safe parameterized repair collector: {dataset_name}"
+            )
+        today = local_today()
+        if start_date > end_date:
+            raise InvalidCoverageRequestError(
+                "start_date must not be later than end_date"
+            )
+        if end_date > today:
+            raise InvalidCoverageRequestError("end_date must not be in the future")
+        if (end_date - start_date).days > 3660:
+            raise InvalidCoverageRequestError(
+                "one repair request may cover at most 3660 days"
+            )
+        rows = self._repository.list_partitions(
+            dataset_name,
+            start_date=start_date,
+            end_date=end_date,
+            status="problem",
+            limit=MAX_MANUAL_REPAIRS,
+        )
+        dates = [row["partition_date"] for row in rows]
+        result = self._repair_planner.submit_dates_bulk(
+            dataset_name,
+            dates,
+            limit=MAX_MANUAL_REPAIRS,
+        )
+        result.update(
+            {
+                "dataset": dataset_name,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+        )
+        return result
 
 
 def submit_scheduled_coverage_audits(

@@ -433,6 +433,12 @@ PostgreSQL 的 `text` 和 `jsonb` 不能表示 NUL 字符。通用与专项采�
 弹窗明细都限制单页行数，筛选会重置页码，避免长历史任务一次性渲染。状态 API 为
 `GET /api/v1/collection-overview`。
 
+覆盖审计页支持按数据集和起止日期查询 `missing` / `partial` 明细。指定范围补采采用
+“先审计、后修复”的证据链：`POST /api/v1/coverage/audits` 只读检查本地业务表，
+`POST /api/v1/coverage/repairs` 只对持久化审计已确认且存在安全参数映射的分区生成
+幂等任务，不把未审计日期、非交易日或观察型数据误判为缺失。初始化总览同时返回
+当前阶段已物化范围和 queued/running 工作范围，避免用总目标区间冒充正在采集区间。
+
 ## 关键代码与运维查询
 
 - 策略推导：[service/tushare_policy.py](../../service/tushare_policy.py)

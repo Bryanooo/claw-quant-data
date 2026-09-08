@@ -124,6 +124,7 @@
           <p class="section-kicker">SYSTEM LIFECYCLE</p>
           <h2>初始采集</h2>
           <p id="initializationSummary" class="section-summary">正在读取运行模式…</p>
+          <div id="initializationWorkRange" class="initialization-work-range hidden"></div>
           <div id="initializationProgress" class="initialization-progress hidden">
             <span id="initializationProgressBar"></span>
           </div>
@@ -257,6 +258,21 @@
           </div>
           <button id="coverageAuditButton" class="button button-secondary">立即审计</button>
         </div>
+        <section class="coverage-range-tool" aria-label="指定范围审计与补采">
+          <div class="coverage-range-copy">
+            <strong>指定范围检查与补采</strong>
+            <span>先用交易日或报告期规则找出真实缺口，再只补采审计确认的缺失与不完整分区。</span>
+          </div>
+          <div class="coverage-range-fields">
+            <label>数据集<select id="coverageRangeDataset" aria-label="补采数据集"></select></label>
+            <label>开始日期<input id="coverageRangeStart" type="date" /></label>
+            <label>结束日期<input id="coverageRangeEnd" type="date" /></label>
+            <button id="coverageRangeInspectButton" class="button button-secondary" type="button">查看已知缺口</button>
+            <button id="coverageRangeAuditButton" class="button button-secondary" type="button">审计此范围</button>
+            <button id="coverageRangeRepairButton" class="button button-primary" type="button">补采确认缺口</button>
+          </div>
+          <p id="coverageRangeHint" class="coverage-range-hint">正在读取可安全补采的数据集…</p>
+        </section>
         <div class="table-wrap">
           <table class="coverage-table">
             <thead>
@@ -294,6 +310,19 @@
           <h2 id="coverageDialogTitle">日期分区</h2>
         </div>
         <button id="coverageDialogClose" class="row-action" aria-label="关闭">关闭</button>
+      </div>
+      <div class="partition-filters">
+        <label>开始日期<input id="coverageDetailStart" type="date" /></label>
+        <label>结束日期<input id="coverageDetailEnd" type="date" /></label>
+        <label>状态<select id="coverageDetailStatus">
+          <option value="problem">只看缺失 / 不完整</option>
+          <option value="">全部状态</option>
+          <option value="missing">缺失</option>
+          <option value="partial">截面不完整</option>
+          <option value="present">有数据</option>
+          <option value="pending">等待发布</option>
+        </select></label>
+        <button id="coverageDetailQueryButton" class="button button-secondary" type="button">查询</button>
       </div>
       <div id="coveragePartitions" class="partition-grid"></div>
       <footer class="dialog-footer">

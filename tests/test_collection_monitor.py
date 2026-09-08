@@ -72,7 +72,7 @@ def test_collection_monitor_unifies_policy_and_dedicated_completion():
     assert items["fut_basic"]["cadence"] == "weekly"
     assert items["fut_basic"]["automatic_safe"] is True
     assert items["stk_mins"]["automation_mode"] == "manual"
-    assert payload["summary"]["automated"] == 183
+    assert payload["summary"]["automated"] == 185
 
 
 def test_dedicated_monitor_prefers_durable_verified_queue_evidence():
@@ -200,9 +200,9 @@ def test_ad_hoc_fanout_campaign_does_not_claim_periodic_automation():
     payload = CollectionMonitorService(repository).overview()
     item = next(row for row in payload["interfaces"] if row["api_name"] == "fund_nav")
 
-    assert item["automation_mode"] == "manual"
+    assert item["automation_mode"] == "policy"
     assert item["latest"]["source"] == "fanout_campaign"
-    assert payload["summary"]["automated"] == 183
+    assert payload["summary"]["automated"] == 185
 
 
 def test_collection_monitor_exposes_worker_pool_backlog():

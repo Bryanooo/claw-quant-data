@@ -506,7 +506,7 @@ def test_task_registry_snapshots_deterministic_handlers():
 
     assert generic.handler_type == "generic"
     assert generic.handler_key == "catalog_typed:cn_cpi"
-    assert generic.handler_version == "3"
+    assert generic.handler_version == "4"
     assert dedicated.handler_type == "dedicated"
     assert dedicated.handler_key.endswith(":_run_stock_daily")
     assert dedicated.handler_version == "2"
@@ -738,6 +738,21 @@ def test_task_registry_defers_job_created_by_newer_handler(monkeypatch):
 
     assert failure.value.defer_without_failure is True
     assert failure.value.retry_after_seconds == 30
+
+
+def test_task_registry_newer_worker_accepts_queued_older_numeric_handler():
+    job = make_job(
+        task_name="tushare_interface",
+        parameters={
+            "api_name": "fund_nav",
+            "parameters": {"nav_date": "20260904"},
+        },
+        handler_type="generic",
+        handler_key="catalog_typed:fund_nav",
+        handler_version="3",
+    )
+
+    TASKS.assert_handler_compatible(job)
 
 
 def test_manual_api_defaults_to_three_attempts():

@@ -67,6 +67,16 @@ _PAGE_SIZE_OVERRIDES = {
     # page boundary for hk_hold.
     "ccass_hold": 5000,
     "hk_hold": 3800,
+    # Whole-market fund partitions are intentionally broad. The gateway
+    # honors 5,000-row pages and persistent checkpoints make retries cheap.
+    "fund_nav": 5000,
+    "fund_portfolio": 5000,
+}
+
+_MAX_PAGES_OVERRIDES = {
+    # The latest observed quarter contains roughly 1.6-1.8 million holdings;
+    # 500 x 5,000 leaves verified headroom without an unbounded request loop.
+    "fund_portfolio": 500,
 }
 
 # Some official pages keep the call limit in a separate "调取说明" block that
@@ -100,8 +110,12 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     # A market-wide request cannot be proven complete for these interfaces.
     "factor_value": "dependency_fanout",
     "fund_basic": "manual",
-    "fund_nav": "ts_code_fanout",
-    "fund_portfolio": "ts_code_fanout",
+    # Live gateway verification on 2026-09-08 proved that both whole-market
+    # scopes are exhaustively pageable. One nav_date returned 25,340 unique
+    # rows; the latest portfolio period paged beyond 1.6 million rows without
+    # repeating pages. These bounded scopes are safer than 32k fund-code jobs.
+    "fund_nav": "trade_date",
+    "fund_portfolio": "report_period",
     "fut_index_daily": "ts_code_fanout",
     # A market-wide ccass_hold_detail date contains more than one million
     # institution-seat rows. It must remain an explicitly scoped query rather
@@ -172,6 +186,11 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # Live verification on 2026-08-30 returned 2000 rows at offsets 0 and
     # 2000 for one trade_date. The gateway supports standard limit/offset.
     "fund_share",
+    # Whole-market fund scopes are large but the gateway honors standard
+    # limit/offset. Durable page checkpoints make the quarterly portfolio job
+    # resumable without falling back to tens of thousands of symbol calls.
+    "fund_nav",
+    "fund_portfolio",
     # Live verification on 2026-09-07 exhausted the day's 22,248-row
     # ``float_date`` partition in four distinct pages (6,000/6,000/6,000/
     # 4,248).  Without offset exhaustion the first round page was correctly
@@ -192,6 +211,9 @@ _OFFSET_PAGINATION_OVERRIDES = {
     "index_weekly",
     "index_monthly",
     "index_daily",
+    # A one-index monthly window returned distinct pages and exhausted after
+    # its former 7,000-row safety boundary, proving offset pagination works.
+    "index_weight",
     # Single-day securities-lending scopes can exceed 2,000 rows. Live probes
     # confirm that the gateway honors standard limit/offset for all four.
     "slb_len",
@@ -372,7 +394,7 @@ def derive_policy(contract: TushareInterfaceContract) -> TushareCollectionPolicy
         parameter_strategy=strategy,
         pagination_mode=pagination,
         page_size=max(page_size, 1),
-        max_pages=100,
+        max_pages=_MAX_PAGES_OVERRIDES.get(contract.api_name, 100),
         documented_row_limit=row_limit,
         min_interval_seconds=_RATE_LIMIT_SECONDS.get(contract.api_name, 0.25),
         automatic_safe=automatic_safe,

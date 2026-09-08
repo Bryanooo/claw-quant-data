@@ -9,6 +9,7 @@ from service.initialization.service import (
     FINANCE_TASKS,
     FULL_FANOUT_BASELINES,
     FULL_HISTORY_START,
+    FULL_INITIALIZATION_BASELINES,
     InitializationService,
     PLANNING_BATCH_SIZE,
     _published_quarter_ends,
@@ -611,6 +612,9 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
         "start_date": "2026-07-29",
         "end_date": "2026-08-28",
     }
+    assert requests["index_weight"]["start_date"] == "2026-07-29"
+    assert requests["fut_weekly_monthly"]["start_date"] == "2026-08-22"
+    assert requests["stk_week_month_adj"]["start_date"] == "2026-08-22"
     market_calls = [call for call in jobs.calls if call[0] == "tushare_interface"]
     fund_nav = [call for call in market_calls if call[1]["api_name"] == "fund_nav"]
     assert len(fund_nav) == 366
@@ -652,7 +656,33 @@ def test_latest_baseline_excludes_interfaces_owned_by_safe_fanout():
         if task_name == "tushare_interface"
     }
     assert catalog_calls
-    assert catalog_calls.isdisjoint(FULL_FANOUT_BASELINES)
+    assert catalog_calls.isdisjoint(FULL_INITIALIZATION_BASELINES)
+
+
+def test_running_initialization_can_rebuild_only_failed_steps():
+    repository = FakeRepository(
+        campaign(status="running", current_phase=5),
+        [
+            collection_step(
+                "incomplete",
+                step_id=41,
+                collection_status="failed",
+            ),
+            collection_step(
+                "running",
+                step_id=42,
+                collection_status="running",
+                completion_evidence=None,
+            ),
+        ],
+    )
+
+    result = service_with(repository).resume(9)
+
+    assert repository.deleted_steps == [41]
+    assert repository.value["verification_round"] == 2
+    assert result["status"] == "running"
+    assert result["current_phase"] == 5
 
 
 def test_non_full_initialization_skips_expensive_whole_universe_fanouts():

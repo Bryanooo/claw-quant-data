@@ -202,6 +202,46 @@ def test_index_periodic_policies_use_market_wide_offset_pagination():
         assert policy.automatic_safe is True
 
 
+def test_fund_market_partitions_are_automatic_and_exhaust_offset_pages(monkeypatch):
+    monkeypatch.setattr(scheduling, "_latest_trade_date", lambda _today: "20260904")
+    catalog = TushareInterfaceCatalog()
+    policies = TusharePolicyRegistry()
+
+    nav = policies.get("fund_nav")
+    assert nav.parameter_strategy == "trade_date"
+    assert nav.pagination_mode == "offset"
+    assert nav.cadence == "daily"
+    assert nav.automatic_safe is True
+    assert nav.page_size == 5000
+    assert scheduling.parameters_for_policy(
+        nav,
+        {item["name"] for item in catalog.get("fund_nav").input_parameters},
+        today=date(2026, 9, 8),
+    ) == {"nav_date": "20260904"}
+
+    portfolio = policies.get("fund_portfolio")
+    assert portfolio.parameter_strategy == "report_period"
+    assert portfolio.pagination_mode == "offset"
+    assert portfolio.cadence == "quarterly"
+    assert portfolio.automatic_safe is True
+    assert portfolio.page_size == 5000
+    assert portfolio.max_pages == 500
+    assert scheduling.parameters_for_policy(
+        portfolio,
+        {
+            item["name"]
+            for item in catalog.get("fund_portfolio").input_parameters
+        },
+        today=date(2026, 9, 8),
+    ) == {"period": "20260630"}
+
+
+def test_index_weight_fanout_uses_offset_pagination():
+    policy = TusharePolicyRegistry().get("index_weight")
+
+    assert policy.pagination_mode == "offset"
+
+
 def test_securities_lending_policies_exhaust_offset_pages():
     policies = TusharePolicyRegistry()
     for api_name in ("slb_len", "slb_len_mm", "slb_sec", "slb_sec_detail"):

@@ -659,6 +659,7 @@ class JobRepository:
         *,
         retryable: bool = True,
         retry_after_seconds: int | None = None,
+        defer_resource_class_seconds: int | None = None,
         failure_status: str = "failed",
         rows_inserted: int = 0,
         completion_evidence: dict | None = None,
@@ -731,6 +732,22 @@ class JobRepository:
                       AND api_name = %s
                     """,
                     (retry_delay, job["api_name"]),
+                )
+            if defer_resource_class_seconds and job.get("resource_class"):
+                cursor.execute(
+                    """
+                    UPDATE sys_collection_job
+                    SET available_at = GREATEST(
+                        available_at,
+                        NOW() + (%s * INTERVAL '1 second')
+                    )
+                    WHERE status = 'queued' AND job_kind = 'leaf'
+                      AND resource_class = %s
+                    """,
+                    (
+                        max(int(defer_resource_class_seconds), 1),
+                        job["resource_class"],
+                    ),
                 )
         return status
 

@@ -23,6 +23,23 @@ _TASK_PRIORITIES = {
     "catalog": 40,
 }
 
+# Purpose-built tasks use internal names that are not always the public
+# Tushare API name. Persist the canonical interface identity on every job so
+# monitoring and recovery can correlate old failures with later successes.
+DEDICATED_TASK_API_NAMES = {
+    "trade_calendar": "trade_cal",
+    "stock_basic": "stock_basic",
+    "stock_daily": "daily",
+    "stock_daily_basic": "daily_basic",
+    "moneyflow": "moneyflow",
+    "stock_limit": "stk_limit",
+    "stock_suspend": "suspend_d",
+    "income_period": "income",
+    "balancesheet_period": "balancesheet",
+    "cashflow_period": "cashflow",
+    "financial_indicator_period": "fina_indicator",
+}
+
 
 class CollectionJobService:
     def __init__(self, repository, registry: TaskRegistry):
@@ -73,7 +90,11 @@ class CollectionJobService:
             parent_job_id=parent_job_id,
             api_name=(
                 api_name
-                or (normalized.get("api_name") if task_name == "tushare_interface" else None)
+                or (
+                    normalized.get("api_name")
+                    if task_name == "tushare_interface"
+                    else DEDICATED_TASK_API_NAMES.get(task_name)
+                )
             ),
             cadence=cadence,
             period_key=period_key,

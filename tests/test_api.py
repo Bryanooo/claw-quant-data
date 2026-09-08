@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from service.api.app import create_app
@@ -84,6 +86,17 @@ class FakeDataService:
             },
         }
 
+    def stock_research_pack(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {
+            "data": {"profile": {"basic": {"ts_code": ts_code}}},
+            "meta": {
+                "ts_code": ts_code,
+                "benchmark": kwargs["benchmark"],
+                "external_data_needed": [],
+            },
+        }
+
 
 class FakeInterfaceDataService:
     def __init__(self):
@@ -166,6 +179,30 @@ def test_dataset_query_passes_only_whitelisted_query_shape():
     assert response.json()["data"][0]["ts_code"] == "000001.SZ"
     assert service.query_args["exact_filters"] == {"ts_code": "000001.SZ"}
     assert service.query_args["limit"] == 20
+
+
+def test_stock_research_pack_endpoint_passes_bounded_parameters():
+    client, service = make_client()
+    with client:
+        response = client.get(
+            "/api/v1/stocks/300750.sz/research-pack",
+            params={
+                "lookback_days": 90,
+                "benchmark": "399006.sz",
+                "financial_periods": 4,
+                "as_of": "2026-09-08",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["profile"]["basic"]["ts_code"] == "300750.SZ"
+    assert service.query_args == {
+        "ts_code": "300750.SZ",
+        "lookback_days": 90,
+        "benchmark": "399006.SZ",
+        "financial_periods": 4,
+        "as_of": date(2026, 9, 8),
+    }
 
 
 def test_interface_discovery_and_raw_query_are_under_api_namespace():

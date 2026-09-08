@@ -57,6 +57,7 @@ class FakeRepository:
         self.created = created
 
     def create(self, task_name, parameters, **kwargs):
+        self.create_options = kwargs
         if self.created:
             self.job = {
                 **self.job,
@@ -169,6 +170,20 @@ def test_job_service_detects_idempotency_key_payload_conflict():
             max_attempts=2,
             idempotency_key="same-request-key",
         )
+
+
+def test_job_service_persists_canonical_api_for_dedicated_task():
+    repository = FakeRepository()
+    service = CollectionJobService(repository, TASKS)
+
+    service.submit(
+        "stock_daily",
+        {"trade_date": "20260725"},
+        max_attempts=3,
+        idempotency_key="daily-20260725",
+    )
+
+    assert repository.create_options["api_name"] == "daily"
 
 
 def test_collection_job_api_submits_without_access_key():
@@ -383,11 +398,45 @@ def test_worker_does_not_retry_permanent_collection_errors(monkeypatch):
     assert failure["completion_evidence"]["failure"]["retryable"] is False
 
 
+@pytest.mark.parametrize(("attempt", "expected_delay"), [(1, 60), (2, 300), (3, 900)])
+def test_worker_applies_shared_exponential_backoff_to_network_failures(
+    monkeypatch, attempt, expected_delay
+):
+    import service.collection_jobs.worker as worker_module
+
+    repository = WorkerRepository()
+    repository.job.update(attempt=attempt, max_attempts=3, resource_class="initialization")
+    failure = {}
+
+    def fail_or_requeue(job, error_message, **options):
+        failure.update(job=job, error_message=error_message, **options)
+        return "queued" if attempt < 3 else "failed"
+
+    repository.fail_or_requeue = fail_or_requeue
+    monkeypatch.setattr(worker_module, "JOB_NETWORK_RETRY_BASE_SECONDS", 60)
+    monkeypatch.setattr(worker_module, "JOB_NETWORK_RETRY_MAX_SECONDS", 900)
+    monkeypatch.setattr(
+        TASKS,
+        "run",
+        lambda *_args: (_ for _ in ()).throw(
+            ConnectionError("temporary failure in name resolution")
+        ),
+    )
+
+    assert JobWorker(repository, worker_id="test-worker").run_once() is True
+    assert failure["retry_after_seconds"] == expected_delay
+    assert failure["defer_resource_class_seconds"] == expected_delay
+    evidence = failure["completion_evidence"]["failure"]
+    assert evidence["category"] == "network"
+    assert evidence["resource_backoff_seconds"] == expected_delay
+
+
 def test_failure_categories_distinguish_operational_causes():
     assert classify_failure(CollectionJobTimeoutError("slow")) == "timeout"
     assert classify_failure(IncompleteCollectionError("response cap (2000)")) == "completeness"
     assert classify_failure(RuntimeError("访问权限不足")) == "permission"
     assert classify_failure(ConnectionError("connection reset")) == "network"
+    assert classify_failure(OSError("[Errno -2] Name or service not known")) == "network"
 
 
 def test_worker_execution_deadline_interrupts_stuck_call():

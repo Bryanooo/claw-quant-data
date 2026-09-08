@@ -170,6 +170,11 @@ class StockSnapshotResponse(ApiModel):
     meta: SnapshotMeta
 
 
+class StockResearchPackResponse(ApiModel):
+    data: dict[str, Any]
+    meta: dict[str, Any]
+
+
 class ErrorBody(ApiModel):
     code: str
     message: str

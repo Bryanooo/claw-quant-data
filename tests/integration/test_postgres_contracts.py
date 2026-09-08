@@ -238,6 +238,63 @@ def test_long_quota_delay_defers_sibling_interface_jobs():
             connection.close()
 
 
+def test_network_failure_defers_the_whole_worker_resource_pool():
+    suffix = uuid4().hex
+    resource_class = f"network-test-{suffix[:8]}"
+    repository = JobRepository()
+    job_ids = []
+    try:
+        for index, api_name in enumerate(("factor_value", "cn_cpi")):
+            job, created = repository.create(
+                "tushare_interface",
+                {"api_name": api_name, "parameters": {"probe": str(index)}},
+                max_attempts=3,
+                idempotency_key=f"integration-network-defer-{index}-{suffix}",
+                api_name=api_name,
+                resource_class=resource_class,
+            )
+            assert created
+            job_ids.append(job["job_id"])
+
+        claimed = repository.claim_next(
+            "integration-network-worker",
+            resource_classes=(resource_class,),
+        )
+        repository.fail_or_requeue(
+            claimed,
+            "temporary DNS resolution failure",
+            retry_after_seconds=60,
+            defer_resource_class_seconds=120,
+        )
+
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT status, available_at > NOW() + INTERVAL '100 seconds'
+                    FROM sys_collection_job WHERE job_id = ANY(%s)
+                    ORDER BY job_id
+                    """,
+                    (job_ids,),
+                )
+                rows = cursor.fetchall()
+            assert rows == [("queued", True), ("queued", True)]
+        finally:
+            connection.close()
+    finally:
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM sys_collection_job WHERE job_id = ANY(%s)",
+                    (job_ids,),
+                )
+            connection.commit()
+        finally:
+            connection.close()
+
+
 def test_failed_fanout_plan_is_only_superseded_by_verified_replacement():
     suffix = uuid4().hex
     repository = FanoutCampaignRepository()
@@ -508,6 +565,46 @@ def test_initialization_campaign_atomically_gates_first_install_and_preserves_up
             connection.commit()
         finally:
             connection.close()
+
+
+def test_estimated_rows_follows_a_registered_view_to_its_base_table():
+    suffix = uuid4().hex[:12]
+    table_name = f"estimate_base_{suffix}"
+    view_name = f"estimate_view_{suffix}"
+    connection = psycopg2.connect(**DB_CONFIG)
+    database = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f'CREATE TABLE "{table_name}" (id integer PRIMARY KEY)')
+            cursor.execute(
+                f'INSERT INTO "{table_name}" SELECT generate_series(1, 200)'
+            )
+            cursor.execute(f'ANALYZE "{table_name}"')
+            cursor.execute(
+                f'CREATE VIEW "{view_name}" AS SELECT * FROM "{table_name}"'
+            )
+        connection.commit()
+        dataset = DatasetSpec(
+            name="estimated_view",
+            table=view_name,
+            description="view row-estimate contract test",
+            category="test",
+            primary_keys=("id",),
+        )
+        database = Database(DB_CONFIG, min_connections=1, max_connections=1)
+
+        estimated = DatasetRepository(database).estimated_rows(dataset)
+
+        assert estimated >= 200
+    finally:
+        if database is not None:
+            database.close()
+        connection.rollback()
+        with connection.cursor() as cursor:
+            cursor.execute(f'DROP VIEW IF EXISTS "{view_name}"')
+            cursor.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+        connection.commit()
+        connection.close()
 
 
 def test_collector_tables_and_generic_upsert_keys_match_postgres():

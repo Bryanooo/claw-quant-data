@@ -41,6 +41,19 @@ class FakeRepository:
     def estimated_rows(self, dataset):
         return 0
 
+    def search_news(self, dataset, **kwargs):
+        self.news_dataset = dataset
+        self.news_query = kwargs
+        return [
+            {
+                "_record_hash": "news-1",
+                "title": "宁德时代发布经营进展",
+                "content": "<p>宁德时代最新经营情况。</p>",
+                "pub_time": "2026-09-07T12:00:00",
+                "src": "测试新闻源",
+            }
+        ]
+
 
 class FreshnessRepository(FakeRepository):
     def __init__(self, latest):
@@ -283,4 +296,54 @@ def test_query_rejects_unknown_filters():
             limit=100,
             offset=0,
             include_total=False,
+        )
+
+
+def test_stock_research_pack_aggregates_governed_datasets_without_advice():
+    repository = FakeRepository()
+    service = DataService(repository, DATASETS)
+
+    result = service.stock_research_pack(
+        "300750.SZ",
+        lookback_days=90,
+        benchmark="399006.SZ",
+        financial_periods=4,
+        as_of=date(2026, 9, 8),
+    )
+
+    assert result["meta"]["start_date"] == date(2026, 6, 11)
+    assert result["meta"]["benchmark"] == "399006.SZ"
+    assert result["data"]["profile"]["basic"]["ts_code"] == "300750.SZ"
+    assert result["data"]["market"]["benchmark_daily"][0]["ts_code"] == "399006.SZ"
+    assert result["data"]["market"]["adjustment_factors"]
+    assert result["data"]["market"]["northbound_holding"]
+    assert result["data"]["fundamentals"]["indicators"]
+    assert result["data"]["ownership_and_events"]["top_holders"]
+    assert result["data"]["ownership_and_events"]["related_news"][0]["content"] == "宁德时代最新经营情况。"
+    assert repository.news_query["start_date"] == date(2026, 6, 11)
+    assert repository.news_query["end_date"] == date(2026, 9, 8)
+    provenance = {item["dataset"]: item for item in result["meta"]["provenance"]}
+    assert "adj_factor" in provenance
+    assert "hk_hold" in provenance
+    assert "latest_value_in_pack" in provenance["stock_daily"]
+    assert "earliest_value_in_pack" in provenance["stock_daily"]
+    assert result["meta"]["external_data_needed"][0]["topic"] == "official_company_announcements"
+    assert "advice" not in result
+
+
+@pytest.mark.parametrize(
+    ("lookback_days", "financial_periods"),
+    [(29, 4), (731, 4), (90, 0), (90, 13)],
+)
+def test_stock_research_pack_rejects_unbounded_requests(
+    lookback_days,
+    financial_periods,
+):
+    service = DataService(FakeRepository(), DATASETS)
+
+    with pytest.raises(InvalidQueryError):
+        service.stock_research_pack(
+            "300750.SZ",
+            lookback_days=lookback_days,
+            financial_periods=financial_periods,
         )

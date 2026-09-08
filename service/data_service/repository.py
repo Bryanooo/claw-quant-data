@@ -1,5 +1,6 @@
 """Safe SQL repository for registered datasets."""
 
+from datetime import date, timedelta
 from typing import Any
 
 from psycopg2 import sql
@@ -76,13 +77,82 @@ class DatasetRepository:
     def estimated_rows(self, dataset: DatasetSpec) -> int:
         row = self._database.fetch_one(
             """
-            SELECT COALESCE(n_live_tup, 0)::bigint AS estimated_rows
-            FROM pg_stat_user_tables
-            WHERE schemaname = 'public' AND relname = %s
+            WITH target AS (
+                SELECT rel.oid, rel.relkind
+                FROM pg_class AS rel
+                JOIN pg_namespace AS namespace
+                  ON namespace.oid = rel.relnamespace
+                WHERE namespace.nspname = 'public' AND rel.relname = %s
+            ), relations AS (
+                SELECT oid FROM target WHERE relkind IN ('r', 'p', 'm')
+                UNION
+                SELECT dependency.refobjid
+                FROM target
+                JOIN pg_rewrite AS rewrite ON rewrite.ev_class = target.oid
+                JOIN pg_depend AS dependency
+                  ON dependency.objid = rewrite.oid
+                 AND dependency.refclassid = 'pg_class'::regclass
+                WHERE target.relkind = 'v'
+                  AND dependency.refobjid <> target.oid
+            )
+            SELECT COALESCE(
+                       MAX(GREATEST(
+                           COALESCE(stats.n_live_tup, 0),
+                           COALESCE(rel.reltuples, 0),
+                           0
+                       )),
+                       0
+                   )::bigint AS estimated_rows
+            FROM relations
+            JOIN pg_class AS rel ON rel.oid = relations.oid
+            LEFT JOIN pg_stat_user_tables AS stats ON stats.relid = rel.oid
             """,
             (dataset.table,),
         )
         return int(row["estimated_rows"]) if row else 0
+
+    def search_news(
+        self,
+        dataset: DatasetSpec,
+        *,
+        terms: tuple[str, ...],
+        start_date: date,
+        end_date: date,
+        limit: int,
+    ) -> list[dict]:
+        """Search governed major-news rows with bounded, literal keywords."""
+        clean_terms = tuple(term.strip() for term in terms if term.strip())[:5]
+        if not clean_terms:
+            return []
+        term_conditions: list[sql.Composed] = []
+        params: list[Any] = []
+        for term in clean_terms:
+            pattern = f"%{term}%"
+            term_conditions.append(
+                sql.SQL("({title} ILIKE %s OR {content} ILIKE %s)").format(
+                    title=sql.Identifier("title"),
+                    content=sql.Identifier("content"),
+                )
+            )
+            params.extend((pattern, pattern))
+        statement = sql.SQL(
+            "SELECT {hash}, {title}, LEFT({content}, 2000) AS {content}, "
+            "{published}, {source} FROM {table} "
+            "WHERE ({terms}) AND {published} >= %s AND {published} < %s "
+            "ORDER BY {published} DESC LIMIT %s"
+        ).format(
+            hash=sql.Identifier("_record_hash"),
+            title=sql.Identifier("title"),
+            content=sql.Identifier("content"),
+            published=sql.Identifier("pub_time"),
+            source=sql.Identifier("src"),
+            table=sql.Identifier(dataset.read_table),
+            terms=sql.SQL(" OR ").join(term_conditions),
+        )
+        return self._database.fetch_all(
+            statement,
+            (*params, start_date, end_date + timedelta(days=1), limit),
+        )
 
     @staticmethod
     def _where_clause(

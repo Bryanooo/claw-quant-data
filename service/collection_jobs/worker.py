@@ -16,6 +16,8 @@ from service.collection_jobs.verification import CollectionVerificationPlanner
 from service.config import (
     JOB_EXECUTION_TIMEOUT_SECONDS,
     JOB_LEASE_SECONDS,
+    JOB_NETWORK_RETRY_BASE_SECONDS,
+    JOB_NETWORK_RETRY_MAX_SECONDS,
     JOB_POLL_INTERVAL_SECONDS,
     JOB_RECLAIM_INTERVAL_SECONDS,
     JOB_STALE_AFTER_SECONDS,
@@ -72,7 +74,9 @@ def classify_failure(exc: Exception) -> str:
     if "psycopg" in name or "database" in name or "sql" in name:
         return "storage"
     if any(marker in name or marker in message for marker in (
-        "connection", "network", "httperror", "connection reset", "dns"
+        "connection", "network", "httperror", "connection reset", "dns",
+        "gaierror", "name or service not known", "name resolution",
+        "nodename nor servname",
     )):
         return "network"
     return "upstream_or_internal"
@@ -174,11 +178,28 @@ class JobWorker:
             logger.exception("job %s failed", job["job_id"])
             retryable = getattr(exc, "retryable", True)
             retry_after_seconds = getattr(exc, "retry_after_seconds", None)
+            failure_category = classify_failure(exc)
+            resource_backoff_seconds = None
+            if failure_category == "network" and retryable:
+                network_delay = min(
+                    JOB_NETWORK_RETRY_BASE_SECONDS
+                    * (5 ** max(int(job.get("attempt") or 1) - 1, 0)),
+                    JOB_NETWORK_RETRY_MAX_SECONDS,
+                )
+                retry_after_seconds = max(
+                    int(retry_after_seconds or 0), network_delay
+                )
+                # DNS and transport failures normally affect the upstream as
+                # a whole. Pause this worker pool as well as the current job
+                # so sibling history partitions do not consume all attempts
+                # during the same incident.
+                resource_backoff_seconds = retry_after_seconds
             status = self._repository.fail_or_requeue(
                 job,
                 f"{type(exc).__name__}: {exc}",
                 retryable=retryable,
                 retry_after_seconds=retry_after_seconds,
+                defer_resource_class_seconds=resource_backoff_seconds,
                 failure_status=getattr(exc, "completion_status", "failed"),
                 rows_inserted=getattr(exc, "rows_inserted", 0),
                 completion_evidence={
@@ -190,10 +211,11 @@ class JobWorker:
                     "partial_rows_inserted": getattr(exc, "rows_inserted", 0),
                     "failed_partitions": list(getattr(exc, "failures", ()))[:50],
                     "failure": {
-                        "category": classify_failure(exc),
+                        "category": failure_category,
                         "exception_type": type(exc).__name__,
                         "retryable": bool(retryable),
                         "retry_after_seconds": retry_after_seconds,
+                        "resource_backoff_seconds": resource_backoff_seconds,
                         "attempt": job.get("attempt"),
                         "max_attempts": job.get("max_attempts"),
                     },

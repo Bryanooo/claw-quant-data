@@ -1038,6 +1038,12 @@ class InitializationService:
         )
         result["phase_index"] = result["current_phase"] + 1
         result["phase_total"] = len(PHASES)
+        work_window = getattr(self._repository, "phase_work_window", None)
+        result["work_window"] = (
+            work_window(result["initialization_id"], result["current_phase"])
+            if callable(work_window)
+            else None
+        )
         return result
 
     def _phase_logical_total(self, campaign: dict) -> int | None:

@@ -382,6 +382,60 @@ class InitializationRepository:
                 break
         return rows[:limit]
 
+    def phase_work_window(self, initialization_id: int, phase: int) -> dict:
+        """Summarize the dated collection work materialized for one phase."""
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT COALESCE(collection.api_name, collection.task_name) AS resource,
+                       MIN(collection.expected_for) AS materialized_start,
+                       MAX(collection.expected_for) AS materialized_end,
+                       MIN(collection.expected_for) FILTER (
+                           WHERE collection.status IN ('queued', 'running')
+                       ) AS active_start,
+                       MAX(collection.expected_for) FILTER (
+                           WHERE collection.status IN ('queued', 'running')
+                       ) AS active_end,
+                       COUNT(*) FILTER (WHERE collection.status='queued') AS queued,
+                       COUNT(*) FILTER (WHERE collection.status='running') AS running,
+                       COUNT(*) FILTER (WHERE collection.status='success') AS completed,
+                       COUNT(*) FILTER (WHERE collection.status='failed') AS failed
+                FROM sys_collection_initialization_step AS step
+                JOIN sys_collection_job AS collection
+                  ON collection.job_id=step.collection_job_id
+                WHERE step.initialization_id=%s AND step.phase=%s
+                  AND collection.expected_for IS NOT NULL
+                GROUP BY COALESCE(collection.api_name, collection.task_name)
+                ORDER BY COALESCE(collection.api_name, collection.task_name)
+                """,
+                (initialization_id, phase),
+            )
+            resources = [dict(row) for row in cursor.fetchall()]
+        active = [row for row in resources if row["queued"] or row["running"]]
+        dated = [row for row in resources if row["materialized_start"] is not None]
+        return {
+            "materialized_start": min(
+                (row["materialized_start"] for row in dated), default=None
+            ),
+            "materialized_end": max(
+                (row["materialized_end"] for row in dated), default=None
+            ),
+            "active_start": min(
+                (row["active_start"] for row in active), default=None
+            ),
+            "active_end": max(
+                (row["active_end"] for row in active), default=None
+            ),
+            "queued": sum(int(row["queued"]) for row in resources),
+            "running": sum(int(row["running"]) for row in resources),
+            "completed": sum(int(row["completed"]) for row in resources),
+            "failed": sum(int(row["failed"]) for row in resources),
+            "resources": resources,
+        }
+
     def update_progress(
         self,
         initialization_id: int,

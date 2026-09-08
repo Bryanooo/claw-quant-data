@@ -644,8 +644,11 @@ class CoverageRepository:
             conditions.append("partition_date <= %s")
             params.append(end_date)
         if status:
-            conditions.append("status = %s")
-            params.append(status)
+            if status == "problem":
+                conditions.append("status IN ('missing', 'partial')")
+            else:
+                conditions.append("status = %s")
+                params.append(status)
         with (
             self._connection() as connection,
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
@@ -663,6 +666,39 @@ class CoverageRepository:
                 (*params, limit),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def covering_audit(
+        self,
+        dataset_name: str,
+        *,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> dict | None:
+        """Return the narrowest completed audit that proves the requested range."""
+        conditions = ["dataset_name=%s"]
+        params: list[Any] = [dataset_name]
+        if start_date:
+            conditions.append("start_date <= %s")
+            params.append(start_date)
+        if end_date:
+            conditions.append("end_date >= %s")
+            params.append(end_date)
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                f"""
+                SELECT audit_id, status, start_date, end_date, finished_at
+                FROM sys_data_coverage_audit
+                WHERE {' AND '.join(conditions)}
+                ORDER BY (end_date - start_date), finished_at DESC, audit_id DESC
+                LIMIT 1
+                """,
+                params,
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def recent_missing(self, dataset_name: str, limit: int = 10) -> list[date]:
         rows = self.list_partitions(

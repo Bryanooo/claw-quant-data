@@ -1,7 +1,7 @@
 from datetime import date
 
 from service.data_coverage.models import CoverageAuditResult, CoveragePartition
-from service.data_coverage.repair import CoverageRepairPlanner
+from service.data_coverage.repair import CoverageRepairPlanner, is_safe_repair_dataset
 
 
 class FakeJobRepository:
@@ -11,6 +11,13 @@ class FakeJobRepository:
     def create(self, task_name, parameters, **options):
         self.created.append((task_name, parameters, options))
         return {"job_id": len(self.created)}, True
+
+    def create_many(self, children):
+        jobs = []
+        for child in children:
+            self.created.append((child.task_name, child.parameters, child))
+            jobs.append({"job_id": len(self.created)})
+        return jobs
 
 
 def audit(dataset="stock_daily", status="gaps"):
@@ -62,6 +69,47 @@ def test_repair_planner_never_repairs_unverified_or_unsupported_datasets():
     assert planner.submit(audit(status="unverified"))["created"] == 0
     assert planner.submit(audit(dataset="forex_daily"))["created"] == 0
     assert repository.created == []
+
+
+def test_safe_repair_capability_is_explicit_and_shared_with_dashboard():
+    assert is_safe_repair_dataset("stock_daily") is True
+    assert is_safe_repair_dataset("index_daily") is True
+    assert is_safe_repair_dataset("forex_daily") is False
+
+
+def test_manual_repair_accepts_confirmed_partition_dates_only():
+    repository = FakeJobRepository()
+
+    result = CoverageRepairPlanner(repository).submit_dates(
+        "stock_daily",
+        [date(2026, 8, 26), date(2026, 8, 25), date(2026, 8, 25)],
+        as_of=date(2026, 9, 8),
+        limit=10,
+    )
+
+    assert result["eligible"] == 2
+    assert result["created"] == 2
+    assert [parameters for _, parameters, _ in repository.created] == [
+        {"trade_date": "20260825"},
+        {"trade_date": "20260826"},
+    ]
+
+
+def test_manual_range_repair_bulk_inserts_independent_retryable_leaves():
+    repository = FakeJobRepository()
+
+    result = CoverageRepairPlanner(repository).submit_dates_bulk(
+        "index_daily",
+        [date(2026, 8, 25), date(2026, 8, 26)],
+        as_of=date(2026, 9, 8),
+        limit=4000,
+    )
+
+    assert result == {"eligible": 2, "created": 2, "job_ids": [1, 2]}
+    first = repository.created[0][2]
+    assert first.resource_class == "backfill"
+    assert first.max_attempts == 3
+    assert first.parameters["complete"] is True
 
 
 def test_repair_planner_uses_report_period_task_for_financial_gaps():

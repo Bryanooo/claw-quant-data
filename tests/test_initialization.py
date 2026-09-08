@@ -396,6 +396,31 @@ def test_core_history_progress_uses_stable_logical_total_not_materialized_batch(
     assert result["progress_basis"] == "logical_total"
 
 
+def test_initialization_progress_exposes_current_materialized_work_range():
+    repository = PlanningRepository()
+    repository.phase_work_window = lambda _initialization_id, _phase: {
+        "materialized_start": date(2018, 1, 1),
+        "materialized_end": date(2018, 4, 30),
+        "active_start": date(2018, 3, 1),
+        "active_end": date(2018, 4, 30),
+        "queued": 120,
+        "running": 2,
+        "completed": 378,
+        "failed": 0,
+        "resources": [{"resource": "daily", "queued": 60, "running": 1}],
+    }
+    service = InitializationService(
+        repository=repository,
+        job_service=PlanningJobs(),
+        coverage_service=PlanningCoverage(),
+    )
+
+    result = service._decorate(campaign(current_phase=1, phase_name="core_history"))
+
+    assert result["work_window"]["active_start"] == date(2018, 3, 1)
+    assert result["work_window"]["queued"] == 120
+
+
 def test_catalog_history_uses_bounded_windows_and_all_libor_currencies():
     repository = PlanningRepository()
     jobs = PlanningJobs()

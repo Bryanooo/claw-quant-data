@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Header, Query, Response, status
 
 from service.api.dependencies import CoverageServiceDependency
-from service.api.schemas import CoverageAuditRequest
+from service.api.schemas import CoverageAuditRequest, CoverageRepairRequest
 
 router = APIRouter(prefix="/v1/coverage", tags=["data coverage"])
 IdempotencyKey = Annotated[
@@ -27,7 +27,7 @@ def coverage_partitions(
     start_date: date | None = None,
     end_date: date | None = None,
     partition_status: Literal[
-        "present", "partial", "missing", "pending", "observed_only"
+        "present", "partial", "missing", "pending", "observed_only", "problem"
     ] | None = Query(default=None, alias="status"),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> dict:
@@ -64,6 +64,22 @@ def submit_coverage_audits(
         start_date=request.start_date,
         end_date=request.end_date,
         idempotency_key=idempotency_key,
+    )
+    if result["created"] == 0:
+        response.status_code = status.HTTP_200_OK
+    return result
+
+
+@router.post("/repairs", status_code=status.HTTP_202_ACCEPTED)
+def submit_coverage_repairs(
+    request: CoverageRepairRequest,
+    response: Response,
+    service: CoverageServiceDependency,
+) -> dict:
+    result = service.submit_repairs(
+        request.dataset,
+        start_date=request.start_date,
+        end_date=request.end_date,
     )
     if result["created"] == 0:
         response.status_code = status.HTTP_200_OK

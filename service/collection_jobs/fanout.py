@@ -25,6 +25,23 @@ class FanoutDefinition:
     max_window_days: int = 366
 
 
+# Authoritative static universe published in Tushare's fut_index_daily
+# contract (doc 468). The endpoint currently requires ts_code even though the
+# parameter table labels it optional, so a frozen documented universe is safer
+# than attempting an incomplete market-wide request.
+NH_FUTURES_INDEX_CODES = (
+    "NHAI.NH", "NHCI.NH", "NHECI.NH", "NHFI.NH", "NHII.NH", "NHMI.NH",
+    "NHNFI.NH", "NHPMI.NH", "A.NH", "AG.NH", "AL.NH", "AP.NH", "AU.NH",
+    "BB.NH", "BU.NH", "C.NH", "CF.NH", "CS.NH", "CU.NH", "CY.NH",
+    "ER.NH", "FB.NH", "FG.NH", "FU.NH", "HC.NH", "I.NH", "J.NH",
+    "JD.NH", "JM.NH", "JR.NH", "L.NH", "LR.NH", "M.NH", "ME.NH",
+    "NI.NH", "P.NH", "PB.NH", "PP.NH", "RB.NH", "RM.NH", "RO.NH",
+    "RS.NH", "RU.NH", "SC.NH", "SF.NH", "SM.NH", "SN.NH", "SP.NH",
+    "SR.NH", "TA.NH", "TC.NH", "V.NH", "WR.NH", "WS.NH", "Y.NH",
+    "ZN.NH",
+)
+
+
 _DEFINITIONS = (
     FanoutDefinition("bc_otcqt", "bc_bond", "ts_code", "trade_date"),
     FanoutDefinition("cb_rate", "convertible_bond", "ts_code", "none", 20),
@@ -66,6 +83,14 @@ _DEFINITIONS = (
     FanoutDefinition(
         "fut_holding", "static", "exchange", "trade_date", 1,
         ("CFFEX", "DCE", "CZCE", "SHFE", "INE", "GFEX"),
+    ),
+    FanoutDefinition(
+        # Live gateway verification on 2026-09-08 showed that this endpoint
+        # does not accept comma-separated index codes: a 20-code request
+        # returned no rows while the same date/code requested individually
+        # returned data. Keep one code per durable child job.
+        "fut_index_daily", "static", "ts_code", "trade_date", 1,
+        NH_FUTURES_INDEX_CODES,
     ),
     FanoutDefinition(
         "opt_daily", "static", "exchange", "trade_date", 1,

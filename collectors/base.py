@@ -713,6 +713,11 @@ class BaseCollector(ABC):
             except Exception as e:
                 last_error = e
                 self.logger.error(f"❌ 第{attempt}次失败: {e}")
+                # The distributed limiter has not called the upstream yet.
+                # Preserve its queue-level deferral semantics instead of
+                # wrapping it as a collector failure and consuming retries.
+                if getattr(e, "defer_without_failure", False):
+                    raise
                 classified = _tushare_error(e)
                 if classified is not None:
                     classified.retry_count = attempt - 1

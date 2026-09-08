@@ -2,15 +2,32 @@
 
 from collections.abc import Callable
 from functools import lru_cache
+import math
 import time
 from typing import Any
 
 import psycopg2
 
 from service.config import DB_CONFIG, TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS
+from service.collection_jobs.context import is_durable_job_active
 
 
 GLOBAL_RATE_KEY = "__token_global__"
+MAX_INLINE_DURABLE_WAIT_SECONDS = 5.0
+
+
+class TushareRateSlotDeferredError(RuntimeError):
+    """Ask the durable queue to release its worker until the slot is ready."""
+
+    retryable = True
+    defer_without_failure = True
+
+    def __init__(self, api_name: str, wait_seconds: float):
+        self.retry_after_seconds = max(math.ceil(wait_seconds), 1)
+        super().__init__(
+            f"Tushare rate slot for {api_name} is available in "
+            f"{self.retry_after_seconds} seconds"
+        )
 
 
 def install_distributed_rate_limit(pro: Any) -> Any:
@@ -99,6 +116,16 @@ def reserve_tushare_request(
 
             assert database_now is not None
             slot = max(database_now, *slots)
+            wait = max((slot - database_now).total_seconds(), 0.0)
+            # A long inline sleep would occupy a scarce Worker lease and may
+            # exceed the whole-job timeout. Do not reserve a later slot yet:
+            # release this durable job back to PostgreSQL and let another job
+            # use the process while the interface-specific window matures.
+            if (
+                is_durable_job_active()
+                and wait > MAX_INLINE_DURABLE_WAIT_SECONDS
+            ):
+                raise TushareRateSlotDeferredError(api_name, wait)
             for key, interval in sorted(intervals.items()):
                 cursor.execute(
                     """

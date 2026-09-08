@@ -44,11 +44,13 @@ const initializationLabels = {
 const issueLabels = {
   initialization_blocked: "历史初始化中断",
   initialization_pending: "等待初始化首采",
+  collection_pending: "采集任务处理中",
   coverage_incomplete: "采集截面不完整",
   collection_incomplete: "采集结果不完整",
   execution_failure: "采集执行失败",
   collection_failed: "自动采集失败",
   manual_parameters_required: "需要受控参数",
+  manual_scope_required: "需要明确采集范围",
   coverage_gap: "日期 / 截面缺口",
   stale_dataset: "数据已经过期",
   dataset_empty: "数据集为空",
@@ -194,7 +196,8 @@ function filteredHealthIssues() {
   }
   if (selected === "missing") {
     return state.healthIssues.filter((item) => [
-      "dataset_empty", "never_collected", "manual_parameters_required"
+      "dataset_empty", "never_collected", "manual_parameters_required",
+      "manual_scope_required"
     ].includes(item.kind));
   }
   return state.healthIssues.filter((item) => item.confidence === "unknown");
@@ -206,13 +209,14 @@ function renderDataHealth() {
   const history = health.history || {};
   const rows = filteredHealthIssues();
   const page = pageRows(rows, "health");
-  $("confirmedIssueCount").textContent = summary.confirmed_issue_count ?? "—";
-  $("emptyDatasetCount").textContent = summary.empty_datasets ?? "—";
-  $("neverCollectedCount").textContent = summary.never_collected_interfaces ?? "—";
-  $("unknownIssueCount").textContent = summary.unknown_issue_count ?? "—";
+  $("datasetsWithDataCount").textContent = summary.datasets_with_data ?? "—";
+  $("backfillPendingCount").textContent = summary.backfill_pending_interfaces ?? "—";
+  $("verifiedEmptyInterfaceCount").textContent = summary.verified_empty_interfaces ?? "—";
+  $("confirmedDataIssueCount").textContent = summary.confirmed_data_issue_count ?? "—";
   $("dataHealthSummary").textContent =
     `${summary.fresh_datasets ?? 0}/${summary.datasets ?? 0} 个数据集已证明新鲜 · ` +
     `${summary.event_driven_datasets ?? 0} 个按事件更新 · ` +
+    `${summary.scope_required_interfaces ?? 0} 个接口需要人工限定范围 · ` +
     `${summary.scheduled_unaudited_datasets ?? 0} 个周期数据集待审计 · ` +
     `${summary.missing_partitions ?? 0} 个日期缺失 · ` +
     `${summary.partial_partitions ?? 0} 个截面不完整`;

@@ -18,6 +18,7 @@ from service.tushare_catalog import (
 )
 from service.tushare_policy import TusharePolicyRegistry
 from scripts.report_tushare_data_presence import _implementation_tables
+from scripts.audit_tushare_interfaces import discover_document_leaves
 
 
 def test_catalog_docs_are_complete_and_do_not_contain_token():
@@ -85,6 +86,38 @@ def test_every_interface_has_an_operational_collection_policy():
     assert TusharePolicyRegistry().get("factor_value").automatic_safe is False
     assert TusharePolicyRegistry().get("fund_basic").automatic_safe is False
     assert TusharePolicyRegistry().get("fut_weekly_detail").parameter_strategy == "manual"
+
+
+def test_reviewed_official_contracts_cannot_be_lost_by_navigation_changes():
+    catalog = TushareInterfaceCatalog()
+    expected = {
+        "moneyflow_hsgt": 47,
+        "hk_hold": 188,
+        "ccass_hold_detail": 274,
+        "ccass_hold": 295,
+    }
+
+    for api_name, doc_id in expected.items():
+        contract = catalog.get(api_name)
+        assert contract.source_doc_id == doc_id
+        assert contract.collectable is True
+        assert contract.input_parameters
+
+    # Even an empty current navigation tree retains the stable official leaves.
+    entries = discover_document_leaves(b'<div id="jstree"></div>')
+    assert set(expected.values()) <= {item.doc_id for item in entries}
+
+
+def test_live_verified_hong_kong_interface_policies_are_bounded():
+    policies = TusharePolicyRegistry()
+
+    assert policies.get("ccass_hold").pagination_mode == "offset"
+    assert policies.get("ccass_hold").page_size == 5000
+    assert policies.get("hk_hold").pagination_mode == "offset"
+    assert policies.get("hk_daily").automatic_safe is True
+    assert policies.get("hk_daily").min_interval_seconds == 3600.0
+    assert policies.get("ccass_hold_detail").parameter_strategy == "manual"
+    assert policies.get("ccass_hold_detail").automatic_safe is False
 
 
 def test_daily_policy_preserves_official_limit_and_live_verified_pagination():

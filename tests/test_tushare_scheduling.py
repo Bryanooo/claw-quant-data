@@ -76,7 +76,10 @@ def test_every_automatic_policy_can_build_bounded_parameters(monkeypatch):
 
     assert len(candidates) >= 115
     assert "ccass_hold_detail" not in candidates
-    assert "hk_daily" not in candidates
+    assert "ccass_hold" in candidates
+    assert "hk_daily" in candidates
+    assert "hk_hold" in candidates
+    assert "moneyflow_hsgt" in candidates
     assert "stk_mins" not in candidates
     assert "opt_daily" not in candidates
     assert "fut_weekly_detail" not in candidates
@@ -157,6 +160,7 @@ def test_next_morning_empty_recheck_waits_for_publication_cutoff(monkeypatch):
     )
 
     assert scheduling._publication_is_mature("margin", date(2026, 8, 31)) is False
+    assert scheduling._publication_is_mature("ccass_hold", date(2026, 8, 31)) is False
     assert scheduling._publication_is_mature("daily_info", date(2026, 8, 31)) is True
 
     monkeypatch.setattr(

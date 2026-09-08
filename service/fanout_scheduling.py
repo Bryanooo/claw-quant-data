@@ -72,6 +72,10 @@ SCHEDULED_FANOUT_RECIPES = (
         "partition futures holdings by the documented exchange universe",
     ),
     ScheduledFanoutRecipe(
+        "fut_index_daily", "daily", "trade_date", 56,
+        "fan out the complete static South China futures index universe from doc 468",
+    ),
+    ScheduledFanoutRecipe(
         "cb_share", "daily", "ann_date", 200,
         "convertible-bond codes are safely grouped by announcement date",
     ),

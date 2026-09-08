@@ -8,18 +8,19 @@
 [采集器架构](../COLLECTOR_ARCHITECTURE.md)和
 [动态数据落地报告](../../reports/tushare_data_presence.md)。
 
-- 当前官方目录接口：231 个；claw-quant 有效历史/扩展接口：13 个
-- 官方接口权限：依底层接口权限 1 个、接口无效/已下线 1 个、无权限 40 个、有权限 188 个、有权限（当前限频） 1 个
+- 当前官方目录接口：235 个；claw-quant 有效历史/扩展接口：9 个
+- 官方接口权限：依底层接口权限 1 个、接口无效/已下线 1 个、无权限 40 个、有权限 192 个、有权限（当前限频） 1 个
 - HTTP 协议：[官方调用说明](https://tushare.pro/document/1?doc_id=40)
 - 权限规则：[官方权限说明](https://tushare.pro/document/1?doc_id=108)
 - 机器可读契约：[contracts.json](contracts.json)
+- 官方导航遗漏接口的复核契约：[official_contract_supplements.json](official_contract_supplements.json)
 - 原始审计证据：[CSV](../../reports/tushare_interface_matrix.csv) / [Markdown](../../reports/tushare_interface_matrix.md)
 
 权限来自真实 Token 的安全探测。保存、删除类接口只探测空参数，不会更改用户数据；它们仅做安全封装，不进入采集调度。`pro_bar` 是 SDK 组合接口，不支持 HTTP。
 
-当前 200 个可采集接口中有 177 个进入自动编排：42 个专项 cron、118 个契约策略
-任务和 17 个周期全量扇出。接口实现、自动编排、历史回填和当前有数据是不同状态；
-各状态的定义与剩余 23 个接口未自动运行的原因见
+当前 200 个可采集接口中有 183 个进入自动编排：42 个专项 cron、123 个契约策略
+任务和 18 个周期全量扇出。接口实现、自动编排、历史回填和当前有数据是不同状态；
+各状态的定义与剩余 17 个接口未自动运行的原因见
 [采集完整性与可靠性策略](COLLECTION_RELIABILITY.md)，实时状态以
 `GET /api/v1/collection-overview` 为准。
 
@@ -51,8 +52,8 @@
 | POST http://api.tushare.pro | [`cb_rate`](interfaces/cb_rate.md) | 获取可转债票面利率 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 305](https://tushare.pro/document/2?doc_id=305) | [输入/输出/示例](interfaces/cb_rate.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
 | POST http://api.tushare.pro | [`cb_rating`](interfaces/cb_rating.md) | 获取可转债评级历史记录 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 458](https://tushare.pro/document/2?doc_id=458) | [输入/输出/示例](interfaces/cb_rating.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
 | POST http://api.tushare.pro | [`cb_share`](interfaces/cb_share.md) | 获取可转债转股结果 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 247](https://tushare.pro/document/2?doc_id=247) | [输入/输出/示例](interfaces/cb_share.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
-| POST http://api.tushare.pro | [`ccass_hold`](interfaces/ccass_hold.md) | claw-quant 代码中存在直接实现 | 有权限 | 已实现 | — | [输入/输出/示例](interfaces/ccass_hold.md) | [collectors/stock/extra/ccass_hold.py:CcassHoldCollector](../../collectors/stock/extra/ccass_hold.py) |
-| POST http://api.tushare.pro | [`ccass_hold_detail`](interfaces/ccass_hold_detail.md) | claw-quant 代码中存在直接实现 | 有权限 | 已实现 | — | [输入/输出/示例](interfaces/ccass_hold_detail.md) | [collectors/stock/extra/ccass_hold_detail.py:CcassHoldDetailCollector](../../collectors/stock/extra/ccass_hold_detail.py) |
+| POST http://api.tushare.pro | [`ccass_hold`](interfaces/ccass_hold.md) | 获取中央结算系统持股汇总数据 | 有权限 | 已实现 | [doc 295](https://tushare.pro/document/2?doc_id=295) | [输入/输出/示例](interfaces/ccass_hold.md) | [collectors/stock/extra/ccass_hold.py:CcassHoldCollector](../../collectors/stock/extra/ccass_hold.py) |
+| POST http://api.tushare.pro | [`ccass_hold_detail`](interfaces/ccass_hold_detail.md) | 获取中央结算系统机构席位持股明细 | 有权限 | 已实现 | [doc 274](https://tushare.pro/document/2?doc_id=274) | [输入/输出/示例](interfaces/ccass_hold_detail.md) | [collectors/stock/extra/ccass_hold_detail.py:CcassHoldDetailCollector](../../collectors/stock/extra/ccass_hold_detail.py) |
 | POST http://api.tushare.pro | [`cctv_news`](interfaces/cctv_news.md) | 获取新闻联播文字稿数据，数据开始于2017年。 | 无权限 | 未实现 | [doc 154](https://tushare.pro/document/2?doc_id=154) | [输入/输出/示例](interfaces/cctv_news.md) | — |
 | POST http://api.tushare.pro | [`ci_daily`](interfaces/ci_daily.md) | 获取中信行业指数日线行情；中信不再披露高开低成交量成交额字段 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 308](https://tushare.pro/document/2?doc_id=308) | [输入/输出/示例](interfaces/ci_daily.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
 | POST http://api.tushare.pro | [`ci_index_member`](interfaces/ci_index_member.md) | 按三级分类提取中信行业成分，可提供某个分类的所有成分，也可按股票代码提取所属分类，参数灵活 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 373](https://tushare.pro/document/2?doc_id=373) | [输入/输出/示例](interfaces/ci_index_member.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
@@ -128,7 +129,7 @@
 | POST http://api.tushare.pro | [`hk_daily`](interfaces/hk_daily.md) | 获取港股每日增量和历史行情，每日18点左右更新当日数据 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 192](https://tushare.pro/document/2?doc_id=192) | [输入/输出/示例](interfaces/hk_daily.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
 | POST http://api.tushare.pro | [`hk_daily_adj`](interfaces/hk_daily_adj.md) | 获取港股复权行情，提供股票股本、市值和成交及换手多个数据指标 | 无权限 | 未实现 | [doc 339](https://tushare.pro/document/2?doc_id=339) | [输入/输出/示例](interfaces/hk_daily_adj.md) | — |
 | POST http://api.tushare.pro | [`hk_fina_indicator`](interfaces/hk_fina_indicator.md) | 获取港股上市公司财务指标数据，为避免服务器压力，现阶段每次请求最多返回200条记录，可通过设置日期多次请求获取更多数据。 | 无权限 | 未实现 | [doc 388](https://tushare.pro/document/2?doc_id=388) | [输入/输出/示例](interfaces/hk_fina_indicator.md) | — |
-| POST http://api.tushare.pro | [`hk_hold`](interfaces/hk_hold.md) | claw-quant 代码中存在直接实现 | 有权限 | 已实现 | — | [输入/输出/示例](interfaces/hk_hold.md) | [collectors/stock/extra/hk_hold.py:HkHoldCollector](../../collectors/stock/extra/hk_hold.py) |
+| POST http://api.tushare.pro | [`hk_hold`](interfaces/hk_hold.md) | 获取沪深港股通持股明细 | 有权限 | 已实现 | [doc 188](https://tushare.pro/document/2?doc_id=188) | [输入/输出/示例](interfaces/hk_hold.md) | [collectors/stock/extra/hk_hold.py:HkHoldCollector](../../collectors/stock/extra/hk_hold.py) |
 | POST http://api.tushare.pro | [`hk_income`](interfaces/hk_income.md) | 获取港股上市公司财务利润表数据 | 无权限 | 未实现 | [doc 389](https://tushare.pro/document/2?doc_id=389) | [输入/输出/示例](interfaces/hk_income.md) | — |
 | POST http://api.tushare.pro | [`hk_mins`](interfaces/hk_mins.md) | 港股分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式 | 无权限 | 未实现 | [doc 304](https://tushare.pro/document/2?doc_id=304) | [输入/输出/示例](interfaces/hk_mins.md) | — |
 | POST http://api.tushare.pro | [`hk_tradecal`](interfaces/hk_tradecal.md) | 获取交易日历 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 250](https://tushare.pro/document/2?doc_id=250) | [输入/输出/示例](interfaces/hk_tradecal.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
@@ -167,7 +168,7 @@
 | POST http://api.tushare.pro | [`moneyflow`](interfaces/moneyflow.md) | 获取沪深A股票资金流向数据，分析大单小单成交情况，用于判别资金动向，数据开始于2010年。 | 有权限 | 已实现 | [doc 170](https://tushare.pro/document/2?doc_id=170) | [输入/输出/示例](interfaces/moneyflow.md) | [collectors/stock/moneyflow/moneyflow.py:MoneyflowCollector](../../collectors/stock/moneyflow/moneyflow.py) |
 | POST http://api.tushare.pro | [`moneyflow_cnt_ths`](interfaces/moneyflow_cnt_ths.md) | 获取同花顺概念板块每日资金流向 | 有权限 | 已实现 | [doc 371](https://tushare.pro/document/2?doc_id=371) | [输入/输出/示例](interfaces/moneyflow_cnt_ths.md) | [collectors/stock/moneyflow/moneyflow_cnt_ths.py:MoneyflowCntThsCollector](../../collectors/stock/moneyflow/moneyflow_cnt_ths.py) |
 | POST http://api.tushare.pro | [`moneyflow_dc`](interfaces/moneyflow_dc.md) | 获取东方财富个股资金流向数据，每日盘后更新，数据开始于20230911 | 有权限 | 已实现 | [doc 349](https://tushare.pro/document/2?doc_id=349) | [输入/输出/示例](interfaces/moneyflow_dc.md) | [collectors/stock/moneyflow/moneyflow_dc.py:MoneyflowDcCollector](../../collectors/stock/moneyflow/moneyflow_dc.py) |
-| POST http://api.tushare.pro | [`moneyflow_hsgt`](interfaces/moneyflow_hsgt.md) | claw-quant 代码中存在直接实现 | 有权限 | 已实现 | — | [输入/输出/示例](interfaces/moneyflow_hsgt.md) | [collectors/stock/moneyflow/moneyflow_hsgt.py:MoneyflowHsgtCollector](../../collectors/stock/moneyflow/moneyflow_hsgt.py) |
+| POST http://api.tushare.pro | [`moneyflow_hsgt`](interfaces/moneyflow_hsgt.md) | 获取沪深港通每日资金流向数据 | 有权限 | 已实现 | [doc 47](https://tushare.pro/document/2?doc_id=47) | [输入/输出/示例](interfaces/moneyflow_hsgt.md) | [collectors/stock/moneyflow/moneyflow_hsgt.py:MoneyflowHsgtCollector](../../collectors/stock/moneyflow/moneyflow_hsgt.py) |
 | POST http://api.tushare.pro | [`moneyflow_ind_dc`](interfaces/moneyflow_ind_dc.md) | 获取东方财富板块资金流向，每天盘后更新 | 有权限 | 已实现 | [doc 344](https://tushare.pro/document/2?doc_id=344) | [输入/输出/示例](interfaces/moneyflow_ind_dc.md) | [collectors/stock/moneyflow/moneyflow_ind_dc.py:MoneyflowIndDcCollector](../../collectors/stock/moneyflow/moneyflow_ind_dc.py) |
 | POST http://api.tushare.pro | [`moneyflow_ind_ths`](interfaces/moneyflow_ind_ths.md) | 获取同花顺行业资金流向，每日盘后更新 | 有权限 | 已实现 | [doc 343](https://tushare.pro/document/2?doc_id=343) | [输入/输出/示例](interfaces/moneyflow_ind_ths.md) | [collectors/stock/moneyflow/moneyflow_ind_ths.py:MoneyflowIndThsCollector](../../collectors/stock/moneyflow/moneyflow_ind_ths.py) |
 | POST http://api.tushare.pro | [`moneyflow_mkt_dc`](interfaces/moneyflow_mkt_dc.md) | 获取东方财富大盘资金流向数据，每日盘后更新 | 有权限 | 已实现 | [doc 345](https://tushare.pro/document/2?doc_id=345) | [输入/输出/示例](interfaces/moneyflow_mkt_dc.md) | [collectors/stock/moneyflow/moneyflow_mkt_dc.py:MoneyflowMktDcCollector](../../collectors/stock/moneyflow/moneyflow_mkt_dc.py) |

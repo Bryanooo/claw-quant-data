@@ -784,7 +784,42 @@ class JobRepository:
                         job["resource_class"],
                     ),
                 )
-        return status
+            return status
+
+    def defer_running(
+        self,
+        job: dict,
+        *,
+        retry_after_seconds: int,
+        reason: str,
+    ) -> str:
+        """Release a leased job without consuming an execution attempt.
+
+        This is used for known future rate-limit slots, not failures. The
+        collector has not called the upstream API, so preserving the attempt
+        budget and avoiding a false failed-task incident is essential.
+        """
+        delay = max(int(retry_after_seconds), 1)
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status = 'queued', completion_status = 'retrying',
+                    available_at = NOW() + (%s * INTERVAL '1 second'),
+                    attempt = GREATEST(attempt - 1, 0),
+                    worker_id = NULL, heartbeat_at = NULL,
+                    lease_expires_at = NULL, finished_at = NULL,
+                    error_message = %s
+                WHERE job_id = %s AND status = 'running'
+                  AND worker_id = %s
+                """,
+                (delay, reason[:4000], job["job_id"], job.get("worker_id")),
+            )
+            if cursor.rowcount != 1:
+                raise JobLeaseLostError(
+                    f"collection job lease lost: {job['job_id']}"
+                )
+        return "queued"
 
     def recover_stale(self, stale_after_seconds: int) -> int:
         with self._connection() as connection, connection.cursor() as cursor:

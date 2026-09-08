@@ -30,6 +30,19 @@ DOC_URL = "https://tushare.pro/document/2?doc_id={doc_id}"
 API_URL = "http://api.tushare.pro"
 USER_AGENT = "claw-quant-data-interface-audit/1.0"
 
+# These official leaf pages have intermittently disappeared from the
+# JavaScript navigation tree even though their stable document URLs remain
+# available. A navigation-only crawl silently turned them into undocumented
+# project extensions, dropping their parameters and disabling scheduling.
+# Keep the stable official identities as crawler seeds as well as reviewed
+# runtime supplements.
+REQUIRED_DOCUMENT_LEAVES = {
+    47: ("股票数据", "资金流向数据", "沪深港通资金流向"),
+    188: ("股票数据", "特色数据", "沪深港股通持股明细"),
+    274: ("股票数据", "特色数据", "中央结算系统持股明细"),
+    295: ("股票数据", "特色数据", "中央结算系统持股汇总"),
+}
+
 EQUIVALENT_IMPLEMENTATIONS = {
     "income": "income_vip",
     "balancesheet": "balancesheet_vip",
@@ -112,7 +125,23 @@ def discover_document_leaves(root_html: bytes) -> list[DocumentEntry]:
         )
         doc_id = int(match.group(1))
         entries[doc_id] = DocumentEntry(doc_id=doc_id, path=path)
+    for doc_id, path in REQUIRED_DOCUMENT_LEAVES.items():
+        entries.setdefault(doc_id, DocumentEntry(doc_id=doc_id, path=path))
     return sorted(entries.values(), key=lambda item: (item.path, item.doc_id))
+
+
+def _merge_reviewed_contract_supplements(
+    contracts: list[dict[str, Any]], docs_dir: Path
+) -> list[dict[str, Any]]:
+    """Prevent a catalog refresh from discarding reviewed official contracts."""
+    supplements_path = docs_dir / "official_contract_supplements.json"
+    if not supplements_path.exists():
+        return contracts
+    supplements = json.loads(supplements_path.read_text(encoding="utf-8"))
+    by_name = {item["api_name"]: item for item in contracts}
+    for item in supplements.get("interfaces", []):
+        by_name[item["api_name"]] = item
+    return sorted(by_name.values(), key=lambda item: item["api_name"])
 
 
 def _normalized_text(element) -> str:
@@ -837,7 +866,12 @@ def write_contract_docs(
             },
         }
         contracts.append(contract)
-        _write_contract_markdown(contract, interfaces_dir / f"{api_name}.md")
+
+    contracts = _merge_reviewed_contract_supplements(contracts, docs_dir)
+    for contract in contracts:
+        _write_contract_markdown(
+            contract, interfaces_dir / f"{contract['api_name']}.md"
+        )
 
     contracts_path = docs_dir / "contracts.json"
     contracts_path.write_text(

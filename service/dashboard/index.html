@@ -14,7 +14,7 @@
         <h1>采集控制台</h1>
       </div>
       <div class="header-actions">
-        <span id="lastUpdated" class="last-updated">尚未连接</span>
+        <span id="lastUpdated" class="last-updated">正在加载系统状态…</span>
         <button id="dispatchButton" class="button button-secondary">立即补采</button>
         <button id="refreshButton" class="button button-primary">刷新状态</button>
       </div>
@@ -23,6 +23,70 @@
     <main>
       <section id="connectionNotice" class="notice hidden" role="status"></section>
 
+      <nav class="console-tabs" aria-label="控制台分区" role="tablist">
+        <button class="console-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="todayView" data-view="today">
+          <span>今日运营</span><small id="todayTabCount">等待加载</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="overviewView" data-view="overview">
+          <span>异常中心</span><small id="healthTabCount">健康状态</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="interfacesView" data-view="interfaces">
+          <span>任务与接口</span><small id="interfaceTabCount">—</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="fanoutView" data-view="fanout">
+          <span>扇出活动</span><small id="fanoutTabCount">—</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="coverageView" data-view="coverage">
+          <span>数据资产</span><small id="coverageTabCount">—</small>
+        </button>
+      </nav>
+
+      <div id="todayView" class="view-panel" role="tabpanel" data-view-panel="today">
+      <section class="workspace delivery-workspace" aria-label="今日采集交付">
+        <div class="workspace-head delivery-head">
+          <div>
+            <p class="section-kicker">TODAY'S DELIVERY</p>
+            <h2>今日数据交付</h2>
+            <p id="deliverySummary" class="section-summary">正在生成当日采集计划…</p>
+          </div>
+          <select id="deliveryStatusFilter" aria-label="今日任务状态">
+            <option value="all">全部计划</option>
+            <option value="attention">只看异常</option>
+            <option value="active">排队 / 运行 / 验证</option>
+            <option value="upcoming">等待发布时间</option>
+            <option value="complete">已严格完成</option>
+          </select>
+        </div>
+        <div class="delivery-grid">
+          <article class="delivery-primary"><span>截至当前</span><strong id="deliveryDueProgress">—</strong><small>已严格交付 / 当前应执行</small></article>
+          <article><span>全日计划</span><strong id="deliveryTotalProgress">—</strong><small>已严格交付 / 今日全部计划</small></article>
+          <article><span>排队 / 运行</span><strong id="deliveryActiveCount">—</strong><small>正在由 Worker 处理</small></article>
+          <article><span>待验证</span><strong id="deliveryUnverifiedCount">—</strong><small>执行成功但证据尚未完成</small></article>
+          <article class="delivery-alert"><span>真实异常</span><strong id="deliveryAttentionCount">—</strong><small>失败、不完整或超过交付时限</small></article>
+          <article><span>下一批计划</span><strong id="deliveryNextTime">—</strong><small>未到时间不会误报失败</small></article>
+        </div>
+        <div class="delivery-bars">
+          <div><span>截至当前进度</span><div class="delivery-progress"><i id="deliveryDueBar"></i></div><small id="deliveryDuePercent">—</small></div>
+          <div><span>全日计划进度</span><div class="delivery-progress"><i id="deliveryTotalBar"></i></div><small id="deliveryTotalPercent">—</small></div>
+        </div>
+        <div class="table-wrap">
+          <table class="delivery-table">
+            <thead><tr><th>计划时间</th><th>接口 / 任务</th><th>目标数据</th><th>交付状态</th><th>数据量</th><th>完成 / 截止</th></tr></thead>
+            <tbody id="deliveryRows"><tr><td colspan="6" class="empty-state">正在读取今日计划…</td></tr></tbody>
+          </table>
+        </div>
+        <footer class="table-footer">
+          <span id="deliveryResultCount">0 项计划</span>
+          <div class="pager" aria-label="今日计划分页">
+            <button class="row-action" type="button" data-page-key="delivery" data-page-delta="-1">上一页</button>
+            <span data-page-info="delivery">第 1 / 1 页</span>
+            <button class="row-action" type="button" data-page-key="delivery" data-page-delta="1">下一页</button>
+          </div>
+        </footer>
+      </section>
+
+      <section class="global-capability" aria-label="全局采集能力">
+        <div class="global-capability-head"><div><p class="section-kicker">SYSTEM CAPABILITY</p><h2>全局采集能力</h2></div><p>这些数字描述系统覆盖能力，不代表今日进度。</p></div>
       <section class="summary-grid" aria-label="采集概况">
         <article class="metric-card metric-primary">
           <span>自动编排</span><strong id="automatedCount">—</strong>
@@ -53,28 +117,15 @@
           <small>请求成功且已穷尽，不等同于失败</small>
         </article>
       </section>
+      </section>
+      </div>
 
-      <nav class="console-tabs" aria-label="控制台分区" role="tablist">
-        <button class="console-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="overviewView" data-view="overview">
-          <span>运行总览</span><small id="healthTabCount">健康状态</small>
-        </button>
-        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="interfacesView" data-view="interfaces">
-          <span>接口任务</span><small id="interfaceTabCount">—</small>
-        </button>
-        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="fanoutView" data-view="fanout">
-          <span>扇出活动</span><small id="fanoutTabCount">—</small>
-        </button>
-        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="coverageView" data-view="coverage">
-          <span>覆盖审计</span><small id="coverageTabCount">—</small>
-        </button>
-      </nav>
-
-      <div id="overviewView" class="view-panel" role="tabpanel" data-view-panel="overview">
+      <div id="overviewView" class="view-panel hidden" role="tabpanel" data-view-panel="overview">
       <section class="workspace data-health-workspace" aria-label="数据资产健康">
         <div class="workspace-head">
           <div>
             <p class="section-kicker">DATA ASSET HEALTH</p>
-            <h2>数据缺失与可信度</h2>
+            <h2>异常与可信度中心</h2>
             <p id="dataHealthSummary" class="section-summary">正在汇总采集、时效、历史覆盖和初始化状态…</p>
           </div>
           <select id="dataIssueFilter" aria-label="数据问题类型">
@@ -253,7 +304,7 @@
         <div class="workspace-head">
           <div>
             <p class="section-kicker">DATA COVERAGE</p>
-            <h2>日期与报告期覆盖</h2>
+            <h2>数据资产与日期覆盖</h2>
             <p id="coverageSummary" class="section-summary">等待读取覆盖状态</p>
           </div>
           <button id="coverageAuditButton" class="button button-secondary">立即审计</button>

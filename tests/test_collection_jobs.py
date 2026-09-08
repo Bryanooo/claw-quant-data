@@ -574,6 +574,48 @@ def test_stock_limit_uses_offset_exhaustion_for_round_historical_count(monkeypat
     assert result.completion_evidence["exhausted"] is True
 
 
+def test_moneyflow_uses_offset_exhaustion_for_round_historical_count(monkeypatch):
+    import collectors.stock.moneyflow.moneyflow as moneyflow_module
+
+    observed = {}
+
+    class FakeMoneyflowCollector:
+        def run_offset_paginated(self, **parameters):
+            observed.update(parameters)
+            return CollectorResult(
+                collector_name="tests.FakeMoneyflowCollector",
+                collector_version="2",
+                api_name="moneyflow",
+                table_name="moneyflow",
+                fetched_rows=5000,
+                stored_rows=5000,
+                request_count=2,
+                evidence={
+                    "verified": True,
+                    "verification_type": "offset_exhaustion",
+                    "exhausted": True,
+                    "page_size": parameters["page_size"],
+                },
+            )
+
+    monkeypatch.setattr(
+        moneyflow_module, "MoneyflowCollector", FakeMoneyflowCollector
+    )
+
+    result = TASKS.run("moneyflow", {"trade_date": "20230704"})
+
+    assert observed == {
+        "page_size": 1000,
+        "max_pages": 100,
+        "trade_date": "20230704",
+    }
+    assert result.rows_fetched == 5000
+    assert result.rows_inserted == 5000
+    assert result.completion_status == "complete"
+    assert result.completion_evidence["verification_type"] == "offset_exhaustion"
+    assert result.completion_evidence["exhausted"] is True
+
+
 def test_daily_basic_repair_routes_to_daily_basic_not_bak_basic(monkeypatch):
     import service.collection_jobs.registry as registry_module
 

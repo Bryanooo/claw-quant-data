@@ -272,22 +272,23 @@ def _run_daily_basic(parameters: BaseModel) -> TaskExecutionResult:
 
 def _run_moneyflow(parameters: BaseModel) -> TaskExecutionResult:
     from collectors.stock.moneyflow.moneyflow import MoneyflowCollector
-    from collectors.tushare_raw import verify_complete_response
     from service.tushare_policy import TusharePolicyRegistry
 
     values = TradeDateParameters.model_validate(parameters)
     request = {"trade_date": values.trade_date}
     if values.ts_code:
         request["ts_code"] = values.ts_code
-    rows = MoneyflowCollector().collect(**request)
-    evidence = verify_complete_response(
-        "moneyflow", TusharePolicyRegistry().get("moneyflow"), request, rows
+    policy = TusharePolicyRegistry().get("moneyflow")
+    result = MoneyflowCollector().run_offset_paginated(
+        page_size=policy.page_size,
+        max_pages=policy.max_pages,
+        **request,
     )
     return TaskExecutionResult(
-        rows_inserted=rows,
-        rows_fetched=rows,
-        completion_status="complete" if rows else "empty",
-        completion_evidence=evidence,
+        rows_inserted=result.stored_rows,
+        rows_fetched=result.fetched_rows,
+        completion_status="complete" if result.fetched_rows else "empty",
+        completion_evidence=dict(result.evidence),
     )
 
 
@@ -581,6 +582,7 @@ TASKS = TaskRegistry(
             "moneyflow",
             TradeDateParameters,
             _run_moneyflow,
+            handler_version="2",
         ),
         TaskSpec(
             "stock_limit",

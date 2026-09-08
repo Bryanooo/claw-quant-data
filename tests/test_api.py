@@ -8,6 +8,7 @@ from service.api.dependencies import (
     get_coverage_service,
     get_data_health_service,
     get_data_service,
+    get_delivery_monitor_service,
     get_fanout_campaign_service,
     get_initialization_service,
     get_interface_data_service,
@@ -317,7 +318,8 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "/api/v1/coverage/repairs" in dashboard_script
     assert "coverageRangeStart" in page.text
     assert "coverageDetailStatus" in page.text
-    assert "数据缺失与可信度" in page.text
+    assert "今日数据交付" in page.text
+    assert "异常与可信度中心" in page.text
     assert 'role="tablist"' in page.text
     assert 'data-view-panel="interfaces"' in page.text
     assert 'data-page-key="interfaces"' in page.text
@@ -328,6 +330,36 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "pageRows(rows, \"health\")" in dashboard_script
     assert "sessionStorage" not in dashboard_script
     assert "API Key" not in dashboard_script
+
+
+def test_today_delivery_endpoint_uses_business_date():
+    client, _ = make_client()
+    captured = {}
+    fake = type(
+        "FakeDeliveryMonitor",
+        (),
+        {
+            "today": lambda self, business_date: captured.update(
+                {"business_date": business_date}
+            ) or {
+                "generated_at": "2026-09-08T12:00:00+08:00",
+                "business_date": business_date.isoformat(),
+                "summary": {"due_now": 3, "completed_due": 2},
+                "items": [],
+                "issues": [],
+            }
+        },
+    )()
+    client.app.dependency_overrides[get_delivery_monitor_service] = lambda: fake
+
+    with client:
+        response = client.get(
+            "/api/v1/delivery/today?business_date=2026-09-08"
+        )
+
+    assert response.status_code == 200
+    assert captured["business_date"] == date(2026, 9, 8)
+    assert response.json()["summary"]["completed_due"] == 2
 
 
 def test_data_health_endpoint_is_under_api_namespace():

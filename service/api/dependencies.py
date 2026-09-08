@@ -17,6 +17,7 @@ from service.data_service.service import DataService
 from service.data_service.interfaces import InterfaceDataService
 from service.initialization.service import InitializationService
 from service.normalization_monitor import NormalizationMonitorService
+from service.delivery_monitor import DeliveryMonitorService
 
 def get_data_service(request: Request) -> DataService:
     repository = DatasetRepository(request.app.state.database)
@@ -45,6 +46,10 @@ NormalizationMonitorDependency = Annotated[
     NormalizationMonitorService,
     Depends(get_normalization_monitor),
 ]
+
+
+def get_delivery_monitor_service() -> DeliveryMonitorService:
+    return DeliveryMonitorService()
 
 
 def get_collection_job_service() -> CollectionJobService:

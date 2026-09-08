@@ -100,7 +100,8 @@ def test_scheduler_registers_expected_jobs_with_tracking():
     scheduler = create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}
 
-    assert len(jobs) == 44
+    assert len(jobs) == 45
+    assert "delivery_plan_reconciler" in jobs
     collection_job_ids = (
         "daily_daily",
         "index_daily_daily",

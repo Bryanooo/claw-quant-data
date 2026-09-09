@@ -44,6 +44,7 @@ def _rule(
     dataset_name: str,
     strategy: CoverageStrategy,
     *,
+    collection_api_name: str | None = None,
     entity_column: str | None = "ts_code",
     grace_days: int = 1,
     release_after: time | None = None,
@@ -66,6 +67,7 @@ def _rule(
         date_column=dataset.date_column,
         date_storage=dataset.date_storage,
         strategy=strategy,
+        collection_api_name=collection_api_name,
         entity_column=entity_column,
         grace_days=grace_days,
         release_after=release_after,
@@ -146,9 +148,9 @@ NEXT_MORNING_RELEASE_DATASETS = {
 
 
 _EXPLICIT_RULES = [
-        _rule("stock_daily", CoverageStrategy.TRADING_DAILY, entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
-        _rule("stock_daily_basic", CoverageStrategy.TRADING_DAILY, entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
-        _rule("stock_limit", CoverageStrategy.TRADING_DAILY, entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
+        _rule("stock_daily", CoverageStrategy.TRADING_DAILY, collection_api_name="daily", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
+        _rule("stock_daily_basic", CoverageStrategy.TRADING_DAILY, collection_api_name="daily_basic", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
+        _rule("stock_limit", CoverageStrategy.TRADING_DAILY, collection_api_name="stk_limit", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
         _rule("moneyflow", CoverageStrategy.TRADING_DAILY, entity_reference="stock_basic", min_entity_ratio=0.85, description="按交易日及当期上市股票截面检查完整性"),
         _rule(
             "index_daily",
@@ -200,6 +202,11 @@ _EXPLICIT_RULES = [
             _rule(
                 dataset_name,
                 CoverageStrategy.REPORT_QUARTERLY,
+                collection_api_name=(
+                    "fina_indicator"
+                    if dataset_name == "financial_indicator"
+                    else None
+                ),
                 entity_reference="stock_basic",
                 min_entity_ratio=0.60,
                 grace_days=0,

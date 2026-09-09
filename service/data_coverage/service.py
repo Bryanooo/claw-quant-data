@@ -6,7 +6,10 @@ import hashlib
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from service.data_coverage.models import InvalidCoverageRequestError
+from service.data_coverage.models import (
+    CoverageStrategy,
+    InvalidCoverageRequestError,
+)
 from service.data_coverage.registry import COVERAGE_RULES, CoverageRuleRegistry
 from service.data_coverage.repository import CoverageRepository
 from service.data_coverage.repair import (
@@ -72,7 +75,10 @@ class CoverageService:
                 raise InvalidCoverageRequestError(
                     "start_date must not be later than end_date"
                 )
-            if (resolved_end - resolved_start).days > 3660:
+            if (
+                (resolved_end - resolved_start).days > 3660
+                and rule.strategy is not CoverageStrategy.REPORT_QUARTERLY
+            ):
                 raise InvalidCoverageRequestError(
                     "one audit may cover at most 3660 days"
                 )

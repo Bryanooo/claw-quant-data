@@ -47,11 +47,81 @@ class JobRepository:
         code_revision: str | None = None,
         priority: int = 50,
         resource_class: str = "default",
+        reuse_verified_scope: bool = False,
     ) -> tuple[dict, bool]:
         with (
             self._connection() as connection,
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
+            if reuse_verified_scope:
+                if not api_name or not cadence or not (expected_for or period_key):
+                    raise ValueError(
+                        "verified scope reuse requires api_name, cadence and a period"
+                    )
+                scope_identity = json.dumps(
+                    {
+                        "task_name": task_name,
+                        "api_name": api_name,
+                        "cadence": cadence,
+                        "period_key": period_key,
+                        "expected_for": str(expected_for or ""),
+                        "parameters": parameters.get("parameters") or {},
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                # Handler upgrades deliberately change the physical
+                # idempotency key, but must not recollect a business scope
+                # which already has strict durable evidence. The transaction
+                # lock also closes the race between two scheduler instances.
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(%s, hashtext(%s))",
+                    (1_924_202_633, scope_identity),
+                )
+                cursor.execute(
+                    """
+                    SELECT * FROM sys_collection_job
+                    WHERE task_name=%s
+                      AND COALESCE(api_name, parameters->>'api_name')=%s
+                      AND cadence=%s
+                      AND (
+                            (%s IS NOT NULL AND expected_for=%s)
+                         OR (%s IS NOT NULL AND period_key=%s)
+                      )
+                      AND COALESCE(parameters->'parameters', '{}'::jsonb)=%s::jsonb
+                      AND status='success'
+                      AND completion_status IN ('complete','empty')
+                      AND (
+                            COALESCE(
+                              (completion_evidence->>'verified')::boolean,
+                              FALSE
+                            )
+                         OR COALESCE(
+                              (completion_evidence->'verification'->>'verified')::boolean,
+                              FALSE
+                            )
+                      )
+                    ORDER BY finished_at DESC NULLS LAST, job_id DESC
+                    LIMIT 1
+                    """,
+                    (
+                        task_name,
+                        api_name,
+                        cadence,
+                        expected_for,
+                        expected_for,
+                        period_key,
+                        period_key,
+                        json.dumps(
+                            parameters.get("parameters") or {},
+                            ensure_ascii=False,
+                        ),
+                    ),
+                )
+                reusable = cursor.fetchone()
+                if reusable:
+                    return dict(reusable), False
             cursor.execute(
                 """
                     INSERT INTO sys_collection_job

@@ -96,7 +96,7 @@ def test_health_checks_live_and_ready(capsys):
 def test_status_returns_consolidated_data_health(capsys):
     client = FakeClient(
         {
-            "/v1/data-health": {
+            "/v1/data-health/summary": {
                 "status": "healthy",
                 "summary": {"confirmed_issue_count": 0},
             }
@@ -107,6 +107,15 @@ def test_status_returns_consolidated_data_health(capsys):
 
     assert exit_code == 0
     assert json.loads(captured.out)["status"] == "healthy"
+    assert client.calls == [("/v1/data-health/summary", None)]
+
+
+def test_status_full_requests_expensive_health_audit(capsys):
+    client = FakeClient({"/v1/data-health": {"status": "warning"}})
+
+    exit_code, _ = run_cli(["status", "--full"], client, capsys)
+
+    assert exit_code == 0
     assert client.calls == [("/v1/data-health", None)]
 
 
@@ -226,6 +235,78 @@ def test_stock_research_pack_cli_forwards_bounded_scope(capsys):
                 "as_of": "2026-09-08",
             },
         )
+    ]
+
+
+def test_sector_research_cli_commands_forward_normalized_scope(capsys):
+    list_path = "/v1/sectors"
+    pack_path = "/v1/sectors/ths/885001.TI/research-pack"
+    client = FakeClient(
+        {
+            list_path: {"data": [], "meta": {}},
+            pack_path: {"data": {}, "meta": {"provider": "ths"}},
+        }
+    )
+
+    exit_code, _ = run_cli(
+        ["sector", "list", "--provider", "ths", "--query", "人工", "--limit", "20"],
+        client,
+        capsys,
+    )
+    assert exit_code == 0
+    exit_code, _ = run_cli(
+        [
+            "sector", "research-pack", "ths", "885001.ti",
+            "--lookback-days", "90", "--member-limit", "200",
+            "--as-of", "2026-09-08",
+        ],
+        client,
+        capsys,
+    )
+    assert exit_code == 0
+    assert client.calls == [
+        (
+            list_path,
+            {"provider": "ths", "query": "人工", "limit": 20},
+        ),
+        (
+            pack_path,
+            {
+                "lookback_days": 90,
+                "member_limit": 200,
+                "as_of": "2026-09-08",
+            },
+        ),
+    ]
+
+
+def test_stock_sector_and_peer_cli_commands(capsys):
+    sectors_path = "/v1/stocks/300750.SZ/sectors"
+    peers_path = "/v1/stocks/300750.SZ/peers"
+    client = FakeClient(
+        {
+            sectors_path: {"data": [], "meta": {}},
+            peers_path: {"data": [], "meta": {}},
+        }
+    )
+
+    assert run_cli(
+        ["stock", "sectors", "300750.sz", "--provider", "ths"],
+        client, capsys,
+    )[0] == 0
+    assert run_cli(
+        [
+            "stock", "peers", "300750.sz", "--provider", "ths",
+            "--max-sectors", "3", "--limit", "20",
+        ],
+        client, capsys,
+    )[0] == 0
+    assert client.calls == [
+        (sectors_path, {"provider": "ths"}),
+        (
+            peers_path,
+            {"max_sectors": 3, "limit": 20, "provider": "ths"},
+        ),
     ]
 
 

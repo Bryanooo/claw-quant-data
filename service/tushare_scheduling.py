@@ -345,6 +345,7 @@ def submit_policy_batch(
             code_revision=handler.code_revision,
             priority={"daily": 80, "weekly": 60, "monthly": 50, "quarterly": 45}.get(cadence, 40),
             resource_class="generic",
+            reuse_verified_scope=True,
         )
         submitted += int(created)
         if not created and _publication_is_mature(contract.api_name, scope_date):

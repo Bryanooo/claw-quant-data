@@ -254,6 +254,7 @@ class CoverageRepository:
         start_date: date,
         end_date: date,
     ) -> list[ActualPartition]:
+        collection_api_name = rule.collection_api_name or rule.dataset_name
         date_expression = self._date_expression(rule)
         entity_expression = (
             sql.SQL("count(DISTINCT {})").format(sql.Identifier(rule.entity_column))
@@ -323,7 +324,7 @@ class CoverageRepository:
                             )
                   )
                 """,
-                (start_date, end_date, rule.dataset_name),
+                (start_date, end_date, collection_api_name),
             )
             incomplete_dates = {
                 row["partition_date"]
@@ -354,7 +355,7 @@ class CoverageRepository:
                             false
                           )=true
                     """,
-                    (start_date, end_date, rule.dataset_name),
+                    (start_date, end_date, collection_api_name),
                 )
                 present_dates = {item.partition_date for item in partitions}
                 partitions.extend(

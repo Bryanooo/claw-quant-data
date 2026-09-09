@@ -27,6 +27,20 @@ class FakeRepository:
         self.rechecks = []
 
     def create(self, task_name, parameters, **options):
+        if options.get("reuse_verified_scope"):
+            for existing in self.jobs.values():
+                if (
+                    existing.get("api_name") == options.get("api_name")
+                    and existing.get("cadence") == options.get("cadence")
+                    and existing.get("expected_for") == options.get("expected_for")
+                    and existing["parameters"].get("parameters", {})
+                    == parameters.get("parameters", {})
+                    and existing.get("status") == "success"
+                    and existing.get("completion_status") in {"complete", "empty"}
+                    and (existing.get("completion_evidence") or {}).get("verified")
+                    is True
+                ):
+                    return existing, False
         key = options["idempotency_key"]
         created = key not in self.jobs
         job = {
@@ -127,6 +141,37 @@ def test_policy_job_identity_changes_only_when_handler_contract_changes():
     assert first_key == same_key
     assert first_key != upgraded_key
     assert len(upgraded_key) <= 128
+
+
+def test_policy_submission_reuses_verified_scope_after_handler_upgrade(monkeypatch):
+    monkeypatch.setattr(scheduling, "_latest_trade_date", lambda _today: "20260828")
+    repository = FakeRepository()
+
+    first = scheduling.submit_policy_batch(
+        "daily", today=date(2026, 8, 28), repository=repository
+    )
+    for job in repository.jobs.values():
+        job.update(
+            status="success",
+            completion_status="complete",
+            completion_evidence={"verified": True},
+        )
+    original_metadata = scheduling.TASKS.handler_metadata
+    monkeypatch.setattr(
+        scheduling.TASKS,
+        "handler_metadata",
+        lambda task_name, payload: HandlerMetadata(
+            original_metadata(task_name, payload).handler_type,
+            original_metadata(task_name, payload).handler_key,
+            "999",
+            "new-revision",
+        ),
+    )
+
+    assert scheduling.submit_policy_batch(
+        "daily", today=date(2026, 8, 28), repository=repository
+    ) == 0
+    assert len(repository.jobs) == first
 
 
 def test_policy_submission_creates_one_separate_recheck_for_empty_result(monkeypatch):

@@ -23,6 +23,7 @@ class CoverageRule:
     date_column: str | None
     date_storage: DateStorage
     strategy: CoverageStrategy
+    collection_api_name: str | None = None
     entity_column: str | None = None
     calendar_exchange: str = "SSE"
     grace_days: int = 1

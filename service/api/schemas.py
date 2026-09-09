@@ -43,6 +43,7 @@ class DatasetDescription(DatasetSummary):
     business_identity_fields: list[str] = Field(default_factory=list)
     identity_confidence: str = "database_constraint"
     allowed_filters: list[str]
+    availability_column: str | None = None
     max_page_size: int
     columns: list[ColumnDescription]
 
@@ -171,6 +172,36 @@ class StockSnapshotResponse(ApiModel):
 
 
 class StockResearchPackResponse(ApiModel):
+    data: dict[str, Any]
+    meta: dict[str, Any]
+
+
+class SectorSummary(ApiModel):
+    provider: str
+    sector_code: str
+    name: str | None = None
+    category: str | None = None
+    market: str | None = None
+    constituent_count: int | None = None
+    trade_date: Any = None
+
+
+class SectorListResponse(ApiModel):
+    data: list[SectorSummary]
+    meta: dict[str, Any]
+
+
+class SectorSnapshotResponse(ApiModel):
+    data: dict[str, Any]
+    meta: dict[str, Any]
+
+
+class SectorMembersResponse(ApiModel):
+    data: list[dict[str, Any]]
+    meta: dict[str, Any]
+
+
+class SectorResearchPackResponse(ApiModel):
     data: dict[str, Any]
     meta: dict[str, Any]
 

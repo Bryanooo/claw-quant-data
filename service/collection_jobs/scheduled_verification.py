@@ -90,6 +90,25 @@ def verify_scheduled_transport(
             "skip_reason": "not_last_open_day_of_week",
             "target_date": target.isoformat(),
         }
+    if rows_fetched == 0 and schedule_id == "stk_weekly_weekly_fri":
+        result = query(
+            """
+            SELECT max(cal_date)=%s AS is_week_end
+            FROM trade_cal
+            WHERE exchange='SSE' AND is_open=1
+              AND date_trunc('week', cal_date)=date_trunc('week', %s::date)
+            """,
+            (target, target),
+        )[0]
+        if bool(result.get("is_week_end")):
+            return None
+        return {
+            **evidence,
+            "scope": "conditional_schedule_skip",
+            "empty": True,
+            "skip_reason": "scheduled_date_is_not_week_end_trade_day",
+            "target_date": target.isoformat(),
+        }
     if rows_fetched <= 0:
         return None
 
@@ -329,6 +348,12 @@ def verify_scheduled_transport(
         }
 
     table_by_schedule = {
+        # ``bak_basic`` is an independent historical snapshot, not the
+        # ``daily_basic`` dataset. Prove the exact persisted trading-day scope
+        # here so it never enters coverage verification under the wrong table.
+        # A full A-share universe is safely below the documented/default
+        # 10,000-row response boundary; equality remains ambiguous.
+        "bak_basic_daily": ("bak_basic", "trade_date", 10000),
         "suspend_d_daily": ("suspend_d", "trade_date", None),
         "stock_st_daily": ("stock_st", "trade_date", 1000),
         # Both interfaces are single, exact-date market snapshots. Their

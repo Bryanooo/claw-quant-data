@@ -1,15 +1,15 @@
 # Tushare 全接口目录与 claw-quant 实现索引
 
-生成日期：2026-08-29。共收录 **244** 个唯一 `api_name`；当前 Token 可执行只读采集 **200** 个；已实现或安全封装 **202** 个。
+最近权限复核：2026-09-09。共收录 **244** 个唯一 `api_name`；当前 Token 可执行只读采集 **201** 个；已实现或安全封装 **203** 个。
 
-这里的 **200 是可采集 API 数量，不是采集器类数量**。其中 94 个 API 由同一个
+这里的 **201 是可采集 API 数量，不是采集器类数量**。其中 95 个 API 由同一个
 参数化契约通用采集器（原始审计层 + 接口专属强类型标准表）承载，106 个由专项或等价专项实现承载，两个集合无缺口、
-并集正好是 200。实现、自动编排和当前数据库已有数据是三个不同口径，详见
+并集正好是 201。实现、自动编排和当前数据库已有数据是三个不同口径，详见
 [采集器架构](../COLLECTOR_ARCHITECTURE.md)和
 [动态数据落地报告](../../reports/tushare_data_presence.md)。
 
 - 当前官方目录接口：235 个；claw-quant 有效历史/扩展接口：9 个
-- 官方接口权限：依底层接口权限 1 个、接口无效/已下线 1 个、无权限 40 个、有权限 192 个、有权限（当前限频） 1 个
+- 完整目录权限：依底层接口权限 1 个、接口无效/已下线 1 个、无权限 39 个、有权限 202 个、有权限（当前限频） 1 个
 - HTTP 协议：[官方调用说明](https://tushare.pro/document/1?doc_id=40)
 - 权限规则：[官方权限说明](https://tushare.pro/document/1?doc_id=108)
 - 机器可读契约：[contracts.json](contracts.json)
@@ -18,9 +18,9 @@
 
 权限来自真实 Token 的安全探测。保存、删除类接口只探测空参数，不会更改用户数据；它们仅做安全封装，不进入采集调度。`pro_bar` 是 SDK 组合接口，不支持 HTTP。
 
-当前 200 个可采集接口中有 183 个进入自动编排：41 个专项 cron、123 个契约策略
+当前 201 个可采集接口中有 185 个进入自动编排：41 个专项 cron、125 个契约策略
 任务和 19 个周期全量扇出。接口实现、自动编排、历史回填和当前有数据是不同状态；
-各状态的定义与剩余 17 个接口未自动运行的原因见
+各状态的定义与剩余 16 个接口未自动运行的原因见
 [采集完整性与可靠性策略](COLLECTION_RELIABILITY.md)，实时状态以
 `GET /api/v1/collection-overview` 为准。
 
@@ -195,7 +195,7 @@
 | POST http://api.tushare.pro | [`rt_etf_sz_iopv`](interfaces/rt_etf_sz_iopv.md) | ETF实时净值和申购赎回数据参考，目前只提供深市 | 无权限 | 未实现 | [doc 454](https://tushare.pro/document/2?doc_id=454) | [输入/输出/示例](interfaces/rt_etf_sz_iopv.md) | — |
 | POST http://api.tushare.pro | [`rt_fut_min`](interfaces/rt_fut_min.md) | 获取全市场期货合约实时分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK、 http Restful API和websocket三种方式，如果需要主力合约分钟，请先通过主力 mapping 接口获取对应的合约代码后提取分钟。 | 无权限 | 未实现 | [doc 340](https://tushare.pro/document/2?doc_id=340) | [输入/输出/示例](interfaces/rt_fut_min.md) | — |
 | POST http://api.tushare.pro | [`rt_fut_min_daily`](interfaces/rt_fut_min_daily.md) | 获取全市场期货合约实时分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK、 http Restful API和websocket三种方式，如果需要主力合约分钟，请先通过主力 mapping 接口获取对应的合约代码后提取分钟。 | 无权限 | 未实现 | [doc 340](https://tushare.pro/document/2?doc_id=340) | [输入/输出/示例](interfaces/rt_fut_min_daily.md) | — |
-| POST http://api.tushare.pro | [`rt_hk_k`](interfaces/rt_hk_k.md) | 获取港股实时日k线行情，支持按股票代码及股票代码通配符一次性提取全部股票实时日k线行情 | 无权限 | 未实现 | [doc 383](https://tushare.pro/document/2?doc_id=383) | [输入/输出/示例](interfaces/rt_hk_k.md) | — |
+| POST http://api.tushare.pro | [`rt_hk_k`](interfaces/rt_hk_k.md) | 获取港股实时日k线行情，支持按股票代码及股票代码通配符一次性提取全部股票实时日k线行情 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 383](https://tushare.pro/document/2?doc_id=383) | [输入/输出/示例](interfaces/rt_hk_k.md) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
 | POST http://api.tushare.pro | [`rt_idx_k`](interfaces/rt_idx_k.md) | 获取交易所指数实时日线行情，支持按代码或代码通配符一次性提取全部交易所指数实时日k线行情 | 无权限 | 未实现 | [doc 403](https://tushare.pro/document/2?doc_id=403) | [输入/输出/示例](interfaces/rt_idx_k.md) | — |
 | POST http://api.tushare.pro | [`rt_idx_min`](interfaces/rt_idx_min.md) | 获取交易所指数实时分钟数据，包括1~60min | 无权限 | 未实现 | [doc 420](https://tushare.pro/document/2?doc_id=420) | [输入/输出/示例](interfaces/rt_idx_min.md) | — |
 | POST http://api.tushare.pro | [`rt_idx_min_daily`](interfaces/rt_idx_min_daily.md) | 获取交易所指数实时分钟数据，包括1~60min | 无权限 | 未实现 | [doc 420](https://tushare.pro/document/2?doc_id=420) | [输入/输出/示例](interfaces/rt_idx_min_daily.md) | — |

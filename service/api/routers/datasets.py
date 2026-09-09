@@ -19,6 +19,7 @@ _STANDARD_QUERY_PARAMETERS = {
     "limit",
     "offset",
     "include_total",
+    "as_of",
 }
 
 
@@ -56,6 +57,7 @@ def query_dataset(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     include_total: bool = False,
+    as_of: str | None = None,
 ) -> dict:
     exact_filters: dict[str, str] = {}
     for name, value in request.query_params.multi_items():
@@ -71,4 +73,5 @@ def query_dataset(
         limit=limit,
         offset=offset,
         include_total=include_total,
+        as_of=as_of,
     )

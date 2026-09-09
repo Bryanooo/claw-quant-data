@@ -76,6 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
         "status",
         help="show consolidated data health and collection status",
     )
+    status.add_argument(
+        "--full",
+        action="store_true",
+        help="request the large full health audit instead of the fast preflight",
+    )
     status.set_defaults(handler=_status)
 
     datasets = commands.add_parser("datasets", help="discover data service datasets")
@@ -89,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     query = commands.add_parser("query", help="query records from a dataset")
     query.add_argument("dataset", type=_dataset_name)
-    _add_record_query_arguments(query)
+    _add_record_query_arguments(query, include_as_of=True)
     query.set_defaults(handler=_query_dataset)
 
     freshness = commands.add_parser("freshness", help="show dataset freshness")
@@ -117,6 +122,56 @@ def build_parser() -> argparse.ArgumentParser:
     )
     stock_research.add_argument("--as-of")
     stock_research.set_defaults(handler=_stock_research_pack)
+    stock_sectors = stock_commands.add_parser(
+        "sectors", help="show point-in-time sector memberships"
+    )
+    stock_sectors.add_argument("ts_code", type=_ts_code)
+    stock_sectors.add_argument("--provider", choices=("ths", "dc", "tdx"))
+    stock_sectors.add_argument("--as-of")
+    stock_sectors.set_defaults(handler=_stock_sectors)
+    stock_peers = stock_commands.add_parser(
+        "peers", help="rank stocks sharing the same sectors"
+    )
+    stock_peers.add_argument("ts_code", type=_ts_code)
+    stock_peers.add_argument("--provider", choices=("ths", "dc", "tdx"))
+    stock_peers.add_argument("--as-of")
+    stock_peers.add_argument(
+        "--max-sectors", type=_bounded_integer(1, 10), default=5
+    )
+    stock_peers.add_argument("--limit", type=_bounded_integer(1, 200), default=50)
+    stock_peers.set_defaults(handler=_stock_peers)
+
+    sector = commands.add_parser("sector", help="query high-level sector views")
+    sector_commands = sector.add_subparsers(dest="sector_command", required=True)
+    sector_list = sector_commands.add_parser("list", help="discover sectors")
+    sector_list.add_argument("--provider", choices=("ths", "dc", "tdx"))
+    sector_list.add_argument("--query")
+    sector_list.add_argument("--category")
+    sector_list.add_argument("--market")
+    sector_list.add_argument("--as-of")
+    sector_list.add_argument("--limit", type=_bounded_integer(1, 500), default=100)
+    sector_list.set_defaults(handler=_sector_list)
+    sector_snapshot = sector_commands.add_parser("snapshot", help="get a sector snapshot")
+    _add_sector_identity_arguments(sector_snapshot)
+    sector_snapshot.add_argument("--as-of")
+    sector_snapshot.set_defaults(handler=_sector_snapshot)
+    sector_members = sector_commands.add_parser("members", help="get sector constituents")
+    _add_sector_identity_arguments(sector_members)
+    sector_members.add_argument("--as-of")
+    sector_members.add_argument("--limit", type=_bounded_integer(1, 5000), default=500)
+    sector_members.set_defaults(handler=_sector_members)
+    sector_research = sector_commands.add_parser(
+        "research-pack", help="get a governed sector research pack"
+    )
+    _add_sector_identity_arguments(sector_research)
+    sector_research.add_argument(
+        "--lookback-days", type=_bounded_integer(30, 730), default=180
+    )
+    sector_research.add_argument(
+        "--member-limit", type=_bounded_integer(1, 2000), default=500
+    )
+    sector_research.add_argument("--as-of")
+    sector_research.set_defaults(handler=_sector_research_pack)
 
     interfaces = commands.add_parser("interfaces", help="discover Tushare interfaces")
     interface_commands = interfaces.add_subparsers(
@@ -196,7 +251,9 @@ def main(
         return error.exit_code
 
 
-def _add_record_query_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_record_query_arguments(
+    parser: argparse.ArgumentParser, *, include_as_of: bool = False
+) -> None:
     parser.add_argument(
         "--filter",
         action="append",
@@ -207,6 +264,11 @@ def _add_record_query_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--date")
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
+    if include_as_of:
+        parser.add_argument(
+            "--as-of",
+            help="exclude records that were not yet available at this date",
+        )
     parser.add_argument("--limit", type=_bounded_integer(1, 1000), default=100)
     parser.add_argument("--offset", type=_bounded_integer(0, None), default=0)
     parser.add_argument("--include-total", action="store_true")
@@ -222,6 +284,7 @@ def _record_query_params(args: argparse.Namespace) -> dict[str, Any]:
         "offset",
         "include_total",
         "date_field",
+        "as_of",
     }
     invalid = sorted(set(params) & reserved)
     if invalid:
@@ -234,6 +297,7 @@ def _record_query_params(args: argparse.Namespace) -> dict[str, Any]:
         "date": args.date,
         "start_date": args.start_date,
         "end_date": args.end_date,
+        "as_of": getattr(args, "as_of", None),
     }
     params.update({key: value for key, value in optional.items() if value is not None})
     params.update(
@@ -245,6 +309,11 @@ def _record_query_params(args: argparse.Namespace) -> dict[str, Any]:
     if args.include_total:
         params["include_total"] = "true"
     return params
+
+
+def _add_sector_identity_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("provider", choices=("ths", "dc", "tdx"))
+    parser.add_argument("sector_code", type=_ts_code)
 
 
 def _parse_filters(values: list[str]) -> dict[str, str]:
@@ -281,8 +350,10 @@ def _health(client: ApiClient, args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
-def _status(client: ApiClient, _args: argparse.Namespace) -> Any:
-    return client.get("/v1/data-health")
+def _status(client: ApiClient, args: argparse.Namespace) -> Any:
+    return client.get(
+        "/v1/data-health" if args.full else "/v1/data-health/summary"
+    )
 
 
 def _datasets_list(client: ApiClient, args: argparse.Namespace) -> list[dict[str, Any]]:
@@ -322,6 +393,83 @@ def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
         params["as_of"] = args.as_of
     return client.get(
         f"/v1/stocks/{args.ts_code.upper()}/research-pack",
+        params=params,
+    )
+
+
+def _stock_sectors(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        key: value
+        for key, value in {
+            "provider": args.provider,
+            "as_of": args.as_of,
+        }.items()
+        if value is not None
+    }
+    return client.get(
+        f"/v1/stocks/{args.ts_code.upper()}/sectors",
+        params=params or None,
+    )
+
+
+def _stock_peers(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "max_sectors": args.max_sectors,
+        "limit": args.limit,
+    }
+    if args.provider:
+        params["provider"] = args.provider
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/stocks/{args.ts_code.upper()}/peers",
+        params=params,
+    )
+
+
+def _sector_list(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        key: value
+        for key, value in {
+            "provider": args.provider,
+            "query": args.query,
+            "category": args.category,
+            "market": args.market,
+            "as_of": args.as_of,
+            "limit": args.limit,
+        }.items()
+        if value is not None
+    }
+    return client.get("/v1/sectors", params=params)
+
+
+def _sector_snapshot(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"as_of": args.as_of} if args.as_of else None
+    return client.get(
+        f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/snapshot",
+        params=params,
+    )
+
+
+def _sector_members(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"limit": args.limit}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/members",
+        params=params,
+    )
+
+
+def _sector_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "lookback_days": args.lookback_days,
+        "member_limit": args.member_limit,
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/research-pack",
         params=params,
     )
 

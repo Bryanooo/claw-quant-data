@@ -213,6 +213,22 @@ def test_full_profile_is_discoverable_with_market_history_start():
     assert full["history_start"] == FULL_HISTORY_START.isoformat()
 
 
+def test_full_initialization_preflight_freezes_a_complete_plan():
+    result = InitializationService().preflight(
+        profile="full",
+        history_start=FULL_HISTORY_START,
+        history_end=date(2026, 9, 5),
+    )
+
+    assert result["status"] == "ready"
+    assert result["plan_version"] >= 2
+    assert len(result["plan_fingerprint"]) == 64
+    assert result["checks"]["interfaces"] == len(
+        set(FULL_INITIALIZATION_BASELINES) | {"index_daily", "kpl_concept_cons", "disclosure_date", "express", "forecast", "fina_mainbz"}
+    )
+    assert result["warnings"][0]["code"] == "non_trading_history_end"
+
+
 def test_full_profile_defaults_to_all_market_history_and_bypasses_ten_year_limit():
     repository = StartRepository()
     service = InitializationService(
@@ -636,7 +652,11 @@ def test_full_initialization_plans_verified_whole_universe_fanouts():
     assert progress["logical_total_steps"] == 385
 
 
-def test_latest_baseline_excludes_interfaces_owned_by_safe_fanout():
+def test_latest_baseline_excludes_interfaces_owned_by_safe_fanout(monkeypatch):
+    monkeypatch.setattr(
+        "service.tushare_scheduling.query",
+        lambda *_args, **_kwargs: [{"trade_date": date(2026, 8, 28)}],
+    )
     repository = PlanningRepository()
     jobs = PlanningJobs()
     service = InitializationService(
@@ -657,6 +677,17 @@ def test_latest_baseline_excludes_interfaces_owned_by_safe_fanout():
     }
     assert catalog_calls
     assert catalog_calls.isdisjoint(FULL_INITIALIZATION_BASELINES)
+    dedicated = [call for call in jobs.calls if call[0] == "scheduled_collector"]
+    assert dedicated
+    assert all(
+        call[1]["scheduled_for"].startswith("2026-08-28T20:00:00")
+        and call[2]["expected_for"] == date(2026, 8, 28)
+        for call in dedicated
+    )
+    assert {
+        "disclosure_date_quarterly", "express_annual",
+        "forecast_seasonal", "mainbz_annual",
+    }.isdisjoint(call[1]["schedule_id"] for call in dedicated)
 
 
 def test_running_initialization_can_rebuild_only_failed_steps():

@@ -10,6 +10,105 @@ class Stub:
         setattr(self, method, lambda: value)
 
 
+def test_operational_summary_avoids_full_freshness_and_delivery_scans():
+    collection = {
+        "summary": {
+            "interfaces": 244,
+            "collectable": 200,
+            "complete": 140,
+            "pending": 3,
+            "running": 1,
+            "attention": 0,
+            "unresolved_failures": 0,
+        },
+        "services": [{"component": "worker", "status": "healthy"}],
+    }
+    coverage = {
+        "summary": {
+            "datasets": 193,
+            "with_gaps": 0,
+            "missing_partitions": 0,
+            "partial_partitions": 0,
+        }
+    }
+    service = DataHealthService(
+        collection_service=Stub(collection),
+        coverage_service=Stub(coverage),
+        data_service=object(),
+        initialization_service=Stub(
+            {
+                "active": {"initialization_id": 66, "status": "running"},
+                "latest": None,
+            }
+        ),
+        delivery_service=None,
+    )
+
+    result = service.summary()
+
+    assert result["status"] == "warning"
+    assert result["summary"]["pending_interfaces"] == 3
+    assert result["history"]["initialization_id"] == 66
+    assert result["unhealthy_services"] == []
+
+
+def test_operational_summary_keeps_intraday_gap_warning_until_deadline():
+    collection = {
+        "summary": {
+            "interfaces": 1,
+            "collectable": 1,
+            "complete": 0,
+            "pending": 0,
+            "running": 0,
+            "attention": 1,
+            "unverified": 0,
+            "unresolved_failures": 0,
+        },
+        "services": [{"component": "worker", "status": "healthy"}],
+    }
+    coverage = {
+        "summary": {
+            "datasets": 1,
+            "with_gaps": 1,
+            "missing_partitions": 0,
+            "partial_partitions": 1,
+        },
+        "datasets": [
+            {
+                "dataset": "index_daily",
+                "latest": {
+                    "status": "gaps",
+                    "start_date": "2026-09-09",
+                    "end_date": "2026-09-09",
+                    "missing_partitions": 0,
+                    "partial_partitions": 1,
+                },
+                "recent_missing": ["2026-09-09"],
+            }
+        ],
+    }
+    delivery = {
+        "items": [
+            {
+                "api_name": "index_daily",
+                "expected_for": "2026-09-09",
+                "due_at": "2026-09-09T23:59:00+08:00",
+                "delivery_status": "waiting",
+                "attention": False,
+            }
+        ]
+    }
+    service = DataHealthService(
+        collection_service=Stub(collection),
+        coverage_service=Stub(coverage),
+        data_service=object(),
+        initialization_service=Stub({"active": None, "latest": None}),
+        delivery_service=Stub(delivery, "today"),
+    )
+
+    assert service.summary()["status"] == "warning"
+
+
 def test_intraday_coverage_gap_is_informational_until_delivery_deadline():
     service = DataHealthService(
         collection_service=Stub(

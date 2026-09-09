@@ -98,6 +98,43 @@ class FakeDataService:
             },
         }
 
+    def list_sectors(self, **kwargs):
+        self.query_args = kwargs
+        return {
+            "data": [
+                {
+                    "provider": "ths",
+                    "sector_code": "885001.TI",
+                    "name": "人工智能",
+                    "category": "概念指数",
+                    "market": "A",
+                    "constituent_count": 88,
+                    "trade_date": None,
+                }
+            ],
+            "meta": {"returned": 1},
+        }
+
+    def sector_snapshot(self, provider, sector_code, **kwargs):
+        self.query_args = {"provider": provider, "sector_code": sector_code, **kwargs}
+        return {"data": {"profile": {"name": "人工智能"}}, "meta": {}}
+
+    def sector_members(self, provider, sector_code, **kwargs):
+        self.query_args = {"provider": provider, "sector_code": sector_code, **kwargs}
+        return {"data": [{"ts_code": "300750.SZ"}], "meta": {}}
+
+    def sector_research_pack(self, provider, sector_code, **kwargs):
+        self.query_args = {"provider": provider, "sector_code": sector_code, **kwargs}
+        return {"data": {"profile": {"name": "人工智能"}}, "meta": {}}
+
+    def stock_sectors(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": [{"sector_code": "885001.TI"}], "meta": {}}
+
+    def stock_peers(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": [{"ts_code": "000001.SZ"}], "meta": {}}
+
 
 class FakeInterfaceDataService:
     def __init__(self):
@@ -182,6 +219,23 @@ def test_dataset_query_passes_only_whitelisted_query_shape():
     assert service.query_args["limit"] == 20
 
 
+def test_dataset_query_forwards_as_of_without_treating_it_as_a_field_filter():
+    client, service = make_client()
+    with client:
+        response = client.get(
+            "/api/v1/datasets/income/records",
+            params={
+                "ts_code": "000001.SZ",
+                "end_date": "2024-03-31",
+                "as_of": "2024-04-30",
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.query_args["exact_filters"] == {"ts_code": "000001.SZ"}
+    assert service.query_args["as_of"] == "2024-04-30"
+
+
 def test_stock_research_pack_endpoint_passes_bounded_parameters():
     client, service = make_client()
     with client:
@@ -203,6 +257,60 @@ def test_stock_research_pack_endpoint_passes_bounded_parameters():
         "benchmark": "399006.SZ",
         "financial_periods": 4,
         "as_of": date(2026, 9, 8),
+    }
+
+
+def test_sector_research_endpoints_are_namespaced_and_bounded():
+    client, service = make_client()
+    with client:
+        listed = client.get(
+            "/api/v1/sectors",
+            params={"provider": "ths", "query": "人工", "limit": 20},
+        )
+        pack = client.get(
+            "/api/v1/sectors/ths/885001.ti/research-pack",
+            params={
+                "lookback_days": 90,
+                "member_limit": 200,
+                "as_of": "2026-09-08",
+            },
+        )
+
+    assert listed.status_code == 200
+    assert listed.json()["data"][0]["sector_code"] == "885001.TI"
+    assert pack.status_code == 200
+    assert service.query_args == {
+        "provider": "ths",
+        "sector_code": "885001.TI",
+        "lookback_days": 90,
+        "member_limit": 200,
+        "as_of": date(2026, 9, 8),
+    }
+
+
+def test_stock_sector_and_peer_endpoints_forward_point_in_time_scope():
+    client, service = make_client()
+    with client:
+        sectors = client.get(
+            "/api/v1/stocks/300750.sz/sectors",
+            params={"provider": "ths", "as_of": "2026-09-08"},
+        )
+        peers = client.get(
+            "/api/v1/stocks/300750.sz/peers",
+            params={
+                "provider": "ths", "as_of": "2026-09-08",
+                "max_sectors": 3, "limit": 20,
+            },
+        )
+
+    assert sectors.status_code == 200
+    assert peers.status_code == 200
+    assert service.query_args == {
+        "ts_code": "300750.SZ",
+        "provider": "ths",
+        "as_of": date(2026, 9, 8),
+        "max_sectors": 3,
+        "limit": 20,
     }
 
 
@@ -382,14 +490,26 @@ def test_data_health_endpoint_is_under_api_namespace():
                     "active": None,
                     "latest": None,
                 },
-            }
+            },
+            "summary": lambda self: {
+                "generated_at": "2026-09-08T12:00:00+08:00",
+                "status": "warning",
+                "scope": "operational_preflight",
+                "summary": {"pending_interfaces": 3},
+                "history": None,
+                "unhealthy_services": [],
+                "full_health_url": "/api/v1/data-health",
+            },
         },
     )()
 
     with client:
         response = client.get("/api/v1/data-health")
+        summary = client.get("/api/v1/data-health/summary")
 
     assert response.status_code == 200
+    assert summary.status_code == 200
+    assert summary.json()["scope"] == "operational_preflight"
     assert response.json()["summary"]["confirmed_issue_count"] == 2
 
 
@@ -460,6 +580,9 @@ def test_initialization_lifecycle_endpoints_are_under_api_namespace():
             assert kwargs["auto_activate"] is False
             return ({"initialization_id": 7, "status": "running"}, True)
 
+        def preflight(self, **kwargs):
+            return {"status": "ready", "profile": kwargs["profile"]}
+
         def get(self, initialization_id):
             return {"initialization_id": initialization_id, "status": "running"}
 
@@ -479,6 +602,10 @@ def test_initialization_lifecycle_endpoints_are_under_api_namespace():
 
     with client:
         overview = client.get("/api/v1/initialization")
+        preflight = client.post(
+            "/api/v1/initialization/preflight",
+            json={"profile": "full", "history_end": "2026-08-28"},
+        )
         created = client.post(
             "/api/v1/initialization",
             headers={"Idempotency-Key": "initialization-test-key"},
@@ -495,6 +622,7 @@ def test_initialization_lifecycle_endpoints_are_under_api_namespace():
         )
 
     assert overview.status_code == 200
+    assert preflight.json() == {"status": "ready", "profile": "full"}
     assert overview.json()["runtime"]["mode"] == "awaiting_initialization"
     assert created.status_code == 202
     assert steps.json() == [{"initialization_id": 7, "limit": 12}]

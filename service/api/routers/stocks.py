@@ -37,3 +37,30 @@ def stock_research_pack(
         financial_periods=financial_periods,
         as_of=as_of,
     )
+
+
+@router.get("/{ts_code}/sectors")
+def stock_sectors(
+    ts_code: str,
+    service: DataServiceDependency,
+    provider: str | None = Query(default=None, pattern=r"^(ths|dc|tdx)$"),
+    as_of: date | None = None,
+) -> dict:
+    return service.stock_sectors(
+        ts_code.upper(), provider=provider, as_of=as_of
+    )
+
+
+@router.get("/{ts_code}/peers")
+def stock_peers(
+    ts_code: str,
+    service: DataServiceDependency,
+    provider: str | None = Query(default=None, pattern=r"^(ths|dc|tdx)$"),
+    as_of: date | None = None,
+    max_sectors: int = Query(default=5, ge=1, le=10),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict:
+    return service.stock_peers(
+        ts_code.upper(), provider=provider, as_of=as_of,
+        max_sectors=max_sectors, limit=limit,
+    )

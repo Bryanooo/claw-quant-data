@@ -20,6 +20,18 @@ def initialization_overview(service: InitializationServiceDependency) -> dict:
     return service.overview()
 
 
+@router.post("/preflight")
+def initialization_preflight(
+    request: InitializationRequest,
+    service: InitializationServiceDependency,
+) -> dict:
+    return service.preflight(
+        profile=request.profile,
+        history_start=request.history_start,
+        history_end=request.history_end,
+    )
+
+
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 def start_initialization(
     request: InitializationRequest,

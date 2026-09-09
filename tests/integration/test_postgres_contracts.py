@@ -125,6 +125,69 @@ def test_coverage_queue_counts_only_unresolved_failures():
         connection.close()
 
 
+def test_verified_policy_scope_is_reused_across_handler_versions():
+    suffix = uuid4().hex
+    repository = JobRepository()
+    parameters = {
+        "api_name": "cn_cpi",
+        "parameters": {"start_m": "202601", "end_m": "202601"},
+        "complete": True,
+    }
+    first, created = repository.create(
+        "tushare_interface",
+        parameters,
+        max_attempts=3,
+        idempotency_key=f"integration-scope-v1-{suffix}",
+        api_name="cn_cpi",
+        cadence="monthly",
+        period_key="2026-01",
+        expected_for=date(2026, 1, 31),
+        handler_type="generic",
+        handler_key="catalog_typed:cn_cpi",
+        handler_version="1",
+    )
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        assert created is True
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='success', completion_status='complete',
+                    completion_evidence='{"verified": true}'::jsonb,
+                    rows_fetched=1, rows_inserted=1, finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (first["job_id"],),
+            )
+        connection.commit()
+
+        reused, created = repository.create(
+            "tushare_interface",
+            parameters,
+            max_attempts=3,
+            idempotency_key=f"integration-scope-v2-{suffix}",
+            api_name="cn_cpi",
+            cadence="monthly",
+            period_key="2026-01",
+            expected_for=date(2026, 1, 31),
+            handler_type="generic",
+            handler_key="catalog_typed:cn_cpi",
+            handler_version="2",
+            reuse_verified_scope=True,
+        )
+        assert created is False
+        assert reused["job_id"] == first["job_id"]
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_collection_job WHERE idempotency_key LIKE %s",
+                (f"integration-scope-%-{suffix}",),
+            )
+        connection.commit()
+        connection.close()
+
+
 def test_physical_partition_does_not_hide_known_incomplete_collection():
     suffix = uuid4().hex[:12]
     table_name = f"coverage_incomplete_{suffix}"
@@ -582,6 +645,63 @@ def test_failed_fanout_plan_is_only_superseded_by_verified_replacement():
         assert resolved["resolution_message"] == (
             "factor-name fan-out replaced stock fan-out"
         )
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_collection_fanout_campaign WHERE campaign_id = ANY(%s)",
+                (campaign_ids,),
+            )
+        connection.commit()
+        connection.close()
+
+
+def test_verified_fanout_replacement_closes_obsolete_same_period_plan():
+    suffix = uuid4().hex
+    repository = FanoutCampaignRepository()
+    original, _ = repository.create(
+        api_name="factor_value",
+        request={"api_name": "factor_value", "trade_date": "2026-08-28"},
+        page_size=200,
+        idempotency_key=f"integration-auto-superseded-original-{suffix}",
+        initialization_id=None,
+        cadence="daily",
+        period_key="2026-08-28",
+        expected_for=date(2026, 8, 28),
+    )
+    replacement, _ = repository.create(
+        api_name="factor_value",
+        request={"api_name": "factor_value", "trade_date": "2026-08-28"},
+        page_size=200,
+        idempotency_key=f"integration-auto-superseded-replacement-{suffix}",
+        initialization_id=None,
+        cadence="daily",
+        period_key="2026-08-28",
+        expected_for=date(2026, 8, 28),
+    )
+    campaign_ids = [original["campaign_id"], replacement["campaign_id"]]
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE sys_collection_fanout_campaign "
+                "SET status='attention', completion_status='incomplete' "
+                "WHERE campaign_id=%s",
+                (original["campaign_id"],),
+            )
+            cursor.execute(
+                "UPDATE sys_collection_fanout_campaign "
+                "SET status='success', completion_status='complete' "
+                "WHERE campaign_id=%s",
+                (replacement["campaign_id"],),
+            )
+        connection.commit()
+
+        assert repository.supersede_resolved_predecessors(
+            replacement["campaign_id"]
+        ) == 1
+        resolved = repository.get(original["campaign_id"])
+        assert resolved["status"] == "superseded"
+        assert resolved["superseded_by_campaign_id"] == replacement["campaign_id"]
     finally:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -1583,13 +1703,14 @@ def test_partition_snapshot_reconciles_only_staged_partitions():
 def test_collection_queue_claims_higher_priority_first():
     repository = JobRepository()
     suffix = uuid4().hex
+    resource_class = f"it-priority-{suffix[:12]}"
     low, _ = repository.create(
         "tushare_interface",
         {"api_name": "cn_cpi", "parameters": {}},
         max_attempts=1,
         idempotency_key=f"priority-low-{suffix}",
         priority=10,
-        resource_class="generic",
+        resource_class=resource_class,
     )
     high, _ = repository.create(
         "stock_daily",
@@ -1597,14 +1718,18 @@ def test_collection_queue_claims_higher_priority_first():
         max_attempts=1,
         idempotency_key=f"priority-high-{suffix}",
         priority=90,
-        resource_class="market",
+        resource_class=resource_class,
     )
     claimed = None
     try:
-        claimed = repository.claim_next("priority-integration", lease_seconds=30)
+        claimed = repository.claim_next(
+            "priority-integration",
+            lease_seconds=30,
+            resource_classes=(resource_class,),
+        )
         assert claimed["job_id"] == high["job_id"]
         assert claimed["priority"] == 90
-        assert claimed["resource_class"] == "market"
+        assert claimed["resource_class"] == resource_class
     finally:
         connection = psycopg2.connect(**DB_CONFIG)
         try:

@@ -100,7 +100,7 @@ def test_registry_exposes_every_collector_table():
     assert collector_tables | normalized_tables | {
         "tushare_current_daily_basic"
     } == registered_tables
-    assert len(DATASETS.list()) == 193
+    assert len(DATASETS.list()) == 194
 
 
 def test_normalized_dataset_exposes_versioned_storage_semantics():
@@ -196,7 +196,7 @@ def test_all_collectable_interfaces_have_a_public_data_path():
     service = InterfaceDataService(FakeRawRepository(), DATASETS)
     interfaces = service.list_interfaces()
 
-    assert len(interfaces) == 200
+    assert len(interfaces) == 201
     assert all(item["datasets"] for item in interfaces)
     assert all(
         item["records_url"]
@@ -329,6 +329,181 @@ def test_stock_research_pack_aggregates_governed_datasets_without_advice():
     assert "earliest_value_in_pack" in provenance["stock_daily"]
     assert result["meta"]["external_data_needed"][0]["topic"] == "official_company_announcements"
     assert "advice" not in result
+
+
+def test_stock_research_pack_enforces_announcement_cutoff_for_historical_view():
+    class CapturingRepository(FakeRepository):
+        def __init__(self):
+            super().__init__()
+            self.queries = []
+
+        def records(self, dataset, query):
+            self.queries.append((dataset.name, query))
+            return super().records(dataset, query)
+
+    repository = CapturingRepository()
+    service = DataService(repository, DATASETS)
+
+    result = service.stock_research_pack(
+        "300750.SZ",
+        lookback_days=90,
+        financial_periods=4,
+        as_of=date(2024, 4, 30),
+    )
+
+    by_dataset = {name: query for name, query in repository.queries}
+    for dataset in (
+        "income",
+        "balancesheet",
+        "cashflow",
+        "financial_indicator",
+        "forecast",
+        "express",
+        "stk_holdernumber",
+        "top10_holders",
+        "dividend",
+    ):
+        assert by_dataset[dataset].as_of == date(2024, 4, 30)
+        assert by_dataset[dataset].end_date == date(2024, 4, 30)
+    assert result["meta"]["quality"]["point_in_time_safe"] is False
+    assert result["meta"]["quality"]["point_in_time_warnings"] == [
+        "stock_basic",
+        "stock_company",
+    ]
+
+
+def test_dataset_as_of_requires_and_uses_declared_availability_column():
+    repository = FakeRepository()
+    service = DataService(repository, DATASETS)
+
+    service.query_dataset(
+        "income",
+        exact_filters={"ts_code": "300750.SZ"},
+        date_value=None,
+        start_date=None,
+        end_date="2024-03-31",
+        as_of="2024-04-30",
+        limit=10,
+        offset=0,
+        include_total=False,
+    )
+
+    assert repository.last_query.as_of == date(2024, 4, 30)
+    with pytest.raises(InvalidQueryError, match="does not support as_of"):
+        service.query_dataset(
+            "stock_basic",
+            exact_filters={"ts_code": "300750.SZ"},
+            date_value=None,
+            start_date=None,
+            end_date=None,
+            as_of="2024-04-30",
+            limit=10,
+            offset=0,
+            include_total=False,
+        )
+
+
+class SectorRepository(FakeRepository):
+    def records(self, dataset, query):
+        self.last_dataset = dataset
+        self.last_query = query
+        code = query.exact_filters.get("ts_code")
+        constituent = query.exact_filters.get("con_code")
+        rows = {
+            "ths_index": [
+                {
+                    "ts_code": "885001.TI",
+                    "name": "人工智能",
+                    "type": "概念指数",
+                    "count": 88,
+                },
+                {
+                    "ts_code": "885002.TI",
+                    "name": "银行",
+                    "type": "行业指数",
+                    "count": 42,
+                },
+            ],
+            "industry_daily": [
+                {
+                    "ts_code": "885001.TI",
+                    "trade_date": date(2026, 9, 8),
+                    "close": 1234.5,
+                    "pct_change": 1.2,
+                },
+                {
+                    "ts_code": "885001.TI",
+                    "trade_date": date(2026, 9, 7),
+                    "close": 1220.0,
+                    "pct_change": 0.5,
+                },
+            ],
+            "ths_member": [
+                {
+                    "ts_code": "885001.TI",
+                    "con_code": "300750.SZ",
+                    "con_name": "宁德时代",
+                    "weight": 8.5,
+                    "in_date": "20200101",
+                    "out_date": None,
+                },
+                {
+                    "ts_code": "885001.TI",
+                    "con_code": "000001.SZ",
+                    "con_name": "平安银行",
+                    "weight": 1.2,
+                    "in_date": "20200101",
+                    "out_date": None,
+                },
+            ],
+            "moneyflow_cnt_ths": [
+                {
+                    "ts_code": "885001.TI",
+                    "trade_date": date(2026, 9, 8),
+                    "net_amount": 10.0,
+                }
+            ],
+        }.get(dataset.name, [])
+        if code:
+            rows = [row for row in rows if row.get("ts_code") == code]
+        if constituent:
+            rows = [row for row in rows if row.get("con_code") == constituent]
+        return rows[query.offset : query.offset + query.limit]
+
+
+def test_sector_research_service_normalizes_vendor_data():
+    service = DataService(SectorRepository(), DATASETS)
+
+    listed = service.list_sectors(provider="ths", query="人工", limit=10)
+    pack = service.sector_research_pack(
+        "ths", "885001.TI", lookback_days=90,
+        member_limit=100, as_of=date(2026, 9, 8),
+    )
+
+    assert listed["meta"]["matched"] == 1
+    assert listed["data"][0]["name"] == "人工智能"
+    assert listed["data"][0]["category"] == "概念指数"
+    assert pack["data"]["profile"]["provider"] == "ths"
+    assert pack["data"]["latest"]["trade_date"] == date(2026, 9, 8)
+    assert pack["data"]["members"][0]["ts_code"] == "300750.SZ"
+    assert pack["meta"]["quality"]["status"] == "ready"
+
+
+def test_stock_sector_membership_and_peer_discovery_are_explainable():
+    service = DataService(SectorRepository(), DATASETS)
+
+    memberships = service.stock_sectors(
+        "300750.SZ", provider="ths", as_of=date(2026, 9, 8)
+    )
+    peers = service.stock_peers(
+        "300750.SZ", provider="ths", as_of=date(2026, 9, 8),
+        max_sectors=5, limit=20,
+    )
+
+    assert memberships["data"][0]["sector_code"] == "885001.TI"
+    assert peers["data"][0]["ts_code"] == "000001.SZ"
+    assert peers["data"][0]["shared_sector_count"] == 1
+    assert peers["data"][0]["shared_sectors"][0]["name"] == "人工智能"
 
 
 @pytest.mark.parametrize(

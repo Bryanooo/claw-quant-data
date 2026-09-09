@@ -25,6 +25,8 @@ class DatasetSpec:
     exact_filters: Mapping[str, str] = field(default_factory=dict)
     date_column: str | None = None
     date_storage: DateStorage = DateStorage.DATE
+    availability_column: str | None = None
+    availability_storage: DateStorage = DateStorage.DATE
     default_order: tuple[str, ...] = ()
     default_descending: bool = True
     max_page_size: int = 1000
@@ -47,6 +49,7 @@ class DatasetQuery:
     date: DateValue | None = None
     start_date: DateValue | None = None
     end_date: DateValue | None = None
+    as_of: DateValue | None = None
     limit: int = 100
     offset: int = 0
     include_total: bool = False

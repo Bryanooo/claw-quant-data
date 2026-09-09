@@ -71,7 +71,7 @@ def test_every_interface_has_an_operational_collection_policy():
 
     assert {item.api_name for item in policies} == {item.api_name for item in contracts}
     collectable = [item for item in contracts if item.collectable]
-    assert len(collectable) == 200
+    assert len(collectable) == 201
     assert all(TusharePolicyRegistry().get(item.api_name).page_size > 0 for item in collectable)
     assert TusharePolicyRegistry().get("fund_adj").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("etf_sh_cons").pagination_mode == "offset"

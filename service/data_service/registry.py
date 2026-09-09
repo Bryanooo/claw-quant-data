@@ -53,6 +53,8 @@ def _market_dataset(
         exact_filters={"ts_code": "ts_code"},
         date_column="trade_date",
         date_storage=date_storage,
+        availability_column="trade_date",
+        availability_storage=date_storage,
         default_order=("trade_date", "ts_code"),
         freshness_sla_hours=freshness_sla_hours,
         freshness_policy="max_age",
@@ -143,6 +145,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             primary_keys=("exchange", "cal_date"),
             exact_filters={"exchange": "exchange", "is_open": "is_open"},
             date_column="cal_date",
+            availability_column="cal_date",
             default_order=("cal_date", "exchange"),
             default_descending=False,
             freshness_sla_hours=48,
@@ -163,6 +166,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             primary_keys=("ts_code", "trade_date", "suspend_type"),
             exact_filters={"ts_code": "ts_code", "suspend_type": "suspend_type"},
             date_column="trade_date",
+            availability_column="trade_date",
             default_order=("trade_date", "ts_code"),
             freshness_sla_hours=72,
             freshness_policy="max_age",
@@ -176,6 +180,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             primary_keys=("ts_code", "end_date", "report_type"),
             exact_filters={"ts_code": "ts_code", "report_type": "report_type"},
             date_column="end_date",
+            availability_column="ann_date",
             default_order=("end_date", "ts_code"),
             freshness_sla_hours=24 * 120,
             freshness_policy="quarterly_disclosure",
@@ -188,6 +193,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             primary_keys=("ts_code", "end_date", "report_type"),
             exact_filters={"ts_code": "ts_code", "report_type": "report_type"},
             date_column="end_date",
+            availability_column="ann_date",
             default_order=("end_date", "ts_code"),
             freshness_sla_hours=24 * 120,
             freshness_policy="quarterly_disclosure",
@@ -200,6 +206,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             primary_keys=("ts_code", "end_date", "report_type"),
             exact_filters={"ts_code": "ts_code", "report_type": "report_type"},
             date_column="end_date",
+            availability_column="ann_date",
             default_order=("end_date", "ts_code"),
             freshness_sla_hours=24 * 120,
             freshness_policy="quarterly_disclosure",
@@ -212,6 +219,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             primary_keys=("ts_code", "end_date"),
             exact_filters={"ts_code": "ts_code"},
             date_column="end_date",
+            availability_column="ann_date",
             default_order=("end_date", "ts_code"),
             freshness_sla_hours=24 * 120,
             freshness_policy="quarterly_disclosure",
@@ -289,10 +297,24 @@ def _generated_dataset(
             if contract.table_name in _COMPACT_DATE_TABLES
             else DateStorage.DATE
         ),
+        availability_column=_AVAILABILITY_COLUMNS.get(contract.table_name),
         default_order=contract.primary_keys,
         freshness_sla_hours=freshness_hours,
         freshness_policy=freshness_policy,
     )
+
+
+_AVAILABILITY_COLUMNS = {
+    "dividend": "ann_date",
+    "express": "ann_date",
+    "forecast": "ann_date",
+    "pledge_stat": "end_date",
+    "repurchase": "ann_date",
+    "stk_holdernumber": "ann_date",
+    "stk_holdertrade": "ann_date",
+    "top10_floatholders": "ann_date",
+    "top10_holders": "ann_date",
+}
 
 
 def _inferred_freshness(

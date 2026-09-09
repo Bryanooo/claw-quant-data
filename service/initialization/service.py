@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 import hashlib
+import json
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -52,6 +53,7 @@ PROFILE_DAYS = {
     "full": None,
 }
 PLANNING_BATCH_SIZE = 500
+INITIALIZATION_PLAN_VERSION = 2
 CORE_TASKS = ("stock_daily", "stock_daily_basic", "moneyflow", "stock_limit")
 TRANSIENT_AUTO_RECOVERY_CATEGORIES = frozenset({"network", "timeout", "quota"})
 FULL_HISTORY_DATASET_STARTS = {
@@ -208,6 +210,165 @@ class InitializationService:
             for name, days in PROFILE_DAYS.items()
         ]
 
+    def preflight(
+        self,
+        *,
+        profile: str,
+        history_start: date | None,
+        history_end: date | None,
+    ) -> dict[str, Any]:
+        """Validate the entire plan before any expensive work is persisted."""
+        from collectors.scheduler import scheduled_collection_ids
+        from service.collection_jobs.fanout import FANOUT_DEFINITIONS
+        from service.data_coverage.models import CoverageStrategy
+        from service.data_coverage.registry import COVERAGE_RULES
+        from service.tushare_catalog import TushareInterfaceCatalog
+
+        errors: list[dict[str, str]] = []
+        warnings: list[dict[str, str]] = []
+        if profile not in PROFILE_DAYS:
+            errors.append({"code": "unsupported_profile", "detail": profile})
+
+        required_tasks = {
+            *CORE_TASKS,
+            *FINANCE_TASKS,
+            "trade_calendar",
+            "stock_basic",
+            "tushare_interface",
+            "scheduled_collector",
+        }
+        for task_name in sorted(required_tasks):
+            try:
+                TASKS.get(task_name)
+            except Exception as exc:
+                errors.append({
+                    "code": "missing_task",
+                    "detail": f"{task_name}: {exc}",
+                })
+
+        catalog = TushareInterfaceCatalog()
+        required_interfaces = set(CORE_INTERFACE_HISTORY)
+        if profile == "full":
+            required_interfaces.update(AUXILIARY_FINANCE_INTERFACES)
+            required_interfaces.update(FULL_INITIALIZATION_BASELINES)
+        for api_name in sorted(required_interfaces):
+            try:
+                contract = catalog.get(api_name)
+            except Exception as exc:
+                errors.append({
+                    "code": "missing_interface_contract",
+                    "detail": f"{api_name}: {exc}",
+                })
+                continue
+            if not contract.collectable:
+                errors.append({
+                    "code": "interface_not_collectable",
+                    "detail": (
+                        f"{api_name}: {contract.permission.get('status', 'unknown')}"
+                    ),
+                })
+
+        if profile == "full":
+            for api_name in sorted(FULL_FANOUT_BASELINES):
+                if api_name not in FANOUT_DEFINITIONS:
+                    errors.append({
+                        "code": "missing_fanout_recipe",
+                        "detail": api_name,
+                    })
+
+        for dataset_name in VERIFICATION_DATASETS:
+            try:
+                rule = COVERAGE_RULES.get(dataset_name)
+            except Exception as exc:
+                errors.append({
+                    "code": "missing_coverage_rule",
+                    "detail": f"{dataset_name}: {exc}",
+                })
+                continue
+            if rule.strategy in {
+                CoverageStrategy.OBSERVED_ONLY,
+                CoverageStrategy.NON_TEMPORAL,
+            }:
+                errors.append({
+                    "code": "non_proving_coverage_rule",
+                    "detail": dataset_name,
+                })
+
+        schedule_ids = scheduled_collection_ids()
+        if not schedule_ids:
+            errors.append({
+                "code": "empty_scheduled_collector_registry",
+                "detail": "no dedicated collectors are registered",
+            })
+
+        resolved_end = history_end or (_today() - timedelta(days=1))
+        profile_days = PROFILE_DAYS.get(profile)
+        resolved_start = history_start or (
+            FULL_HISTORY_START
+            if profile == "full"
+            else resolved_end - timedelta(days=(profile_days or 1) - 1)
+        )
+        if resolved_end >= _today():
+            errors.append({
+                "code": "unfinished_history_end",
+                "detail": resolved_end.isoformat(),
+            })
+        if resolved_start > resolved_end:
+            errors.append({
+                "code": "invalid_history_range",
+                "detail": f"{resolved_start.isoformat()}..{resolved_end.isoformat()}",
+            })
+        if profile == "full" and resolved_start < FULL_HISTORY_START:
+            errors.append({
+                "code": "history_before_supported_market_start",
+                "detail": resolved_start.isoformat(),
+            })
+        if (
+            profile in PROFILE_DAYS
+            and profile != "full"
+            and (resolved_end - resolved_start).days > 3660
+        ):
+            errors.append({
+                "code": "history_range_too_large",
+                "detail": "non-full initialization cannot exceed 10 years",
+            })
+        if resolved_end.weekday() >= 5:
+            warnings.append({
+                "code": "non_trading_history_end",
+                "detail": "latest-baseline collectors will use the latest open trade date",
+            })
+
+        manifest = {
+            "version": INITIALIZATION_PLAN_VERSION,
+            "profile": profile,
+            "history_start": resolved_start.isoformat(),
+            "history_end": resolved_end.isoformat(),
+            "tasks": sorted(required_tasks),
+            "interfaces": sorted(required_interfaces),
+            "fanout": sorted(FULL_FANOUT_BASELINES if profile == "full" else ()),
+            "verification": list(VERIFICATION_DATASETS),
+            "scheduled_collectors": sorted(schedule_ids),
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return {
+            "status": "ready" if not errors else "blocked",
+            "plan_version": INITIALIZATION_PLAN_VERSION,
+            "plan_fingerprint": fingerprint,
+            "history_start": resolved_start.isoformat(),
+            "history_end": resolved_end.isoformat(),
+            "checks": {
+                "tasks": len(required_tasks),
+                "interfaces": len(required_interfaces),
+                "fanout_recipes": len(FULL_FANOUT_BASELINES) if profile == "full" else 0,
+                "coverage_rules": len(VERIFICATION_DATASETS),
+                "scheduled_collectors": len(schedule_ids),
+            },
+            "errors": errors,
+            "warnings": warnings,
+        }
+
     def start(
         self,
         *,
@@ -238,6 +399,16 @@ class InitializationService:
             )
         if profile != "full" and (resolved_end - resolved_start).days > 3660:
             raise InvalidTaskParametersError("initialization history cannot exceed 10 years")
+        preflight = self.preflight(
+            profile=profile,
+            history_start=resolved_start,
+            history_end=resolved_end,
+        )
+        if preflight["status"] != "ready":
+            details = "; ".join(item["detail"] for item in preflight["errors"])
+            raise InvalidTaskParametersError(
+                f"initialization preflight failed: {details}"
+            )
         key = idempotency_key or (
             f"initialize-{profile}-{resolved_start.isoformat()}-{resolved_end.isoformat()}"
         )
@@ -248,7 +419,11 @@ class InitializationService:
                 history_end=resolved_end,
                 auto_activate=auto_activate,
                 idempotency_key=key,
-                options={"core_tasks": list(CORE_TASKS)},
+                options={
+                    "core_tasks": list(CORE_TASKS),
+                    "plan_version": preflight["plan_version"],
+                    "plan_fingerprint": preflight["plan_fingerprint"],
+                },
             )
         except ValueError as exc:
             raise JobConflictError(str(exc)) from exc
@@ -916,6 +1091,7 @@ class InitializationService:
 
         end = campaign["history_end"]
         trade_date = _latest_trade_date(end)
+        trade_day = datetime.strptime(trade_date, "%Y%m%d").date()
         catalog = TushareInterfaceCatalog()
         policies = TusharePolicyRegistry()
         for contract in catalog.list():
@@ -962,8 +1138,14 @@ class InitializationService:
             "balancesheet_quarterly", "balancesheet_annual",
             "cashflow_quarterly", "cashflow_annual",
             "fina_indicator_quarterly", "fina_indicator_annual",
+            # Already exhaustively covered by finance_history. Replaying these
+            # at the latest-baseline phase created ambiguous weekend zero runs.
+            "disclosure_date_quarterly", "express_annual",
+            "forecast_seasonal", "mainbz_annual",
         }
-        scheduled_for = datetime.combine(end, datetime.min.time(), SHANGHAI).replace(hour=20)
+        scheduled_for = datetime.combine(
+            trade_day, datetime.min.time(), SHANGHAI
+        ).replace(hour=20)
         for schedule_id in sorted(scheduled_collection_ids() - excluded):
             self._submit_collection(
                 campaign,
@@ -973,7 +1155,7 @@ class InitializationService:
                 allow_empty=True,
                 require_verified=False,
                 period_key=f"initial-{end.isoformat()}",
-                expected_for=end,
+                expected_for=trade_day,
                 existing_steps=existing_steps,
             )
         return True

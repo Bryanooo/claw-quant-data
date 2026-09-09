@@ -233,6 +233,70 @@ class DataHealthService:
             "initialization": initialization,
         }
 
+    def summary(self) -> dict[str, Any]:
+        """Return a bounded operational preflight for humans and Agents.
+
+        Full health intentionally evaluates freshness for every public table
+        and delivery evidence for every scheduled interface. That is suitable
+        for the dashboard but too expensive as the CLI's mandatory preflight.
+        This summary uses already-aggregated collection, coverage and
+        initialization evidence and links callers to the full view.
+        """
+        collection = self._collection.overview()
+        coverage = self._coverage.overview()
+        initialization = self._initialization.overview()
+        delivery = self._delivery.today() if self._delivery is not None else None
+        collection_summary = collection["summary"]
+        coverage_summary = coverage["summary"]
+        campaign = initialization.get("active") or initialization.get("latest")
+        unhealthy_services = [
+            item["component"]
+            for item in collection.get("services", [])
+            if item.get("status") != "healthy"
+        ]
+        confirmed_coverage_gaps = any(
+            (item.get("latest") or {}).get("status") == "gaps"
+            and self._pending_coverage_deadline(item, delivery) is None
+            for item in coverage.get("datasets", [])
+        )
+        critical = bool(
+            collection_summary.get("unresolved_failures")
+            or confirmed_coverage_gaps
+            or unhealthy_services
+            or (campaign and campaign.get("status") in {"attention", "paused"})
+        )
+        pending = bool(
+            collection_summary.get("pending")
+            or collection_summary.get("running")
+            or collection_summary.get("attention")
+            or collection_summary.get("unverified")
+            or coverage_summary.get("with_gaps")
+            or (campaign and campaign.get("status") == "running")
+        )
+        return {
+            "generated_at": business_now().isoformat(),
+            "status": "critical" if critical else "warning" if pending else "healthy",
+            "scope": "operational_preflight",
+            "summary": {
+                "interfaces": collection_summary.get("interfaces", 0),
+                "collectable_interfaces": collection_summary.get("collectable", 0),
+                "strictly_complete_interfaces": collection_summary.get("complete", 0),
+                "pending_interfaces": collection_summary.get("pending", 0),
+                "running_interfaces": collection_summary.get("running", 0),
+                "unverified_interfaces": collection_summary.get("unverified", 0),
+                "scope_required_interfaces": collection_summary.get("scope_required", 0),
+                "not_collectable_interfaces": collection_summary.get("not_collectable", 0),
+                "unresolved_failures": collection_summary.get("unresolved_failures", 0),
+                "datasets": coverage_summary.get("datasets", 0),
+                "datasets_with_gaps": coverage_summary.get("with_gaps", 0),
+                "missing_partitions": coverage_summary.get("missing_partitions", 0),
+                "partial_partitions": coverage_summary.get("partial_partitions", 0),
+            },
+            "history": campaign,
+            "unhealthy_services": unhealthy_services,
+            "full_health_url": "/api/v1/data-health",
+        }
+
     @staticmethod
     def _effective_freshness(
         collection: dict[str, Any], freshness: list[dict[str, Any]]

@@ -247,6 +247,42 @@ def test_exact_date_schedule_fails_closed_on_stored_count_mismatch():
     ) is None
 
 
+def test_bak_basic_verifies_its_own_exact_date_not_daily_basic():
+    evidence = verify_scheduled_transport(
+        "bak_basic_daily",
+        "2026-09-08T16:00:00+08:00",
+        5567,
+        query=lambda sql, params: (
+            [{"row_count": 5567}]
+            if "FROM bak_basic" in sql and params == (date(2026, 9, 8),)
+            else []
+        ),
+    )
+
+    assert evidence["verified"] is True
+    assert evidence["scope"] == "exact_trade_date"
+    assert evidence["target_date"] == "2026-09-08"
+    assert verify_scheduled_transport(
+        "bak_basic_daily",
+        "2026-09-08T16:00:00+08:00",
+        10000,
+        query=lambda _sql, _params: [{"row_count": 10000}],
+    ) is None
+
+
+def test_weekly_schedule_weekend_probe_is_a_verified_conditional_skip():
+    evidence = verify_scheduled_transport(
+        "stk_weekly_weekly_fri",
+        "2026-09-05T20:00:00+08:00",
+        0,
+        query=lambda _sql, _params: [{"is_week_end": False}],
+    )
+
+    assert evidence["verified"] is True
+    assert evidence["empty"] is True
+    assert evidence["skip_reason"] == "scheduled_date_is_not_week_end_trade_day"
+
+
 def test_exact_date_market_snapshot_requires_exhaustion_below_default_cap():
     evidence = verify_scheduled_transport(
         "ths_daily_daily",

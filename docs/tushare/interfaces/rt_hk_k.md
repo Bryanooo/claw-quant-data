@@ -2,11 +2,11 @@
 
 - 分类：港股数据
 - 功能：获取港股实时日k线行情，支持按股票代码及股票代码通配符一次性提取全部股票实时日k线行情
-- Token 权限：**无权限**（Tushare 明确返回无访问权限）
+- Token 权限：**有权限**（2026-09-09 双重实时探测均返回成功）
 - 官方权限要求：本接口是单独开权限的数据，单独申请权限请参考 权限列表
 - 官方文档：[doc 383](https://tushare.pro/document/2?doc_id=383)
 - HTTP：`POST http://api.tushare.pro`
-- claw-quant：未实现；代码：无
+- claw-quant：已实现（契约通用采集器：原始层+强类型标准表）；代码：[`collectors/tushare_raw.py:CatalogRawCollector`](../../../collectors/tushare_raw.py)
 
 ## 输入契约
 
@@ -71,6 +71,10 @@ ts_code  pre_close  close   high   open    low            vol       amount
 
 ## claw-quant 存储契约
 
-当前 Token 不可采集或接口不可直接调用，因此没有启用运行时采集。
+该接口采用两阶段持久化：上游响应先无损写入 `tushare_raw_record`，随后按契约转换到
+强类型标准表 `tushare_norm_rt_hk_k`。标准表字段、类型、日期列、系统血缘字段和
+稳定性规则见[标准化表契约](../tables/rt_hk_k.md)。转换失败记录进入
+`sys_tushare_normalization_error`，契约外字段保存在 `_extra_payload` 并登记到
+`sys_tushare_schema_drift`；原始响应始终可用于修复后重放。
 
 > 权限状态来自实际 Token 探测；示例中的 Token 仅为环境变量占位符，不包含真实密钥。

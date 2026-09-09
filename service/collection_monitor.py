@@ -128,6 +128,13 @@ class CollectionMonitorRepository:
                 )
               )
             ORDER BY COALESCE(api_name, parameters->>'api_name'),
+                     CASE
+                       WHEN status IN ('queued','running') THEN 0
+                       WHEN cadence IS DISTINCT FROM 'initialization' THEN 1
+                       WHEN status='success'
+                        AND completion_status IN ('complete','empty') THEN 2
+                       ELSE 3
+                     END,
                      created_at DESC, job_id DESC
             """
         )
@@ -200,7 +207,7 @@ class CollectionMonitorRepository:
                            WHEN 'trade_cal' THEN 'trade_calendar'
                            WHEN 'daily' THEN 'stock_daily'
                            WHEN 'daily_basic' THEN 'stock_daily_basic'
-                           WHEN 'bak_basic' THEN 'stock_daily_basic'
+                           WHEN 'bak_basic' THEN 'bak_basic'
                            WHEN 'stk_limit' THEN 'stock_limit'
                            WHEN 'suspend_d' THEN 'stock_suspend'
                            WHEN 'fina_indicator' THEN 'financial_indicator'
@@ -305,6 +312,24 @@ class CollectionMonitorRepository:
 
 def _json_time(value: Any) -> Any:
     return value.isoformat() if isinstance(value, (date, datetime)) else value
+
+
+def _operational_job_rank(job: dict[str, Any]) -> tuple[int, float]:
+    """Prefer proven operational evidence over an ambiguous init probe."""
+    completion = job.get("completion_status") or "pending"
+    initialization_probe = job.get("cadence") == "initialization"
+    tier = 0 if initialization_probe else 1
+    if completion in {"complete", "empty"}:
+        tier = 2
+    if job.get("status") in {"queued", "running"}:
+        tier = 3
+    elif not initialization_probe and completion in {
+        "retrying", "failed", "incomplete", "verifying",
+    }:
+        tier = 3
+    value = job.get("created_at") or job.get("started_at")
+    timestamp = value.timestamp() if hasattr(value, "timestamp") else 0.0
+    return tier, timestamp
 
 
 def _coverage_failure_reason(evidence: dict[str, Any]) -> str:
@@ -483,7 +508,7 @@ class CollectionMonitorService:
             recipe.api_name: recipe for recipe in SCHEDULED_FANOUT_RECIPES
         }
         interfaces = []
-        ignored_manual_attention = 0
+        ignored_manual_probes = 0
 
         for contract in TushareInterfaceCatalog().list():
             policy = policies.get(contract.api_name)
@@ -517,8 +542,7 @@ class CollectionMonitorService:
                 queue_job = (
                     max(
                         queue_candidates,
-                        key=lambda item: item.get("created_at")
-                        or item.get("started_at"),
+                        key=_operational_job_rank,
                     )
                     if queue_candidates
                     else None
@@ -563,7 +587,7 @@ class CollectionMonitorService:
                         job.get("status") == "failed"
                         or job.get("completion_status") in {"failed", "incomplete"}
                     ):
-                        ignored_manual_attention += 1
+                        ignored_manual_probes += 1
                     job = None
                 campaign = campaigns.get(contract.api_name)
                 if campaign and not job:
@@ -589,7 +613,16 @@ class CollectionMonitorService:
                 )
                 latest = _fanout_latest(campaigns[contract.api_name])
             elif contract.api_name in jobs:
-                latest = _queue_latest(jobs[contract.api_name])
+                job = jobs[contract.api_name]
+                if (
+                    job.get("status") == "failed"
+                    or job.get("completion_status") in {"failed", "incomplete"}
+                ) and contract.api_name not in unresolved_failures:
+                    # A period-less exploratory request is not a production
+                    # failure and must not make a manual interface look broken.
+                    ignored_manual_probes += 1
+                else:
+                    latest = _queue_latest(job)
 
             interfaces.append(
                 {
@@ -654,17 +687,27 @@ class CollectionMonitorService:
         counts: dict[str, int] = {
             "interfaces": len(interfaces),
             "collectable": sum(item["collectable"] for item in interfaces),
+            "not_collectable": sum(not item["collectable"] for item in interfaces),
             "automated": sum(item["automation_mode"] != "manual" for item in interfaces),
             "complete": 0,
             "attention": 0,
-            "manual_attention": ignored_manual_attention,
+            "manual_attention": 0,
+            "ignored_manual_probes": ignored_manual_probes,
+            "planned_rechecks": 0,
             "unverified": 0,
             "pending": 0,
+            "scope_required": 0,
             "running": 0,
             "empty": 0,
             "unresolved_failures": len(unresolved_failures),
         }
         for item in interfaces:
+            # Permission-denied, invalid and SDK-only contracts belong in the
+            # catalog, but they are not executable work. Counting their lack
+            # of a job as ``pending`` made a healthy installation permanently
+            # yellow and hid the three genuinely scope-bound interfaces.
+            if not item["collectable"]:
+                continue
             state = (item["latest"] or {}).get("completion_status", "pending")
             if item["unresolved_failure"]:
                 counts["attention"] += 1
@@ -676,8 +719,16 @@ class CollectionMonitorService:
                 counts["empty"] += 1
             elif state == "unverified":
                 counts["unverified"] += 1
+            elif state in {"failed", "incomplete"} and not item["unresolved_failure"]:
+                # Delivery-deadline retries and already-resolved historical
+                # attempts are not terminal failures. Keep them visible
+                # without inflating actionable attention.
+                counts["planned_rechecks"] += 1
             elif state == "pending":
-                counts["pending"] += 1
+                if item["automation_mode"] == "manual":
+                    counts["scope_required"] += 1
+                else:
+                    counts["pending"] += 1
             elif item["automation_mode"] == "manual":
                 counts["manual_attention"] += 1
             else:

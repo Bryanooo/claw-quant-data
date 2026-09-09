@@ -1,6 +1,8 @@
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from service.data_coverage.calculator import CoverageCalculator, completed_quarters
 from service.data_coverage.models import (
     ActualPartition,
@@ -13,6 +15,15 @@ from service.data_coverage.registry import COVERAGE_RULES
 import service.data_coverage.service as coverage_service
 from service.data_service.registry import DATASETS
 from service.data_service.models import DateStorage
+
+
+class AuditSubmissionRepository:
+    def __init__(self):
+        self.calls = []
+
+    def create_job(self, dataset_name, start_date, end_date, *, idempotency_key):
+        self.calls.append((dataset_name, start_date, end_date, idempotency_key))
+        return {"job_id": len(self.calls)}, True
 
 
 class FakeCoverageRepository:
@@ -60,6 +71,55 @@ def test_financial_rules_only_compare_recent_point_in_time_universe():
         assert rule.entity_reference_max_age_days == 1825
         assert rule.accept_verified_empty is True
         assert rule.verified_empty_min_age_days == 1825
+
+    assert (
+        COVERAGE_RULES.get("financial_indicator").collection_api_name
+        == "fina_indicator"
+    )
+
+
+def test_public_dataset_aliases_map_to_collection_api_names():
+    assert COVERAGE_RULES.get("stock_daily").collection_api_name == "daily"
+    assert (
+        COVERAGE_RULES.get("stock_daily_basic").collection_api_name
+        == "daily_basic"
+    )
+    assert COVERAGE_RULES.get("stock_limit").collection_api_name == "stk_limit"
+
+
+def test_quarterly_audit_allows_full_history_range():
+    repository = AuditSubmissionRepository()
+    service = coverage_service.CoverageService(repository=repository)
+
+    result = service.submit_audits(
+        ["income"],
+        start_date=date(1990, 12, 31),
+        end_date=date(2026, 6, 30),
+        idempotency_key="full-finance-history",
+    )
+
+    assert result["created"] == 1
+    assert repository.calls[0][:3] == (
+        "income",
+        date(1990, 12, 31),
+        date(2026, 6, 30),
+    )
+
+
+def test_daily_audit_still_rejects_more_than_ten_years():
+    service = coverage_service.CoverageService(
+        repository=AuditSubmissionRepository()
+    )
+
+    with pytest.raises(
+        coverage_service.InvalidCoverageRequestError,
+        match="at most 3660 days",
+    ):
+        service.submit_audits(
+            ["stock_daily"],
+            start_date=date(1990, 12, 19),
+            end_date=date(2026, 9, 5),
+        )
 
 
 def test_old_financial_history_uses_exhausted_partition_not_current_universe():
@@ -408,7 +468,7 @@ def test_observed_only_rule_never_invents_missing_dates():
 def test_every_public_dataset_has_an_explicit_coverage_classification():
     rules = COVERAGE_RULES.list()
 
-    assert len(rules) == len(DATASETS.list()) == 193
+    assert len(rules) == len(DATASETS.list()) == 194
     assert {item.dataset_name for item in rules} == {
         item.name for item in DATASETS.list()
     }

@@ -31,12 +31,14 @@ API 地址不接受嵌入式用户名、密码、查询字符串或 URL fragment
 ./clawq health
 ./clawq health --live-only
 ./clawq status
+./clawq status --full
 ./clawq freshness
 ./clawq freshness stock_daily
 ```
 
-`health` 检查 API 进程和 PostgreSQL 是否可用。`status` 返回统一数据健康视图，
-包含采集、历史初始化、覆盖、新鲜度和服务心跳，适合 Agent 在查询前判断数据是否可信。
+`health` 检查 API 进程和 PostgreSQL 是否可用。`status` 默认返回有界的运行状态、
+覆盖摘要、服务心跳和历史初始化进度，适合 Agent 高频预检；`status --full` 才读取
+包含全部数据集新鲜度和交付明细的完整健康视图，响应明显更大。
 
 ### 数据集发现
 
@@ -68,6 +70,7 @@ Agent 应先调用 `describe`，不能猜测过滤字段。
 | `--date` | 单一日期或报告期 |
 | `--start-date` | 起始日期 |
 | `--end-date` | 结束日期 |
+| `--as-of` | 按数据可获得日期过滤，避免读到该历史时点尚未公开的数据；仅支持声明了可获得日期字段的数据集 |
 | `--limit` | 本页记录数，1 到 1,000 |
 | `--offset` | 分页偏移量，必须非负 |
 | `--include-total` | 额外计算总行数；大表查询可能更慢 |
@@ -100,6 +103,27 @@ CLI 拒绝重复过滤器、空过滤值、非法数据集名和使用 `--filter
 不等同于公司公告，当前仍需到交易所或公司公告系统核验。
 
 该命令只聚合原始研究材料，不计算预测、评级或交易建议；衍生分析仍由 Agent 完成。
+
+历史 `--as-of` 不只限制行情日期，也会按 `ann_date` 限制财务报表、业绩预告、
+股东和公司行为数据。`meta.quality` 区分确定缺失和无法仅凭空结果确认的
+`unknown_empty`，Agent 不得把后者直接解释为“没有发生”。
+
+### 板块研究
+
+```bash
+./clawq stock sectors 300750.SZ --provider ths --as-of 2026-09-08
+./clawq stock peers 300750.SZ --provider ths --max-sectors 5 --limit 20
+./clawq sector list --provider ths --query 人工智能 --market A
+./clawq sector list --provider dc --category 概念板块 --as-of 2026-09-08
+./clawq sector snapshot tdx 880728.TDX
+./clawq sector members dc BK1184.DC --as-of 2026-09-08 --limit 500
+./clawq sector research-pack ths 885728.TI \
+  --lookback-days 180 --member-limit 500 --as-of 2026-09-08
+```
+
+板块供应方固定为 `ths`、`dc`、`tdx`。服务统一返回 `provider`、`sector_code`、
+名称、类型、行情和成分语义，但不会错误地把不同供应方的同名板块合并为一个代码。
+Research Pack 的 `meta.quality` 会标记行情/成分缺失、成分截断以及资金流是否可用。
 
 ### 接口契约和标准数据
 

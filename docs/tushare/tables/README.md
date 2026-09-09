@@ -78,6 +78,7 @@
 | `p_get` | `tushare_norm_p_get` | 8 | `-` | [p_get.md](p_get.md) |
 | `p_list` | `tushare_norm_p_list` | 5 | `-` | [p_list.md](p_list.md) |
 | `repo_daily` | `tushare_norm_repo_daily` | 12 | `trade_date` | [repo_daily.md](repo_daily.md) |
+| `rt_hk_k` | `tushare_norm_rt_hk_k` | 8 | `-` | [rt_hk_k.md](rt_hk_k.md) |
 | `sf_month` | `tushare_norm_sf_month` | 4 | `-` | [sf_month.md](sf_month.md) |
 | `shibor` | `tushare_norm_shibor` | 9 | `date` | [shibor.md](shibor.md) |
 | `shibor_lpr` | `tushare_norm_shibor_lpr` | 3 | `date` | [shibor_lpr.md](shibor_lpr.md) |

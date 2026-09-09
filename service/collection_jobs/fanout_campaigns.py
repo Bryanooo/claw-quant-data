@@ -525,6 +525,43 @@ class FanoutCampaignRepository:
                 (status, completion_status, error_message, status, campaign_id),
             )
 
+    def supersede_resolved_predecessors(self, replacement_campaign_id: int) -> int:
+        """Close obsolete plans after a verified logical-period replacement.
+
+        Initialization repair may deliberately revise a request window while
+        preserving the same interface, period and initialization. Keeping the
+        abandoned campaign in ``attention`` makes it look actionable forever,
+        even though the initialization step now points at the verified plan.
+        """
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                WITH replacement AS (
+                    SELECT campaign_id, api_name, period_key, initialization_id
+                    FROM sys_collection_fanout_campaign
+                    WHERE campaign_id=%s AND status='success'
+                      AND completion_status IN ('complete','empty')
+                )
+                UPDATE sys_collection_fanout_campaign AS original
+                SET status='superseded', completion_status='incomplete',
+                    superseded_by_campaign_id=replacement.campaign_id,
+                    resolution_message=(
+                        'Automatically superseded by verified replacement campaign '
+                        || replacement.campaign_id
+                    ),
+                    error_message=NULL, updated_at=NOW(), finished_at=NOW()
+                FROM replacement
+                WHERE original.campaign_id < replacement.campaign_id
+                  AND original.api_name=replacement.api_name
+                  AND original.period_key IS NOT DISTINCT FROM replacement.period_key
+                  AND original.initialization_id IS NOT DISTINCT FROM
+                      replacement.initialization_id
+                  AND original.status IN ('attention','paused')
+                """,
+                (replacement_campaign_id,),
+            )
+            return cursor.rowcount
+
     def supersede(
         self,
         campaign_id: int,
@@ -827,6 +864,7 @@ class FanoutCampaignService:
                     self._repository.set_status(
                         campaign_id, "success", completion, error_message=None
                     )
+                    self._repository.supersede_resolved_predecessors(campaign_id)
                     return self.get(campaign_id)
                 offset = int(plan["next_offset"])
             else:

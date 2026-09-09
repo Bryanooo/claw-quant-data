@@ -21,6 +21,7 @@ from service.api.routers import (
     initialization,
     interfaces,
     normalization,
+    sectors,
     stocks,
 )
 from service.api.schemas import ErrorResponse
@@ -161,6 +162,7 @@ def create_app(
     application.include_router(interfaces.router, prefix="/api")
     application.include_router(normalization.router, prefix="/api")
     application.include_router(stocks.router, prefix="/api")
+    application.include_router(sectors.router, prefix="/api")
     application.include_router(collection_jobs.router, prefix="/api")
     application.include_router(collection_monitor.router, prefix="/api")
     application.include_router(coverage.router, prefix="/api")

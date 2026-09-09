@@ -8005,6 +8005,70 @@
       ]
     },
     {
+      "api_name": "rt_hk_k",
+      "table_name": "tushare_norm_rt_hk_k",
+      "schema_version": 1,
+      "date_column": null,
+      "identity_fields": [
+        "ts_code"
+      ],
+      "business_identity_fields": [
+        "ts_code"
+      ],
+      "identity_confidence": "heuristic",
+      "current_view": null,
+      "fields": [
+        {
+          "name": "ts_code",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "股票代码"
+        },
+        {
+          "name": "pre_close",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "昨收价"
+        },
+        {
+          "name": "close",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "收盘价"
+        },
+        {
+          "name": "high",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "最高价"
+        },
+        {
+          "name": "open",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "开盘价"
+        },
+        {
+          "name": "low",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "最低价"
+        },
+        {
+          "name": "vol",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "成交量（股）"
+        },
+        {
+          "name": "amount",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "成交额(元)"
+        }
+      ]
+    },
+    {
       "api_name": "sf_month",
       "table_name": "tushare_norm_sf_month",
       "schema_version": 1,

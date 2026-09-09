@@ -1,0 +1,809 @@
+{
+  "generated_at": "2026-09-09T18:09:20.002198+08:00",
+  "probe_attempts": 2,
+  "total": 40,
+  "confirmed_denied": 39,
+  "changed_or_inconclusive": 1,
+  "interfaces": [
+    {
+      "api_name": "anns_d",
+      "official_url": "https://tushare.pro/document/2?doc_id=176",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(anns_d)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(anns_d)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "cb_price_chg",
+      "official_url": "https://tushare.pro/document/2?doc_id=246",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(cb_price_chg)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(cb_price_chg)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "cctv_news",
+      "official_url": "https://tushare.pro/document/2?doc_id=154",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(cctv_news)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(cctv_news)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "etf_mins",
+      "official_url": "https://tushare.pro/document/2?doc_id=387",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(etf_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(etf_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "factor_list",
+      "official_url": "https://tushare.pro/document/2?doc_id=486",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(factor_list)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(factor_list)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "ft_mins",
+      "official_url": "https://tushare.pro/document/2?doc_id=313",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(ft_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(ft_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_adjfactor",
+      "official_url": "https://tushare.pro/document/2?doc_id=401",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_adjfactor)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_adjfactor)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_balancesheet",
+      "official_url": "https://tushare.pro/document/2?doc_id=390",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_balancesheet)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_balancesheet)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_cashflow",
+      "official_url": "https://tushare.pro/document/2?doc_id=391",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_cashflow)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_cashflow)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_daily_adj",
+      "official_url": "https://tushare.pro/document/2?doc_id=339",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_daily_adj)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_daily_adj)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_fina_indicator",
+      "official_url": "https://tushare.pro/document/2?doc_id=388",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_fina_indicator)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_fina_indicator)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_income",
+      "official_url": "https://tushare.pro/document/2?doc_id=389",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_income)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_income)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hk_mins",
+      "official_url": "https://tushare.pro/document/2?doc_id=304",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hk_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "hm_detail",
+      "official_url": "https://tushare.pro/document/2?doc_id=312",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hm_detail)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(hm_detail)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "idx_mins",
+      "official_url": "https://tushare.pro/document/2?doc_id=419",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(idx_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(idx_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "irm_qa_sh",
+      "official_url": "https://tushare.pro/document/2?doc_id=366",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(irm_qa_sh)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(irm_qa_sh)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "irm_qa_sz",
+      "official_url": "https://tushare.pro/document/2?doc_id=367",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(irm_qa_sz)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(irm_qa_sz)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "monetary_policy",
+      "official_url": "https://tushare.pro/document/2?doc_id=465",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(monetary_policy)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(monetary_policy)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "news",
+      "official_url": "https://tushare.pro/document/2?doc_id=143",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(news)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(news)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "npr",
+      "official_url": "https://tushare.pro/document/2?doc_id=406",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(npr)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(npr)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "opt_mins",
+      "official_url": "https://tushare.pro/document/2?doc_id=341",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(opt_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(opt_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "research_report",
+      "official_url": "https://tushare.pro/document/2?doc_id=415",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(research_report)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(research_report)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_etf_sz_iopv",
+      "official_url": "https://tushare.pro/document/2?doc_id=454",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_etf_sz_iopv)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_etf_sz_iopv)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_fut_min",
+      "official_url": "https://tushare.pro/document/2?doc_id=340",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_fut_min)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_fut_min)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_fut_min_daily",
+      "official_url": "https://tushare.pro/document/2?doc_id=340",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_fut_min_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_fut_min_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_hk_k",
+      "official_url": "https://tushare.pro/document/2?doc_id=383",
+      "documented_permission": "无权限",
+      "confirmed": false,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "accessible",
+          "code": 0,
+          "message": ""
+        },
+        {
+          "attempt": 2,
+          "classification": "accessible",
+          "code": 0,
+          "message": ""
+        }
+      ]
+    },
+    {
+      "api_name": "rt_idx_k",
+      "official_url": "https://tushare.pro/document/2?doc_id=403",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_idx_k)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_idx_k)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_idx_min",
+      "official_url": "https://tushare.pro/document/2?doc_id=420",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_idx_min)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_idx_min)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_idx_min_daily",
+      "official_url": "https://tushare.pro/document/2?doc_id=420",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_idx_min_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_idx_min_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "rt_sw_k",
+      "official_url": "https://tushare.pro/document/2?doc_id=417",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_sw_k)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(rt_sw_k)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "stk_premarket",
+      "official_url": "https://tushare.pro/document/2?doc_id=329",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(stk_premarket)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(stk_premarket)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "sw_mins",
+      "official_url": "https://tushare.pro/document/2?doc_id=469",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(sw_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(sw_mins)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_adjfactor",
+      "official_url": "https://tushare.pro/document/2?doc_id=402",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_adjfactor)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_adjfactor)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_balancesheet",
+      "official_url": "https://tushare.pro/document/2?doc_id=395",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_balancesheet)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_balancesheet)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_cashflow",
+      "official_url": "https://tushare.pro/document/2?doc_id=396",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_cashflow)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_cashflow)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_daily",
+      "official_url": "https://tushare.pro/document/2?doc_id=254",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_daily_adj",
+      "official_url": "https://tushare.pro/document/2?doc_id=338",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_daily_adj)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_daily_adj)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_fina_indicator",
+      "official_url": "https://tushare.pro/document/2?doc_id=393",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_fina_indicator)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_fina_indicator)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "us_income",
+      "official_url": "https://tushare.pro/document/2?doc_id=394",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_income)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(us_income)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    },
+    {
+      "api_name": "yc_cb",
+      "official_url": "https://tushare.pro/document/2?doc_id=201",
+      "documented_permission": "无权限",
+      "confirmed": true,
+      "probes": [
+        {
+          "attempt": 1,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(yc_cb)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        },
+        {
+          "attempt": 2,
+          "classification": "denied",
+          "code": 40203,
+          "message": "抱歉，您没有接口(yc_cb)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+        }
+      ]
+    }
+  ]
+}

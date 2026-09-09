@@ -8,9 +8,9 @@ from service.tushare_normalization import (
 def test_all_generic_interfaces_have_typed_normalization_contracts():
     contracts = NORMALIZATION_CONTRACTS.list()
 
-    assert len(contracts) == 94
-    assert len({contract.api_name for contract in contracts}) == 94
-    assert len({contract.table_name for contract in contracts}) == 94
+    assert len(contracts) == 95
+    assert len({contract.api_name for contract in contracts}) == 95
+    assert len({contract.table_name for contract in contracts}) == 95
     assert all(contract.fields for contract in contracts)
     assert all(
         contract.table_name == normalized_table_name(contract.api_name)

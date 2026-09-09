@@ -34,7 +34,7 @@ _DIRECT_DATASETS = {
 
 _SCHEDULED_DAILY_DATASETS = {
     "daily_daily": "stock_daily",
-    "bak_basic_daily": "stock_daily_basic",
+    "bak_basic_daily": "bak_basic",
     "stk_limit_daily": "stock_limit",
     "index_daily_daily": "index_daily",
     "index_dailybasic_daily": "index_dailybasic",

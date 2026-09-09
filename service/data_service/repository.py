@@ -179,6 +179,14 @@ class DatasetRepository:
                 conditions.append(sql.SQL("{} <= %s").format(date_column))
                 params.append(query.end_date)
 
+        if query.as_of is not None and dataset.availability_column:
+            conditions.append(
+                sql.SQL("{} <= %s").format(
+                    sql.Identifier(dataset.availability_column)
+                )
+            )
+            params.append(query.as_of)
+
         if not conditions:
             return sql.SQL(""), tuple(params)
         return (

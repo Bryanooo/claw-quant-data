@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from service.collection_monitor import CollectionMonitorService
+from service.collection_monitor import CollectionMonitorService, _operational_job_rank
 
 
 class FakeMonitorRepository:
@@ -73,6 +73,10 @@ def test_collection_monitor_unifies_policy_and_dedicated_completion():
     assert items["fut_basic"]["automatic_safe"] is True
     assert items["stk_mins"]["automation_mode"] == "manual"
     assert payload["summary"]["automated"] == 185
+    assert payload["summary"]["not_collectable"] == 43
+    assert payload["summary"]["scope_required"] == 16
+    # Catalog-only denied contracts are not executable pending work.
+    assert payload["summary"]["pending"] == 183
 
 
 def test_dedicated_monitor_prefers_durable_verified_queue_evidence():
@@ -106,6 +110,24 @@ def test_dedicated_monitor_prefers_durable_verified_queue_evidence():
 
     assert item["latest"]["source"] == "queue"
     assert item["latest"]["completion_status"] == "complete"
+
+
+def test_verified_operational_job_outranks_ambiguous_initialization_probe():
+    now = datetime.now(timezone.utc)
+    verified = {
+        "cadence": "scheduled",
+        "completion_status": "complete",
+        "status": "success",
+        "created_at": now,
+    }
+    ambiguous = {
+        "cadence": "initialization",
+        "completion_status": "unverified",
+        "status": "success",
+        "created_at": now,
+    }
+
+    assert _operational_job_rank(verified) > _operational_job_rank(ambiguous)
 
 
 def test_dedicated_monitor_recovers_legacy_queue_job_by_schedule_id():
@@ -366,4 +388,5 @@ def test_manual_probe_failure_is_not_counted_as_production_failure():
     payload = CollectionMonitorService(repository).overview()
 
     assert payload["summary"]["attention"] == 0
-    assert payload["summary"]["manual_attention"] == 1
+    assert payload["summary"]["manual_attention"] == 0
+    assert payload["summary"]["ignored_manual_probes"] == 1

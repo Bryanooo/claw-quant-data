@@ -14,3 +14,10 @@ def data_health(
     service: DataHealthService = Depends(get_data_health_service),
 ) -> dict:
     return service.overview()
+
+
+@router.get("/data-health/summary")
+def data_health_summary(
+    service: DataHealthService = Depends(get_data_health_service),
+) -> dict:
+    return service.summary()

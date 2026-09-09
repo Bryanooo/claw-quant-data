@@ -16,31 +16,30 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 回测、组合管理或实盘交易**。
 
 面向研究 Agent 的只读入口包括单数据集查询、股票快照和
-`/api/v1/stocks/{ts_code}/research-pack`。Research Pack 只聚合带来源信息的原始
+个股/板块 Research Pack。Research Pack 只聚合带来源信息的原始
 研究材料，并显式返回缺失项；其中 `major_news` 会按证券名称/代码做有界关键词
 检索，交易所公告正文仍需官方外部来源补齐。预测、评级和操作建议仍属于上层 Agent。
+点时查询、板块成分语义、质量状态及接口示例见
+[研究数据 API](docs/RESEARCH_API.md)，命令行用法见 [CLI](docs/CLI.md)。
 
 ## 先看结论
 
-截至 2026-09-06，系统的实际建设状态如下：
+截至 2026-09-09，系统的实际建设状态如下：
 
 | 项目 | 当前状态 |
 |---|---:|
 | Tushare 接口目录 | 244 个唯一 `api_name` |
-| 当前 Token 可采集的只读接口 | 200 个 |
-| 已实现接口 | 200 个（94 通用 + 106 专项/等价专项） |
+| 当前 Token 可采集的只读接口 | 201 个 |
+| 已实现接口 | 201 个（95 通用 + 106 专项/等价专项） |
 | 实际采集器类 | 98 个（类数量不等于 API 数量） |
-| 已进入自动编排 | 183 个 |
+| 已进入自动编排 | 185 个 |
 | 专项采集器编排 | 41 个 |
-| 契约驱动通用采集编排 | 123 个 |
+| 契约驱动通用采集编排 | 125 个 |
 | 周期全量扇出编排 | 19 个 |
-| 暂不安全自动运行 | 17 个 |
-| 当前有正行数证据 | 183 个接口 |
-| 当前无正行数证据 | 17 个接口（15 个需历史扇出/人工范围；`hk_daily` 首采等待接口窗口；`p_list` 未建用户组合时合法为空） |
-| 数据服务物理表 | 192 张（97 张专项表 + 94 张契约标准表 + 1 张原始表） |
-| REST API 白名单数据集 | 193 个，覆盖全部业务表并包含 `daily_basic` 业务别名视图 |
-| 有明确 REST 数据路径的可采接口 | 200 个 |
-| PostgreSQL `public` 表 | 213 张（含业务表、迁移表与 `sys_*` 运维表） |
+| 暂不安全自动运行 | 16 个 |
+| 数据服务物理表 | 193 张（97 张专项表 + 95 张契约标准表 + 1 张原始表） |
+| REST API 白名单数据集 | 194 个，覆盖全部业务表并包含 `daily_basic` 业务别名视图 |
+| 有明确 REST 数据路径的可采接口 | 201 个 |
 | Docker 常驻服务 | PostgreSQL、自动备份、API、3 个隔离 Worker、Scheduler、Auditor 共 8 个 |
 | 自动化测试 | 以当前 `pytest` 运行结果为准（同时覆盖单元与 PostgreSQL 契约测试） |
 
@@ -53,23 +52,30 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 [reports/tushare_data_presence.md](reports/tushare_data_presence.md)，统一采集器设计见
 [docs/COLLECTOR_ARCHITECTURE.md](docs/COLLECTOR_ARCHITECTURE.md)。
 
-最近一次真实数据库审计确认：当前核心日频窗口连续，但全历史初始化尚未执行完成；
-采集时效、历史缺口和控制台真实失败口径见
+2026-09-09 的真实数据库验收确认：初始化 #66 已完成七个阶段，最终10项严格覆盖
+审计全部通过，并已原子切换到日常模式。这里的“全历史”遵循各接口契约：核心行情和
+财务数据按可用起点回填，高基数接口按文档定义的安全基线范围扇出，并不把每个接口都
+解释为从其最早发布日期穷尽。最终证据和本轮修复见
+[历史初始化完成报告](reports/history_initialization_completion_2026-09-09.md)；采集时效、
+历史缺口和控制台真实失败口径见
 [历史完整性、采集时效与告警真实性审计](reports/history_and_timeliness_audit_2026-09-06.md)。
 2026-09-08 的共享 DNS 故障、漏报原因和治理验证见
 [历史补采 DNS 故障复盘](reports/history_backfill_dns_incident_2026-09-08.md)。
+当前 Token 的逐接口双重权限复核见
+[Tushare 权限复核报告](reports/tushare_permission_recheck.md)：39 个接口明确无权限，
+`rt_hk_k` 已确认新开通并完成采集、标准化和查询链路验证。
 
-### 为什么 200 个接口只有 98 个采集器类
+### 为什么 201 个接口只有 98 个采集器类
 
 接口、采集器类和物理表是三个不同口径，不能按数量一一对应：
 
-- 94 个字段变化较大或使用频率较低的接口由一个参数化通用采集器承载；响应先写入
-  `tushare_raw_record`，再进入94张强类型 `tushare_norm_*` 标准表；
+- 95 个字段变化较大或使用频率较低的接口由一个参数化通用采集器承载；响应先写入
+  `tushare_raw_record`，再进入95张强类型 `tushare_norm_*` 标准表；
 - 106 个专项/等价专项接口契约复用 97 张领域规范化表，其中普通/VIP 接口可共用
   一套实现，`weekly`、`monthly` 等上游接口也可汇入同一张频率化行情表；
 - `ggt_daily` 同时派生日表和月汇总表，所以一个上游接口也可能对应多张表；
-- 因此采集入口仍是98个类，但数据服务层是97张专项表、94张通用接口标准表和
-  1张原始表，共192张可查询数据表。
+- 因此采集入口仍是98个类，但数据服务层是97张专项表、95张通用接口标准表和
+  1张原始表，共193张可查询数据表。
 
 Dataset Registry 会从代码中的采集器契约和标准化契约生成完整安全白名单，并由
 测试强制保证192张数据表全部可查询；数据库中其他 `sys_*` 运维表不会作为业务
@@ -100,7 +106,7 @@ flowchart LR
 
     SC --> BT["规范化业务表"]
     RC --> RT["tushare_raw_record<br/>JSONB 原始数据"]
-    RC --> NT["94 张 tushare_norm_*<br/>强类型标准表"]
+    RC --> NT["95 张 tushare_norm_*<br/>强类型标准表"]
     RC --> CP["分页 Checkpoint"]
 
     BT --> PG[("PostgreSQL")]
@@ -292,7 +298,7 @@ Tushare 接口契约 → 有界请求 / 分页 → JSONB 原始层 → 类型校
 
 1. **专项 cron 任务**：处理交易日历、股票日线、指数、财务报表等 41 个接口，
    触发后同样先写入 `sys_collection_job`。
-2. **策略目录任务**：根据接口契约推导日、周、月周期，为 119 个非专项接口生成独立
+2. **策略目录任务**：根据接口契约推导日、周、月周期，为 125 个非专项接口生成独立
    的 `sys_collection_job`。
 3. **周期全量扇出**：为 19 个已验证接口冻结实体宇宙，分批生成可恢复的
    日、周或月度活动。
@@ -318,17 +324,18 @@ Tushare 接口契约 → 有界请求 / 分页 → JSONB 原始层 → 类型校
   `sys_collection_job`，不会在调度线程内直接访问 Tushare。旧版本留下的
   `last_job_id=NULL` 引导游标会被视为“尚无采集证据”并自动补发，而不是跳过。
 
-### 为什么还有 17 个接口不自动跑
+### 为什么还有 16 个接口不自动跑
 
 | 原因 | 数量 | 处理方式 |
 |---|---:|---|
-| 初始化基线覆盖、暂不做周期高基数扇出 | 13 | 需要时通过受控活动运行，避免日常额度失控 |
+| 初始化基线覆盖、暂不做周期高基数扇出 | 10 | 需要时通过受控活动运行，避免日常额度失控 |
 | `ccass_hold_detail` 单日规模不可控 | 1 | 必须显式限定股票或日期范围 |
-| `fund_basic` 业务范围需人工指定 | 1 | 初始化按已验证的 E/O 范围采集 |
+| `fund_basic` / `fut_weekly_detail` 范围需指定 | 2 | 初始化或调用方提供明确枚举范围 |
 | `stk_mins` 极低频限流 | 1 | 保持按需，避免小时配额被无界扇出耗尽 |
 | `p_get` 依赖调用方名称清单 | 1 | 仅接受显式依赖清单 |
+| `rt_hk_k` 实时按需 | 1 | 显式提供港股代码或官方通配符，不进入历史回填 |
 
-这 17 个接口不是“没有实现”，而是不适合按固定周期直接全量调用。其中仍有一部分
+这 16 个接口不是“没有实现”，而是不适合按固定周期直接全量调用。其中仍有一部分
 可以使用**受控按需扇出**：调用方必须给出日期或报告期边界，单批最多 200 个
 子任务，股票、基金、转债和指数清单只从白名单本地表读取；剩余接口仍保持人工
 显式调用或禁用批量回填。
@@ -488,7 +495,7 @@ Dashboard 可以：
 
 ### REST 数据服务
 
-当前 Dataset Registry 对外开放全部192个数据集。专项数据和通用接口强类型标准
+当前 Dataset Registry 对外开放全部193个数据集。专项数据和通用接口强类型标准
 数据均按数据集查询；原始 JSONB 只承担审计和重放：
 
 ```bash
@@ -501,6 +508,10 @@ curl http://127.0.0.1:8000/api/v1/interfaces
 curl 'http://127.0.0.1:8000/api/v1/interfaces/adj_factor/records?ts_code=000001.SZ&start_date=2026-01-01&limit=20'
 
 curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
+
+curl 'http://127.0.0.1:8000/api/v1/sectors?provider=ths&query=人工智能&market=A'
+
+curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_days=180'
 ```
 
 日期参数同时支持 `YYYY-MM-DD` 和 `YYYYMMDD`。通用查询默认返回 100 行，
@@ -516,14 +527,21 @@ curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
 | `GET /api/v1/datasets` | 数据集发现 |
 | `GET /api/v1/datasets/{name}` | 字段、过滤器和主键信息 |
 | `GET /api/v1/datasets/{name}/records` | 数据查询与分页 |
-| `GET /api/v1/interfaces` | 发现 200 个可采接口及其数据集/原始数据路径 |
+| `GET /api/v1/interfaces` | 发现 201 个可采接口及其数据集/原始数据路径 |
 | `GET /api/v1/interfaces/{api_name}` | 查询接口契约、文档、字段和允许过滤器 |
 | `GET /api/v1/interfaces/{api_name}/records` | 查询通用接口的强类型标准数据 |
-| `GET /api/v1/normalization` | 查看94个通用接口的标准化健康状态 |
+| `GET /api/v1/normalization` | 查看95个通用接口的标准化健康状态 |
 | `GET /api/v1/normalization/drift` | 查看字段新增、缺失等 Schema Drift |
 | `GET /api/v1/normalization/errors` | 查看未解决或历史隔离记录 |
 | `GET /api/v1/freshness` | 数据最新日期和新鲜度 |
 | `GET /api/v1/stocks/{ts_code}/snapshot` | 股票综合快照 |
+| `GET /api/v1/stocks/{ts_code}/research-pack` | 带历史时点约束、来源和质量状态的个股研究资料包 |
+| `GET /api/v1/stocks/{ts_code}/sectors` | 查询股票在指定历史时点所属的供应方板块 |
+| `GET /api/v1/stocks/{ts_code}/peers` | 按共同板块数量发现可比股票 |
+| `GET /api/v1/sectors` | 跨同花顺、东财、通达信发现和搜索板块 |
+| `GET /api/v1/sectors/{provider}/{code}/snapshot` | 板块资料、最新行情和成分摘要 |
+| `GET /api/v1/sectors/{provider}/{code}/members` | 指定历史时点的板块成分 |
+| `GET /api/v1/sectors/{provider}/{code}/research-pack` | 板块行情、成分、资金流和质量状态资料包 |
 | `GET /api/v1/collection-tasks` | 可提交的任务类型 |
 | `POST /api/v1/collection-jobs` | 提交持久化采集任务 |
 | `GET /api/v1/collection-jobs` | 按接口、周期和状态查询任务历史 |
@@ -539,6 +557,7 @@ curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
 | `GET /api/v1/collection-overview` | 全接口采集状态与完成证据 |
 | `GET /api/v1/delivery/today` | 查询当日持久化交付计划、截至当前/全日进度、逾期和真实异常；可传 `business_date` |
 | `GET /api/v1/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
+| `GET /api/v1/data-health/summary` | 面向 CLI/Agent 的轻量健康预检，不扫描全部明细 |
 | `POST /api/v1/collection-dispatch` | 生成最近周期补采任务 |
 | `GET /api/v1/coverage` | 数据集日期覆盖总览和最近缺失日期 |
 | `GET /api/v1/coverage/datasets/{name}/partitions` | 按日期及状态查询分区明细；`status=problem` 同时返回缺失和不完整分区 |
@@ -546,6 +565,7 @@ curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
 | `POST /api/v1/coverage/repairs` | 为指定范围内已经审计确认的安全缺口生成幂等补采任务 |
 | `GET /api/v1/coverage/jobs` | 查看覆盖审计队列 |
 | `GET /api/v1/initialization` | 查询运行模式、当前和最近一次初始化活动 |
+| `POST /api/v1/initialization/preflight` | 不创建任务，预检完整计划并返回版本、指纹、阻断项和提醒 |
 | `POST /api/v1/initialization` | 创建一次分阶段、可恢复的初始采集 |
 | `GET /api/v1/initialization/{id}/steps` | 查看每个初始化步骤及其采集/审计任务 |
 | `POST /api/v1/initialization/{id}/pause` | 暂停初始化协调（不强杀已运行任务） |
@@ -571,6 +591,11 @@ Swagger UI：<http://127.0.0.1:8000/api/docs>
   --limit 20
 
 ./clawq stock snapshot 000001.SZ
+./clawq stock research-pack 000001.SZ --as-of 2026-09-08
+./clawq stock sectors 300750.SZ --provider ths
+./clawq stock peers 300750.SZ --provider ths --limit 20
+./clawq sector list --provider ths --query 人工智能 --market A
+./clawq sector research-pack ths 885728.TI --lookback-days 180
 ./clawq freshness stock_daily
 ./clawq coverage show stock_daily --status missing
 ./clawq interfaces describe adj_factor
@@ -655,6 +680,10 @@ USD/EUR/JPY/GBP/CHF，避免把默认 USD 误当全部币种。事件、名单�
 也可以通过 REST 启动；请求立即返回，采集在后台继续：
 
 ```bash
+curl -X POST http://127.0.0.1:8000/api/v1/initialization/preflight \
+  -H "Content-Type: application/json" \
+  -d '{"profile":"full","history_end":"2026-09-05"}'
+
 curl -X POST http://127.0.0.1:8000/api/v1/initialization \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: first-initialization-$(date +%s)" \
@@ -943,7 +972,7 @@ claw-quant-data/
 │   ├── collection_monitor.py   # 全接口完成状态聚合
 │   ├── heartbeat.py            # 非 HTTP 进程数据库心跳
 │   ├── normalization_monitor.py # 标准化运行、隔离错误和字段漂移健康状态
-│   ├── tushare_normalization.py # 94 个通用接口的强类型转换契约与幂等写入
+│   ├── tushare_normalization.py # 95 个通用接口的强类型转换契约与幂等写入
 │   ├── tushare_rate_limit.py   # 通用/专项采集共享的分布式 Token 限流
 │   ├── tushare_catalog.py      # 机器可读接口契约入口
 │   ├── tushare_policy.py       # 安全周期与参数策略
@@ -1016,7 +1045,7 @@ docker compose exec api python scripts/queue_catalog_history_repair.py \
 - `empty` 是“请求成功但无数据”，不是 `complete`；
 - 自动策略路由的专项采集器已经与通用采集器共用有界分区和返回上限证据；少数
   独立 cron 数据集如果尚无可信覆盖规则，仍会保守显示为 `unverified`；
-- 94 个通用接口已经各自拥有强类型标准表；新增或变化字段仍需经过 Schema Drift
+- 95 个通用接口已经各自拥有强类型标准表；新增或变化字段仍需经过 Schema Drift
   审核后升级契约，不能自动污染稳定查询模型；
 - 未配置新鲜度 SLA 的日期型数据返回 `not_configured`，不会按0小时 SLA 误报过期；
 - 尚未进入周期配方的接口因实测触顶、高基数扇出、限频或契约不足被刻意保留为

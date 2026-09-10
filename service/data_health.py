@@ -452,6 +452,7 @@ class DataHealthService:
                         ),
                         "automatic_repair": auto_repair,
                         "api_name": api_name,
+                        "job_id": unresolved.get("job_id"),
                         "partition_details": bool(
                             interface_datasets.intersection(auditable_names)
                         ),

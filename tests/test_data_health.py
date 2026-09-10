@@ -220,6 +220,7 @@ def test_data_health_keeps_confirmed_gaps_separate_from_unknown_coverage():
                 "cadence": "daily",
                 "latest": {"completion_status": "complete"},
                 "unresolved_failure": {
+                    "job_id": 9001,
                     "failure_type": "coverage_incomplete",
                     "period_key": "2026-09-04",
                     "error_message": "截面不完整",
@@ -336,6 +337,11 @@ def test_data_health_keeps_confirmed_gaps_separate_from_unknown_coverage():
     assert "dataset_empty" not in kinds
     assert "freshness_not_configured" in kinds
     assert "collection_unverified" in kinds
+    failed_issue = next(
+        item for item in result["issues"]
+        if item.get("resource") == "daily"
+    )
+    assert failed_issue["job_id"] == 9001
 
 
 def test_data_health_does_not_call_current_phase_ratio_overall_progress():

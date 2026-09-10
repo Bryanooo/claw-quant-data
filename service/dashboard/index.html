@@ -23,9 +23,26 @@
     <main>
       <section id="connectionNotice" class="notice hidden" role="status"></section>
 
+      <section id="operationsBanner" class="operations-banner status-loading" aria-live="polite">
+        <div class="operations-banner-copy">
+          <span id="operationsBannerLabel" class="operations-banner-label">正在检查</span>
+          <div>
+            <strong id="operationsBannerTitle">正在建立系统运行快照</strong>
+            <p id="operationsBannerDetail">正在核对服务、今日交付、历史失败与数据缺口。</p>
+          </div>
+        </div>
+        <div class="operations-banner-actions">
+          <small id="operationsBannerFreshness">尚无成功快照</small>
+          <button id="operationsIssuesButton" class="button button-secondary" type="button">查看异常</button>
+        </div>
+      </section>
+
       <nav class="console-tabs" aria-label="控制台分区" role="tablist">
         <button class="console-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="todayView" data-view="today">
           <span>今日运营</span><small id="todayTabCount">等待加载</small>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="calendarView" data-view="calendar">
+          <span>数据日历</span><small id="calendarTabCount">等待加载</small>
         </button>
         <button class="console-tab" type="button" role="tab" aria-selected="false" aria-controls="overviewView" data-view="overview">
           <span>异常中心</span><small id="healthTabCount">健康状态</small>
@@ -118,6 +135,63 @@
         </article>
       </section>
       </section>
+      </div>
+
+      <div id="calendarView" class="view-panel hidden" role="tabpanel" data-view-panel="calendar">
+        <section class="workspace calendar-workspace" aria-label="数据采集日历">
+          <div class="workspace-head calendar-head">
+            <div>
+              <p class="section-kicker">DELIVERY CALENDAR</p>
+              <h2>数据日历</h2>
+              <p id="calendarSummary" class="section-summary">正在按数据日期汇总固定交付要求与严格校验结果…</p>
+            </div>
+            <div class="calendar-navigation">
+              <button id="calendarPrevious" class="button button-secondary" type="button" aria-label="上个月">← 上月</button>
+              <strong id="calendarMonthLabel">—</strong>
+              <button id="calendarNext" class="button button-secondary" type="button" aria-label="下个月">下月 →</button>
+            </div>
+          </div>
+          <div class="calendar-legend" aria-label="日历状态说明">
+            <span class="legend-complete">严格完成</span>
+            <span class="legend-progress">等待交付 / 核验中</span>
+            <span class="legend-issue">真实异常</span>
+            <span class="legend-empty">未留存 / 未来</span>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span>
+          </div>
+          <div id="calendarGrid" class="calendar-grid" aria-label="按数据日期展示的每日数据状态"></div>
+        </section>
+
+        <section class="workspace calendar-detail-workspace" aria-label="选中数据日期的交付明细">
+          <div class="workspace-head">
+            <div>
+              <p class="section-kicker">DAY DETAIL</p>
+              <h2 id="calendarDetailTitle">日期明细</h2>
+              <p id="calendarDetailSummary" class="section-summary">点击数据日期，查看固定数据要求、任务执行日和完整性证据。</p>
+            </div>
+            <select id="calendarDetailFilter" aria-label="日期明细状态">
+              <option value="all">全部数据要求</option>
+              <option value="attention">只看异常</option>
+              <option value="active">排队 / 运行 / 验证</option>
+              <option value="complete">已严格完成</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="calendar-detail-table">
+              <thead><tr><th>数据接口</th><th>数据日期</th><th>任务执行日</th><th>最终截止</th><th>状态</th><th>数据量</th><th>校验证据 / 原因</th><th>操作</th></tr></thead>
+              <tbody id="calendarDetailRows"><tr><td colspan="8" class="empty-state">请选择一个数据日期</td></tr></tbody>
+            </table>
+          </div>
+          <footer class="table-footer">
+            <span id="calendarDetailResultCount">0 项数据要求</span>
+            <div class="pager" aria-label="日期明细分页">
+              <button class="row-action" type="button" data-page-key="calendarDetails" data-page-delta="-1">上一页</button>
+              <span data-page-info="calendarDetails">第 1 / 1 页</span>
+              <button class="row-action" type="button" data-page-key="calendarDetails" data-page-delta="1">下一页</button>
+            </div>
+          </footer>
+        </section>
       </div>
 
       <div id="overviewView" class="view-panel hidden" role="tabpanel" data-view-panel="overview">

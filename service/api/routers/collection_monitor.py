@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from service.api.dependencies import (
     get_collection_monitor_service,
@@ -28,6 +28,39 @@ def today_delivery_progress(
     service: DeliveryMonitorService = Depends(get_delivery_monitor_service),
 ) -> dict:
     return service.today(business_date)
+
+
+@router.get("/delivery/calendar")
+def delivery_calendar(
+    start_date: date = Query(),
+    end_date: date = Query(),
+    service: DeliveryMonitorService = Depends(get_delivery_monitor_service),
+) -> dict:
+    try:
+        return service.calendar(start_date, end_date)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.get("/delivery/data-calendar")
+def delivery_data_calendar(
+    start_date: date = Query(),
+    end_date: date = Query(),
+    service: DeliveryMonitorService = Depends(get_delivery_monitor_service),
+) -> dict:
+    """Summarize strict delivery by data date, not task run date."""
+    try:
+        return service.data_calendar(start_date, end_date)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.get("/delivery/data-calendar/{data_date}")
+def delivery_data_calendar_day(
+    data_date: date,
+    service: DeliveryMonitorService = Depends(get_delivery_monitor_service),
+) -> dict:
+    return service.data_calendar_day(data_date)
 
 
 @router.post("/collection-dispatch", status_code=202)

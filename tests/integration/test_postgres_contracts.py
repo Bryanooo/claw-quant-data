@@ -1264,6 +1264,7 @@ def test_partial_result_is_not_an_incident_before_delivery_deadline():
     api_name = f"deadline_{suffix}"
     schedule_id = f"deadline_schedule_{suffix}"
     business_date = date.today()
+    data_date = business_date - timedelta(days=1)
     scheduled_for = datetime.now(timezone.utc) - timedelta(hours=2)
     connection = psycopg2.connect(**DB_CONFIG)
     job_id = None
@@ -1288,8 +1289,8 @@ def test_partial_result_is_not_an_incident_before_delivery_deadline():
                     api_name,
                     schedule_id,
                     scheduled_for.isoformat(),
-                    business_date.isoformat(),
-                    business_date,
+                    data_date.isoformat(),
+                    data_date,
                 ),
             )
             job_id = cursor.fetchone()[0]
@@ -1311,12 +1312,32 @@ def test_partial_result_is_not_an_incident_before_delivery_deadline():
                     api_name,
                     api_name,
                     scheduled_for,
-                    business_date,
-                    business_date.isoformat(),
+                    data_date,
+                    data_date.isoformat(),
                 ),
             )
             delivery_plan_id = cursor.fetchone()[0]
         connection.commit()
+
+        calendar_rows = DeliveryPlanRepository().list_calendar_with_execution(
+            business_date, business_date
+        )
+        calendar_row = next(
+            row for row in calendar_rows
+            if row["delivery_plan_id"] == delivery_plan_id
+        )
+        assert calendar_row["job_id"] == job_id
+        assert calendar_row["job_completion_status"] == "incomplete"
+
+        data_date_rows = DeliveryPlanRepository().list_calendar_with_execution(
+            data_date, data_date, date_basis="expected_for"
+        )
+        data_date_row = next(
+            row for row in data_date_rows
+            if row["delivery_plan_id"] == delivery_plan_id
+        )
+        assert data_date_row["business_date"] == business_date
+        assert data_date_row["expected_for"] == data_date
 
         unresolved = CollectionMonitorRepository().unresolved_partition_failures()
         assert api_name not in unresolved
@@ -2214,6 +2235,69 @@ def test_empty_results_create_bounded_separately_auditable_rechecks():
                     (root_job_id, root_job_id),
                 )
             connection.commit()
+        connection.close()
+
+
+def test_delivery_plan_upsert_reconciles_cadence_and_removes_stale_plans():
+    suffix = uuid4().hex[:12]
+    business_date = date(2099, 1, 5)
+    repository = DeliveryPlanRepository()
+    base = {
+        "business_date": business_date,
+        "source_type": "dedicated",
+        "api_name": f"delivery_{suffix}",
+        "title": "delivery contract",
+        "scheduled_for": datetime(2099, 1, 5, 13, tzinfo=timezone.utc),
+        "due_at": datetime(2099, 1, 5, 14, tzinfo=timezone.utc),
+        "expected_for": date(2098, 12, 31),
+        "period_key": "20981231",
+        "metadata": {},
+    }
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        repository.upsert(
+            [
+                {
+                    **base,
+                    "plan_key": f"kept:{suffix}",
+                    "source_key": f"kept_{suffix}",
+                    "cadence": "daily",
+                },
+                {
+                    **base,
+                    "plan_key": f"stale:{suffix}",
+                    "source_key": f"stale_{suffix}",
+                    "cadence": "daily",
+                },
+            ]
+        )
+        repository.upsert(
+            [
+                {
+                    **base,
+                    "plan_key": f"kept:{suffix}",
+                    "source_key": f"kept_{suffix}",
+                    "cadence": "quarterly",
+                }
+            ]
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT plan_key, cadence
+                FROM sys_collection_delivery_plan
+                WHERE business_date=%s
+                """,
+                (business_date,),
+            )
+            assert cursor.fetchall() == [(f"kept:{suffix}", "quarterly")]
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_collection_delivery_plan WHERE business_date=%s",
+                (business_date,),
+            )
+        connection.commit()
         connection.close()
 
 

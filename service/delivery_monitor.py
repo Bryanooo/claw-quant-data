@@ -51,6 +51,7 @@ class DeliveryPlanRepository:
         self._connection_factory = connection_factory
 
     def upsert(self, plans: Iterable[dict[str, Any]]) -> int:
+        plans = list(plans)
         values = [
             (
                 item["business_date"], item["plan_key"], item["source_type"],
@@ -75,7 +76,11 @@ class DeliveryPlanRepository:
                          expected_for, period_key, metadata)
                     VALUES %s
                     ON CONFLICT (business_date, plan_key) DO UPDATE
-                    SET title=EXCLUDED.title,
+                    SET source_type=EXCLUDED.source_type,
+                        source_key=EXCLUDED.source_key,
+                        api_name=EXCLUDED.api_name,
+                        title=EXCLUDED.title,
+                        cadence=EXCLUDED.cadence,
                         scheduled_for=EXCLUDED.scheduled_for,
                         due_at=EXCLUDED.due_at,
                         expected_for=EXCLUDED.expected_for,
@@ -86,6 +91,20 @@ class DeliveryPlanRepository:
                     values,
                     page_size=len(values),
                 )
+                plans_by_day: dict[date, list[str]] = {}
+                for item in plans:
+                    plans_by_day.setdefault(item["business_date"], []).append(
+                        item["plan_key"]
+                    )
+                for business_date, plan_keys in plans_by_day.items():
+                    cursor.execute(
+                        """
+                        DELETE FROM sys_collection_delivery_plan
+                        WHERE business_date=%s
+                          AND NOT (plan_key = ANY(%s))
+                        """,
+                        (business_date, plan_keys),
+                    )
             connection.commit()
             return len(values)
         except Exception:
@@ -94,7 +113,221 @@ class DeliveryPlanRepository:
         finally:
             connection.close()
 
+    def list_calendar_with_execution(
+        self,
+        start_date: date,
+        end_date: date,
+        *,
+        date_basis: str = "business_date",
+    ) -> list[dict[str, Any]]:
+        """Resolve plans in bulk using either their run date or data date."""
+        if date_basis not in {"business_date", "expected_for"}:
+            raise ValueError("date_basis must be business_date or expected_for")
+        connection = self._connection_factory(**DB_CONFIG)
+        try:
+            with connection.cursor(
+                cursor_factory=psycopg2.extras.RealDictCursor
+            ) as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM sys_collection_delivery_plan
+                    WHERE {date_basis} BETWEEN %s AND %s
+                    ORDER BY {date_basis}, scheduled_for,
+                             source_type, api_name
+                    """,
+                    (start_date, end_date),
+                )
+                plans = [dict(row) for row in cursor.fetchall()]
+                if not plans:
+                    return []
+                empty_execution = {
+                    "job_id": None,
+                    "job_status": None,
+                    "job_completion_status": None,
+                    "job_rows_fetched": None,
+                    "job_rows_inserted": None,
+                    "job_attempt": None,
+                    "job_max_attempts": None,
+                    "job_available_at": None,
+                    "job_started_at": None,
+                    "job_finished_at": None,
+                    "job_error_message": None,
+                    "job_evidence": None,
+                    "campaign_id": None,
+                    "campaign_status": None,
+                    "campaign_completion_status": None,
+                    "campaign_rows_fetched": None,
+                    "campaign_rows_inserted": None,
+                    "campaign_updated_at": None,
+                    "campaign_finished_at": None,
+                    "campaign_error_message": None,
+                    "completed_offset": None,
+                    "universe_total": None,
+                    "pages_completed": None,
+                    "pages_created": None,
+                }
+                for plan in plans:
+                    plan.update(empty_execution)
+                cursor.execute(
+                    """
+                    CREATE TEMP TABLE delivery_calendar_target (
+                        delivery_plan_id BIGINT PRIMARY KEY,
+                        business_date DATE NOT NULL,
+                        source_type TEXT NOT NULL,
+                        source_key TEXT NOT NULL,
+                        api_name TEXT NOT NULL,
+                        cadence TEXT NOT NULL,
+                        expected_for DATE,
+                        period_key TEXT
+                    ) ON COMMIT DROP
+                    """
+                )
+                psycopg2.extras.execute_values(
+                    cursor,
+                    """
+                    INSERT INTO delivery_calendar_target
+                        (delivery_plan_id, business_date, source_type,
+                         source_key, api_name, cadence, expected_for,
+                         period_key)
+                    VALUES %s
+                    """,
+                    [
+                        (
+                            plan["delivery_plan_id"], plan["business_date"],
+                            plan["source_type"], plan["source_key"],
+                            plan["api_name"], plan["cadence"],
+                            plan.get("expected_for"), plan.get("period_key"),
+                        )
+                        for plan in plans
+                    ],
+                    page_size=1000,
+                )
+                by_id = {plan["delivery_plan_id"]: plan for plan in plans}
+                job_projection = """
+                    target.delivery_plan_id,
+                    candidate.job_id,
+                    candidate.status AS job_status,
+                    candidate.completion_status AS job_completion_status,
+                    candidate.rows_fetched AS job_rows_fetched,
+                    candidate.rows_inserted AS job_rows_inserted,
+                    candidate.attempt AS job_attempt,
+                    candidate.max_attempts AS job_max_attempts,
+                    candidate.available_at AS job_available_at,
+                    candidate.started_at AS job_started_at,
+                    candidate.finished_at AS job_finished_at,
+                    candidate.error_message AS job_error_message,
+                    candidate.completion_evidence AS job_evidence
+                """
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT ON (target.delivery_plan_id)
+                           {job_projection}
+                    FROM delivery_calendar_target AS target
+                    JOIN sys_collection_job AS candidate
+                      ON target.source_type='policy'
+                     AND candidate.job_kind IN ('leaf', 'batch')
+                     AND COALESCE(candidate.api_name,
+                                  candidate.parameters->>'api_name')=target.api_name
+                     AND candidate.cadence=target.cadence
+                     AND (
+                       (target.expected_for IS NOT NULL
+                        AND candidate.expected_for=target.expected_for)
+                       OR (target.period_key IS NOT NULL
+                           AND candidate.period_key=target.period_key)
+                     )
+                    ORDER BY target.delivery_plan_id,
+                      CASE
+                        WHEN candidate.completion_status IN ('complete', 'empty')
+                         AND (
+                           COALESCE((candidate.completion_evidence->>'verified')::boolean, FALSE)
+                           OR COALESCE((candidate.completion_evidence->'verification'->>'verified')::boolean, FALSE)
+                         ) THEN 0
+                        WHEN candidate.completion_status IN ('complete', 'empty') THEN 1
+                        ELSE 2
+                      END,
+                      candidate.created_at DESC, candidate.job_id DESC
+                    """
+                )
+                self._merge_calendar_rows(by_id, cursor.fetchall())
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT ON (target.delivery_plan_id)
+                           {job_projection}
+                    FROM delivery_calendar_target AS target
+                    JOIN sys_collection_job AS candidate
+                      ON target.source_type='dedicated'
+                     AND candidate.job_kind IN ('leaf', 'batch')
+                     AND candidate.parameters->>'schedule_id'=target.source_key
+                     AND ((candidate.parameters->>'scheduled_for')::timestamptz
+                          AT TIME ZONE 'Asia/Shanghai')::date=target.business_date
+                    ORDER BY target.delivery_plan_id,
+                      CASE
+                        WHEN candidate.completion_status IN ('complete', 'empty')
+                         AND (
+                           COALESCE((candidate.completion_evidence->>'verified')::boolean, FALSE)
+                           OR COALESCE((candidate.completion_evidence->'verification'->>'verified')::boolean, FALSE)
+                         ) THEN 0
+                        WHEN candidate.completion_status IN ('complete', 'empty') THEN 1
+                        ELSE 2
+                      END,
+                      candidate.created_at DESC, candidate.job_id DESC
+                    """
+                )
+                self._merge_calendar_rows(by_id, cursor.fetchall())
+                cursor.execute(
+                    """
+                    SELECT DISTINCT ON (target.delivery_plan_id)
+                           target.delivery_plan_id,
+                           candidate.campaign_id,
+                           candidate.status AS campaign_status,
+                           candidate.completion_status AS campaign_completion_status,
+                           candidate.rows_fetched AS campaign_rows_fetched,
+                           candidate.rows_inserted AS campaign_rows_inserted,
+                           candidate.updated_at AS campaign_updated_at,
+                           candidate.finished_at AS campaign_finished_at,
+                           candidate.error_message AS campaign_error_message,
+                           candidate.completed_offset,
+                           candidate.universe_total,
+                           candidate.pages_completed,
+                           candidate.pages_created
+                    FROM delivery_calendar_target AS target
+                    JOIN sys_collection_fanout_campaign AS candidate
+                      ON target.source_type='fanout'
+                     AND candidate.api_name=target.api_name
+                     AND candidate.cadence=target.cadence
+                     AND (
+                       (target.expected_for IS NOT NULL
+                        AND candidate.expected_for=target.expected_for)
+                       OR (target.period_key IS NOT NULL
+                           AND candidate.period_key=target.period_key)
+                     )
+                    ORDER BY target.delivery_plan_id,
+                      CASE candidate.completion_status
+                        WHEN 'complete' THEN 0 WHEN 'empty' THEN 1 ELSE 2
+                      END,
+                      candidate.created_at DESC, candidate.campaign_id DESC
+                    """
+                )
+                self._merge_calendar_rows(by_id, cursor.fetchall())
+                return plans
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _merge_calendar_rows(
+        plans: dict[int, dict[str, Any]], rows: Iterable[dict[str, Any]]
+    ) -> None:
+        for raw in rows:
+            row = dict(raw)
+            plan_id = row.pop("delivery_plan_id")
+            plans[plan_id].update(row)
+
     def list_with_execution(self, business_date: date) -> list[dict[str, Any]]:
+        return self.list_calendar_with_execution(business_date, business_date)
+
+    def list_range_with_execution(
+        self, start_date: date, end_date: date
+    ) -> list[dict[str, Any]]:
         connection = self._connection_factory(**DB_CONFIG)
         try:
             with connection.cursor(
@@ -152,8 +385,14 @@ class DeliveryPlanRepository:
                             )
                           )
                         ORDER BY
-                          CASE candidate.completion_status
-                            WHEN 'complete' THEN 0 WHEN 'empty' THEN 1 ELSE 2
+                          CASE
+                            WHEN candidate.completion_status IN ('complete', 'empty')
+                             AND (
+                               COALESCE((candidate.completion_evidence->>'verified')::boolean, FALSE)
+                               OR COALESCE((candidate.completion_evidence->'verification'->>'verified')::boolean, FALSE)
+                             ) THEN 0
+                            WHEN candidate.completion_status IN ('complete', 'empty') THEN 1
+                            ELSE 2
                           END,
                           candidate.created_at DESC, candidate.job_id DESC
                         LIMIT 1
@@ -177,10 +416,11 @@ class DeliveryPlanRepository:
                           candidate.created_at DESC, candidate.campaign_id DESC
                         LIMIT 1
                     ) AS campaign ON TRUE
-                    WHERE plan.business_date=%s
-                    ORDER BY plan.scheduled_for, plan.source_type, plan.api_name
+                    WHERE plan.business_date BETWEEN %s AND %s
+                    ORDER BY plan.business_date, plan.scheduled_for,
+                             plan.source_type, plan.api_name
                     """,
-                    (business_date,),
+                    (start_date, end_date),
                 )
                 return [dict(row) for row in cursor.fetchall()]
         finally:
@@ -198,6 +438,8 @@ class DeliveryPlanBuilder:
     ):
         self._market_open = market_open or self._is_market_open
         self._scheduler_factory = scheduler_factory
+        self._cached_scheduler: Any | None = None
+        self._scope_cache: dict[tuple[str, date], tuple[date, str | None]] = {}
 
     @staticmethod
     def _is_market_open(day: date) -> bool:
@@ -215,11 +457,16 @@ class DeliveryPlanBuilder:
         return bool(rows and rows[0]["is_open"])
 
     def _scheduler(self):
-        if self._scheduler_factory is not None:
-            return self._scheduler_factory()
-        from collectors.scheduler import create_scheduler
+        if self._cached_scheduler is None:
+            if self._scheduler_factory is not None:
+                self._cached_scheduler = self._scheduler_factory()
+            else:
+                from collectors.scheduler import create_scheduler
 
-        return create_scheduler(durabilize=False, set_active=False)
+                self._cached_scheduler = create_scheduler(
+                    durabilize=False, set_active=False
+                )
+        return self._cached_scheduler
 
     @staticmethod
     def _cadence_due(cadence: str, day: date, market_open: bool) -> bool:
@@ -272,6 +519,8 @@ class DeliveryPlanBuilder:
                 cadence = "weekly"
             elif job.id.endswith("_monthly_eom"):
                 cadence = "monthly"
+            elif job.id.endswith("_quarterly"):
+                cadence = "quarterly"
             expected_for = day
             if job.id == "index_daily_finalize":
                 from service.tushare_scheduling import _latest_trade_date
@@ -279,6 +528,27 @@ class DeliveryPlanBuilder:
                 expected_for = date.fromisoformat(
                     _latest_trade_date(day - timedelta(days=1))
                 )
+            elif cadence == "quarterly":
+                period = _period_key(cadence, day)
+                expected_for = date(
+                    int(period[:4]), int(period[4:6]), int(period[6:8])
+                )
+            elif job.id.endswith("_monthly_eom"):
+                from calendar import monthrange
+                from service.tushare_scheduling import _latest_trade_date
+
+                month_end = day.replace(day=monthrange(day.year, day.month)[1])
+                latest_trade = date.fromisoformat(_latest_trade_date(month_end))
+                if day != latest_trade:
+                    continue
+                expected_for = latest_trade
+            elif cadence in {"weekly", "monthly"}:
+                expected_for, _ = _resolved_scope(cadence, day)
+            period_key = (
+                expected_for.strftime("%Y%m%d")
+                if cadence == "quarterly"
+                else _period_key(cadence, expected_for)
+            )
             plans.append(
                 {
                     "business_date": day,
@@ -291,7 +561,7 @@ class DeliveryPlanBuilder:
                     "scheduled_for": occurrences[0],
                     "due_at": occurrences[-1] + timedelta(hours=1),
                     "expected_for": expected_for,
-                    "period_key": _period_key(cadence, expected_for),
+                    "period_key": period_key,
                     "metadata": {
                         "schedule_id": job.id,
                         "fire_times": [item.isoformat() for item in occurrences],
@@ -318,7 +588,12 @@ class DeliveryPlanBuilder:
             ):
                 continue
             scope_day = day - timedelta(days=7) if policy.cadence == "weekly" else day
-            expected_for, _ = _resolved_scope(policy.cadence, scope_day)
+            scope_key = (policy.cadence, scope_day)
+            if scope_key not in self._scope_cache:
+                self._scope_cache[scope_key] = _resolved_scope(
+                    policy.cadence, scope_day
+                )
+            expected_for, _ = self._scope_cache[scope_key]
             scheduled_for = _local_datetime(
                 day, time(19, 15) if policy.cadence == "daily" else time(7, 15)
             )
@@ -389,7 +664,327 @@ class DeliveryMonitorService:
         now = self._now().astimezone(SHANGHAI_TIMEZONE)
         day = business_date or now.date()
         self.materialize(day)
-        items = [self._decorate(row, now) for row in self._repository.list_with_execution(day)]
+        return self._progress(
+            day, self._repository.list_with_execution(day), now
+        )
+
+    def calendar(self, start_date: date, end_date: date) -> dict[str, Any]:
+        """Return task-run-day delivery states for backwards compatibility."""
+        self._validate_calendar_range(start_date, end_date)
+
+        now = self._now().astimezone(SHANGHAI_TIMEZONE)
+        days: list[date] = []
+        cursor = start_date
+        while cursor <= end_date:
+            days.append(cursor)
+            cursor += timedelta(days=1)
+        # Reading history must never invent a past expectation. Doing so would
+        # turn days from before delivery-plan retention into false overdue
+        # incidents. Only today is materialized as part of a read; older days
+        # are reported as untracked when no contemporaneous snapshot exists.
+        if start_date <= now.date() <= end_date:
+            self.materialize(now.date())
+        rows_by_day: dict[date, list[dict[str, Any]]] = {
+            day: [] for day in days
+        }
+        list_range = getattr(
+            self._repository,
+            "list_calendar_with_execution",
+            self._repository.list_range_with_execution,
+        )
+        for row in list_range(
+            start_date, end_date
+        ):
+            rows_by_day[row["business_date"]].append(row)
+
+        calendar_days: list[dict[str, Any]] = []
+        for day in days:
+            progress = self._progress(day, rows_by_day[day], now)
+            summary = progress["summary"]
+            if day > now.date():
+                status = "future"
+            elif summary["attention"]:
+                status = "issue"
+            elif not summary["total"]:
+                status = "untracked"
+            elif summary["completed_total"] == summary["total"]:
+                status = "complete"
+            else:
+                status = "in_progress"
+            calendar_days.append(
+                {
+                    "business_date": day.isoformat(),
+                    "status": status,
+                    **summary,
+                }
+            )
+        counts = Counter(item["status"] for item in calendar_days)
+        return {
+            "generated_at": now.isoformat(),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "summary": {
+                "days": len(calendar_days),
+                "complete_days": counts["complete"],
+                "issue_days": counts["issue"],
+                "in_progress_days": counts["in_progress"],
+                "untracked_days": counts["untracked"],
+                "future_days": counts["future"],
+            },
+            "days": calendar_days,
+        }
+
+    def data_calendar(self, start_date: date, end_date: date) -> dict[str, Any]:
+        """Return verified delivery states grouped by the date of the data.
+
+        Persisted delivery plans are the schedule contract. Multiple run-day
+        attempts for one API/data date (for example post-close and T+1 repair)
+        collapse into one requirement. Any verified attempt satisfies it.
+        """
+        self._validate_calendar_range(start_date, end_date)
+        now = self._now().astimezone(SHANGHAI_TIMEZONE)
+        if start_date <= now.date() <= end_date:
+            self.materialize(now.date())
+
+        rows = self._repository.list_calendar_with_execution(
+            start_date, end_date, date_basis="expected_for"
+        )
+        rows_by_day: dict[date, list[dict[str, Any]]] = {}
+        for row in rows:
+            data_date = row.get("expected_for")
+            if data_date is None or self._effective_cadence(row) != "daily":
+                continue
+            rows_by_day.setdefault(data_date, []).append(row)
+
+        calendar_days: list[dict[str, Any]] = []
+        cursor = start_date
+        while cursor <= end_date:
+            progress = self._data_date_progress(
+                cursor, rows_by_day.get(cursor, []), now
+            )
+            calendar_days.append(
+                {"data_date": cursor.isoformat(), **progress["summary"]}
+            )
+            cursor += timedelta(days=1)
+
+        counts = Counter(item["status"] for item in calendar_days)
+        return {
+            "generated_at": now.isoformat(),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "basis": "data_date",
+            "requirement_source": "persisted_delivery_plan",
+            "validation_basis": "verified_completion_evidence",
+            "summary": {
+                "days": len(calendar_days),
+                "complete_days": counts["complete"],
+                "issue_days": counts["issue"],
+                "in_progress_days": counts["in_progress"],
+                "untracked_days": counts["untracked"],
+                "future_days": counts["future"],
+            },
+            "days": calendar_days,
+        }
+
+    def data_calendar_day(self, data_date: date) -> dict[str, Any]:
+        """Return the API requirements and task evidence for one data date."""
+        now = self._now().astimezone(SHANGHAI_TIMEZONE)
+        if data_date == now.date():
+            self.materialize(data_date)
+        rows = self._repository.list_calendar_with_execution(
+            data_date, data_date, date_basis="expected_for"
+        )
+        progress = self._data_date_progress(data_date, rows, now)
+        return {
+            "generated_at": now.isoformat(),
+            "data_date": data_date.isoformat(),
+            "basis": "data_date",
+            "requirement_source": "persisted_delivery_plan",
+            "validation_basis": "verified_completion_evidence",
+            **progress,
+        }
+
+    @staticmethod
+    def _validate_calendar_range(start_date: date, end_date: date) -> None:
+        if start_date > end_date:
+            raise ValueError("start_date must not be after end_date")
+        if (end_date - start_date).days > 62:
+            raise ValueError("delivery calendar range cannot exceed 63 days")
+
+    def _data_date_progress(
+        self,
+        data_date: date,
+        rows: list[dict[str, Any]],
+        now: datetime,
+    ) -> dict[str, Any]:
+        primary_snapshot_present = any(
+            row.get("business_date") == data_date
+            and self._effective_cadence(row) == "daily"
+            for row in rows
+        )
+        groups: dict[tuple[str, date], list[dict[str, Any]]] = {}
+        for row in rows:
+            expected_for = row.get("expected_for")
+            if expected_for != data_date or self._effective_cadence(row) != "daily":
+                continue
+            row = {**row, "cadence": "daily"}
+            groups.setdefault((row["api_name"], expected_for), []).append(
+                self._decorate(row, now)
+            )
+
+        items = [
+            self._collapse_data_requirement(group, now)
+            for group in groups.values()
+        ]
+        items.sort(key=lambda item: (item["attention"] is False, item["api_name"]))
+        counts = Counter(item["delivery_status"] for item in items)
+        completed = sum(
+            item["delivery_status"] in {"complete", "empty"} for item in items
+        )
+        attention = sum(item["attention"] for item in items)
+        if data_date > now.date():
+            status = "future"
+        elif not primary_snapshot_present:
+            # A later T+1 task can leave isolated evidence for a date that
+            # predates plan retention. It does not establish the denominator
+            # of fixed daily requirements and therefore must never turn green.
+            status = "untracked"
+        elif attention:
+            status = "issue"
+        elif not items:
+            status = "untracked"
+        elif completed == len(items):
+            status = "complete"
+        else:
+            status = "in_progress"
+        summary = {
+            "status": status,
+            "requirement_snapshot_complete": primary_snapshot_present,
+            "total": len(items),
+            "completed_total": completed,
+            "attention": attention,
+            "overdue": sum(
+                item["delivery_status"] in {"overdue", "failed", "incomplete"}
+                for item in items
+            ),
+            "running": counts["running"] + counts["retrying"],
+            "queued": counts["queued"],
+            "waiting": counts["waiting"] + counts["not_due"],
+            "unverified": counts["unverified"] + counts["verifying"],
+            "empty": counts["empty"],
+        }
+        return {
+            "summary": summary,
+            "items": items,
+            "issues": [item for item in items if item["attention"]],
+        }
+
+    @staticmethod
+    def _effective_cadence(row: dict[str, Any]) -> str | None:
+        """Recover the true cadence from dedicated schedule IDs.
+
+        Old delivery-plan snapshots could inherit a catalog cadence that did
+        not describe the dedicated cron task. The immutable source key is the
+        authoritative schedule identity and keeps historical calendars honest.
+        """
+        cadence = row.get("cadence")
+        if row.get("source_type") != "dedicated":
+            return cadence
+        schedule_id = str(row.get("source_key") or "")
+        if schedule_id.endswith("_daily") or schedule_id.endswith("_finalize"):
+            return "daily"
+        if schedule_id.endswith("_weekly") or schedule_id.endswith("_weekly_fri"):
+            return "weekly"
+        if schedule_id.endswith("_monthly_eom"):
+            return "monthly"
+        if schedule_id.endswith("_quarterly"):
+            return "quarterly"
+        return cadence
+
+    def _collapse_data_requirement(
+        self, attempts: list[dict[str, Any]], now: datetime
+    ) -> dict[str, Any]:
+        attempts.sort(key=lambda item: item["scheduled_for"])
+        terminal = [
+            item for item in attempts
+            if item["delivery_status"] in {"complete", "empty"}
+        ]
+        final_due = max(item["due_at"] for item in attempts)
+        if terminal:
+            completed = [
+                item for item in terminal if item["delivery_status"] == "complete"
+            ]
+            selected = (completed or terminal)[-1]
+            status = selected["delivery_status"]
+            validation_state = f"verified_{status}"
+        elif now <= final_due:
+            priority = {
+                "running": 0, "retrying": 1, "queued": 2,
+                "verifying": 3, "unverified": 4, "waiting": 5,
+                "not_due": 6, "failed": 7, "incomplete": 8, "overdue": 9,
+            }
+            selected = min(
+                attempts, key=lambda item: priority.get(item["delivery_status"], 10)
+            )
+            if selected["delivery_status"] in {"failed", "incomplete", "overdue"}:
+                status = "waiting"
+            else:
+                status = selected["delivery_status"]
+            validation_state = "pending_final_attempt"
+        else:
+            selected = max(
+                attempts,
+                key=lambda item: (
+                    item.get("finished_at") or item["scheduled_for"],
+                    item.get("work_id") or 0,
+                ),
+            )
+            statuses = {item["delivery_status"] for item in attempts}
+            if "incomplete" in statuses or statuses & {"unverified", "verifying"}:
+                status = "incomplete"
+            elif "failed" in statuses:
+                status = "failed"
+            else:
+                status = "overdue"
+            validation_state = "missing_verified_completion"
+
+        result = self._serialize(selected)
+        result.update(
+            {
+                "data_date": selected["expected_for"].isoformat(),
+                "business_dates": sorted(
+                    {item["business_date"].isoformat() for item in attempts}
+                ),
+                "planned_attempt_total": len(attempts),
+                "scheduled_for": attempts[0]["scheduled_for"].isoformat(),
+                "final_due_at": final_due.isoformat(),
+                "delivery_status": status,
+                "attention": status in {"failed", "incomplete", "overdue"},
+                "validation_state": validation_state,
+                "attempts": [
+                    {
+                        "business_date": item["business_date"].isoformat(),
+                        "scheduled_for": item["scheduled_for"].isoformat(),
+                        "due_at": item["due_at"].isoformat(),
+                        "source_type": item["source_type"],
+                        "work_id": item.get("work_id"),
+                        "delivery_status": item["delivery_status"],
+                        "completion_evidence": item.get("completion_evidence") or {},
+                        "error_message": item.get("error_message"),
+                    }
+                    for item in attempts
+                ],
+            }
+        )
+        return result
+
+    def _progress(
+        self,
+        day: date,
+        rows: list[dict[str, Any]],
+        now: datetime,
+    ) -> dict[str, Any]:
+        items = [self._decorate(row, now) for row in rows]
         counts = Counter(item["delivery_status"] for item in items)
         due_items = [item for item in items if item["scheduled_for"] <= now]
         complete_states = {"complete", "empty"}
@@ -434,6 +1029,13 @@ class DeliveryMonitorService:
             rows_fetched = item.get("campaign_rows_fetched")
             rows_inserted = item.get("campaign_rows_inserted")
             work_id = item.get("campaign_id")
+            evidence = {
+                "verified": completion in {"complete", "empty"},
+                "verification_type": "fanout_campaign_aggregate",
+                "pages_completed": item.get("pages_completed"),
+                "pages_created": item.get("pages_created"),
+                "universe_total": item.get("universe_total"),
+            }
         else:
             work_status = item.get("job_status")
             completion = item.get("job_completion_status")
@@ -442,6 +1044,13 @@ class DeliveryMonitorService:
             rows_fetched = item.get("job_rows_fetched")
             rows_inserted = item.get("job_rows_inserted")
             work_id = item.get("job_id")
+            evidence = item.get("job_evidence") or {}
+            verified = bool(
+                evidence.get("verified")
+                or (evidence.get("verification") or {}).get("verified")
+            )
+            if completion in {"complete", "empty"} and not verified:
+                completion = "unverified"
 
         if completion == "complete":
             status = "complete"
@@ -478,6 +1087,9 @@ class DeliveryMonitorService:
                 "rows_inserted": rows_inserted,
                 "finished_at": finished_at,
                 "error_message": error,
+                "completion_evidence": evidence,
+                "execution_status": work_status,
+                "completion_status": completion,
                 "on_time": bool(
                     status in {"complete", "empty"}
                     and finished_at

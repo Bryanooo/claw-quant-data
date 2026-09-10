@@ -67,6 +67,33 @@ def test_every_coverage_rule_references_real_source_columns():
             assert rule.entity_column in columns[rule.table], rule.dataset_name
 
 
+def test_stk_surv_provider_text_fields_are_unbounded():
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT column_name, data_type, character_maximum_length
+                FROM information_schema.columns
+                WHERE table_schema='public' AND table_name='stk_surv'
+                  AND column_name = ANY(%s)
+                """,
+                ([
+                    "name", "fund_visitors", "rece_place", "rece_mode",
+                    "rece_org", "org_type", "comp_rece",
+                ],),
+            )
+            columns = {
+                name: (data_type, maximum)
+                for name, data_type, maximum in cursor.fetchall()
+            }
+    finally:
+        connection.close()
+
+    assert len(columns) == 7
+    assert all(value == ("text", None) for value in columns.values())
+
+
 def test_coverage_queue_counts_only_unresolved_failures():
     suffix = uuid4().hex
     dataset_name = "stock_daily"

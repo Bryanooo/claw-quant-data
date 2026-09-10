@@ -239,14 +239,14 @@ CREATE INDEX IF NOT EXISTS idx_stk_ah_comparison_code ON stk_ah_comparison (ts_c
 -- 12. stk_surv: 机构调研表
 CREATE TABLE IF NOT EXISTS stk_surv (
     ts_code       VARCHAR(16)   NOT NULL,
-    name          VARCHAR(64),
+    name          TEXT,
     surv_date     DATE          NOT NULL,
-    fund_visitors VARCHAR(32)   NOT NULL,
-    rece_place    VARCHAR(256),
-    rece_mode     VARCHAR(64),
-    rece_org      VARCHAR(256)  NOT NULL,
-    org_type      VARCHAR(32),
-    comp_rece     VARCHAR(128),
+    fund_visitors TEXT          NOT NULL,
+    rece_place    TEXT,
+    rece_mode     TEXT,
+    rece_org      TEXT          NOT NULL,
+    org_type      TEXT,
+    comp_rece     TEXT,
     content       TEXT,
     created_at    TIMESTAMP     NOT NULL DEFAULT NOW(),
     PRIMARY KEY (ts_code, surv_date, fund_visitors, rece_org)

@@ -1,11 +1,17 @@
 const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
   initialization: null, fanoutCampaigns: [], freshness: [], delivery: null,
+  calendar: null, calendarDetail: null, calendarMonth: null,
+  selectedCalendarDate: null,
   dataHealth: {}, healthIssues: [], timer: null,
+  operationalSummary: null, hasLoadedOperational: false,
   coverageRangeDataset: null, coverageDetailDataset: null,
   activeView: "today",
+  endpointErrors: {}, isRefreshing: false, hasLoadedSnapshot: false,
+  noticeKind: null,
+  snapshotGeneratedAt: null, lastSuccessfulRefresh: null,
   pages: {
-    delivery: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
+    delivery: 1, calendarDetails: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
     coveragePartitions: 1, batchChildren: 1, initializationSteps: 1, fanoutPages: 1
   },
   dialogData: {
@@ -13,8 +19,14 @@ const state = {
   }
 };
 
+try {
+  state.lastSuccessfulRefresh = window.localStorage.getItem("claw-quant:last-successful-dashboard-refresh");
+} catch (_error) {
+  // Private browsing and hardened browsers may disable local storage.
+}
+
 const pageSizes = {
-  delivery: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20,
+  delivery: 15, calendarDetails: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20,
   coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20
 };
 
@@ -29,7 +41,7 @@ const labels = {
   running: "运行中", retrying: "等待重试", verifying: "完整性审计中", failed: "失败", pending: "尚未运行",
   paused: "已暂停", attention: "需要处理", success: "已结束", superseded: "已由新方案替代",
   event_driven: "按事件更新", not_due: "等待发布时间", waiting: "等待任务生成",
-  queued: "已排队", overdue: "已逾期"
+  queued: "已排队", overdue: "已逾期", in_progress: "交付窗口内"
 };
 const coverageLabels = {
   trading_daily: "交易日", trading_weekly: "完整交易周", trading_monthly: "完整月份",
@@ -62,9 +74,133 @@ const issueLabels = {
   freshness_not_configured: "未配置时效口径"
 };
 
-function notice(message = "") {
+function notice(message = "", kind = "action") {
+  state.noticeKind = message ? kind : null;
   $("connectionNotice").textContent = message;
   $("connectionNotice").classList.toggle("hidden", !message);
+}
+
+const endpointLabels = {
+  delivery: "今日交付",
+  calendar: "数据日历",
+  preflight: "运行预检",
+  health: "数据健康",
+  fanout: "扇出活动"
+};
+
+function setEndpointError(source, error) {
+  state.endpointErrors[source] = error.message || String(error);
+}
+
+function clearEndpointError(source) {
+  delete state.endpointErrors[source];
+}
+
+function bannerFacts() {
+  const healthSummary = state.dataHealth?.summary || {};
+  const operational = state.operationalSummary || {};
+  const operationalCounts = operational.summary || {};
+  const collectionSummary = state.summary || {};
+  const deliverySummary = state.delivery?.summary || {};
+  const unhealthyServices = operational.unhealthy_services?.length
+    ? operational.unhealthy_services.map((component) => ({ component, status: "unhealthy" }))
+    : state.services.filter((item) => item.status !== "healthy");
+  return {
+    unhealthyServices,
+    unresolved: Number(operationalCounts.unresolved_failures ?? healthSummary.unresolved_failures ?? collectionSummary.unresolved_failures ?? 0),
+    critical: Math.max(Number(healthSummary.critical_issue_count || 0), operational.status === "critical" ? 1 : 0),
+    confirmedData: Number(healthSummary.confirmed_data_issue_count || 0),
+    deliveryAttention: Number(deliverySummary.attention || 0),
+    overdue: Number(deliverySummary.overdue || 0),
+    active: Number(operationalCounts.running_interfaces ?? collectionSummary.running ?? 0) +
+      Number(operationalCounts.pending_interfaces ?? collectionSummary.pending ?? 0) +
+      Number(deliverySummary.queued || 0) + Number(deliverySummary.running || 0),
+    unknown: Number(healthSummary.unknown_issue_count || 0),
+    initializationStatus: operational.history?.status || (state.dataHealth?.initialization?.active || {}).status
+  };
+}
+
+function renderOperationsBanner() {
+  const banner = $("operationsBanner");
+  const label = $("operationsBannerLabel");
+  const title = $("operationsBannerTitle");
+  const detail = $("operationsBannerDetail");
+  const freshness = $("operationsBannerFreshness");
+  const errors = Object.entries(state.endpointErrors);
+  const facts = bannerFacts();
+  let status = "loading";
+  let labelText = "正在检查";
+  let titleText = "正在建立系统运行快照";
+  let detailText = "正在核对服务、今日交付、历史失败与数据缺口。";
+
+  if (errors.length || navigator.onLine === false) {
+    status = "offline";
+    labelText = "服务失联";
+    titleText = "控制台无法取得完整运行状态，页面数据可能已经过期";
+    detailText = errors.length
+      ? `读取失败：${errors.map(([source, message]) => `${endpointLabels[source] || source}（${message}）`).join("；")}`
+      : "浏览器当前处于离线状态，无法连接本地数据服务。";
+  } else if (state.hasLoadedOperational || state.hasLoadedSnapshot) {
+    const trueIssueCount = Math.max(
+      facts.critical,
+      facts.confirmedData,
+      facts.unresolved,
+      facts.deliveryAttention
+    );
+    if (facts.unhealthyServices.length || trueIssueCount || facts.overdue || ["attention", "paused"].includes(facts.initializationStatus)) {
+      status = "critical";
+      labelText = "需要处理";
+      titleText = `发现 ${trueIssueCount || facts.unhealthyServices.length || 1} 个已确认运行问题`;
+      const parts = [];
+      if (facts.unhealthyServices.length) parts.push(`异常服务：${facts.unhealthyServices.map((item) => item.component).join("、")}`);
+      if (facts.unresolved) parts.push(`${facts.unresolved} 个未恢复采集失败`);
+      if (facts.deliveryAttention) parts.push(`今日 ${facts.deliveryAttention} 项真实异常`);
+      if (facts.overdue) parts.push(`${facts.overdue} 项交付逾期`);
+      if (["attention", "paused"].includes(facts.initializationStatus)) parts.push("历史初始化阻塞或暂停");
+      detailText = parts.join(" · ") || "异常中心已有可定位证据。";
+    } else if (facts.active || facts.unknown || facts.initializationStatus === "running") {
+      status = "warning";
+      labelText = "处理中";
+      titleText = "系统在线，仍有采集或完整性核验正在进行";
+      detailText = `${facts.active} 项排队/运行 · ${facts.unknown} 项完整性待确认${facts.initializationStatus === "running" ? " · 历史初始化进行中" : ""}`;
+    } else {
+      status = "healthy";
+      labelText = "运行正常";
+      titleText = "未发现服务故障、未恢复失败或逾期交付";
+      const due = state.delivery?.summary;
+      detailText = due
+        ? `今日截至当前严格交付 ${due.completed_due || 0}/${due.due_now || 0} · 已确认数据问题 0`
+        : "服务、任务和数据完整性检查均已通过。";
+    }
+  }
+
+  banner.className = `operations-banner status-${status}`;
+  label.textContent = labelText;
+  title.textContent = titleText;
+  detail.textContent = detailText;
+  document.body.classList.toggle("is-offline", status === "offline");
+  freshness.textContent = state.lastSuccessfulRefresh
+    ? `上次完整快照 ${formatTime(state.lastSuccessfulRefresh)}`
+    : "尚无成功快照";
+  $("operationsIssuesButton").textContent = status === "critical" ? "立即处理" : "查看异常";
+}
+
+async function loadOperationalSummary() {
+  try {
+    const response = await fetch("/api/v1/data-health/summary");
+    if (!response.ok) throw new Error(`运行预检接口返回 ${response.status}`);
+    state.operationalSummary = await response.json();
+    state.hasLoadedOperational = true;
+    clearEndpointError("preflight");
+    $("lastUpdated").textContent = `运行预检更新于 ${formatTime(state.operationalSummary.generated_at)} · 正在加载完整数据明细`;
+    renderOperationsBanner();
+    return true;
+  } catch (error) {
+    state.hasLoadedOperational = false;
+    setEndpointError("preflight", error);
+    renderOperationsBanner();
+    return false;
+  }
 }
 
 function formatTime(value) {
@@ -79,6 +215,169 @@ function formatClock(value) {
   return new Intl.DateTimeFormat("zh-CN", {
     hour: "2-digit", minute: "2-digit", hour12: false
   }).format(new Date(value));
+}
+
+function shanghaiToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function currentCalendarMonth() {
+  return shanghaiToday().slice(0, 7);
+}
+
+function calendarMonthRange(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    startDate: `${year}-${String(month).padStart(2, "0")}-01`,
+    endDate: `${year}-${String(month).padStart(2, "0")}-${String(days).padStart(2, "0")}`
+  };
+}
+
+function shiftCalendarMonth(delta) {
+  const [year, month] = state.calendarMonth.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1));
+  state.calendarMonth = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+  state.selectedCalendarDate = null;
+  state.calendarDetail = null;
+  state.pages.calendarDetails = 1;
+  loadCalendar().then(renderOperationsBanner);
+}
+
+function renderCalendar() {
+  const payload = state.calendar;
+  if (!payload) return;
+  const summary = payload.summary || {};
+  $("calendarMonthLabel").textContent = `${state.calendarMonth.replace("-", " 年 ")} 月`;
+  $("calendarSummary").textContent =
+    `按数据日期：${summary.complete_days || 0} 天严格完成 · ${summary.in_progress_days || 0} 天等待交付/核验 · ` +
+    `${summary.issue_days || 0} 天存在真实异常 · ${summary.untracked_days || 0} 天未留存交付要求`;
+  $("calendarTabCount").textContent = summary.issue_days
+    ? `${summary.issue_days} 天异常`
+    : `${summary.complete_days || 0} 天完成`;
+  const firstDay = new Date(`${payload.start_date}T00:00:00+08:00`).getDay();
+  const leading = (firstDay + 6) % 7;
+  const today = shanghaiToday();
+  const statusCopy = {
+    complete: "严格完成", in_progress: "交付中", issue: "真实异常",
+    untracked: "未留存", future: "未来"
+  };
+  const cells = Array.from({ length: leading }, () => '<span class="calendar-spacer" aria-hidden="true"></span>');
+  for (const day of payload.days || []) {
+    const completed = Number(day.completed_total || 0);
+    const total = Number(day.total || 0);
+    const evidence = day.status === "untracked"
+      ? (total ? `仅有 ${total} 项零散证据，缺少固定清单` : "没有当时留存的固定任务清单")
+      : day.status === "issue"
+      ? `${day.attention || 0} 项异常 · ${day.overdue || 0} 项逾期`
+      : total ? `${completed}/${total} 项严格交付` : "没有当时留存的固定任务清单";
+    cells.push(`<button type="button" class="calendar-day status-${day.status}${day.data_date === state.selectedCalendarDate ? " is-selected" : ""}${day.data_date === today ? " is-today" : ""}" data-calendar-date="${day.data_date}" aria-label="数据日期 ${day.data_date} ${statusCopy[day.status] || day.status}">
+      <span class="calendar-date">${Number(day.data_date.slice(-2))}</span>
+      <strong>${statusCopy[day.status] || day.status}</strong>
+      <small>${escapeHtml(evidence)}</small>
+    </button>`);
+  }
+  $("calendarGrid").innerHTML = cells.join("");
+}
+
+function filteredCalendarDetailRows() {
+  const rows = state.calendarDetail?.items || [];
+  const filter = $("calendarDetailFilter").value;
+  if (filter === "attention") return rows.filter((item) => item.attention);
+  if (filter === "active") return rows.filter((item) =>
+    ["queued", "running", "retrying", "verifying", "unverified", "waiting"].includes(item.delivery_status));
+  if (filter === "complete") return rows.filter((item) =>
+    ["complete", "empty"].includes(item.delivery_status));
+  return rows;
+}
+
+function renderCalendarDetail() {
+  const payload = state.calendarDetail;
+  if (!payload) return;
+  const summary = payload.summary || {};
+  const rows = filteredCalendarDetailRows();
+  const page = pageRows(rows, "calendarDetails");
+  $("calendarDetailTitle").textContent = `${payload.data_date} 数据交付明细`;
+  $("calendarDetailSummary").textContent =
+    `严格完成 ${summary.completed_total || 0}/${summary.total || 0} · ` +
+    `运行/排队 ${Number(summary.running || 0) + Number(summary.queued || 0)} · ` +
+    `等待交付/验证 ${Number(summary.waiting || 0) + Number(summary.unverified || 0)} · 真实异常 ${summary.attention || 0}`;
+  $("calendarDetailResultCount").textContent = rows.length
+    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 项数据要求`
+    : "0 项数据要求";
+  if (!rows.length) {
+    $("calendarDetailRows").innerHTML = '<tr><td colspan="8" class="empty-state">该数据日期没有留存交付要求</td></tr>';
+    return;
+  }
+  $("calendarDetailRows").innerHTML = page.rows.map((item) => {
+    const status = item.delivery_status || "pending";
+    const evidence = item.error_message || (
+      status === "complete" ? (item.on_time ? "按时通过完整性验证" : "恢复后通过完整性验证") :
+      status === "empty" ? "请求已穷尽并验证为空" :
+      status === "not_due" ? "尚未到计划发布时间" :
+      status === "waiting" ? "最终补采截止时间尚未到" :
+      status === "overdue" ? "所有计划执行日均已过期，仍无严格验证结果" :
+      "任务正在执行或等待完整性证据"
+    );
+    const canRetry = item.source_type !== "fanout" && status === "failed" && item.work_id;
+    const runDates = (item.business_dates || []).join("、") || "—";
+    const verification = item.completion_evidence?.verification_type ||
+      (item.completion_evidence?.verified ? "严格证据已确认" : "尚无严格完成证据");
+    return `<tr class="${item.attention ? "delivery-row-attention" : ""}">
+      <td><span class="api-name">${escapeHtml(item.api_name)}</span><span class="api-title">${escapeHtml(item.title)}</span></td>
+      <td class="number">${escapeHtml(item.data_date || "—")}</td>
+      <td>${escapeHtml(runDates)}<span class="completion-reason">${item.planned_attempt_total || 1} 次计划尝试</span></td>
+      <td class="number">${formatTime(item.final_due_at)}</td>
+      <td><span class="pill status-${status}">${labels[status] || status}</span></td>
+      <td class="number">${item.rows_fetched == null ? "—" : Number(item.rows_fetched).toLocaleString()} / ${item.rows_inserted == null ? "—" : Number(item.rows_inserted).toLocaleString()}</td>
+      <td>${escapeHtml(evidence)}<span class="completion-reason">${escapeHtml(verification)}</span></td>
+      <td><button class="row-action" data-calendar-retry="${item.work_id || ""}" ${canRetry ? "" : "disabled"}>重试</button></td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadCalendarDetail(dataDate) {
+  if (!dataDate) return false;
+  try {
+    const response = await fetch(`/api/v1/delivery/data-calendar/${dataDate}`);
+    if (!response.ok) throw new Error(`日期明细接口返回 ${response.status}`);
+    state.calendarDetail = await response.json();
+    state.selectedCalendarDate = dataDate;
+    state.pages.calendarDetails = 1;
+    renderCalendar();
+    renderCalendarDetail();
+    return true;
+  } catch (error) {
+    notice(`无法读取数据日期 ${dataDate} 的交付明细：${error.message}`, "load-error");
+    return false;
+  }
+}
+
+async function loadCalendar() {
+  state.calendarMonth ||= currentCalendarMonth();
+  const { startDate, endDate } = calendarMonthRange(state.calendarMonth);
+  try {
+    const response = await fetch(`/api/v1/delivery/data-calendar?start_date=${startDate}&end_date=${endDate}`);
+    if (!response.ok) throw new Error(`数据日历接口返回 ${response.status}`);
+    state.calendar = await response.json();
+    const available = state.calendar.days || [];
+    const preferred = available.find((item) => item.data_date === shanghaiToday())
+      || available.find((item) => item.status === "issue") || available[0];
+    if (!available.some((item) => item.data_date === state.selectedCalendarDate)) {
+      state.selectedCalendarDate = preferred?.data_date || null;
+    }
+    renderCalendar();
+    if (state.selectedCalendarDate) await loadCalendarDetail(state.selectedCalendarDate);
+    clearEndpointError("calendar");
+    return true;
+  } catch (error) {
+    setEndpointError("calendar", error);
+    return false;
+  }
 }
 
 function filteredDeliveryRows() {
@@ -158,8 +457,11 @@ async function loadDelivery() {
     if (!response.ok) throw new Error(`今日交付接口返回 ${response.status}`);
     state.delivery = await response.json();
     renderDelivery();
+    clearEndpointError("delivery");
+    return true;
   } catch (error) {
-    notice(`暂时无法读取今日采集进度：${error.message}`);
+    setEndpointError("delivery", error);
+    return false;
   }
 }
 
@@ -238,7 +540,8 @@ function render() {
     const unresolved = item.unresolved_failure;
     const isBatch = latest.job_kind === "batch";
     const isCampaign = latest.source === "fanout_campaign";
-    const canRetry = latest.source === "queue" && latest.status === "failed" && !isBatch;
+    const retryJobId = unresolved?.job_id || latest.id;
+    const canRetry = Boolean(unresolved?.job_id) || (latest.source === "queue" && latest.status === "failed" && !isBatch);
     const batch = latest.batch;
     const campaign = latest.campaign;
     const batchProgress = unresolved
@@ -261,7 +564,7 @@ function render() {
         ? `<button class="row-action" data-fanout-detail="${latest.id}">查看活动</button>`
         : isBatch
         ? `<button class="row-action" data-batch="${latest.id}">查看批次</button>`
-        : `<button class="row-action" data-retry="${latest.id || ""}" ${canRetry ? "" : "disabled"}>重试</button>`}</td>
+        : `<button class="row-action" data-retry="${retryJobId || ""}" ${canRetry ? "" : "disabled"}>重试</button>`}</td>
     </tr>`;
   }).join("");
 }
@@ -337,12 +640,11 @@ function renderDataHealth() {
     <td><span class="issue-kind">${escapeHtml(issueLabels[item.kind] || item.kind)}</span><span class="pill status-${item.severity === "critical" ? "failed" : item.severity === "warning" ? "incomplete" : item.severity === "info" ? "pending" : "verifying"}">${item.confidence === "confirmed" ? "已确认" : item.confidence === "planned" ? "已纳入计划" : item.confidence === "configuration" ? "待配置" : "完整性未知"}</span></td>
     <td>${escapeHtml(item.scope || "—")}</td>
     <td>${escapeHtml(item.detail || "—")}</td>
-    <td><span>${escapeHtml(item.action || "—")}</span>${item.partition_details ? `<button class="row-action health-detail-action" data-health-coverage-detail="${escapeHtml(item.dataset || item.resource)}">查看日期</button>` : ""}</td>
+    <td><span>${escapeHtml(item.action || "—")}</span><div class="health-actions">${item.job_id ? `<button class="row-action" data-health-retry="${Number(item.job_id)}">重试任务 #${Number(item.job_id)}</button>` : ""}${item.partition_details ? `<button class="row-action" data-health-coverage-detail="${escapeHtml(item.dataset || item.resource)}">查看日期</button>` : ""}</div></td>
   </tr>`).join("");
 }
 
 async function loadDataHealth() {
-  $("refreshButton").disabled = true;
   try {
     const response = await fetch("/api/v1/data-health");
     if (!response.ok) throw new Error(`数据健康接口返回 ${response.status}`);
@@ -360,15 +662,12 @@ async function loadDataHealth() {
     renderCoverage();
     renderInitialization(payload.initialization);
     renderDataHealth();
-    notice("");
-    const services = state.services.map((item) =>
-      `${item.component}:${item.status === "healthy" ? "正常" : "异常"}`
-    ).join(" · ");
-    $("lastUpdated").textContent = `更新于 ${formatTime(payload.generated_at)}${services ? ` · ${services}` : ""}`;
+    state.snapshotGeneratedAt = payload.generated_at;
+    clearEndpointError("health");
+    return true;
   } catch (error) {
-    notice(`暂时无法读取数据健康状态：${error.message}`);
-  } finally {
-    $("refreshButton").disabled = false;
+    setEndpointError("health", error);
+    return false;
   }
 }
 
@@ -395,7 +694,7 @@ async function loadOverview() {
     }).join(" · ");
     $("lastUpdated").textContent = `更新于 ${formatTime(payload.generated_at)}${workloads ? ` · ${workloads}` : ""}${services ? ` · ${services}` : ""}`;
   } catch (error) {
-    notice(`暂时无法读取采集状态：${error.message}`);
+    notice(`暂时无法读取采集状态：${error.message}`, "load-error");
   } finally {
     $("refreshButton").disabled = false;
   }
@@ -473,7 +772,7 @@ async function loadInitialization() {
     if (!response.ok) throw new Error(`初始化接口返回 ${response.status}`);
     renderInitialization(await response.json());
   } catch (error) {
-    notice(`暂时无法读取初始化状态：${error.message}`);
+    notice(`暂时无法读取初始化状态：${error.message}`, "load-error");
   }
 }
 
@@ -593,8 +892,11 @@ async function loadFanoutCampaigns() {
     if (!response.ok) throw new Error(`扇出活动接口返回 ${response.status}`);
     state.fanoutCampaigns = await response.json();
     renderFanoutCampaigns();
+    clearEndpointError("fanout");
+    return true;
   } catch (error) {
-    notice(`暂时无法读取全量扇出活动：${error.message}`);
+    setEndpointError("fanout", error);
+    return false;
   }
 }
 
@@ -838,7 +1140,7 @@ async function loadCoverage() {
     state.coverageSummary = payload.summary;
     renderCoverage();
   } catch (error) {
-    notice(`暂时无法读取覆盖审计：${error.message}`);
+    notice(`暂时无法读取覆盖审计：${error.message}`, "load-error");
   }
 }
 
@@ -1004,7 +1306,37 @@ async function loadCoveragePartitions() {
 }
 
 async function refreshAll() {
-  await Promise.all([loadDelivery(), loadDataHealth(), loadFanoutCampaigns()]);
+  if (state.isRefreshing) return;
+  state.isRefreshing = true;
+  $("refreshButton").disabled = true;
+  renderOperationsBanner();
+  try {
+    const results = await Promise.all([
+      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadDataHealth(), loadFanoutCampaigns()
+    ]);
+    state.hasLoadedSnapshot = results.every(Boolean);
+    if (state.hasLoadedSnapshot) {
+      if (state.noticeKind === "load-error") notice("");
+      state.lastSuccessfulRefresh = state.snapshotGeneratedAt || new Date().toISOString();
+      try {
+        window.localStorage.setItem("claw-quant:last-successful-dashboard-refresh", state.lastSuccessfulRefresh);
+      } catch (_error) {
+        // The health banner still works without persistence.
+      }
+      const services = state.services.map((item) =>
+        `${item.component}:${item.status === "healthy" ? "正常" : "异常"}`
+      ).join(" · ");
+      $("lastUpdated").textContent = `更新于 ${formatTime(state.lastSuccessfulRefresh)}${services ? ` · ${services}` : ""}`;
+    } else {
+      $("lastUpdated").textContent = state.lastSuccessfulRefresh
+        ? `连接异常 · 上次完整更新 ${formatTime(state.lastSuccessfulRefresh)}`
+        : "连接异常 · 尚无完整快照";
+    }
+  } finally {
+    state.isRefreshing = false;
+    $("refreshButton").disabled = false;
+    renderOperationsBanner();
+  }
 }
 
 $("refreshButton").addEventListener("click", refreshAll);
@@ -1032,6 +1364,20 @@ $("deliveryStatusFilter").addEventListener("change", () => {
   state.pages.delivery = 1;
   renderDelivery();
 });
+$("calendarDetailFilter").addEventListener("change", () => {
+  state.pages.calendarDetails = 1;
+  renderCalendarDetail();
+});
+$("calendarPrevious").addEventListener("click", () => shiftCalendarMonth(-1));
+$("calendarNext").addEventListener("click", () => shiftCalendarMonth(1));
+$("calendarGrid").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-calendar-date]");
+  if (button) loadCalendarDetail(button.dataset.calendarDate);
+});
+$("calendarDetailRows").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-calendar-retry]");
+  if (button && !button.disabled) retryJob(button.dataset.calendarRetry, button);
+});
 document.querySelector(".console-tabs").addEventListener("click", (event) => {
   const button = event.target.closest("[data-view]");
   if (button) activateView(button.dataset.view);
@@ -1048,9 +1394,17 @@ document.querySelector(".console-tabs").addEventListener("keydown", (event) => {
   next.focus();
 });
 $("dataHealthRows").addEventListener("click", (event) => {
+  const retryButton = event.target.closest("[data-health-retry]");
+  if (retryButton && !retryButton.disabled) retryJob(retryButton.dataset.healthRetry, retryButton);
   const button = event.target.closest("[data-health-coverage-detail]");
   if (button) showCoverageDetail(button.dataset.healthCoverageDetail);
 });
+$("operationsIssuesButton").addEventListener("click", () => {
+  activateView("overview");
+  document.querySelector("[data-view-panel=\"overview\"]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+window.addEventListener("online", refreshAll);
+window.addEventListener("offline", renderOperationsBanner);
 ["searchInput", "cadenceFilter", "statusFilter", "modeFilter"].forEach((id) => {
   $(id).addEventListener(id === "searchInput" ? "input" : "change", () => {
     state.pages.interfaces = 1;
@@ -1063,6 +1417,7 @@ document.addEventListener("click", (event) => {
   const key = button.dataset.pageKey;
   const renderers = {
     delivery: renderDelivery,
+    calendarDetails: renderCalendarDetail,
     health: renderDataHealth,
     interfaces: render,
     fanout: renderFanoutCampaigns,
@@ -1128,5 +1483,6 @@ $("initializationDialogClose").addEventListener("click", () => $("initialization
 $("fanoutDialogClose").addEventListener("click", () => $("fanoutDialog").close());
 
 activateView(state.activeView);
+renderOperationsBanner();
 refreshAll();
 state.timer = window.setInterval(refreshAll, 30000);

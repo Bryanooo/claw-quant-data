@@ -427,6 +427,9 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "coverageRangeStart" in page.text
     assert "coverageDetailStatus" in page.text
     assert "今日数据交付" in page.text
+    assert "数据日历" in page.text
+    assert 'id="operationsBanner"' in page.text
+    assert "正在核对服务、今日交付、历史失败与数据缺口" in page.text
     assert "异常与可信度中心" in page.text
     assert 'role="tablist"' in page.text
     assert 'data-view-panel="interfaces"' in page.text
@@ -436,6 +439,11 @@ def test_collection_dashboard_and_overview_endpoint():
     assert 'data-page-key="coverage"' in page.text
     assert "pageRows(rows, \"interfaces\")" in dashboard_script
     assert "pageRows(rows, \"health\")" in dashboard_script
+    assert "data-health-retry" in dashboard_script
+    assert "/api/v1/delivery/data-calendar" in dashboard_script
+    assert 'data-page-key="calendarDetails"' in page.text
+    assert "last-successful-dashboard-refresh" in dashboard_script
+    assert "state.endpointErrors" in dashboard_script
     assert "sessionStorage" not in dashboard_script
     assert "API Key" not in dashboard_script
 
@@ -468,6 +476,80 @@ def test_today_delivery_endpoint_uses_business_date():
     assert response.status_code == 200
     assert captured["business_date"] == date(2026, 9, 8)
     assert response.json()["summary"]["completed_due"] == 2
+
+
+def test_delivery_calendar_endpoint_uses_bounded_date_range():
+    client, _ = make_client()
+    captured = {}
+    fake = type(
+        "FakeDeliveryCalendar",
+        (),
+        {
+            "calendar": lambda self, start_date, end_date: captured.update(
+                {"start_date": start_date, "end_date": end_date}
+            ) or {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "summary": {"days": 30, "issue_days": 1},
+                "days": [],
+            }
+        },
+    )()
+    client.app.dependency_overrides[get_delivery_monitor_service] = lambda: fake
+
+    with client:
+        response = client.get(
+            "/api/v1/delivery/calendar?start_date=2026-09-01&end_date=2026-09-30"
+        )
+
+    assert response.status_code == 200
+    assert captured == {
+        "start_date": date(2026, 9, 1),
+        "end_date": date(2026, 9, 30),
+    }
+    assert response.json()["summary"]["issue_days"] == 1
+
+
+def test_delivery_data_calendar_endpoints_use_data_date():
+    client, _ = make_client()
+    captured = {}
+    fake = type(
+        "FakeDataCalendar",
+        (),
+        {
+            "data_calendar": lambda self, start_date, end_date: captured.update(
+                {"range": (start_date, end_date)}
+            ) or {
+                "basis": "data_date",
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "summary": {"days": 2},
+                "days": [],
+            },
+            "data_calendar_day": lambda self, data_date: captured.update(
+                {"day": data_date}
+            ) or {
+                "basis": "data_date",
+                "data_date": data_date.isoformat(),
+                "summary": {"status": "complete"},
+                "items": [],
+            },
+        },
+    )()
+    client.app.dependency_overrides[get_delivery_monitor_service] = lambda: fake
+
+    with client:
+        month = client.get(
+            "/api/v1/delivery/data-calendar?start_date=2026-09-08&end_date=2026-09-09"
+        )
+        day = client.get("/api/v1/delivery/data-calendar/2026-09-08")
+
+    assert month.status_code == 200
+    assert day.status_code == 200
+    assert captured["range"] == (date(2026, 9, 8), date(2026, 9, 9))
+    assert captured["day"] == date(2026, 9, 8)
+    assert month.json()["basis"] == "data_date"
+    assert day.json()["data_date"] == "2026-09-08"
 
 
 def test_data_health_endpoint_is_under_api_namespace():

@@ -556,6 +556,9 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `POST /api/v1/collection-fanout-campaigns/{id}/resume` | 重排失败子任务并继续活动 |
 | `GET /api/v1/collection-overview` | 全接口采集状态与完成证据 |
 | `GET /api/v1/delivery/today` | 查询当日持久化交付计划、截至当前/全日进度、逾期和真实异常；可传 `business_date` |
+| `GET /api/v1/delivery/calendar` | 兼容的任务执行日日历；主控制台不再用它判断某天数据是否齐全 |
+| `GET /api/v1/delivery/data-calendar` | 按 `start_date`/`end_date` 查询最多 63 天的数据日期交付状态；同接口同数据日的冗余任务合并判定 |
+| `GET /api/v1/delivery/data-calendar/{data_date}` | 查询指定数据日的固定接口要求、任务执行日、最终截止时间和严格校验证据 |
 | `GET /api/v1/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
 | `GET /api/v1/data-health/summary` | 面向 CLI/Agent 的轻量健康预检，不扫描全部明细 |
 | `POST /api/v1/collection-dispatch` | 生成最近周期补采任务 |

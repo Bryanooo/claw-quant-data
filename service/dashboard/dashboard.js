@@ -7,6 +7,7 @@ const state = {
   operationalSummary: null, hasLoadedOperational: false,
   coverageRangeDataset: null, coverageDetailDataset: null,
   activeView: "today",
+  sidebarCollapsed: false,
   endpointErrors: {}, isRefreshing: false, hasLoadedSnapshot: false,
   noticeKind: null,
   snapshotGeneratedAt: null, lastSuccessfulRefresh: null,
@@ -21,6 +22,7 @@ const state = {
 
 try {
   state.lastSuccessfulRefresh = window.localStorage.getItem("claw-quant:last-successful-dashboard-refresh");
+  state.sidebarCollapsed = window.localStorage.getItem("claw-quant:sidebar-collapsed") === "true";
 } catch (_error) {
   // Private browsing and hardened browsers may disable local storage.
 }
@@ -539,6 +541,22 @@ function activateView(view) {
     button.setAttribute("aria-selected", String(selected));
     button.tabIndex = selected ? 0 : -1;
   });
+}
+
+function setSidebarCollapsed(collapsed, persist = true) {
+  state.sidebarCollapsed = Boolean(collapsed);
+  document.body.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+  const toggle = $("sidebarToggle");
+  const label = state.sidebarCollapsed ? "展开侧栏" : "收起侧栏";
+  toggle.setAttribute("aria-expanded", String(!state.sidebarCollapsed));
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
+  if (!persist) return;
+  try {
+    window.localStorage.setItem("claw-quant:sidebar-collapsed", String(state.sidebarCollapsed));
+  } catch (_error) {
+    // The layout remains usable when local storage is unavailable.
+  }
 }
 
 function filteredRows() {
@@ -1459,16 +1477,17 @@ document.querySelector(".console-tabs").addEventListener("click", (event) => {
   if (button) activateView(button.dataset.view);
 });
 document.querySelector(".console-tabs").addEventListener("keydown", (event) => {
-  if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
   const tabs = [...document.querySelectorAll("[data-view]")];
   const current = tabs.indexOf(event.target.closest("[data-view]"));
   if (current < 0) return;
   event.preventDefault();
-  const direction = event.key === "ArrowRight" ? 1 : -1;
+  const direction = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1;
   const next = tabs[(current + direction + tabs.length) % tabs.length];
   activateView(next.dataset.view);
   next.focus();
 });
+$("sidebarToggle").addEventListener("click", () => setSidebarCollapsed(!state.sidebarCollapsed));
 $("dataHealthRows").addEventListener("click", (event) => {
   const retryButton = event.target.closest("[data-health-retry]");
   if (retryButton && !retryButton.disabled) retryJob(retryButton.dataset.healthRetry, retryButton);
@@ -1558,6 +1577,7 @@ $("batchDialogClose").addEventListener("click", () => $("batchDialog").close());
 $("initializationDialogClose").addEventListener("click", () => $("initializationDialog").close());
 $("fanoutDialogClose").addEventListener("click", () => $("fanoutDialog").close());
 
+setSidebarCollapsed(state.sidebarCollapsed, false);
 activateView(state.activeView);
 renderOperationsBanner();
 refreshAll();

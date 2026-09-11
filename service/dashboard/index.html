@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Claw Quant · 采集控制台</title>
-    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260911-sidebar-v3" />
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260911-theme-v1" />
   </head>
-  <body>
+  <body class="theme-dark">
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">CQ</span>
@@ -22,6 +22,7 @@
       </div>
       <div class="header-actions">
         <span id="lastUpdated" class="last-updated">正在加载系统状态…</span>
+        <button id="themeToggle" class="button button-secondary" type="button" aria-label="切换暗黑模式" title="切换暗黑模式" aria-pressed="false"><span id="themeIcon" class="action-icon theme-icon" aria-hidden="true">☾</span><span id="themeLabel" class="action-label">暗黑模式</span></button>
         <button id="dispatchButton" class="button button-secondary" aria-label="立即补采" title="立即补采"><span class="action-icon" aria-hidden="true">↻</span><span class="action-label">立即补采</span></button>
         <button id="refreshButton" class="button button-primary" aria-label="刷新状态" title="刷新状态"><span class="action-icon" aria-hidden="true">✓</span><span class="action-label">刷新状态</span></button>
       </div>
@@ -520,6 +521,6 @@
       </footer>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260911-sidebar-v3" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260911-theme-v1" defer></script>
   </body>
 </html>

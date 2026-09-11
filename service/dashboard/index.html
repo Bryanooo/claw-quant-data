@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Claw Quant · 采集控制台</title>
-    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260911-data-calendar-v3" />
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260911-sidebar-v2" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <p class="eyebrow">CLAW QUANT / DATA OPS</p>
         <h1>采集控制台</h1>
+        <p class="brand-description">Data reliability workspace</p>
       </div>
       <div class="header-actions">
         <span id="lastUpdated" class="last-updated">正在加载系统状态…</span>
@@ -38,6 +39,7 @@
       </section>
 
       <nav class="console-tabs" aria-label="控制台分区" role="tablist">
+        <p class="navigation-label">工作台</p>
         <button class="console-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="todayView" data-view="today">
           <span>今日运营</span><small id="todayTabCount">等待加载</small>
         </button>
@@ -512,6 +514,6 @@
       </footer>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260911-data-calendar-v3" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260911-sidebar-v2" defer></script>
   </body>
 </html>

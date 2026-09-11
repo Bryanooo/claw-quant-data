@@ -1,7 +1,7 @@
 const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
   initialization: null, fanoutCampaigns: [], freshness: [], delivery: null,
-  calendar: null, calendarDetail: null, calendarMonth: null,
+  calendar: null, calendarDetail: null, todayDataDetail: null, calendarMonth: null,
   selectedCalendarDate: null,
   dataHealth: {}, healthIssues: [], timer: null,
   operationalSummary: null, hasLoadedOperational: false,
@@ -30,7 +30,11 @@ const pageSizes = {
   coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20
 };
 
-const $ = (id) => document.getElementById(id);
+const $ = (id) => {
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`控制台页面缺少 #${id} 元素，请强制刷新静态资源`);
+  return node;
+};
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
 }[char]));
@@ -102,9 +106,11 @@ function bannerFacts() {
   const operationalCounts = operational.summary || {};
   const collectionSummary = state.summary || {};
   const deliverySummary = state.delivery?.summary || {};
-  const unhealthyServices = operational.unhealthy_services?.length
-    ? operational.unhealthy_services.map((component) => ({ component, status: "unhealthy" }))
-    : state.services.filter((item) => item.status !== "healthy");
+  const dataSummary = state.todayDataDetail?.summary || {};
+  const dataItems = state.todayDataDetail?.data_items || [];
+  const unhealthyServices = state.services.length
+    ? state.services.filter((item) => item.status !== "healthy")
+    : (operational.unhealthy_services || []).map((component) => ({ component, status: "unhealthy" }));
   return {
     unhealthyServices,
     unresolved: Number(operationalCounts.unresolved_failures ?? healthSummary.unresolved_failures ?? collectionSummary.unresolved_failures ?? 0),
@@ -116,6 +122,13 @@ function bannerFacts() {
       Number(operationalCounts.pending_interfaces ?? collectionSummary.pending ?? 0) +
       Number(deliverySummary.queued || 0) + Number(deliverySummary.running || 0),
     unknown: Number(healthSummary.unknown_issue_count || 0),
+    dataStatus: dataSummary.status,
+    dataAudited: Number(dataSummary.audited_present || 0),
+    dataMonitored: Number(dataSummary.monitored_datasets || 0),
+    dataIssues: Number(dataSummary.audited_issues || 0),
+    dataWaiting: dataItems.filter((item) =>
+      item.validation_status === "unverified" && !item.attention
+    ).length,
     initializationStatus: operational.history?.status || (state.dataHealth?.initialization?.active || {}).status
   };
 }
@@ -144,6 +157,7 @@ function renderOperationsBanner() {
     const trueIssueCount = Math.max(
       facts.critical,
       facts.confirmedData,
+      facts.dataIssues,
       facts.unresolved,
       facts.deliveryAttention
     );
@@ -152,9 +166,12 @@ function renderOperationsBanner() {
       labelText = "需要处理";
       titleText = `发现 ${trueIssueCount || facts.unhealthyServices.length || 1} 个已确认运行问题`;
       const parts = [];
-      if (facts.unhealthyServices.length) parts.push(`异常服务：${facts.unhealthyServices.map((item) => item.component).join("、")}`);
+      if (facts.unhealthyServices.length) parts.push(facts.unhealthyServices.map((item) =>
+        `${item.label || item.component}：${item.diagnostic || "心跳异常"}；${item.action || "请进入异常中心查看"}`
+      ).join(" · "));
       if (facts.unresolved) parts.push(`${facts.unresolved} 个未恢复采集失败`);
       if (facts.deliveryAttention) parts.push(`今日 ${facts.deliveryAttention} 项真实异常`);
+      if (facts.dataIssues) parts.push(`今日 ${facts.dataIssues} 个数据集确认缺失或不完整`);
       if (facts.overdue) parts.push(`${facts.overdue} 项交付逾期`);
       if (["attention", "paused"].includes(facts.initializationStatus)) parts.push("历史初始化阻塞或暂停");
       detailText = parts.join(" · ") || "异常中心已有可定位证据。";
@@ -163,13 +180,20 @@ function renderOperationsBanner() {
       labelText = "处理中";
       titleText = "系统在线，仍有采集或完整性核验正在进行";
       detailText = `${facts.active} 项排队/运行 · ${facts.unknown} 项完整性待确认${facts.initializationStatus === "running" ? " · 历史初始化进行中" : ""}`;
+    } else if (facts.dataWaiting && facts.dataMonitored) {
+      status = "healthy";
+      labelText = "正常推进";
+      titleText = `今日数据已通过 ${facts.dataAudited}/${facts.dataMonitored} 项严格审计`;
+      const due = state.delivery?.summary;
+      detailText = `${facts.dataWaiting} 项等待上游约定发布时间，当前不判为缺失` +
+        (due ? ` · 今日任务交付 ${due.completed_due || 0}/${due.due_now || 0}` : "");
     } else {
       status = "healthy";
       labelText = "运行正常";
       titleText = "未发现服务故障、未恢复失败或逾期交付";
       const due = state.delivery?.summary;
       detailText = due
-        ? `今日截至当前严格交付 ${due.completed_due || 0}/${due.due_now || 0} · 已确认数据问题 0`
+        ? `今日任务交付 ${due.completed_due || 0}/${due.due_now || 0} · 已确认数据问题 0`
         : "服务、任务和数据完整性检查均已通过。";
     }
   }
@@ -252,10 +276,12 @@ function renderCalendar() {
   const payload = state.calendar;
   if (!payload) return;
   const summary = payload.summary || {};
-  $("calendarMonthLabel").textContent = `${state.calendarMonth.replace("-", " 年 ")} 月`;
+  $("calendarMonthPicker").value = state.calendarMonth;
+  if (payload.observed_min_date) $("calendarMonthPicker").min = payload.observed_min_date.slice(0, 7);
+  if (payload.observed_max_date) $("calendarMonthPicker").max = payload.observed_max_date.slice(0, 7);
   $("calendarSummary").textContent =
-    `按数据日期：${summary.complete_days || 0} 天严格完成 · ${summary.in_progress_days || 0} 天等待交付/核验 · ` +
-    `${summary.issue_days || 0} 天存在真实异常 · ${summary.untracked_days || 0} 天未留存交付要求`;
+    `按数据事实：${summary.complete_days || 0} 天通过当前规则严格审计 · ${summary.observed_days || 0} 天已有数据待完整审计 · ` +
+    `${summary.in_progress_days || 0} 天采集/核验中 · ${summary.issue_days || 0} 天确认异常；历史范围 ${payload.observed_min_date || "—"} 至 ${payload.observed_max_date || "—"}`;
   $("calendarTabCount").textContent = summary.issue_days
     ? `${summary.issue_days} 天异常`
     : `${summary.complete_days || 0} 天完成`;
@@ -263,18 +289,20 @@ function renderCalendar() {
   const leading = (firstDay + 6) % 7;
   const today = shanghaiToday();
   const statusCopy = {
-    complete: "严格完成", in_progress: "交付中", issue: "真实异常",
-    untracked: "未留存", future: "未来"
+    complete: "严格完成", observed: "已有数据", in_progress: "核验中", issue: "确认异常",
+    untracked: "无数据事实", future: "未来"
   };
   const cells = Array.from({ length: leading }, () => '<span class="calendar-spacer" aria-hidden="true"></span>');
   for (const day of payload.days || []) {
-    const completed = Number(day.completed_total || 0);
-    const total = Number(day.total || 0);
+    const completed = Number(day.audited_present ?? day.completed_total ?? 0);
+    const total = Number(day.monitored_datasets ?? day.total ?? 0);
     const evidence = day.status === "untracked"
-      ? (total ? `仅有 ${total} 项零散证据，缺少固定清单` : "没有当时留存的固定任务清单")
+      ? "没有物理分区或当前审计证据"
       : day.status === "issue"
-      ? `${day.attention || 0} 项异常 · ${day.overdue || 0} 项逾期`
-      : total ? `${completed}/${total} 项严格交付` : "没有当时留存的固定任务清单";
+      ? `${day.audited_issues || day.attention || 0} 个数据集确认异常`
+      : day.status === "observed"
+      ? `${day.observed_datasets || 0} 个数据集 · ${Number(day.observed_rows || 0).toLocaleString()} 行`
+      : total ? `${completed}/${total} 个数据集审计通过` : "没有物理数据事实";
     cells.push(`<button type="button" class="calendar-day status-${day.status}${day.data_date === state.selectedCalendarDate ? " is-selected" : ""}${day.data_date === today ? " is-today" : ""}" data-calendar-date="${day.data_date}" aria-label="数据日期 ${day.data_date} ${statusCopy[day.status] || day.status}">
       <span class="calendar-date">${Number(day.data_date.slice(-2))}</span>
       <strong>${statusCopy[day.status] || day.status}</strong>
@@ -285,13 +313,12 @@ function renderCalendar() {
 }
 
 function filteredCalendarDetailRows() {
-  const rows = state.calendarDetail?.items || [];
+  const rows = state.calendarDetail?.data_items || [];
   const filter = $("calendarDetailFilter").value;
   if (filter === "attention") return rows.filter((item) => item.attention);
-  if (filter === "active") return rows.filter((item) =>
-    ["queued", "running", "retrying", "verifying", "unverified", "waiting"].includes(item.delivery_status));
-  if (filter === "complete") return rows.filter((item) =>
-    ["complete", "empty"].includes(item.delivery_status));
+  if (filter === "unverified") return rows.filter((item) =>
+    ["observed", "unverified"].includes(item.validation_status));
+  if (filter === "complete") return rows.filter((item) => item.validation_status === "present");
   return rows;
 }
 
@@ -301,41 +328,42 @@ function renderCalendarDetail() {
   const summary = payload.summary || {};
   const rows = filteredCalendarDetailRows();
   const page = pageRows(rows, "calendarDetails");
-  $("calendarDetailTitle").textContent = `${payload.data_date} 数据交付明细`;
+  $("calendarDetailTitle").textContent = `${payload.data_date} 数据事实明细`;
   $("calendarDetailSummary").textContent =
-    `严格完成 ${summary.completed_total || 0}/${summary.total || 0} · ` +
-    `运行/排队 ${Number(summary.running || 0) + Number(summary.queued || 0)} · ` +
-    `等待交付/验证 ${Number(summary.waiting || 0) + Number(summary.unverified || 0)} · 真实异常 ${summary.attention || 0}`;
+    `物理存在 ${summary.observed_datasets || 0}/${summary.monitored_datasets || 0} · ` +
+    `当前规则审计通过 ${summary.audited_present || 0}/${summary.monitored_datasets || 0} · ` +
+    `确认异常 ${summary.audited_issues || 0} · 任务旁证 ${summary.task_completed || 0}/${summary.task_total || 0}`;
   $("calendarDetailResultCount").textContent = rows.length
-    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 项数据要求`
-    : "0 项数据要求";
+    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 个数据集`
+    : "0 个数据集";
   if (!rows.length) {
-    $("calendarDetailRows").innerHTML = '<tr><td colspan="8" class="empty-state">该数据日期没有留存交付要求</td></tr>';
+    $("calendarDetailRows").innerHTML = '<tr><td colspan="7" class="empty-state">该日期没有物理数据或适用的严格数据要求</td></tr>';
     return;
   }
   $("calendarDetailRows").innerHTML = page.rows.map((item) => {
-    const status = item.delivery_status || "pending";
-    const evidence = item.error_message || (
-      status === "complete" ? (item.on_time ? "按时通过完整性验证" : "恢复后通过完整性验证") :
-      status === "empty" ? "请求已穷尽并验证为空" :
-      status === "not_due" ? "尚未到计划发布时间" :
-      status === "waiting" ? "最终补采截止时间尚未到" :
-      status === "overdue" ? "所有计划执行日均已过期，仍无严格验证结果" :
-      "任务正在执行或等待完整性证据"
-    );
-    const canRetry = item.source_type !== "fanout" && status === "failed" && item.work_id;
-    const runDates = (item.business_dates || []).join("、") || "—";
-    const verification = item.completion_evidence?.verification_type ||
-      (item.completion_evidence?.verified ? "严格证据已确认" : "尚无严格完成证据");
+    const status = item.validation_status || "unverified";
+    const validationLabel = item.availability_state === "waiting_publication"
+      ? "等待上游发布"
+      : item.availability_state === "waiting_recheck"
+      ? "等待自动复查"
+      : coverageLabels[status] || (status === "observed" ? "已有数据 / 待审计" : status);
+    const task = item.task || {};
+    const taskStatus = task.delivery_status || "pending";
+    const entityEvidence = item.entity_count == null
+      ? "该规则只校验日期分区"
+      : `${Number(item.entity_count).toLocaleString()} / ${item.expected_entity_count == null ? "—" : Number(item.expected_entity_count).toLocaleString()} 个实体`;
+    const ratio = item.entity_coverage_ratio == null ? "" : ` · ${(Number(item.entity_coverage_ratio) * 100).toFixed(1)}%`;
+    const taskEvidence = task.api_name
+      ? `${labels[taskStatus] || taskStatus} · 执行日 ${(task.business_dates || []).join("、") || "—"}`
+      : "无同期任务记录（不影响物理数据事实）";
     return `<tr class="${item.attention ? "delivery-row-attention" : ""}">
-      <td><span class="api-name">${escapeHtml(item.api_name)}</span><span class="api-title">${escapeHtml(item.title)}</span></td>
-      <td class="number">${escapeHtml(item.data_date || "—")}</td>
-      <td>${escapeHtml(runDates)}<span class="completion-reason">${item.planned_attempt_total || 1} 次计划尝试</span></td>
-      <td class="number">${formatTime(item.final_due_at)}</td>
-      <td><span class="pill status-${status}">${labels[status] || status}</span></td>
-      <td class="number">${item.rows_fetched == null ? "—" : Number(item.rows_fetched).toLocaleString()} / ${item.rows_inserted == null ? "—" : Number(item.rows_inserted).toLocaleString()}</td>
-      <td>${escapeHtml(evidence)}<span class="completion-reason">${escapeHtml(verification)}</span></td>
-      <td><button class="row-action" data-calendar-retry="${item.work_id || ""}" ${canRetry ? "" : "disabled"}>重试</button></td>
+      <td><span class="api-name">${escapeHtml(item.dataset_name)}</span><span class="api-title">上游 ${escapeHtml(item.api_name)}</span></td>
+      <td class="number">${Number(item.row_count || 0).toLocaleString()} 行<span class="completion-reason">数据日期 ${escapeHtml(item.data_date)}</span></td>
+      <td><span class="pill coverage-${status}">${validationLabel}</span><span class="completion-reason">${item.audit_checked_at ? `审计 ${formatTime(item.audit_checked_at)}` : "无当前规则版本审计"}</span></td>
+      <td>${escapeHtml(entityEvidence)}${escapeHtml(ratio)}</td>
+      <td><span class="pill status-${taskStatus}">${labels[taskStatus] || taskStatus}</span><span class="completion-reason">${escapeHtml(taskEvidence)}</span></td>
+      <td>${escapeHtml(item.description || "—")}</td>
+      <td>${escapeHtml(item.action || "—")}</td>
     </tr>`;
   }).join("");
 }
@@ -453,10 +481,17 @@ function renderDelivery() {
 
 async function loadDelivery() {
   try {
-    const response = await fetch("/api/v1/delivery/today");
+    const today = shanghaiToday();
+    const [response, dataResponse] = await Promise.all([
+      fetch("/api/v1/delivery/today"),
+      fetch(`/api/v1/delivery/data-calendar/${today}`)
+    ]);
     if (!response.ok) throw new Error(`今日交付接口返回 ${response.status}`);
+    if (!dataResponse.ok) throw new Error(`今日数据事实接口返回 ${dataResponse.status}`);
     state.delivery = await response.json();
+    state.todayDataDetail = await dataResponse.json();
     renderDelivery();
+    renderAutomationExplanation();
     clearEndpointError("delivery");
     return true;
   } catch (error) {
@@ -580,6 +615,18 @@ function renderSummary(summary) {
   $("coverageText").textContent = summary.collectable
     ? `${summary.automated} / ${summary.collectable} 个有权限接口`
     : "等待加载";
+  renderAutomationExplanation();
+}
+
+function renderAutomationExplanation() {
+  const automated = Number(state.summary?.automated || 0);
+  const dailyRequirements = Number(state.todayDataDetail?.summary?.task_total || 0);
+  const taskPlans = Number(state.delivery?.summary?.total || 0);
+  if (!automated || !state.todayDataDetail || !state.delivery) return;
+  const notDaily = Math.max(automated - dailyRequirements, 0);
+  $("automationExplanation").textContent =
+    `${automated} 个接口具备自动编排能力；今日 ${dailyRequirements} 个接口产生日频数据要求，` +
+    `${notDaily} 个属于周/月/季周期或共享同一专项任务，不应每天重复采集。今日共 ${taskPlans} 次任务计划，包含分时采集与 T+1 复核。`;
 }
 
 function filteredHealthIssues() {
@@ -625,6 +672,7 @@ function renderDataHealth() {
   } else {
     historyNode.innerHTML = `<strong>历史初始化</strong><span>${escapeHtml(history.message || "尚无初始化记录")}</span>`;
   }
+  renderServiceDiagnostics();
 
   const end = Math.min(page.start + page.rows.length, rows.length);
   $("dataHealthResultCount").textContent = rows.length
@@ -642,6 +690,21 @@ function renderDataHealth() {
     <td>${escapeHtml(item.detail || "—")}</td>
     <td><span>${escapeHtml(item.action || "—")}</span><div class="health-actions">${item.job_id ? `<button class="row-action" data-health-retry="${Number(item.job_id)}">重试任务 #${Number(item.job_id)}</button>` : ""}${item.partition_details ? `<button class="row-action" data-health-coverage-detail="${escapeHtml(item.dataset || item.resource)}">查看日期</button>` : ""}</div></td>
   </tr>`).join("");
+}
+
+function renderServiceDiagnostics() {
+  const node = $("serviceDiagnostics");
+  const unhealthy = state.services.filter((item) => item.status !== "healthy");
+  if (!unhealthy.length) {
+    node.className = "service-diagnostics is-healthy";
+    node.innerHTML = `<strong>基础服务全部在线</strong><span>调度、Worker、审计与备份心跳均在阈值内。</span>`;
+    return;
+  }
+  node.className = "service-diagnostics has-issues";
+  node.innerHTML = unhealthy.map((item) => `<article>
+    <div><strong>${escapeHtml(item.label || item.component)}</strong><span>${escapeHtml(item.diagnostic || "服务心跳异常")}</span></div>
+    <p>${escapeHtml(item.action || "检查对应容器日志和进程状态")}</p>
+  </article>`).join("");
 }
 
 async function loadDataHealth() {
@@ -1370,6 +1433,19 @@ $("calendarDetailFilter").addEventListener("change", () => {
 });
 $("calendarPrevious").addEventListener("click", () => shiftCalendarMonth(-1));
 $("calendarNext").addEventListener("click", () => shiftCalendarMonth(1));
+$("calendarToday").addEventListener("click", () => {
+  state.calendarMonth = currentCalendarMonth();
+  state.selectedCalendarDate = null;
+  loadCalendar().then(renderOperationsBanner);
+});
+$("calendarMonthPicker").addEventListener("change", (event) => {
+  if (!event.target.value) return;
+  state.calendarMonth = event.target.value;
+  state.selectedCalendarDate = null;
+  state.calendarDetail = null;
+  state.pages.calendarDetails = 1;
+  loadCalendar().then(renderOperationsBanner);
+});
 $("calendarGrid").addEventListener("click", (event) => {
   const button = event.target.closest("[data-calendar-date]");
   if (button) loadCalendarDetail(button.dataset.calendarDate);

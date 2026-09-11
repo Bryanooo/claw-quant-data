@@ -9,6 +9,30 @@ last_success="${backup_dir}/.last-success"
 
 mkdir -p "${backup_dir}"
 
+write_heartbeat() {
+    heartbeat_success=0
+    if [ -s "${last_success}" ]; then
+        heartbeat_success="$(cat "${last_success}")"
+    fi
+    backup_instance="$(hostname | tr -cd 'A-Za-z0-9_.-')"
+    psql -v ON_ERROR_STOP=1 \
+        -c "INSERT INTO sys_service_heartbeat(
+                component,instance_id,process_id,last_seen_at,details
+            ) VALUES (
+                'backup', '${backup_instance}', $$, NOW(),
+                jsonb_build_object(
+                    'backup_dir','/backups',
+                    'last_success_epoch',${heartbeat_success},
+                    'interval_seconds',${interval_seconds},
+                    'retention_days',${retention_days},
+                    'operation',${1:-'idle'}
+                )
+            ) ON CONFLICT(component,instance_id) DO UPDATE SET
+                process_id=EXCLUDED.process_id,
+                last_seen_at=EXCLUDED.last_seen_at,
+                details=EXCLUDED.details" >/dev/null || true
+}
+
 # Preserve the install/upgrade backup as the first valid daily snapshot rather
 # than creating a second large dump immediately when the sidecar is introduced.
 if [ ! -s "${last_success}" ] && find "${backup_dir}" -maxdepth 1 \
@@ -27,8 +51,14 @@ while true; do
         target="${backup_dir}/claw-quant-${stamp}.dump"
         partial="${target}.partial"
         rm -f "${partial}"
-        if pg_dump --format=custom --no-owner --no-acl \
-            --file="${partial}" "${PGDATABASE}" && [ -s "${partial}" ]; then
+        pg_dump --format=custom --no-owner --no-acl \
+            --file="${partial}" "${PGDATABASE}" &
+        dump_pid=$!
+        while kill -0 "${dump_pid}" 2>/dev/null; do
+            write_heartbeat "'dumping'"
+            sleep 30
+        done
+        if wait "${dump_pid}" && [ -s "${partial}" ]; then
             mv "${partial}" "${target}"
             date +%s > "${last_success}"
             find "${backup_dir}" -maxdepth 1 -type f \
@@ -39,25 +69,6 @@ while true; do
             printf 'backup failed at %s\n' "$(date -Iseconds)" >&2
         fi
     fi
-    heartbeat_success=0
-    if [ -s "${last_success}" ]; then
-        heartbeat_success="$(cat "${last_success}")"
-    fi
-    backup_instance="$(hostname | tr -cd 'A-Za-z0-9_.-')"
-    psql -v ON_ERROR_STOP=1 \
-        -c "INSERT INTO sys_service_heartbeat(
-                component,instance_id,process_id,last_seen_at,details
-            ) VALUES (
-                'backup', '${backup_instance}', $$, NOW(),
-                jsonb_build_object(
-                    'backup_dir','/backups',
-                    'last_success_epoch',${heartbeat_success},
-                    'interval_seconds',${interval_seconds},
-                    'retention_days',${retention_days}
-                )
-            ) ON CONFLICT(component,instance_id) DO UPDATE SET
-                process_id=EXCLUDED.process_id,
-                last_seen_at=EXCLUDED.last_seen_at,
-                details=EXCLUDED.details" >/dev/null || true
+    write_heartbeat "'idle'"
     sleep 60
 done

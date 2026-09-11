@@ -426,7 +426,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "/api/v1/coverage/repairs" in dashboard_script
     assert "coverageRangeStart" in page.text
     assert "coverageDetailStatus" in page.text
-    assert "今日数据交付" in page.text
+    assert "今日任务交付" in page.text
     assert "数据日历" in page.text
     assert 'id="operationsBanner"' in page.text
     assert "正在核对服务、今日交付、历史失败与数据缺口" in page.text

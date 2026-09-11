@@ -98,7 +98,11 @@ SHANGHAI_TIMEZONE = ZoneInfo("Asia/Shanghai")
 # partition or an upstream publication delay. Rechecks therefore happen as
 # separate jobs, slowly enough to avoid blind polling and for a bounded window.
 _EMPTY_RECHECK_POLICIES = {
-    "daily": {"min_interval_seconds": 4 * 3600, "max_generations": 3, "window_days": 4},
+    # The evening patrols run at 19:15 and 23:15.  A strict four-hour interval
+    # is subtly too long because the first job normally finishes after 19:15,
+    # causing the 23:15 patrol to miss the second attempt.  Three hours keeps
+    # the retries bounded while guaranteeing the intended same-day recheck.
+    "daily": {"min_interval_seconds": 3 * 3600, "max_generations": 3, "window_days": 4},
     "weekly": {"min_interval_seconds": 24 * 3600, "max_generations": 5, "window_days": 14},
     "monthly": {"min_interval_seconds": 24 * 3600, "max_generations": 10, "window_days": 45},
     "quarterly": {"min_interval_seconds": 7 * 24 * 3600, "max_generations": 14, "window_days": 120},

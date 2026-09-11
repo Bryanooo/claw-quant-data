@@ -8,6 +8,7 @@ const state = {
   coverageRangeDataset: null, coverageDetailDataset: null,
   activeView: "today",
   sidebarCollapsed: false,
+  theme: "dark",
   endpointErrors: {}, isRefreshing: false, hasLoadedSnapshot: false,
   noticeKind: null,
   snapshotGeneratedAt: null, lastSuccessfulRefresh: null,
@@ -23,6 +24,7 @@ const state = {
 try {
   state.lastSuccessfulRefresh = window.localStorage.getItem("claw-quant:last-successful-dashboard-refresh");
   state.sidebarCollapsed = window.localStorage.getItem("claw-quant:sidebar-collapsed") === "true";
+  state.theme = window.localStorage.getItem("claw-quant:theme") || "dark";
 } catch (_error) {
   // Private browsing and hardened browsers may disable local storage.
 }
@@ -556,6 +558,24 @@ function setSidebarCollapsed(collapsed, persist = true) {
     window.localStorage.setItem("claw-quant:sidebar-collapsed", String(state.sidebarCollapsed));
   } catch (_error) {
     // The layout remains usable when local storage is unavailable.
+  }
+}
+
+function setTheme(theme, persist = true) {
+  state.theme = theme === "light" ? "light" : "dark";
+  const isDark = state.theme === "dark";
+  document.body.classList.toggle("theme-dark", isDark);
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", isDark ? "dark" : "light");
+  $("themeToggle").setAttribute("aria-pressed", String(isDark));
+  $("themeToggle").setAttribute("aria-label", isDark ? "切换浅色模式" : "切换暗黑模式");
+  $("themeToggle").title = isDark ? "切换浅色模式" : "切换暗黑模式";
+  $("themeLabel").textContent = isDark ? "浅色模式" : "暗黑模式";
+  $("themeIcon").textContent = isDark ? "☀" : "☾";
+  if (!persist) return;
+  try {
+    window.localStorage.setItem("claw-quant:theme", state.theme);
+  } catch (_error) {
+    // Theme switching remains available without persistence.
   }
 }
 
@@ -1488,6 +1508,7 @@ document.querySelector(".console-tabs").addEventListener("keydown", (event) => {
   next.focus();
 });
 $("sidebarToggle").addEventListener("click", () => setSidebarCollapsed(!state.sidebarCollapsed));
+$("themeToggle").addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
 $("dataHealthRows").addEventListener("click", (event) => {
   const retryButton = event.target.closest("[data-health-retry]");
   if (retryButton && !retryButton.disabled) retryJob(retryButton.dataset.healthRetry, retryButton);
@@ -1577,6 +1598,7 @@ $("batchDialogClose").addEventListener("click", () => $("batchDialog").close());
 $("initializationDialogClose").addEventListener("click", () => $("initializationDialog").close());
 $("fanoutDialogClose").addEventListener("click", () => $("fanoutDialog").close());
 
+setTheme(state.theme, false);
 setSidebarCollapsed(state.sidebarCollapsed, false);
 activateView(state.activeView);
 renderOperationsBanner();

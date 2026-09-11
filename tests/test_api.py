@@ -413,7 +413,8 @@ def test_collection_dashboard_and_overview_endpoint():
     assert page.status_code == 200
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
-    assert "sidebar-v3" in page.text
+    assert 'id="themeToggle"' in page.text
+    assert "theme-v1" in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
     assert overview.json()["summary"]["interfaces"] == 244
@@ -426,6 +427,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "/api/v1/data-health" in dashboard_script
     assert "data-health-coverage-detail" in dashboard_script
     assert "claw-quant:sidebar-collapsed" in dashboard_script
+    assert "claw-quant:theme" in dashboard_script
     assert "/api/v1/coverage/repairs" in dashboard_script
     assert "coverageRangeStart" in page.text
     assert "coverageDetailStatus" in page.text

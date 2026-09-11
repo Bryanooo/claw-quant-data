@@ -935,6 +935,7 @@ class DeliveryMonitorService:
             "requirement_source": "scheduled_daily_coverage_registry",
             "validation_basis": "physical_partitions_plus_current_coverage_audit",
             "monitored_dataset_count": len(self._daily_rules()),
+            "scope": self._data_calendar_scope(),
             "observed_min_date": bounds[0].isoformat() if bounds[0] else None,
             "observed_max_date": bounds[1].isoformat() if bounds[1] else None,
             "summary": {
@@ -996,6 +997,7 @@ class DeliveryMonitorService:
             "requirement_source": "scheduled_daily_coverage_registry",
             "validation_basis": "physical_partitions_plus_current_coverage_audit",
             "monitored_dataset_count": len(self._daily_rules()),
+            "scope": self._data_calendar_scope(),
             "summary": summary,
             "data_items": data_items,
             "task_evidence": {
@@ -1019,6 +1021,21 @@ class DeliveryMonitorService:
             rule for rule in COVERAGE_RULES.scheduled()
             if rule.strategy == CoverageStrategy.TRADING_DAILY
         )
+
+    def _data_calendar_scope(self) -> dict[str, Any]:
+        """Describe the calendar denominator without conflating interfaces.
+
+        An upstream interface, a stored dataset, and a scheduled coverage rule
+        are different objects.  The data calendar deliberately renders only
+        datasets with a strict trading-day contract; weekly, monthly,
+        quarterly and observed-only datasets remain available in coverage and
+        interface views.
+        """
+        return {
+            "kind": "strict_trading_daily",
+            "scheduled_coverage_datasets": len(COVERAGE_RULES.scheduled()),
+            "monitored_daily_datasets": len(self._daily_rules()),
+        }
 
     def _current_coverage_evidence(
         self, rows: list[dict[str, Any]]
@@ -1056,13 +1073,19 @@ class DeliveryMonitorService:
             if item.get("status") in {"missing", "partial"}
         ]
         task_summary = task_progress["summary"]
+        strict_complete = (
+            market_open
+            and monitored > 0
+            and len(audited_present) == monitored
+            and not audited_issues
+        )
         if data_date > now.date():
             status = "future"
-        elif audited_issues or task_summary.get("attention"):
+        elif audited_issues:
             status = "issue"
-        elif market_open and len(audited_present) == monitored:
+        elif strict_complete:
             status = "complete"
-        elif data_date == now.date() and (
+        elif market_open and data_date == now.date() and (
             facts_by_name or evidence_by_name or task_summary.get("total")
         ):
             status = "in_progress"
@@ -1079,6 +1102,8 @@ class DeliveryMonitorService:
             "audited_expected": len(audited_expected),
             "audited_present": len(audited_present),
             "audited_issues": len(audited_issues),
+            "strict_scope_complete": strict_complete,
+            "historical_expectation_known": len(evidence_by_name) >= monitored,
             "audit_coverage_ratio": (
                 len(audited_present) / monitored if market_open and monitored else None
             ),
@@ -1089,7 +1114,10 @@ class DeliveryMonitorService:
             # Compatibility aliases used by existing dashboard clients.
             "total": monitored if market_open else len(facts_by_name),
             "completed_total": len(audited_present),
-            "attention": len(audited_issues) + int(task_summary.get("attention") or 0),
+            # A data-day warning must be backed by physical/audit evidence.
+            # Task failures remain visible as supporting evidence, but cannot
+            # turn a complete data partition red or manufacture a data gap.
+            "attention": len(audited_issues),
             "overdue": task_summary.get("overdue", 0),
             "running": task_summary.get("running", 0),
             "queued": task_summary.get("queued", 0),
@@ -1128,15 +1156,18 @@ class DeliveryMonitorService:
                 availability_state = "waiting_publication"
             elif validation_status == "unverified" and api_name == "ths_hot":
                 availability_state = "waiting_recheck"
-            attention = validation_status in {"missing", "partial"} or bool(
-                task and task.get("attention")
-            )
+            attention = validation_status in {"missing", "partial"}
             if validation_status == "missing":
                 action = "按该数据日期创建精确补采，并在写入后重新执行覆盖审计"
             elif validation_status == "partial":
                 action = "检查截面/分页证据，修复后重采该数据日期"
             elif validation_status == "observed":
                 action = "数据已存在；需要同规则版本覆盖审计后才能标记严格完成"
+            elif not market_open and fact is None and audit is None:
+                action = (
+                    "非交易日没有强日频数据要求；任务记录仅作执行旁证，"
+                    "不参与数据完整性结论"
+                )
             elif validation_status == "unverified" and rule.release_after:
                 release = rule.release_after.strftime("%H:%M")
                 action = (
@@ -1182,6 +1213,7 @@ class DeliveryMonitorService:
                         if task else None
                     ),
                     "attention": attention,
+                    "task_attention": bool(task and task.get("attention")),
                     "action": action,
                 }
             )

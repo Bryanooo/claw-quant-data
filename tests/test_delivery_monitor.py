@@ -1,5 +1,7 @@
 from datetime import date, datetime, timezone
 
+from service.data_coverage.models import CoverageStrategy
+from service.data_coverage.registry import COVERAGE_RULES
 from service.delivery_monitor import DeliveryMonitorService, DeliveryPlanBuilder
 
 
@@ -62,6 +64,29 @@ class DataFactRepository(CalendarRepository):
 
     def daily_data_bounds(self):
         return date(1990, 12, 19), date(2026, 9, 11)
+
+
+def strict_daily_data(day):
+    rules = [
+        rule for rule in COVERAGE_RULES.scheduled()
+        if rule.strategy == CoverageStrategy.TRADING_DAILY
+    ]
+    facts = [
+        {"dataset_name": rule.dataset_name, "data_date": day, "row_count": 1}
+        for rule in rules
+    ]
+    evidence = [
+        {
+            "dataset_name": rule.dataset_name,
+            "partition_date": day,
+            "status": "present",
+            "expected": True,
+            "row_count": 1,
+            "rule_revision": rule.revision,
+        }
+        for rule in rules
+    ]
+    return facts, evidence
 
 def plan_row(name, scheduled_hour, due_hour, **overrides):
     row = {
@@ -490,6 +515,71 @@ def test_data_calendar_ignores_obsolete_audit_revision_false_failure():
 
     assert result["summary"]["status"] == "observed"
     assert result["summary"]["audited_issues"] == 0
+
+
+def test_data_calendar_keeps_verified_data_complete_despite_overdue_task():
+    day = date(2026, 7, 1)
+    facts, evidence = strict_daily_data(day)
+    overdue = plan_row(
+        "daily", 8, 10, business_date=day, expected_for=day,
+        scheduled_for=datetime(2026, 7, 1, 8, tzinfo=timezone.utc),
+        due_at=datetime(2026, 7, 1, 10, tzinfo=timezone.utc),
+    )
+    service = DeliveryMonitorService(
+        repository=DataFactRepository(
+            [overdue], facts=facts, evidence=evidence, market_dates=[day]
+        ),
+        builder=FakeBuilder(),
+        now_factory=lambda: datetime(2026, 9, 10, 12, tzinfo=timezone.utc),
+    )
+
+    result = service.data_calendar_day(day)
+
+    assert result["summary"]["status"] == "complete"
+    assert result["summary"]["attention"] == 0
+    assert result["summary"]["task_attention"] == 1
+    assert result["issues"] == []
+
+
+def test_data_calendar_does_not_turn_closed_day_red_from_overdue_task():
+    day = date(2026, 8, 1)
+    overdue = plan_row(
+        "daily", 8, 10, business_date=day, expected_for=day,
+        scheduled_for=datetime(2026, 8, 1, 8, tzinfo=timezone.utc),
+        due_at=datetime(2026, 8, 1, 10, tzinfo=timezone.utc),
+    )
+    service = DeliveryMonitorService(
+        repository=DataFactRepository([overdue]),
+        builder=FakeBuilder(),
+        now_factory=lambda: datetime(2026, 9, 10, 12, tzinfo=timezone.utc),
+    )
+
+    result = service.data_calendar_day(day)
+
+    assert result["summary"]["status"] == "untracked"
+    assert result["summary"]["attention"] == 0
+    assert result["summary"]["task_attention"] == 1
+    assert result["data_items"][0]["attention"] is False
+    assert result["data_items"][0]["task_attention"] is True
+
+
+def test_data_calendar_current_closed_day_is_not_in_progress_from_tasks():
+    day = date(2026, 9, 12)
+    planned = plan_row(
+        "daily", 8, 10, business_date=day, expected_for=day,
+        scheduled_for=datetime(2026, 9, 12, 8, tzinfo=timezone.utc),
+        due_at=datetime(2026, 9, 12, 10, tzinfo=timezone.utc),
+    )
+    service = DeliveryMonitorService(
+        repository=DataFactRepository([planned]),
+        builder=FakeBuilder(),
+        now_factory=lambda: datetime(2026, 9, 12, 12, tzinfo=timezone.utc),
+    )
+
+    result = service.data_calendar_day(day)
+
+    assert result["summary"]["status"] == "untracked"
+    assert result["summary"]["market_open"] is False
 
 
 def test_policy_plan_only_schedules_daily_work_on_market_days():

@@ -38,6 +38,31 @@ class CalendarRepository(FakeRepository):
         ]
 
 
+class DataFactRepository(CalendarRepository):
+    def __init__(self, rows, *, facts=(), evidence=(), market_dates=()):
+        super().__init__(rows)
+        self.facts = list(facts)
+        self.evidence = list(evidence)
+        self.market_dates = set(market_dates)
+
+    def list_daily_data_facts(self, start_date, end_date):
+        return [
+            item for item in self.facts
+            if start_date <= item["data_date"] <= end_date
+        ]
+
+    def list_daily_coverage_evidence(self, start_date, end_date):
+        return [
+            item for item in self.evidence
+            if start_date <= item["partition_date"] <= end_date
+        ]
+
+    def list_market_dates(self, start_date, end_date):
+        return {day for day in self.market_dates if start_date <= day <= end_date}
+
+    def daily_data_bounds(self):
+        return date(1990, 12, 19), date(2026, 9, 11)
+
 def plan_row(name, scheduled_hour, due_hour, **overrides):
     row = {
         "delivery_plan_id": 1,
@@ -404,6 +429,67 @@ def test_data_calendar_recovers_true_cadence_from_old_dedicated_snapshot():
     detail = service.data_calendar_day(date(2026, 9, 8))
 
     assert [item["api_name"] for item in detail["items"]] == ["daily"]
+
+
+def test_data_calendar_never_turns_green_from_task_success_alone():
+    day = date(2026, 9, 8)
+    task = plan_row(
+        "daily", 8, 10, job_id=70, job_status="success",
+        job_completion_status="complete",
+    )
+    service = DeliveryMonitorService(
+        repository=DataFactRepository([task], market_dates=[day]),
+        builder=FakeBuilder(),
+        now_factory=lambda: datetime(2026, 9, 10, 12, tzinfo=timezone.utc),
+    )
+
+    result = service.data_calendar_day(day)
+
+    assert result["summary"]["status"] == "untracked"
+    assert result["summary"]["task_completed"] == 1
+    assert result["summary"]["audited_present"] == 0
+
+
+def test_data_calendar_shows_historical_physical_rows_as_observed():
+    day = date(2018, 1, 2)
+    service = DeliveryMonitorService(
+        repository=DataFactRepository(
+            [],
+            facts=[{"dataset_name": "stock_daily", "data_date": day, "row_count": 3200}],
+            market_dates=[day],
+        ),
+        builder=FakeBuilder(),
+        now_factory=lambda: datetime(2026, 9, 10, 12, tzinfo=timezone.utc),
+    )
+
+    result = service.data_calendar(day, day)
+
+    assert result["days"][0]["status"] == "observed"
+    assert result["days"][0]["observed_rows"] == 3200
+    assert result["observed_min_date"] == "1990-12-19"
+
+
+def test_data_calendar_ignores_obsolete_audit_revision_false_failure():
+    day = date(1991, 2, 20)
+    service = DeliveryMonitorService(
+        repository=DataFactRepository(
+            [],
+            facts=[{"dataset_name": "stock_daily", "data_date": day, "row_count": 4}],
+            evidence=[{
+                "dataset_name": "stock_daily", "partition_date": day,
+                "status": "partial", "expected": True, "row_count": 4,
+                "rule_revision": None,
+            }],
+            market_dates=[day],
+        ),
+        builder=FakeBuilder(),
+        now_factory=lambda: datetime(2026, 9, 10, 12, tzinfo=timezone.utc),
+    )
+
+    result = service.data_calendar_day(day)
+
+    assert result["summary"]["status"] == "observed"
+    assert result["summary"]["audited_issues"] == 0
 
 
 def test_policy_plan_only_schedules_daily_work_on_market_days():

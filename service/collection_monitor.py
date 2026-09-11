@@ -314,6 +314,53 @@ def _json_time(value: Any) -> Any:
     return value.isoformat() if isinstance(value, (date, datetime)) else value
 
 
+def _service_health_view(item: dict[str, Any]) -> dict[str, Any]:
+    threshold_seconds = 90
+    age_seconds = float(item["age_seconds"])
+    healthy = age_seconds <= threshold_seconds
+    component = item["component"]
+    details = item.get("details") or {}
+    labels = {
+        "scheduler": "调度器",
+        "worker": "日常 Worker",
+        "worker-backfill": "历史补采 Worker",
+        "worker-fanout": "扇出 Worker",
+        "auditor": "覆盖审计器",
+        "backup": "数据库备份",
+    }
+    actions = {
+        "scheduler": "检查 scheduler 容器日志；恢复前不会生成新的定时任务",
+        "worker": "检查 worker 容器日志与日常队列；必要时重启该容器",
+        "worker-backfill": "检查 worker-backfill 容器日志；日常采集不受该组件影响",
+        "worker-fanout": "检查 worker-fanout 容器日志与扇出队列",
+        "auditor": "检查 auditor 容器日志；采集可继续，但完整性状态不会更新",
+        "backup": "检查 backup 容器日志和最近备份时间；采集数据仍保存在 PostgreSQL 中",
+    }
+    operation = details.get("operation")
+    activity = f"，当前动作 {operation}" if operation else ""
+    return {
+        "component": component,
+        "label": labels.get(component, component),
+        "status": "healthy" if healthy else "stale",
+        "age_seconds": age_seconds,
+        "threshold_seconds": threshold_seconds,
+        "last_seen_at": _json_time(item["last_seen_at"]),
+        "instance_id": item.get("instance_id"),
+        "details": details,
+        "diagnostic": (
+            f"心跳正常（{round(age_seconds)} 秒前{activity}）"
+            if healthy
+            else (
+                f"超过 {threshold_seconds} 秒未收到心跳，最近一次为"
+                f" {round(age_seconds)} 秒前{activity}"
+            )
+        ),
+        "action": "无需处理" if healthy else actions.get(
+            component, "检查对应容器日志和进程状态"
+        ),
+    }
+
+
 def _operational_job_rank(job: dict[str, Any]) -> tuple[int, float]:
     """Prefer proven operational evidence over an ambiguous init probe."""
     completion = job.get("completion_status") or "pending"
@@ -739,12 +786,7 @@ class CollectionMonitorService:
             "summary": counts,
             "services": [
                 {
-                    "component": item["component"],
-                    "status": "healthy" if float(item["age_seconds"]) <= 90 else "stale",
-                    "age_seconds": float(item["age_seconds"]),
-                    "last_seen_at": _json_time(item["last_seen_at"]),
-                    "instance_id": item.get("instance_id"),
-                    "details": item.get("details") or {},
+                    **_service_health_view(item),
                     "queue": {
                         key: sum(
                             int(queue_resources.get(resource, {}).get(key) or 0)

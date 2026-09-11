@@ -9,9 +9,13 @@ from typing import Any
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql
 
 from service.clock import SHANGHAI_TIMEZONE, business_now
 from service.config import DB_CONFIG
+from service.data_coverage.models import CoverageStrategy
+from service.data_coverage.registry import COVERAGE_RULES
+from service.data_service.models import DateStorage
 from service.fanout_scheduling import SCHEDULED_FANOUT_RECIPES, _recipe_scope
 from service.tushare_catalog import TushareInterfaceCatalog
 from service.tushare_policy import TusharePolicyRegistry
@@ -110,6 +114,131 @@ class DeliveryPlanRepository:
         except Exception:
             connection.rollback()
             raise
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _daily_rules():
+        return tuple(
+            rule for rule in COVERAGE_RULES.scheduled()
+            if rule.strategy == CoverageStrategy.TRADING_DAILY
+        )
+
+    def list_daily_data_facts(
+        self, start_date: date, end_date: date
+    ) -> list[dict[str, Any]]:
+        """Read physical daily partitions; task rows are never treated as data."""
+        statements = []
+        parameters: list[Any] = []
+        for rule in self._daily_rules():
+            column = sql.Identifier(rule.date_column)
+            if rule.date_storage == DateStorage.COMPACT:
+                date_expression = sql.SQL(
+                    "to_date(NULLIF({column}::text, ''), 'YYYYMMDD')"
+                ).format(column=column)
+                lower, upper = (
+                    start_date.strftime("%Y%m%d"), end_date.strftime("%Y%m%d")
+                )
+            else:
+                date_expression = column
+                lower, upper = start_date, end_date
+            statements.append(
+                sql.SQL(
+                    """
+                    SELECT %s::text AS dataset_name,
+                           {date_expression} AS data_date,
+                           count(*)::bigint AS row_count
+                    FROM {table}
+                    WHERE {column} BETWEEN %s AND %s
+                    GROUP BY {column}
+                    """
+                ).format(
+                    date_expression=date_expression,
+                    table=sql.Identifier(rule.table),
+                    column=column,
+                )
+            )
+            parameters.extend((rule.dataset_name, lower, upper))
+        if not statements:
+            return []
+        connection = self._connection_factory(**DB_CONFIG)
+        try:
+            with connection.cursor(
+                cursor_factory=psycopg2.extras.RealDictCursor
+            ) as cursor:
+                cursor.execute(sql.SQL(" UNION ALL ").join(statements), parameters)
+                return [dict(row) for row in cursor.fetchall()]
+        finally:
+            connection.close()
+
+    def list_daily_coverage_evidence(
+        self, start_date: date, end_date: date
+    ) -> list[dict[str, Any]]:
+        names = [rule.dataset_name for rule in self._daily_rules()]
+        if not names:
+            return []
+        connection = self._connection_factory(**DB_CONFIG)
+        try:
+            with connection.cursor(
+                cursor_factory=psycopg2.extras.RealDictCursor
+            ) as cursor:
+                cursor.execute(
+                    """
+                    SELECT partition.dataset_name, partition.partition_date,
+                           partition.status, partition.row_count,
+                           partition.entity_count,
+                           partition.expected_entity_count,
+                           partition.entity_coverage_ratio,
+                           partition.expected, partition.checked_at,
+                           NULLIF(audit.evidence->>'rule_revision', '')::integer
+                               AS rule_revision
+                    FROM sys_data_coverage_partition AS partition
+                    JOIN sys_data_coverage_audit AS audit
+                      ON audit.audit_id=partition.audit_id
+                    WHERE partition.dataset_name=ANY(%s)
+                      AND partition.partition_date BETWEEN %s AND %s
+                    ORDER BY partition.partition_date, partition.dataset_name
+                    """,
+                    (names, start_date, end_date),
+                )
+                return [dict(row) for row in cursor.fetchall()]
+        finally:
+            connection.close()
+
+    def list_market_dates(self, start_date: date, end_date: date) -> set[date]:
+        connection = self._connection_factory(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT cal_date FROM trade_cal
+                    WHERE exchange='SSE' AND is_open=1
+                      AND cal_date BETWEEN %s AND %s
+                    """,
+                    (start_date, end_date),
+                )
+                return {row[0] for row in cursor.fetchall()}
+        finally:
+            connection.close()
+
+    def daily_data_bounds(self) -> tuple[date | None, date | None]:
+        """Use the canonical stock daily table as the historical anchor."""
+        rule = COVERAGE_RULES.get("stock_daily")
+        column = sql.Identifier(rule.date_column)
+        value = (
+            sql.SQL("to_date(NULLIF({}::text, ''), 'YYYYMMDD')").format(column)
+            if rule.date_storage == DateStorage.COMPACT
+            else column
+        )
+        connection = self._connection_factory(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    sql.SQL("SELECT min({value}), max({value}) FROM {table}").format(
+                        value=value, table=sql.Identifier(rule.table)
+                    )
+                )
+                return cursor.fetchone()
         finally:
             connection.close()
 
@@ -735,11 +864,11 @@ class DeliveryMonitorService:
         }
 
     def data_calendar(self, start_date: date, end_date: date) -> dict[str, Any]:
-        """Return verified delivery states grouped by the date of the data.
+        """Return data-date states from physical rows and current audit evidence.
 
-        Persisted delivery plans are the schedule contract. Multiple run-day
-        attempts for one API/data date (for example post-close and T+1 repair)
-        collapse into one requirement. Any verified attempt satisfies it.
+        Delivery plans remain useful execution evidence, but they never make a
+        calendar day green on their own. This distinction is essential for old
+        history, where data exists long before delivery-plan retention began.
         """
         self._validate_calendar_range(start_date, end_date)
         now = self._now().astimezone(SHANGHAI_TIMEZONE)
@@ -756,28 +885,62 @@ class DeliveryMonitorService:
                 continue
             rows_by_day.setdefault(data_date, []).append(row)
 
+        facts = self._repository_call(
+            "list_daily_data_facts", start_date, end_date, default=[]
+        )
+        evidence = self._current_coverage_evidence(
+            self._repository_call(
+                "list_daily_coverage_evidence", start_date, end_date, default=[]
+            )
+        )
+        market_dates = self._repository_call(
+            "list_market_dates", start_date, end_date, default=set()
+        )
+        facts_by_day: dict[date, list[dict[str, Any]]] = {}
+        for item in facts:
+            if item.get("data_date") is not None:
+                facts_by_day.setdefault(item["data_date"], []).append(item)
+        evidence_by_day: dict[date, list[dict[str, Any]]] = {}
+        for item in evidence:
+            evidence_by_day.setdefault(item["partition_date"], []).append(item)
+
         calendar_days: list[dict[str, Any]] = []
         cursor = start_date
         while cursor <= end_date:
-            progress = self._data_date_progress(
+            task_progress = self._data_date_progress(
                 cursor, rows_by_day.get(cursor, []), now
             )
+            progress = self._combine_data_evidence(
+                cursor,
+                task_progress,
+                facts_by_day.get(cursor, []),
+                evidence_by_day.get(cursor, []),
+                cursor in market_dates,
+                now,
+            )
             calendar_days.append(
-                {"data_date": cursor.isoformat(), **progress["summary"]}
+                {"data_date": cursor.isoformat(), **progress}
             )
             cursor += timedelta(days=1)
 
         counts = Counter(item["status"] for item in calendar_days)
+        bounds = self._repository_call(
+            "daily_data_bounds", default=(None, None)
+        )
         return {
             "generated_at": now.isoformat(),
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "basis": "data_date",
-            "requirement_source": "persisted_delivery_plan",
-            "validation_basis": "verified_completion_evidence",
+            "requirement_source": "scheduled_daily_coverage_registry",
+            "validation_basis": "physical_partitions_plus_current_coverage_audit",
+            "monitored_dataset_count": len(self._daily_rules()),
+            "observed_min_date": bounds[0].isoformat() if bounds[0] else None,
+            "observed_max_date": bounds[1].isoformat() if bounds[1] else None,
             "summary": {
                 "days": len(calendar_days),
                 "complete_days": counts["complete"],
+                "observed_days": counts["observed"],
                 "issue_days": counts["issue"],
                 "in_progress_days": counts["in_progress"],
                 "untracked_days": counts["untracked"],
@@ -787,22 +950,255 @@ class DeliveryMonitorService:
         }
 
     def data_calendar_day(self, data_date: date) -> dict[str, Any]:
-        """Return the API requirements and task evidence for one data date."""
+        """Return physical data validation first, with task evidence attached."""
         now = self._now().astimezone(SHANGHAI_TIMEZONE)
         if data_date == now.date():
             self.materialize(data_date)
         rows = self._repository.list_calendar_with_execution(
             data_date, data_date, date_basis="expected_for"
         )
-        progress = self._data_date_progress(data_date, rows, now)
+        task_progress = self._data_date_progress(data_date, rows, now)
+        facts = self._repository_call(
+            "list_daily_data_facts", data_date, data_date, default=[]
+        )
+        evidence = self._current_coverage_evidence(
+            self._repository_call(
+                "list_daily_coverage_evidence", data_date, data_date, default=[]
+            )
+        )
+        market_dates = self._repository_call(
+            "list_market_dates", data_date, data_date, default=set()
+        )
+        data_items = self._data_items(
+            data_date, facts, evidence, task_progress["items"],
+            data_date in market_dates,
+        )
+        summary = self._combine_data_evidence(
+            data_date, task_progress, facts, evidence,
+            data_date in market_dates, now,
+        )
+        production_data_path = hasattr(self._repository, "list_daily_data_facts")
+        compact_task_items = [
+            {
+                key: item.get(key)
+                for key in (
+                    "api_name", "title", "delivery_status", "business_dates",
+                    "work_id", "final_due_at", "attention",
+                    "planned_attempt_total", "error_message", "validation_state",
+                )
+            }
+            for item in task_progress["items"]
+        ]
         return {
             "generated_at": now.isoformat(),
             "data_date": data_date.isoformat(),
             "basis": "data_date",
-            "requirement_source": "persisted_delivery_plan",
-            "validation_basis": "verified_completion_evidence",
-            **progress,
+            "requirement_source": "scheduled_daily_coverage_registry",
+            "validation_basis": "physical_partitions_plus_current_coverage_audit",
+            "monitored_dataset_count": len(self._daily_rules()),
+            "summary": summary,
+            "data_items": data_items,
+            "task_evidence": {
+                "summary": task_progress["summary"],
+                "items": compact_task_items,
+                "issues": [item for item in compact_task_items if item["attention"]],
+            },
+            # Task-only repositories are retained for compatibility tests and
+            # third-party adapters. Production clients should render
+            # ``data_items``; duplicating complete task payloads made one day
+            # exceed 700 KiB and slowed the console materially.
+            "items": (
+                compact_task_items if production_data_path else task_progress["items"]
+            ),
+            "issues": [item for item in data_items if item["attention"]],
         }
+
+    @staticmethod
+    def _daily_rules():
+        return tuple(
+            rule for rule in COVERAGE_RULES.scheduled()
+            if rule.strategy == CoverageStrategy.TRADING_DAILY
+        )
+
+    def _current_coverage_evidence(
+        self, rows: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        revisions = {rule.dataset_name: rule.revision for rule in self._daily_rules()}
+        return [
+            row for row in rows
+            if row.get("rule_revision") == revisions.get(row.get("dataset_name"))
+        ]
+
+    def _combine_data_evidence(
+        self,
+        data_date: date,
+        task_progress: dict[str, Any],
+        facts: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+        market_open: bool,
+        now: datetime,
+    ) -> dict[str, Any]:
+        # Compatibility repositories have task evidence only. Production uses
+        # the physical fact path below, so task success cannot manufacture a
+        # green data day.
+        if not hasattr(self._repository, "list_daily_data_facts"):
+            return task_progress["summary"]
+
+        monitored = len(self._daily_rules())
+        facts_by_name = {item["dataset_name"]: item for item in facts}
+        evidence_by_name = {item["dataset_name"]: item for item in evidence}
+        audited_expected = [item for item in evidence if item.get("expected")]
+        audited_present = [
+            item for item in audited_expected if item.get("status") == "present"
+        ]
+        audited_issues = [
+            item for item in audited_expected
+            if item.get("status") in {"missing", "partial"}
+        ]
+        task_summary = task_progress["summary"]
+        if data_date > now.date():
+            status = "future"
+        elif audited_issues or task_summary.get("attention"):
+            status = "issue"
+        elif market_open and len(audited_present) == monitored:
+            status = "complete"
+        elif data_date == now.date() and (
+            facts_by_name or evidence_by_name or task_summary.get("total")
+        ):
+            status = "in_progress"
+        elif facts_by_name or evidence_by_name:
+            status = "observed"
+        else:
+            status = "untracked"
+        return {
+            "status": status,
+            "market_open": market_open,
+            "monitored_datasets": monitored,
+            "observed_datasets": len(facts_by_name),
+            "observed_rows": sum(int(item.get("row_count") or 0) for item in facts),
+            "audited_expected": len(audited_expected),
+            "audited_present": len(audited_present),
+            "audited_issues": len(audited_issues),
+            "audit_coverage_ratio": (
+                len(audited_present) / monitored if market_open and monitored else None
+            ),
+            "task_status": task_summary.get("status"),
+            "task_total": task_summary.get("total", 0),
+            "task_completed": task_summary.get("completed_total", 0),
+            "task_attention": task_summary.get("attention", 0),
+            # Compatibility aliases used by existing dashboard clients.
+            "total": monitored if market_open else len(facts_by_name),
+            "completed_total": len(audited_present),
+            "attention": len(audited_issues) + int(task_summary.get("attention") or 0),
+            "overdue": task_summary.get("overdue", 0),
+            "running": task_summary.get("running", 0),
+            "queued": task_summary.get("queued", 0),
+            "waiting": task_summary.get("waiting", 0),
+            "unverified": max(monitored - len(evidence_by_name), 0) if market_open else 0,
+            "empty": task_summary.get("empty", 0),
+        }
+
+    def _data_items(
+        self,
+        data_date: date,
+        facts: list[dict[str, Any]],
+        evidence: list[dict[str, Any]],
+        task_items: list[dict[str, Any]],
+        market_open: bool,
+    ) -> list[dict[str, Any]]:
+        facts_by_name = {item["dataset_name"]: item for item in facts}
+        evidence_by_name = {item["dataset_name"]: item for item in evidence}
+        task_by_api = {item["api_name"]: item for item in task_items}
+        items: list[dict[str, Any]] = []
+        for rule in self._daily_rules():
+            fact = facts_by_name.get(rule.dataset_name)
+            audit = evidence_by_name.get(rule.dataset_name)
+            api_name = rule.collection_api_name or rule.dataset_name
+            task = task_by_api.get(api_name)
+            if not market_open and fact is None and audit is None and task is None:
+                continue
+            if audit is not None:
+                validation_status = audit["status"]
+            elif fact is not None:
+                validation_status = "observed"
+            else:
+                validation_status = "unverified"
+            availability_state = None
+            if validation_status == "unverified" and rule.release_after:
+                availability_state = "waiting_publication"
+            elif validation_status == "unverified" and api_name == "ths_hot":
+                availability_state = "waiting_recheck"
+            attention = validation_status in {"missing", "partial"} or bool(
+                task and task.get("attention")
+            )
+            if validation_status == "missing":
+                action = "按该数据日期创建精确补采，并在写入后重新执行覆盖审计"
+            elif validation_status == "partial":
+                action = "检查截面/分页证据，修复后重采该数据日期"
+            elif validation_status == "observed":
+                action = "数据已存在；需要同规则版本覆盖审计后才能标记严格完成"
+            elif validation_status == "unverified" and rule.release_after:
+                release = rule.release_after.strftime("%H:%M")
+                action = (
+                    f"上游在下一自然日 {release} 后发布；到期后系统自动复采并审计，"
+                    "当前不判为缺失"
+                )
+            elif validation_status == "unverified" and api_name == "ths_hot":
+                action = (
+                    "热榜数据分批发布至 22:00；系统在 23:15 及后续巡航自动复查，"
+                    "成熟后仍为空才升级为异常"
+                )
+            elif validation_status == "unverified":
+                action = "尚无当前规则版本的物理分区审计，不能判定缺失或完成"
+            else:
+                action = "当前规则版本覆盖审计已通过"
+            items.append(
+                {
+                    "dataset_name": rule.dataset_name,
+                    "api_name": api_name,
+                    "data_date": data_date.isoformat(),
+                    "description": rule.description,
+                    "validation_status": validation_status,
+                    "availability_state": availability_state,
+                    "row_count": int((fact or audit or {}).get("row_count") or 0),
+                    "entity_count": (audit or {}).get("entity_count"),
+                    "expected_entity_count": (audit or {}).get(
+                        "expected_entity_count"
+                    ),
+                    "entity_coverage_ratio": (audit or {}).get(
+                        "entity_coverage_ratio"
+                    ),
+                    "audit_checked_at": _json_time((audit or {}).get("checked_at")),
+                    "task": (
+                        {
+                            key: task.get(key)
+                            for key in (
+                                "api_name", "delivery_status", "business_dates",
+                                "work_id", "final_due_at", "attention",
+                                "planned_attempt_total", "error_message",
+                                "validation_state",
+                            )
+                        }
+                        if task else None
+                    ),
+                    "attention": attention,
+                    "action": action,
+                }
+            )
+        return sorted(
+            items,
+            key=lambda item: (
+                not item["attention"],
+                item["validation_status"] == "present",
+                item["dataset_name"],
+            ),
+        )
+
+    def _repository_call(self, name: str, *args, default):
+        # Tests and third-party repositories written before the data-fact
+        # calendar can still exercise task-only compatibility behavior.
+        method = getattr(self._repository, name, None)
+        return method(*args) if method is not None else default
 
     @staticmethod
     def _validate_calendar_range(start_date: date, end_date: date) -> None:

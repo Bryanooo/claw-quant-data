@@ -194,6 +194,10 @@ def test_policy_submission_creates_one_separate_recheck_for_empty_result(monkeyp
     assert len(repository.rechecks) == first
     assert third == 0
     assert all(item["max_generations"] == 3 for item in repository.rechecks)
+    assert all(
+        item["min_interval_seconds"] == 3 * 3600
+        for item in repository.rechecks
+    )
 
 
 def test_next_morning_empty_recheck_waits_for_publication_cutoff(monkeypatch):

@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
 
-from service.collection_monitor import CollectionMonitorService, _operational_job_rank
+from service.collection_monitor import (
+    CollectionMonitorService,
+    _operational_job_rank,
+    _service_health_view,
+)
 
 
 class FakeMonitorRepository:
@@ -251,6 +255,21 @@ def test_collection_monitor_exposes_worker_pool_backlog():
         "failed_24h": 2,
     }
     assert payload["queue_resources"][0]["resource_class"] == "fanout"
+
+
+def test_stale_service_exposes_operator_diagnosis_and_action():
+    item = _service_health_view({
+        "component": "backup",
+        "instance_id": "backup-1",
+        "details": {"operation": "dumping"},
+        "last_seen_at": datetime.now(timezone.utc),
+        "age_seconds": 125,
+    })
+
+    assert item["status"] == "stale"
+    assert item["threshold_seconds"] == 90
+    assert "125 秒前" in item["diagnostic"]
+    assert "backup 容器日志" in item["action"]
 
 
 def test_older_unrecovered_partition_failure_is_not_hidden_by_latest_success():

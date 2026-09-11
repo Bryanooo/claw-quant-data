@@ -840,7 +840,10 @@ class JobRepository:
             "gaps": "incomplete",
             "empty": "empty",
             "unverified": "unverified",
-            "observed_only": "unverified",
+            # An observed-only audit cannot prove a global expected-date
+            # calendar, but it must not erase an already verified exact request
+            # scope (for example bak_basic's stored/fetched equality proof).
+            "observed_only": "observed_only",
         }[audit_status]
         evidence = {
             "verification": {
@@ -857,11 +860,21 @@ class JobRepository:
             cursor.execute(
                 """
                 UPDATE sys_collection_job
-                SET completion_status = %s,
+                SET completion_status = CASE
+                        WHEN %s='observed_only' THEN CASE
+                            WHEN COALESCE(
+                                (completion_evidence->>'verified')::boolean,
+                                false
+                            ) THEN 'complete'
+                            ELSE 'unverified'
+                        END
+                        ELSE %s
+                    END,
                     completion_evidence = completion_evidence || %s::jsonb
                 WHERE job_id = %s AND status = 'success'
                 """,
                 (
+                    completion_status,
                     completion_status,
                     json.dumps(evidence, ensure_ascii=False),
                     collection_job_id,

@@ -47,6 +47,11 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 数据。最终结果仍会根据完整性证据被判定为 `complete`、`empty`、
 `incomplete` 等状态。
 
+控制台中的 185 是“具备自动编排能力的接口总数”，不是“每个交易日都必须调用的
+接口数”。以 2026-09-11 为例，130 个接口形成当日日频数据要求，其余 55 个属于
+周/月/季周期或复用同一个专项调度任务；同日 137 次任务计划还包含分时采集和 T+1
+复核。控制台会同时展示这三个数字和差异原因，避免把能力、数据要求、任务次数混为一谈。
+
 “当前有正行数证据”也不等于历史已经完整回填；它只说明原始表或对应规范化表
 目前至少存在一行。逐接口动态证据见
 [reports/tushare_data_presence.md](reports/tushare_data_presence.md)，统一采集器设计见
@@ -557,8 +562,8 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `GET /api/v1/collection-overview` | 全接口采集状态与完成证据 |
 | `GET /api/v1/delivery/today` | 查询当日持久化交付计划、截至当前/全日进度、逾期和真实异常；可传 `business_date` |
 | `GET /api/v1/delivery/calendar` | 兼容的任务执行日日历；主控制台不再用它判断某天数据是否齐全 |
-| `GET /api/v1/delivery/data-calendar` | 按 `start_date`/`end_date` 查询最多 63 天的数据日期交付状态；同接口同数据日的冗余任务合并判定 |
-| `GET /api/v1/delivery/data-calendar/{data_date}` | 查询指定数据日的固定接口要求、任务执行日、最终截止时间和严格校验证据 |
+| `GET /api/v1/delivery/data-calendar` | 按 `start_date`/`end_date` 查询最多 63 天的数据事实状态；直接核对 34 个日频数据集的物理分区与当前版本覆盖审计，任务仅作旁证 |
+| `GET /api/v1/delivery/data-calendar/{data_date}` | 查询指定数据日逐数据集的物理行数、截面证据、当前审计状态、任务旁证与建议动作 |
 | `GET /api/v1/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
 | `GET /api/v1/data-health/summary` | 面向 CLI/Agent 的轻量健康预检，不扫描全部明细 |
 | `POST /api/v1/collection-dispatch` | 生成最近周期补采任务 |

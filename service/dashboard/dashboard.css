@@ -15,7 +15,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: var(--bg); color: var(--text); }
-body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .16; background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 32px 32px; }
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .32; background: radial-gradient(circle at 15% 0, rgba(48,118,77,.12), transparent 34%), radial-gradient(circle at 92% 10%, rgba(58,101,128,.08), transparent 28%); }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 
@@ -50,7 +50,7 @@ main { position: relative; padding: 24px clamp(20px, 4vw, 64px) 64px; }
 .operations-banner.status-critical .operations-banner-label, .operations-banner.status-offline .operations-banner-label { color: var(--red); }
 .operations-banner.status-loading .operations-banner-label { color: var(--blue); }
 body.is-offline .workspace, body.is-offline .global-capability, body.is-offline .initialization-panel { opacity: .58; }
-.summary-grid { display: grid; grid-template-columns: repeat(7, minmax(132px, 1fr)); gap: 10px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
 .metric-card { min-height: 100px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(145deg, var(--panel-2), var(--panel)); }
 .metric-card span, .metric-card small { display: block; color: var(--muted); }
 .metric-card strong { display: block; margin: 9px 0 5px; font: 680 clamp(25px, 2.8vw, 36px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -89,6 +89,10 @@ body.is-offline .workspace, body.is-offline .global-capability, body.is-offline 
 .global-capability { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
 .global-capability-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
 .global-capability-head p:last-child { margin: 0; color: var(--muted); font-size: 11px; }
+.capability-explanation { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-top: 14px; padding: 15px 17px; border: 1px solid #26332c; border-radius: 10px; background: #0c110e; }
+.capability-explanation strong { max-width: 880px; font-size: 12px; line-height: 1.6; }
+.capability-explanation span { flex: 0 0 auto; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.capability-explanation b { color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .workspace { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--panel); }
 .coverage-workspace, .data-health-workspace, .fanout-workspace { margin: 0; }
@@ -188,11 +192,12 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 
 .calendar-head { align-items: center; }
 .calendar-navigation { display: flex; align-items: center; gap: 12px; }
-.calendar-navigation strong { min-width: 92px; text-align: center; font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.calendar-month-picker input { width: 148px; padding: 0 11px; color-scheme: dark; }
 .calendar-legend { display: flex; gap: 18px; padding: 13px 20px; border-bottom: 1px solid var(--line); color: var(--muted); background: #0e1210; font-size: 11px; flex-wrap: wrap; }
 .calendar-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .calendar-legend span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .legend-complete { color: var(--green); }
+.legend-observed { color: #68d5cf; }
 .legend-progress { color: var(--blue); }
 .legend-issue { color: var(--red); }
 .legend-empty { color: var(--muted); }
@@ -210,6 +215,8 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 .calendar-day small { display: block; margin-top: 6px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .calendar-day.status-complete { box-shadow: inset 0 3px 0 var(--green); background: #102119; }
 .calendar-day.status-complete strong { color: var(--green); }
+.calendar-day.status-observed { box-shadow: inset 0 3px 0 #68d5cf; background: #10201f; }
+.calendar-day.status-observed strong { color: #68d5cf; }
 .calendar-day.status-in_progress { box-shadow: inset 0 3px 0 var(--blue); background: #101b22; }
 .calendar-day.status-in_progress strong { color: var(--blue); }
 .calendar-day.status-issue { box-shadow: inset 0 3px 0 var(--red); background: #281513; }
@@ -217,6 +224,15 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 .calendar-day.status-untracked, .calendar-day.status-future { color: #67716c; background: #0d100e; }
 .calendar-detail-workspace { margin-top: 18px; }
 .calendar-detail-table { min-width: 1120px; }
+.coverage-observed { color: #68d5cf; border-color: #316560; background: #10201f; }
+.service-diagnostics { padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.service-diagnostics.is-healthy { display: flex; align-items: center; gap: 12px; color: var(--green); background: #0d1711; }
+.service-diagnostics.is-healthy span { color: var(--muted); font-size: 11px; }
+.service-diagnostics article { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.2fr); gap: 22px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.service-diagnostics article:last-child { border-bottom: 0; }
+.service-diagnostics article strong, .service-diagnostics article span { display: block; }
+.service-diagnostics article strong { color: var(--red); }
+.service-diagnostics article span, .service-diagnostics article p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
@@ -258,4 +274,6 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
   .calendar-day { padding: 8px; }
   .calendar-day strong { margin-top: 12px; font-size: 9px; }
   .calendar-day small { display: none; }
+  .capability-explanation { flex-direction: column; }
+  .capability-explanation span { flex: auto; }
 }

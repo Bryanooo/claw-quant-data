@@ -153,12 +153,17 @@
               <button id="calendarNext" class="button button-secondary" type="button" aria-label="下个月">下月 →</button>
             </div>
           </div>
+          <div class="calendar-scope" aria-label="数据日历统计口径">
+            <article><span>自动编排接口</span><strong id="calendarAutomatedScope">—</strong><small>覆盖日 / 周 / 月 / 季及事件型采集</small></article>
+            <article><span>定期覆盖审计</span><strong id="calendarAuditedScope">—</strong><small>具备明确周期规则的数据集</small></article>
+            <article><span>本日历强日频</span><strong id="calendarDailyScope">—</strong><small>可按交易日严格判定的数据集</small></article>
+          </div>
           <div class="calendar-legend" aria-label="日历状态说明">
-            <span class="legend-complete">34/34 当前规则审计通过</span>
-            <span class="legend-observed">已有物理数据，尚未完整审计</span>
+            <span class="legend-complete">严格完成：当日适用强日频集全部审计通过</span>
+            <span class="legend-observed">已有数据：存在物理数据，历史适用范围尚未完全建模或审计</span>
             <span class="legend-progress">当日采集 / 核验中</span>
             <span class="legend-issue">确认缺失或不完整</span>
-            <span class="legend-empty">无数据事实 / 未来</span>
+            <span class="legend-empty">非交易日无要求 / 无数据事实 / 未来</span>
           </div>
           <div class="calendar-weekdays" aria-hidden="true">
             <span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span>

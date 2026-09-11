@@ -127,6 +127,7 @@ function bannerFacts() {
       Number(deliverySummary.queued || 0) + Number(deliverySummary.running || 0),
     unknown: Number(healthSummary.unknown_issue_count || 0),
     dataStatus: dataSummary.status,
+    marketOpen: dataSummary.market_open,
     dataAudited: Number(dataSummary.audited_present || 0),
     dataMonitored: Number(dataSummary.monitored_datasets || 0),
     dataIssues: Number(dataSummary.audited_issues || 0),
@@ -184,6 +185,14 @@ function renderOperationsBanner() {
       labelText = "处理中";
       titleText = "系统在线，仍有采集或完整性核验正在进行";
       detailText = `${facts.active} 项排队/运行 · ${facts.unknown} 项完整性待确认${facts.initializationStatus === "running" ? " · 历史初始化进行中" : ""}`;
+    } else if (facts.dataStatus === "untracked" && facts.marketOpen === false) {
+      status = "healthy";
+      labelText = "非交易日";
+      titleText = "今日没有强日频数据交付要求";
+      const due = state.delivery?.summary;
+      detailText = facts.dataWaiting
+        ? `${facts.dataWaiting} 项任务旁证或上游发布等待不影响今日数据结论`
+        : (due ? `今日任务交付 ${due.completed_due || 0}/${due.due_now || 0}，数据日历不制造周末缺口` : "数据日历不制造周末缺口。");
     } else if (facts.dataWaiting && facts.dataMonitored) {
       status = "healthy";
       labelText = "正常推进";
@@ -276,10 +285,19 @@ function shiftCalendarMonth(delta) {
   loadCalendar().then(renderOperationsBanner);
 }
 
+function renderCalendarScope() {
+  const payload = state.calendar || {};
+  const scope = payload.scope || {};
+  $("calendarAutomatedScope").textContent = state.summary?.automated ?? "—";
+  $("calendarAuditedScope").textContent = scope.scheduled_coverage_datasets ?? state.coverageSummary?.scheduled ?? "—";
+  $("calendarDailyScope").textContent = scope.monitored_daily_datasets ?? payload.monitored_dataset_count ?? "—";
+}
+
 function renderCalendar() {
   const payload = state.calendar;
   if (!payload) return;
   const summary = payload.summary || {};
+  renderCalendarScope();
   $("calendarMonthPicker").value = state.calendarMonth;
   if (payload.observed_min_date) $("calendarMonthPicker").min = payload.observed_min_date.slice(0, 7);
   if (payload.observed_max_date) $("calendarMonthPicker").max = payload.observed_max_date.slice(0, 7);
@@ -294,18 +312,18 @@ function renderCalendar() {
   const today = shanghaiToday();
   const statusCopy = {
     complete: "严格完成", observed: "已有数据", in_progress: "核验中", issue: "确认异常",
-    untracked: "无数据事实", future: "未来"
+    untracked: "无日频结论", future: "未来"
   };
   const cells = Array.from({ length: leading }, () => '<span class="calendar-spacer" aria-hidden="true"></span>');
   for (const day of payload.days || []) {
     const completed = Number(day.audited_present ?? day.completed_total ?? 0);
     const total = Number(day.monitored_datasets ?? day.total ?? 0);
     const evidence = day.status === "untracked"
-      ? "没有物理分区或当前审计证据"
+      ? (day.market_open ? "尚无物理数据或审计结论" : "非交易日，无强日频要求")
       : day.status === "issue"
       ? `${day.audited_issues || day.attention || 0} 个数据集确认异常`
       : day.status === "observed"
-      ? `${day.observed_datasets || 0} 个数据集 · ${Number(day.observed_rows || 0).toLocaleString()} 行`
+      ? `实际 ${day.observed_datasets || 0} 个 · ${Number(day.observed_rows || 0).toLocaleString()} 行 · 待严格审计`
       : total ? `${completed}/${total} 个数据集审计通过` : "没有物理数据事实";
     cells.push(`<button type="button" class="calendar-day status-${day.status}${day.data_date === state.selectedCalendarDate ? " is-selected" : ""}${day.data_date === today ? " is-today" : ""}" data-calendar-date="${day.data_date}" aria-label="数据日期 ${day.data_date} ${statusCopy[day.status] || day.status}">
       <span class="calendar-date">${Number(day.data_date.slice(-2))}</span>
@@ -334,9 +352,9 @@ function renderCalendarDetail() {
   const page = pageRows(rows, "calendarDetails");
   $("calendarDetailTitle").textContent = `${payload.data_date} 数据事实明细`;
   $("calendarDetailSummary").textContent =
-    `物理存在 ${summary.observed_datasets || 0}/${summary.monitored_datasets || 0} · ` +
+    `物理存在 ${summary.observed_datasets || 0} 个数据集 · ` +
     `当前规则审计通过 ${summary.audited_present || 0}/${summary.monitored_datasets || 0} · ` +
-    `确认异常 ${summary.audited_issues || 0} · 任务旁证 ${summary.task_completed || 0}/${summary.task_total || 0}`;
+    `确认数据异常 ${summary.audited_issues || 0} · 任务旁证 ${summary.task_completed || 0}/${summary.task_total || 0}`;
   $("calendarDetailResultCount").textContent = rows.length
     ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 个数据集`
     : "0 个数据集";
@@ -360,12 +378,13 @@ function renderCalendarDetail() {
     const taskEvidence = task.api_name
       ? `${labels[taskStatus] || taskStatus} · 执行日 ${(task.business_dates || []).join("、") || "—"}`
       : "无同期任务记录（不影响物理数据事实）";
+    const taskWarning = item.task_attention ? " · 任务执行需关注（不改变数据结论）" : "";
     return `<tr class="${item.attention ? "delivery-row-attention" : ""}">
       <td><span class="api-name">${escapeHtml(item.dataset_name)}</span><span class="api-title">上游 ${escapeHtml(item.api_name)}</span></td>
       <td class="number">${Number(item.row_count || 0).toLocaleString()} 行<span class="completion-reason">数据日期 ${escapeHtml(item.data_date)}</span></td>
       <td><span class="pill coverage-${status}">${validationLabel}</span><span class="completion-reason">${item.audit_checked_at ? `审计 ${formatTime(item.audit_checked_at)}` : "无当前规则版本审计"}</span></td>
       <td>${escapeHtml(entityEvidence)}${escapeHtml(ratio)}</td>
-      <td><span class="pill status-${taskStatus}">${labels[taskStatus] || taskStatus}</span><span class="completion-reason">${escapeHtml(taskEvidence)}</span></td>
+      <td><span class="pill status-${taskStatus}">${labels[taskStatus] || taskStatus}</span><span class="completion-reason">${escapeHtml(taskEvidence + taskWarning)}</span></td>
       <td>${escapeHtml(item.description || "—")}</td>
       <td>${escapeHtml(item.action || "—")}</td>
     </tr>`;
@@ -654,6 +673,7 @@ function renderSummary(summary) {
     ? `${summary.automated} / ${summary.collectable} 个有权限接口`
     : "等待加载";
   renderAutomationExplanation();
+  renderCalendarScope();
 }
 
 function renderAutomationExplanation() {
@@ -1135,6 +1155,7 @@ async function dispatchLatest() {
 
 function renderCoverage() {
   const summary = state.coverageSummary;
+  renderCalendarScope();
   const page = pageRows(state.coverage, "coverage");
   $("coverageSummary").textContent = summary.audited == null
     ? "等待首次审计"

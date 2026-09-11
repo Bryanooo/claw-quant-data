@@ -200,7 +200,7 @@ class InitializationService:
                     "quick": "最近 30 天，用于功能验证与轻量研究",
                     "standard": "最近 1 年，推荐的默认初始化范围",
                     "research": "最近 3 年，任务量和耗时显著增加",
-                    "full": "全部可靠历史，按各数据集可用起点回填",
+                    "full": "按已配置历史配方回填可靠历史；其余接口建立最新基线",
                 }[name],
                 **(
                     {"history_start": FULL_HISTORY_START.isoformat()}
@@ -1297,7 +1297,7 @@ class InitializationService:
                 {
                     "key": "strict_coverage_verified",
                     "met": completed_campaign,
-                    "description": "最终覆盖审计全部为 complete，无缺失或部分分区",
+                    "description": "初始化计划内核心数据集最终覆盖审计全部通过",
                 },
                 {
                     "key": "daily_mode_activated",

@@ -414,7 +414,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "theme-v1" in page.text
+    assert "instance-v1" in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
     assert overview.json()["summary"]["interfaces"] == 244
@@ -442,9 +442,14 @@ def test_collection_dashboard_and_overview_endpoint():
     assert 'data-page-key="health"' in page.text
     assert 'data-page-key="fanout"' in page.text
     assert 'data-page-key="coverage"' in page.text
+    assert 'id="instanceRows"' in page.text
+    assert 'id="jobInstanceDialog"' in page.text
+    assert 'data-page-key="jobInstances"' in page.text
     assert "pageRows(rows, \"interfaces\")" in dashboard_script
     assert "pageRows(rows, \"health\")" in dashboard_script
     assert "data-health-retry" in dashboard_script
+    assert "/api/v1/collection-jobs?limit=100" in dashboard_script
+    assert "retry_root_job_id" in dashboard_script
     assert "/api/v1/delivery/data-calendar" in dashboard_script
     assert 'data-page-key="calendarDetails"' in page.text
     assert "last-successful-dashboard-refresh" in dashboard_script

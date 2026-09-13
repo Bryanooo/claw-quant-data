@@ -280,6 +280,9 @@ class CollectionJobResponse(ApiModel):
     completion_evidence: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str | None = None
     parent_job_id: int | None = None
+    retry_of_job_id: int | None = None
+    retry_root_job_id: int | None = None
+    retry_generation: int = 0
     recheck_of_job_id: int | None = None
     recheck_root_job_id: int | None = None
     recheck_generation: int = 0

@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS sys_collection_job (
     completion_evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
     idempotency_key  VARCHAR(128) UNIQUE,
     parent_job_id    BIGINT REFERENCES sys_collection_job(job_id),
+    retry_of_job_id  BIGINT REFERENCES sys_collection_job(job_id),
+    retry_root_job_id BIGINT REFERENCES sys_collection_job(job_id),
+    retry_generation SMALLINT NOT NULL DEFAULT 0,
     recheck_of_job_id BIGINT REFERENCES sys_collection_job(job_id),
     recheck_root_job_id BIGINT REFERENCES sys_collection_job(job_id),
     recheck_generation SMALLINT NOT NULL DEFAULT 0,
@@ -46,6 +49,8 @@ CREATE TABLE IF NOT EXISTS sys_collection_job (
     CONSTRAINT ck_collection_job_priority CHECK (priority BETWEEN 0 AND 100),
     CONSTRAINT ck_collection_job_recheck_generation
         CHECK (recheck_generation BETWEEN 0 AND 20),
+    CONSTRAINT ck_collection_job_retry_generation
+        CHECK (retry_generation BETWEEN 0 AND 20),
     CONSTRAINT ck_collection_job_kind CHECK (job_kind IN ('leaf', 'batch')),
     CONSTRAINT ck_collection_job_completion_status CHECK (
         completion_status IN (
@@ -70,6 +75,9 @@ CREATE INDEX IF NOT EXISTS idx_collection_job_expired_lease
 CREATE INDEX IF NOT EXISTS idx_collection_job_parent
     ON sys_collection_job(parent_job_id, status, job_id)
     WHERE parent_job_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_collection_job_retry_root
+    ON sys_collection_job(retry_root_job_id, retry_generation, job_id)
+    WHERE retry_root_job_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_collection_job_recheck_source
     ON sys_collection_job(recheck_of_job_id)
     WHERE recheck_of_job_id IS NOT NULL;

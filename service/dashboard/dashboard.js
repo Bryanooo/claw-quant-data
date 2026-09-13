@@ -1,6 +1,6 @@
 const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
-  initialization: null, fanoutCampaigns: [], freshness: [], delivery: null,
+  initialization: null, fanoutCampaigns: [], jobInstances: [], focusedJob: null, freshness: [], delivery: null,
   calendar: null, calendarDetail: null, todayDataDetail: null, calendarMonth: null,
   selectedCalendarDate: null,
   dataHealth: {}, healthIssues: [], timer: null,
@@ -12,9 +12,10 @@ const state = {
   endpointErrors: {}, isRefreshing: false, hasLoadedSnapshot: false,
   noticeKind: null,
   snapshotGeneratedAt: null, lastSuccessfulRefresh: null,
+  jobPollTimer: null,
   pages: {
     delivery: 1, calendarDetails: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
-    coveragePartitions: 1, batchChildren: 1, initializationSteps: 1, fanoutPages: 1
+    coveragePartitions: 1, batchChildren: 1, initializationSteps: 1, fanoutPages: 1, jobInstances: 1
   },
   dialogData: {
     coveragePartitions: [], batchChildren: [], initializationSteps: [], fanoutPages: []
@@ -31,7 +32,7 @@ try {
 
 const pageSizes = {
   delivery: 15, calendarDetails: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20,
-  coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20
+  coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20, jobInstances: 15
 };
 
 const $ = (id) => {
@@ -93,7 +94,8 @@ const endpointLabels = {
   calendar: "数据日历",
   preflight: "运行预检",
   health: "数据健康",
-  fanout: "扇出活动"
+  fanout: "扇出活动",
+  instances: "执行实例"
 };
 
 function setEndpointError(source, error) {
@@ -652,11 +654,11 @@ function render() {
       <td><span class="pill status-${unresolved ? "failed" : completion}">${unresolved ? "历史缺口" : (labels[completion] || completion)}</span><span class="completion-reason">${escapeHtml(batchProgress)}</span></td>
       <td class="number">${fetched} / ${stored}<span class="completion-reason">获取 / 新增</span></td>
       <td>${formatTime(latest.finished_at)}<span class="completion-reason">${latest.attempt ? `第 ${latest.attempt} 次尝试` : "—"}</span></td>
-      <td>${isCampaign
+      <td><div class="instance-actions">${latest.id ? `<button class="row-action" data-instance="${latest.id}">实例 #${latest.id}</button>` : ""}${isCampaign
         ? `<button class="row-action" data-fanout-detail="${latest.id}">查看活动</button>`
         : isBatch
         ? `<button class="row-action" data-batch="${latest.id}">查看批次</button>`
-        : `<button class="row-action" data-retry="${retryJobId || ""}" ${canRetry ? "" : "disabled"}>重试</button>`}</td>
+        : `<button class="row-action" data-retry="${retryJobId || ""}" ${canRetry ? "" : "disabled"}>重试</button>`}</div></td>
     </tr>`;
   }).join("");
 }
@@ -952,7 +954,7 @@ function renderInitializationSteps() {
       return `
       <article class="batch-child">
         <div><strong>${escapeHtml(step.step_key)}</strong><small>${escapeHtml(resource)}</small>${error ? `<small class="error-text">${escapeHtml(error)}</small>` : ""}</div>
-        <div class="batch-child-state"><span class="pill status-${step.state === "complete" ? "complete" : step.state === "failed" ? "failed" : "running"}">${step.state === "complete" ? "完成" : step.state === "failed" ? "失败" : "处理中"}</span><span>${Number(rows || 0).toLocaleString()} 行</span>${isFanout ? `<button class="row-action" data-fanout-detail="${step.fanout_campaign_id}">查看活动</button>` : ""}</div>
+        <div class="batch-child-state"><span class="pill status-${step.state === "complete" ? "complete" : step.state === "failed" ? "failed" : "running"}">${step.state === "complete" ? "完成" : step.state === "failed" ? "失败" : "处理中"}</span><span>${Number(rows || 0).toLocaleString()} 行</span>${step.collection_job_id ? `<button class="row-action" data-instance="${step.collection_job_id}">查看实例</button>` : ""}${isFanout ? `<button class="row-action" data-fanout-detail="${step.fanout_campaign_id}">查看活动</button>` : ""}</div>
       </article>`;
     }).join("") : '<p class="empty-state">当前阶段尚未生成步骤</p>';
 }
@@ -1068,6 +1070,113 @@ async function fanoutAction(campaignId, action, button) {
   }
 }
 
+function instanceDisplayStatus(job) {
+  if (job.status === "queued") return job.completion_status === "retrying" ? "retrying" : "queued";
+  if (job.status === "running") return "running";
+  if (job.status === "failed") return "failed";
+  return job.completion_status || job.status || "pending";
+}
+
+function filteredJobInstances() {
+  const filter = $("instanceStatusFilter").value;
+  if (filter === "all") return state.jobInstances;
+  if (filter === "retry") return state.jobInstances.filter((job) => Number(job.retry_generation || 0) > 0);
+  if (filter === "active") return state.jobInstances.filter((job) => ["queued", "running", "retrying", "verifying", "unverified"].includes(instanceDisplayStatus(job)));
+  if (filter === "failed") return state.jobInstances.filter((job) => instanceDisplayStatus(job) === "failed");
+  return state.jobInstances.filter((job) => ["complete", "empty"].includes(instanceDisplayStatus(job)));
+}
+
+function renderJobInstances() {
+  const rows = filteredJobInstances();
+  const page = pageRows(rows, "jobInstances");
+  $("instanceResultCount").textContent = rows.length
+    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 个执行实例`
+    : "0 个执行实例";
+  if (!rows.length) {
+    $("instanceRows").innerHTML = '<tr><td colspan="8" class="empty-state">当前筛选下没有执行实例</td></tr>';
+    return;
+  }
+  $("instanceRows").innerHTML = page.rows.map((job) => {
+    const visualStatus = instanceDisplayStatus(job);
+    const relation = job.retry_of_job_id
+      ? `人工重试自 #${job.retry_of_job_id} · 第 ${job.retry_generation} 代`
+      : job.parent_job_id
+      ? `批次 #${job.parent_job_id} 的叶子实例`
+      : "原始执行实例";
+    const scope = job.expected_for || job.period_key || "按请求参数";
+    const attempt = Number(job.attempt || 0);
+    return `<tr>
+      <td><span class="instance-id">#${job.job_id}</span><span class="completion-reason">创建 ${formatTime(job.created_at)}</span></td>
+      <td><span class="api-name">${escapeHtml(job.task_name)}</span><span class="api-title">接口 ${escapeHtml(job.api_name || "—")}</span></td>
+      <td>${escapeHtml(scope)}<span class="completion-reason">${escapeHtml(labels[job.cadence] || job.cadence || job.resource_class || "—")}</span></td>
+      <td><span class="pill status-${visualStatus}">${labels[visualStatus] || visualStatus}</span><span class="completion-reason">${Number(job.rows_fetched || 0).toLocaleString()} 获取 / ${Number(job.rows_inserted || 0).toLocaleString()} 写入</span></td>
+      <td class="number">${attempt}/${job.max_attempts}<span class="completion-reason">同一实例内的自动尝试</span></td>
+      <td>${escapeHtml(relation)}</td>
+      <td>${escapeHtml(job.worker_id || "尚未分配")}<span class="completion-reason">${job.started_at ? `开始 ${formatTime(job.started_at)}` : `可执行 ${formatTime(job.available_at)}`}</span></td>
+      <td><div class="instance-actions"><button class="row-action" data-instance="${job.job_id}">查看进度</button><button class="row-action" data-retry="${job.job_id}" ${job.status === "failed" && job.job_kind !== "batch" ? "" : "disabled"}>重试</button></div></td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadJobInstances() {
+  try {
+    const response = await fetch("/api/v1/collection-jobs?limit=100");
+    if (!response.ok) throw new Error(`执行实例接口返回 ${response.status}`);
+    state.jobInstances = await response.json();
+    renderJobInstances();
+    clearEndpointError("instances");
+    return true;
+  } catch (error) {
+    setEndpointError("instances", error);
+    return false;
+  }
+}
+
+function renderJobInstanceDetail(job) {
+  state.focusedJob = job;
+  const visualStatus = instanceDisplayStatus(job);
+  const relation = job.retry_of_job_id
+    ? `本实例由 #${job.retry_of_job_id} 人工重试创建；重试根实例 #${job.retry_root_job_id}，第 ${job.retry_generation} 代。`
+    : job.parent_job_id
+    ? `本实例是批次 #${job.parent_job_id} 的可独立重试叶子。`
+    : "本实例是该次逻辑工作请求的原始执行实例。";
+  $("jobInstanceDialogTitle").textContent = `执行实例 #${job.job_id}`;
+  $("jobInstanceDetail").innerHTML = `
+    <div class="instance-state-banner">
+      <div><strong>${escapeHtml(job.task_name)} · ${escapeHtml(job.api_name || "无独立接口名")}</strong><span>${escapeHtml(relation)}</span></div>
+      <span class="pill status-${visualStatus}">${labels[visualStatus] || visualStatus}</span>
+    </div>
+    <div class="instance-detail-grid">
+      <article><span>实例状态</span><strong>${escapeHtml(job.status)} / ${escapeHtml(job.completion_status)}</strong><small>队列状态 / 完整性状态</small></article>
+      <article><span>自动尝试</span><strong>${Number(job.attempt || 0)} / ${job.max_attempts}</strong><small>失败退避不会创建隐藏实例</small></article>
+      <article><span>数据范围</span><strong>${escapeHtml(job.expected_for || job.period_key || "按请求参数")}</strong><small>${escapeHtml(labels[job.cadence] || job.cadence || "未指定周期")}</small></article>
+      <article><span>数据量</span><strong>${Number(job.rows_fetched || 0).toLocaleString()} / ${Number(job.rows_inserted || 0).toLocaleString()}</strong><small>获取 / 写入</small></article>
+      <article><span>Worker</span><strong>${escapeHtml(job.worker_id || "尚未分配")}</strong><small>${escapeHtml(job.resource_class || "default")} 资源池</small></article>
+      <article><span>时间</span><strong>${job.started_at ? formatTime(job.started_at) : "尚未开始"}</strong><small>${job.finished_at ? `完成 ${formatTime(job.finished_at)}` : `下次可执行 ${formatTime(job.available_at)}`}</small></article>
+      <article><span>处理器</span><strong>${escapeHtml(job.handler_key || job.handler_type || "—")}</strong><small>版本 ${escapeHtml(job.handler_version || "—")} · ${escapeHtml(job.code_revision || "—")}</small></article>
+      <article><span>实例链</span><strong>${job.retry_root_job_id ? `#${job.retry_root_job_id} → #${job.job_id}` : `#${job.job_id}`}</strong><small>${escapeHtml(relation)}</small></article>
+    </div>
+    ${job.error_message ? `<div class="instance-error"><strong>失败原因</strong><br>${escapeHtml(job.error_message)}</div>` : ""}`;
+}
+
+async function showJobInstance(jobId) {
+  if (!$('jobInstanceDialog').open) $('jobInstanceDialog').showModal();
+  $("jobInstanceDialogTitle").textContent = `执行实例 #${jobId}`;
+  $("jobInstanceDetail").innerHTML = '<p class="empty-state">正在读取实例状态…</p>';
+  if (state.jobPollTimer) window.clearTimeout(state.jobPollTimer);
+  try {
+    const response = await fetch(`/api/v1/collection-jobs/${jobId}`);
+    if (!response.ok) throw new Error(`实例明细返回 ${response.status}`);
+    const job = await response.json();
+    renderJobInstanceDetail(job);
+    if ($('jobInstanceDialog').open && ["queued", "running", "retrying", "verifying", "unverified"].includes(instanceDisplayStatus(job))) {
+      state.jobPollTimer = window.setTimeout(() => showJobInstance(jobId), 2000);
+    }
+  } catch (error) {
+    $("jobInstanceDetail").innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function retryJob(jobId, button) {
   if (!window.confirm("确认重新执行这个失败任务？任务会进入持久化队列，并可能调用上游接口。")) {
     return;
@@ -1084,8 +1193,16 @@ async function retryJob(jobId, button) {
       const body = await response.json();
       throw new Error(body.error?.message || `重试返回 ${response.status}`);
     }
-    notice("重试任务已进入持久化队列。");
-    await loadDataHealth();
+    const retried = await response.json();
+    const newInstance = Number(retried.job_id) !== Number(jobId);
+    notice(newInstance
+      ? `已创建重试执行实例 #${retried.job_id}（来源实例 #${jobId}），正在跟踪进度。`
+      : `执行实例 #${retried.job_id} 已重新入队，正在跟踪进度。`);
+    renderJobInstanceDetail(retried);
+    if (!$("jobInstanceDialog").open) $("jobInstanceDialog").showModal();
+    showJobInstance(retried.job_id);
+    await loadJobInstances();
+    loadDataHealth();
   } catch (error) {
     notice(`无法重试：${error.message}`);
     button.disabled = false;
@@ -1108,6 +1225,7 @@ function renderBatchChildren() {
       <div class="batch-child-state">
         <span class="pill status-${child.completion_status}">${labels[child.completion_status] || child.completion_status}</span>
         <span>${Number(child.rows_inserted || 0).toLocaleString()} 行</span>
+        <button class="row-action" data-instance="${child.job_id}">查看实例</button>
         <button class="row-action" data-batch-retry="${child.job_id}" ${child.status === "failed" ? "" : "disabled"}>重试</button>
       </div>
     </article>`).join("");
@@ -1434,7 +1552,7 @@ async function refreshAll() {
   renderOperationsBanner();
   try {
     const results = await Promise.all([
-      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadDataHealth(), loadFanoutCampaigns()
+      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadDataHealth(), loadFanoutCampaigns(), loadJobInstances()
     ]);
     state.hasLoadedSnapshot = results.every(Boolean);
     if (state.hasLoadedSnapshot) {
@@ -1481,6 +1599,10 @@ $("initializationDetailButton").addEventListener("click", showInitializationStep
 $("dataIssueFilter").addEventListener("change", () => {
   state.pages.health = 1;
   renderDataHealth();
+});
+$("instanceStatusFilter").addEventListener("change", () => {
+  state.pages.jobInstances = 1;
+  renderJobInstances();
 });
 $("deliveryStatusFilter").addEventListener("change", () => {
   state.pages.delivery = 1;
@@ -1562,7 +1684,8 @@ document.addEventListener("click", (event) => {
     coveragePartitions: renderCoveragePartitions,
     batchChildren: renderBatchChildren,
     initializationSteps: renderInitializationSteps,
-    fanoutPages: renderFanoutPages
+    fanoutPages: renderFanoutPages,
+    jobInstances: renderJobInstances
   };
   state.pages[key] += Number(button.dataset.pageDelta);
   renderers[key]?.();
@@ -1574,8 +1697,21 @@ $("interfaceRows").addEventListener("click", (event) => {
   if (batchButton) showBatch(batchButton.dataset.batch);
   const campaignButton = event.target.closest("[data-fanout-detail]");
   if (campaignButton) showFanoutCampaign(campaignButton.dataset.fanoutDetail);
+  const instanceButton = event.target.closest("[data-instance]");
+  if (instanceButton) showJobInstance(instanceButton.dataset.instance);
+});
+$("instanceRows").addEventListener("click", (event) => {
+  const instanceButton = event.target.closest("[data-instance]");
+  if (instanceButton) showJobInstance(instanceButton.dataset.instance);
+  const retryButton = event.target.closest("[data-retry]");
+  if (retryButton && !retryButton.disabled) retryJob(retryButton.dataset.retry, retryButton);
 });
 $("batchChildren").addEventListener("click", async (event) => {
+  const instanceButton = event.target.closest("[data-instance]");
+  if (instanceButton) {
+    showJobInstance(instanceButton.dataset.instance);
+    return;
+  }
   const button = event.target.closest("[data-batch-retry]");
   if (!button || button.disabled) return;
   await retryJob(button.dataset.batchRetry, button);
@@ -1583,6 +1719,8 @@ $("batchChildren").addEventListener("click", async (event) => {
   if (jobId) await showBatch(jobId);
 });
 $("initializationSteps").addEventListener("click", (event) => {
+  const instanceButton = event.target.closest("[data-instance]");
+  if (instanceButton) showJobInstance(instanceButton.dataset.instance);
   const button = event.target.closest("[data-fanout-detail]");
   if (button) showFanoutCampaign(button.dataset.fanoutDetail);
 });
@@ -1618,6 +1756,11 @@ $("coverageDialogClose").addEventListener("click", () => $("coverageDialog").clo
 $("batchDialogClose").addEventListener("click", () => $("batchDialog").close());
 $("initializationDialogClose").addEventListener("click", () => $("initializationDialog").close());
 $("fanoutDialogClose").addEventListener("click", () => $("fanoutDialog").close());
+$("jobInstanceDialogClose").addEventListener("click", () => {
+  if (state.jobPollTimer) window.clearTimeout(state.jobPollTimer);
+  state.jobPollTimer = null;
+  $("jobInstanceDialog").close();
+});
 
 setTheme(state.theme, false);
 setSidebarCollapsed(state.sidebarCollapsed, false);

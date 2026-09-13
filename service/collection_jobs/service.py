@@ -71,6 +71,9 @@ class CollectionJobService:
         max_attempts: int,
         idempotency_key: str | None,
         parent_job_id: int | None = None,
+        retry_of_job_id: int | None = None,
+        retry_root_job_id: int | None = None,
+        retry_generation: int = 0,
         api_name: str | None = None,
         cadence: str | None = None,
         period_key: str | None = None,
@@ -88,6 +91,9 @@ class CollectionJobService:
             max_attempts=max_attempts,
             idempotency_key=idempotency_key,
             parent_job_id=parent_job_id,
+            retry_of_job_id=retry_of_job_id,
+            retry_root_job_id=retry_root_job_id,
+            retry_generation=retry_generation,
             api_name=(
                 api_name
                 or (
@@ -178,7 +184,11 @@ class CollectionJobService:
             original["parameters"],
             max_attempts=original["max_attempts"],
             idempotency_key=idempotency_key,
-            parent_job_id=original["job_id"],
+            retry_of_job_id=original["job_id"],
+            retry_root_job_id=(
+                original.get("retry_root_job_id") or original["job_id"]
+            ),
+            retry_generation=int(original.get("retry_generation") or 0) + 1,
             api_name=original.get("api_name"),
             cadence=original.get("cadence"),
             period_key=original.get("period_key"),

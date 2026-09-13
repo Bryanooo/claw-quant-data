@@ -187,6 +187,39 @@ def test_job_service_persists_canonical_api_for_dedicated_task():
     assert repository.create_options["api_name"] == "daily"
 
 
+def test_manual_retry_creates_a_distinct_execution_instance_lineage():
+    repository = FakeRepository(
+        job=make_job(status="failed", attempt=2, max_attempts=2)
+    )
+    service = CollectionJobService(repository, TASKS)
+
+    service.retry(1, idempotency_key="retry-instance-1-generation-1")
+
+    assert repository.create_options["parent_job_id"] is None
+    assert repository.create_options["retry_of_job_id"] == 1
+    assert repository.create_options["retry_root_job_id"] == 1
+    assert repository.create_options["retry_generation"] == 1
+
+
+def test_manual_retry_preserves_root_across_multiple_instance_generations():
+    repository = FakeRepository(
+        job=make_job(
+            job_id=3,
+            status="failed",
+            retry_of_job_id=2,
+            retry_root_job_id=1,
+            retry_generation=2,
+        )
+    )
+    service = CollectionJobService(repository, TASKS)
+
+    service.retry(3, idempotency_key="retry-instance-3-generation-3")
+
+    assert repository.create_options["retry_of_job_id"] == 3
+    assert repository.create_options["retry_root_job_id"] == 1
+    assert repository.create_options["retry_generation"] == 3
+
+
 def test_collection_job_api_submits_without_access_key():
     repository = FakeRepository()
     service = CollectionJobService(repository, TASKS)

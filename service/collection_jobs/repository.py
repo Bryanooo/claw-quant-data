@@ -37,6 +37,9 @@ class JobRepository:
         max_attempts: int,
         idempotency_key: str | None,
         parent_job_id: int | None = None,
+        retry_of_job_id: int | None = None,
+        retry_root_job_id: int | None = None,
+        retry_generation: int = 0,
         api_name: str | None = None,
         cadence: str | None = None,
         period_key: str | None = None,
@@ -126,11 +129,12 @@ class JobRepository:
                 """
                     INSERT INTO sys_collection_job
                         (task_name, parameters, max_attempts, idempotency_key,
-                         parent_job_id, api_name, cadence, period_key, expected_for,
+                         parent_job_id, retry_of_job_id, retry_root_job_id,
+                         retry_generation, api_name, cadence, period_key, expected_for,
                          handler_type, handler_key, handler_version, code_revision,
                          priority, resource_class)
-                    VALUES (%s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (idempotency_key) DO NOTHING
                     RETURNING *
                     """,
@@ -140,6 +144,9 @@ class JobRepository:
                     max_attempts,
                     idempotency_key,
                     parent_job_id,
+                    retry_of_job_id,
+                    retry_root_job_id,
+                    retry_generation,
                     api_name,
                     cadence,
                     period_key,
@@ -687,7 +694,7 @@ class JobRepository:
                 f"""
                     SELECT * FROM sys_collection_job
                     WHERE {where}
-                    ORDER BY created_at DESC
+                    ORDER BY created_at DESC, job_id DESC
                     LIMIT %s
                     """,
                 (*parameters, limit),

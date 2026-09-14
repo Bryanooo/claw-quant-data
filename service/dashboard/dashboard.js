@@ -47,7 +47,7 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => 
 const labels = {
   dedicated: "专项调度", policy: "策略队列", fanout: "全量扇出", manual: "手动",
   daily: "每日", weekly: "每周", monthly: "每月", quarterly: "每季度", manualCadence: "手动",
-  complete: "严格完成", empty: "空结果", incomplete: "不完整", unverified: "未验证",
+  complete: "严格完成", empty: "空结果", page_complete: "分页完成", incomplete: "不完整", unverified: "未验证",
   running: "运行中", retrying: "等待重试", verifying: "完整性审计中", failed: "失败", pending: "尚未运行",
   paused: "已暂停", attention: "需要处理", success: "已结束", superseded: "已由新方案替代",
   event_driven: "按事件更新", not_due: "等待发布时间", waiting: "等待任务生成",
@@ -551,7 +551,7 @@ async function loadDelivery() {
 }
 
 function statusGroup(status) {
-  if (status === "complete") return "complete";
+  if (["complete", "page_complete"].includes(status)) return "complete";
   if (status === "empty") return "empty";
   if (["running", "retrying", "verifying"].includes(status)) return "active";
   if (status === "unverified") return "unverified";
@@ -753,7 +753,11 @@ function renderDataHealth() {
     const phase = initializationLabels[history.phase_name] || history.phase_name || "未知阶段";
     const total = history.phase_logical_total_steps ?? history.phase_planned_steps ?? 0;
     const materialized = history.phase_materialized_steps ?? history.phase_planned_steps ?? 0;
-    historyNode.innerHTML = `<strong>历史初始化 #${history.initialization_id}</strong><span>${escapeHtml(history.history_start || "?")} → ${escapeHtml(history.history_end || "?")} · 第 ${history.phase_index || "?"}/${history.phase_total || "?"} 阶段 ${escapeHtml(phase)} · 当前阶段已完成 ${Number(history.phase_completed_steps || 0).toLocaleString()}/${Number(total).toLocaleString()}，已生成 ${Number(materialized).toLocaleString()}，失败 ${Number(history.phase_failed_steps || 0).toLocaleString()}。这不是全流程完成率。</span>`;
+    const scope = history.coverage_scope || {};
+    const coverageTruth = history.initialization_complete
+      ? `配置计划已完成；严格审计 ${Number(scope.strictly_verified_datasets || 0)}/${Number(scope.auditable_datasets || 0)} 个可审计数据集，${Number(scope.unaudited_datasets || 0)} 个尚未审计。`
+      : `当前阶段已完成 ${Number(history.phase_completed_steps || 0).toLocaleString()}/${Number(total).toLocaleString()}，已生成 ${Number(materialized).toLocaleString()}，失败 ${Number(history.phase_failed_steps || 0).toLocaleString()}。`;
+    historyNode.innerHTML = `<strong>历史初始化 #${history.initialization_id}</strong><span>${escapeHtml(history.history_start || "?")} → ${escapeHtml(history.history_end || "?")} · 第 ${history.phase_index || "?"}/${history.phase_total || "?"} 阶段 ${escapeHtml(phase)} · ${escapeHtml(coverageTruth)} 核心计划完成不等于全部数据集历史完整。</span>`;
   } else {
     historyNode.innerHTML = `<strong>历史初始化</strong><span>${escapeHtml(history.message || "尚无初始化记录")}</span>`;
   }
@@ -1181,6 +1185,18 @@ function renderJobInstanceDetail(job) {
     ? `本实例是批次 #${job.parent_job_id} 的可独立重试叶子。`
     : "本实例是该次逻辑工作请求的原始执行实例。";
   $("jobInstanceDialogTitle").textContent = `执行实例 #${job.job_id}`;
+  const attempts = Array.isArray(job.attempts) ? job.attempts : [];
+  const attemptTimeline = attempts.length
+    ? `<div class="attempt-timeline"><h3>自动尝试记录</h3>${attempts.map((attempt) => {
+        const retry = attempt.retry_after_seconds
+          ? ` · ${Number(attempt.retry_after_seconds)} 秒后重试`
+          : "";
+        const legacy = attempt.evidence?.historical_snapshot
+          ? " · 迁移前仅保留最终快照"
+          : "";
+        return `<article><div><strong>第 ${Number(attempt.attempt_number)} 次</strong><span class="pill status-${escapeHtml(attempt.status)}">${escapeHtml(labels[attempt.status] || attempt.status)}</span></div><span>${escapeHtml(attempt.worker_id || "未分配")} · ${formatTime(attempt.started_at)}${attempt.finished_at ? ` → ${formatTime(attempt.finished_at)}` : " → 进行中"}${escapeHtml(retry + legacy)}</span>${attempt.error_message ? `<small>${escapeHtml(attempt.error_message)}</small>` : ""}</article>`;
+      }).join("")}</div>`
+    : '<div class="attempt-timeline"><h3>自动尝试记录</h3><p class="empty-state">该实例尚未被 Worker 领取。</p></div>';
   $("jobInstanceDetail").innerHTML = `
     <div class="instance-state-banner">
       <div><strong>${escapeHtml(job.task_name)} · ${escapeHtml(job.api_name || "无独立接口名")}</strong><span>${escapeHtml(relation)}</span></div>
@@ -1196,7 +1212,8 @@ function renderJobInstanceDetail(job) {
       <article><span>处理器</span><strong>${escapeHtml(job.handler_key || job.handler_type || "—")}</strong><small>版本 ${escapeHtml(job.handler_version || "—")} · ${escapeHtml(job.code_revision || "—")}</small></article>
       <article><span>实例链</span><strong>${job.retry_root_job_id ? `#${job.retry_root_job_id} → #${job.job_id}` : `#${job.job_id}`}</strong><small>${escapeHtml(relation)}</small></article>
     </div>
-    ${job.error_message ? `<div class="instance-error"><strong>失败原因</strong><br>${escapeHtml(job.error_message)}</div>` : ""}`;
+    ${job.error_message ? `<div class="instance-error"><strong>当前失败原因</strong><br>${escapeHtml(job.error_message)}</div>` : ""}
+    ${attemptTimeline}`;
 }
 
 async function showJobInstance(jobId) {

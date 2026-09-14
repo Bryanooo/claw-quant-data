@@ -252,6 +252,22 @@ class JobRepository:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def list_attempts(self, job_id: int) -> list[dict]:
+        """Return the immutable worker-attempt timeline for one instance."""
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT * FROM sys_collection_job_attempt
+                WHERE job_id=%s
+                ORDER BY attempt_id
+                """,
+                (job_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def list_unverified_scheduled(self, *, limit: int = 500) -> list[dict]:
         """Return bounded recent candidates for idempotent evidence recovery."""
         with (
@@ -754,6 +770,15 @@ class JobRepository:
                 ),
             )
             row = cursor.fetchone()
+            if row:
+                cursor.execute(
+                    """
+                    INSERT INTO sys_collection_job_attempt(
+                        job_id, attempt_number, worker_id, status, started_at
+                    ) VALUES (%s,%s,%s,'running',NOW())
+                    """,
+                    (row["job_id"], row["attempt"], worker_id),
+                )
             return dict(row) if row else None
 
     def finish(
@@ -830,6 +855,27 @@ class JobRepository:
             )
             if cursor.rowcount != 1:
                 raise JobLeaseLostError(f"collection job lease lost: {job_id}")
+            cursor.execute(
+                """
+                UPDATE sys_collection_job_attempt
+                SET status='success', rows_inserted=%s, rows_fetched=%s,
+                    evidence=%s, finished_at=NOW()
+                WHERE attempt_id=(
+                    SELECT attempt_id FROM sys_collection_job_attempt
+                    WHERE job_id=%s AND status='running'
+                      AND (%s IS NULL OR worker_id=%s)
+                    ORDER BY attempt_id DESC LIMIT 1
+                )
+                """,
+                (
+                    rows_inserted,
+                    rows_fetched,
+                    psycopg2.extras.Json(final_evidence),
+                    job_id,
+                    worker_id,
+                    worker_id,
+                ),
+            )
 
     def apply_verification_result(
         self,
@@ -989,6 +1035,29 @@ class JobRepository:
                 raise JobLeaseLostError(
                     f"collection job lease lost: {job['job_id']}"
                 )
+            cursor.execute(
+                """
+                UPDATE sys_collection_job_attempt
+                SET status=%s, retryable=%s, retry_after_seconds=%s,
+                    rows_inserted=%s, error_message=%s, evidence=%s,
+                    finished_at=NOW()
+                WHERE attempt_id=(
+                    SELECT attempt_id FROM sys_collection_job_attempt
+                    WHERE job_id=%s AND status='running' AND worker_id=%s
+                    ORDER BY attempt_id DESC LIMIT 1
+                )
+                """,
+                (
+                    "retrying" if should_retry else "failed",
+                    should_retry,
+                    retry_delay if should_retry else None,
+                    rows_inserted,
+                    error_message[:4000],
+                    psycopg2.extras.Json(completion_evidence or {}),
+                    job["job_id"],
+                    job.get("worker_id"),
+                ),
+            )
             # A long retry delay signals a shared upstream quota window (for
             # example 1000 calls/day). Defer all still-queued leaves for the
             # same interface in the same transaction. This prevents a fan-out
@@ -1063,10 +1132,47 @@ class JobRepository:
                 raise JobLeaseLostError(
                     f"collection job lease lost: {job['job_id']}"
                 )
+            cursor.execute(
+                """
+                UPDATE sys_collection_job_attempt
+                SET status='deferred', retryable=TRUE,
+                    retry_after_seconds=%s, error_message=%s, finished_at=NOW()
+                WHERE attempt_id=(
+                    SELECT attempt_id FROM sys_collection_job_attempt
+                    WHERE job_id=%s AND status='running' AND worker_id=%s
+                    ORDER BY attempt_id DESC LIMIT 1
+                )
+                """,
+                (delay, reason[:4000], job["job_id"], job.get("worker_id")),
+            )
         return "queued"
 
     def recover_stale(self, stale_after_seconds: int) -> int:
         with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job_attempt AS attempt
+                SET status='lease_expired',
+                    retryable=(job.attempt < job.max_attempts),
+                    error_message=CASE
+                        WHEN job.attempt < job.max_attempts
+                            THEN 'worker lease expired before job completed'
+                        ELSE 'worker lease expired after final attempt'
+                    END,
+                    finished_at=NOW()
+                FROM sys_collection_job AS job
+                WHERE attempt.job_id=job.job_id AND attempt.status='running'
+                  AND job.status='running' AND job.job_kind='leaf'
+                  AND (
+                    job.lease_expires_at < NOW()
+                    OR (
+                        job.lease_expires_at IS NULL
+                        AND job.started_at < NOW() - (%s * INTERVAL '1 second')
+                    )
+                  )
+                """,
+                (stale_after_seconds,),
+            )
             cursor.execute(
                 """
                     UPDATE sys_collection_job

@@ -2674,7 +2674,7 @@ def test_collection_batch_parent_is_aggregated_and_failed_child_can_requeue():
         connection.close()
 
 
-def test_partial_fanout_batch_cannot_claim_whole_universe_complete():
+def test_partial_fanout_batch_is_a_completed_page_not_incomplete_work():
     suffix = uuid4().hex
     repository = JobRepository()
     handler = TASKS.handler_metadata(
@@ -2729,7 +2729,7 @@ def test_partial_fanout_batch_cannot_claim_whole_universe_complete():
 
         refreshed = repository.get(parent["job_id"])
         assert refreshed["status"] == "success"
-        assert refreshed["completion_status"] == "incomplete"
+        assert refreshed["completion_status"] == "page_complete"
         assert refreshed["completion_evidence"]["verified"] is False
         assert refreshed["completion_evidence"]["universe_complete"] is False
     finally:
@@ -2744,6 +2744,73 @@ def test_partial_fanout_batch_cannot_claim_whole_universe_complete():
             )
         connection.commit()
         connection.close()
+
+
+def test_automatic_attempts_preserve_failure_and_recovery_timeline():
+    suffix = uuid4().hex
+    resource_class = f"attempt-{suffix[:12]}"
+    repository = JobRepository()
+    job, created = repository.create(
+        "stock_daily",
+        {"trade_date": "20260914"},
+        max_attempts=2,
+        idempotency_key=f"integration-attempt-ledger-{suffix}",
+        resource_class=resource_class,
+    )
+    assert created is True
+    try:
+        first = repository.claim_next(
+            "integration-attempt-worker",
+            resource_classes=(resource_class,),
+        )
+        assert first["job_id"] == job["job_id"]
+        assert repository.fail_or_requeue(
+            first,
+            "temporary upstream network failure",
+            retry_after_seconds=1,
+        ) == "queued"
+
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE sys_collection_job SET available_at=NOW() WHERE job_id=%s",
+                    (job["job_id"],),
+                )
+            connection.commit()
+        finally:
+            connection.close()
+
+        second = repository.claim_next(
+            "integration-attempt-worker",
+            resource_classes=(resource_class,),
+        )
+        assert second["job_id"] == job["job_id"]
+        repository.finish(
+            job["job_id"],
+            rows_inserted=10,
+            rows_fetched=10,
+            completion_status="complete",
+            completion_evidence={"verified": True},
+            worker_id="integration-attempt-worker",
+        )
+
+        attempts = repository.list_attempts(job["job_id"])
+        assert [item["status"] for item in attempts] == ["retrying", "success"]
+        assert attempts[0]["error_message"] == "temporary upstream network failure"
+        assert attempts[0]["retryable"] is True
+        assert attempts[1]["rows_fetched"] == 10
+    finally:
+        connection = psycopg2.connect(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM sys_collection_job WHERE job_id=%s",
+                    (job["job_id"],),
+                )
+            connection.commit()
+        finally:
+            connection.close()
 
 
 def test_fanout_campaign_resumes_pages_and_only_completes_whole_universe(monkeypatch):

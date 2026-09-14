@@ -556,7 +556,11 @@ def test_full_history_verification_respects_dataset_start_dates():
     assert starts["kpl_concept_cons"] == date(2024, 10, 14)
 
 
-def test_full_initialization_plans_verified_whole_universe_fanouts():
+def test_full_initialization_plans_verified_whole_universe_fanouts(monkeypatch):
+    monkeypatch.setattr(
+        "service.tushare_scheduling._latest_trade_date",
+        lambda day: day.strftime("%Y%m%d"),
+    )
     repository = PlanningRepository()
     fanout = PlanningFanout()
     jobs = PlanningJobs()

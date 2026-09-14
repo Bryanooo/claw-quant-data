@@ -223,7 +223,7 @@ class DataHealthService:
                 "confirmed_data_issue_count": confirmed_data_issues,
                 "unknown_issue_count": unknown,
             },
-            "history": self._history(initialization),
+            "history": self._history(initialization, coverage),
             "issues": issues,
             # Keep the source views so the dashboard renders one consistent
             # point-in-time snapshot instead of racing four independent calls.
@@ -292,7 +292,7 @@ class DataHealthService:
                 "missing_partitions": coverage_summary.get("missing_partitions", 0),
                 "partial_partitions": coverage_summary.get("partial_partitions", 0),
             },
-            "history": campaign,
+            "history": self._history(initialization, coverage),
             "unhealthy_services": unhealthy_services,
             "full_health_url": "/api/v1/data-health",
         }
@@ -342,12 +342,45 @@ class DataHealthService:
         return effective
 
     @staticmethod
-    def _history(initialization: dict[str, Any]) -> dict[str, Any]:
+    def _history(
+        initialization: dict[str, Any],
+        coverage: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         campaign = initialization.get("active") or initialization.get("latest")
+        coverage_items = (coverage or {}).get("datasets", [])
+        auditable = [item for item in coverage_items if item.get("auditable")]
+        strictly_verified_statuses = {"complete", "empty"}
+        strict_complete = sum(
+            (item.get("latest") or {}).get("status")
+            in strictly_verified_statuses
+            for item in auditable
+        )
+        verified_empty = sum(
+            (item.get("latest") or {}).get("status") == "empty"
+            for item in auditable
+        )
+        observed_only = sum(
+            (item.get("latest") or {}).get("status") == "observed_only"
+            for item in auditable
+        )
+        unaudited = sum(not item.get("latest") for item in auditable)
+        coverage_scope = {
+            "datasets": len(coverage_items),
+            "auditable_datasets": len(auditable),
+            "non_auditable_datasets": len(coverage_items) - len(auditable),
+            "strictly_verified_datasets": strict_complete,
+            "verified_empty_datasets": verified_empty,
+            "observed_only_datasets": observed_only,
+            "unaudited_datasets": unaudited,
+            "all_auditable_datasets_verified": bool(auditable)
+            and strict_complete == len(auditable),
+        }
         if not campaign:
             return {
                 "status": "not_started",
                 "complete": False,
+                "initialization_complete": False,
+                "coverage_scope": coverage_scope,
                 "message": "尚无可证明完成的初始化活动",
             }
         status = campaign.get("status")
@@ -359,6 +392,15 @@ class DataHealthService:
             "history_end": campaign.get("history_end"),
             "status": status,
             "complete": complete,
+            "initialization_complete": complete,
+            "completion_scope": "configured_initialization_plan",
+            # Non-temporal datasets do not have a historical partition
+            # contract, so verifying every auditable dataset still cannot be
+            # advertised as proof for the entire catalog.
+            "all_datasets_verified": bool(coverage_items)
+            and len(auditable) == len(coverage_items)
+            and coverage_scope["all_auditable_datasets_verified"],
+            "coverage_scope": coverage_scope,
             "phase_name": campaign.get("phase_name"),
             "phase_index": campaign.get("phase_index"),
             "phase_total": campaign.get("phase_total"),
@@ -376,7 +418,8 @@ class DataHealthService:
             "completion_gate": campaign.get("completion_gate"),
             "work_window": campaign.get("work_window"),
             "message": (
-                "全量历史初始化已经完成并通过验收"
+                "配置的历史初始化计划及核心数据集验收已经完成；"
+                "全部数据集的历史完整性仍以覆盖审计统计为准"
                 if complete
                 else "初始化尚未完成；当前进度只代表当前阶段，不代表全历史完成率"
             ),

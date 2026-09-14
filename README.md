@@ -198,6 +198,12 @@ stateDiagram-v2
 初始化响应中的 `completion_gate` 会逐项展示这些门槛是否满足。当前阶段的百分比
 只代表该阶段，不能被解释为全历史完成率。
 
+这里的 `completed` 只证明安装时配置的初始化计划及核心验收范围已经完成，不等于
+目录中每一个数据集的全部历史都经过严格验证。`GET /api/v1/data-health` 会同时返回
+`history.coverage_scope`：严格验证、仅观察和未审计数据集分别计数；只有
+`all_datasets_verified=true` 时，客户端才可以声称全目录历史均已验证。非时间序列
+数据集没有历史分区契约，会单独计入 `non_auditable_datasets`，不会被静默当作已验证。
+
 任一步骤都是可审计、幂等且可重试的 `sys_collection_job` 或
 `sys_data_coverage_job`。新数据库首次初始化期间，Scheduler 暂不创建日常专项、目录巡航和
 日常覆盖任务，只有验收完成并切换到 `daily` 后才开始周期增量。已有系统发起重新初始化时
@@ -260,7 +266,8 @@ Tushare 接口契约 → 有界请求 / 分页 → JSONB 原始层 → 类型校
 
 - **任务定义**（`TaskSpec`）：描述做什么、参数契约以及使用哪个处理器，本身不表示某次运行；
 - **执行实例**（`sys_collection_job.job_id`）：一次持久化入队到终态的运行实体，拥有独立状态、Worker、时间、行数和错误证据；
-- **自动尝试**（`attempt/max_attempts`）：同一个执行实例内部因瞬态故障发生的退避重试，不创建隐藏实例。
+- **自动尝试**（`attempt/max_attempts`）：同一个执行实例内部因瞬态故障发生的退避重试，不创建隐藏实例；每次尝试都追加到
+  `sys_collection_job_attempt`，失败原因、退避秒数、Worker、行数和终态不会被后一次成功覆盖。
 
 操作员点击“重试”会创建一个新的执行实例，通过 `retry_of_job_id`、
 `retry_root_job_id` 和 `retry_generation` 形成可追溯链；批次结构只使用
@@ -285,6 +292,7 @@ Tushare 接口契约 → 有界请求 / 分页 → JSONB 原始层 → 类型校
 | `retrying` | 临时错误或限频，等待退避重试 |
 | `verifying` | 采集已成功写入，针对该日期/报告期的完整性审计正在排队或执行 |
 | `complete` | 有界分区或分页耗尽得到证明，并且上游返回了数据 |
+| `page_complete` | 当前冻结宇宙分页已完整完成，但后续页面尚未物化；它不是失败，也不表示整个活动完成 |
 | `empty` | 请求完整执行且已穷尽，但上游返回 0 行；不等同于失败 |
 | `incomplete` | 触及上限、疑似整数截断、分页重复或达到最大页数，不能证明完整 |
 | `unverified` | 任务执行成功，但该专项采集器尚未提供足够完整性证据 |

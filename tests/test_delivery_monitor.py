@@ -584,18 +584,47 @@ def test_data_calendar_current_closed_day_is_not_in_progress_from_tasks():
 
 def test_policy_plan_only_schedules_daily_work_on_market_days():
     empty_scheduler = type("Scheduler", (), {"get_jobs": lambda self: []})()
+    scope = lambda _cadence, day: (day, day.isoformat())
+    recipe = lambda _recipe, day, **_options: ({}, day.isoformat(), day)
     closed = DeliveryPlanBuilder(
         market_open=lambda day: False,
         scheduler_factory=lambda: empty_scheduler,
+        scope_resolver=scope,
+        recipe_scope_resolver=recipe,
     ).build(date(2026, 9, 8))
     opened = DeliveryPlanBuilder(
         market_open=lambda day: True,
         scheduler_factory=lambda: empty_scheduler,
+        scope_resolver=scope,
+        recipe_scope_resolver=recipe,
     ).build(date(2026, 9, 8))
 
     assert not any(item["cadence"] == "daily" for item in closed)
     assert any(item["source_type"] == "policy" for item in opened)
     assert any(item["source_type"] == "fanout" for item in opened)
+
+
+def test_dedicated_market_jobs_do_not_create_closed_day_false_overdue(monkeypatch):
+    from collectors.scheduler import create_scheduler
+
+    monkeypatch.setattr(
+        "service.delivery_monitor._resolved_scope",
+        lambda _cadence, day: (day, day.isoformat()),
+    )
+    plans = DeliveryPlanBuilder(
+        market_open=lambda _day: False,
+        scheduler_factory=lambda: create_scheduler(
+            durabilize=False, set_active=False
+        ),
+        scope_resolver=lambda _cadence, day: (day, day.isoformat()),
+        recipe_scope_resolver=lambda _recipe, day, **_options: (
+            {}, day.isoformat(), day
+        ),
+    ).build(date(2026, 9, 13))
+
+    assert {
+        item["source_key"] for item in plans if item["source_type"] == "dedicated"
+    } == {"stock_basic_daily", "trade_cal_daily"}
 
 
 def test_t_plus_one_delivery_targets_previous_trade_date(monkeypatch):
@@ -609,6 +638,10 @@ def test_t_plus_one_delivery_targets_previous_trade_date(monkeypatch):
         market_open=lambda _day: True,
         scheduler_factory=lambda: create_scheduler(
             durabilize=False, set_active=False
+        ),
+        scope_resolver=lambda _cadence, day: (day, day.isoformat()),
+        recipe_scope_resolver=lambda _recipe, _day, **_options: (
+            {}, "2026-09-07", date(2026, 9, 7)
         ),
     ).build(date(2026, 9, 8))
     plan = next(

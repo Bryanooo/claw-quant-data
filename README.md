@@ -506,7 +506,9 @@ Dashboard 可以：
 - 数据日期状态仅由物理分区和当前规则覆盖审计决定，任务异常单独作为执行旁证展示；
 - 未到发布时间显示为等待，只有执行失败、覆盖不完整或超过截止时间才进入真实异常；
 - 当日未验证任务按持久化任务 ID 对齐交付截止时间，截止前等待复采、截止后才升级；
-- 通过“今日运营 / 异常中心 / 任务与接口 / 扇出活动 / 数据资产”五个页签按职责查看；
+- 通过“今日运营 / 数据日历 / 异常中心 / 执行实例 / 扇出活动 / 接口清单 / 数据资产”七个页签按职责查看；
+- “执行实例”查询的是 PostgreSQL 中完整的任务账本，使用服务端分页，可按实例 ID、接口、任务、状态、叶子/批次类型、创建日期和扇出活动筛选；
+- “扇出活动”表示一个接口跨实体全集、跨分页推进的编排容器，不等同于今日任务；可从活动直接钻取分页批次及其全部任务实例，再查看实例内部的自动尝试；
 - 在“异常与可信度中心”统一查看真实缺失、空表、未首采和完整性未知；
 - 将“已确认问题”和“尚未证明完整”分开统计，未知状态不会冒充采集失败；
 - 只把已纳入周期规则但尚无审计的数据集列为待处理；按需观察数据不制造伪故障；
@@ -581,6 +583,7 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `GET /api/v1/collection-tasks` | 可提交的任务类型 |
 | `POST /api/v1/collection-jobs` | 提交持久化采集任务 |
 | `GET /api/v1/collection-jobs` | 按接口、周期和状态查询任务历史 |
+| `GET /api/v1/collection-job-instances` | 服务端分页查询完整执行实例账本；支持状态、关键字、类型、创建日期与扇出活动范围 |
 | `POST /api/v1/collection-jobs/{id}/retry` | 重试失败任务 |
 | `GET /api/v1/collection-batches/fanout-definitions` | 查询允许安全扇出的接口、依赖和边界 |
 | `POST /api/v1/collection-batches/fanout` | 创建有界、持久化父子回填批次 |
@@ -829,6 +832,18 @@ curl -X POST http://127.0.0.1:8000/api/v1/collection-jobs \
 curl 'http://127.0.0.1:8000/api/v1/collection-jobs?api_name=cn_cpi&limit=20'
 ```
 
+### 分页查询完整执行实例账本
+
+```bash
+curl 'http://127.0.0.1:8000/api/v1/collection-job-instances?page=1&page_size=25&state=attention&created_from=2026-09-01&created_to=2026-09-14'
+```
+
+`state` 可取 `active`、`attention`、`complete`、`retry`；省略表示全部。
+还可使用 `query` 搜索实例 ID、接口名或任务名，使用 `job_kind=leaf|batch`
+区分叶子与批次，或用 `campaign_id` 只查看某次全量扇出活动产生的实例。
+响应的 `page.total_items` 和 `page.total_pages` 来自数据库全量计数，而不是浏览器中
+最近若干条记录的二次筛选。
+
 ### 创建受控扇出回填批次
 
 ```bash
@@ -862,7 +877,8 @@ curl http://127.0.0.1:8000/api/v1/collection-fanout-campaigns/1
 
 `page_size` 是每个父批次允许的最大子任务数，范围为 1–200。活动的
 `completed_offset` 只随已严格验证的分页前进；`next_offset` 表示已经规划到的
-位置，两者分开保存以支持崩溃恢复。可在同一控制台查看活动、分页和叶子任务，
+位置，两者分开保存以支持崩溃恢复。控制台将层级明确展示为“扇出活动 → 分页批次
+→ 任务实例 → 自动尝试”，可在同一控制台逐层查看证据，
 并执行带二次确认的暂停或继续操作。
 
 系统当前自动派发 8 个低风险配方：`dc_index`、`cb_share` 为每日有界分区，

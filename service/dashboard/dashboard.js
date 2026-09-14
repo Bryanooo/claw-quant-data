@@ -14,6 +14,8 @@ const state = {
   snapshotGeneratedAt: null, lastSuccessfulRefresh: null,
   bannerAction: { view: "overview", filter: null },
   jobPollTimer: null,
+  jobInstancePage: { number: 1, size: 25, total_items: 0, total_pages: 1, has_previous: false, has_next: false },
+  instanceCampaignId: null,
   pages: {
     delivery: 1, calendarDetails: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
     coveragePartitions: 1, batchChildren: 1, initializationSteps: 1, fanoutPages: 1, jobInstances: 1
@@ -33,7 +35,7 @@ try {
 
 const pageSizes = {
   delivery: 15, calendarDetails: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20,
-  coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20, jobInstances: 15
+  coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20, jobInstances: 25
 };
 
 const $ = (id) => {
@@ -203,7 +205,7 @@ function renderOperationsBanner() {
         action = { view: "fanout", filter: "active", label: "查看进行中" };
       } else if (facts.activeInstances || facts.active) {
         detailText = `${facts.active} 项排队/运行${facts.unknown ? ` · ${facts.unknown} 项完整性待确认` : ""}`;
-        action = { view: "interfaces", filter: "active", label: "查看进行中" };
+        action = { view: "instances", filter: "active", label: "查看进行中" };
       } else {
         detailText = `${facts.unknown} 项完整性待确认${facts.initializationStatus === "running" ? " · 历史初始化进行中" : ""}`;
         action = { view: "overview", filter: "unknown", label: "查看核验" };
@@ -1030,7 +1032,7 @@ function renderFanoutCampaigns() {
   $("fanoutResultCount").textContent = rows.length
     ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 个活动`
     : "0 个活动";
-  $("fanoutTabCount").textContent = `${state.fanoutCampaigns.length} 个最近活动`;
+  $("fanoutTabCount").textContent = `${state.fanoutCampaigns.length} 个活动`;
   if (!rows.length) {
     $("fanoutCampaignRows").innerHTML = '<tr><td colspan="7" class="empty-state">当前筛选下没有扇出活动</td></tr>';
     return;
@@ -1048,14 +1050,14 @@ function renderFanoutCampaigns() {
       <td class="number">${Number(campaign.pages_completed || 0)} / ${Number(campaign.pages_created || 0)}<span class="completion-reason">已验证 / 已生成</span></td>
       <td class="number">${Number(campaign.rows_fetched || 0).toLocaleString()} / ${Number(campaign.rows_inserted || 0).toLocaleString()}<span class="completion-reason">获取 / 新增</span></td>
       <td>${formatTime(campaign.finished_at || campaign.updated_at)}</td>
-      <td class="campaign-actions"><button class="row-action" data-fanout-detail="${campaign.campaign_id}">查看</button><button class="row-action" data-fanout-action="${canPause ? "pause" : "resume"}" data-fanout-id="${campaign.campaign_id}" ${canPause || canResume ? "" : "disabled"}>${canPause ? "暂停" : "继续"}</button></td>
+      <td class="campaign-actions"><button class="row-action" data-fanout-detail="${campaign.campaign_id}">活动详情</button><button class="row-action" data-fanout-instances="${campaign.campaign_id}">任务实例</button><button class="row-action" data-fanout-action="${canPause ? "pause" : "resume"}" data-fanout-id="${campaign.campaign_id}" ${canPause || canResume ? "" : "disabled"}>${canPause ? "暂停" : "继续"}</button></td>
     </tr>`;
   }).join("");
 }
 
 async function loadFanoutCampaigns() {
   try {
-    const response = await fetch("/api/v1/collection-fanout-campaigns?limit=50");
+    const response = await fetch("/api/v1/collection-fanout-campaigns?limit=200");
     if (!response.ok) throw new Error(`扇出活动接口返回 ${response.status}`);
     state.fanoutCampaigns = await response.json();
     renderFanoutCampaigns();
@@ -1121,26 +1123,34 @@ function instanceDisplayStatus(job) {
   return job.completion_status || job.status || "pending";
 }
 
-function filteredJobInstances() {
-  const filter = $("instanceStatusFilter").value;
-  if (filter === "all") return state.jobInstances;
-  if (filter === "retry") return state.jobInstances.filter((job) => Number(job.retry_generation || 0) > 0);
-  if (filter === "active") return state.jobInstances.filter((job) => ["queued", "running", "retrying", "verifying", "unverified"].includes(instanceDisplayStatus(job)));
-  if (filter === "failed") return state.jobInstances.filter((job) => instanceDisplayStatus(job) === "failed");
-  return state.jobInstances.filter((job) => ["complete", "empty"].includes(instanceDisplayStatus(job)));
-}
-
 function renderJobInstances() {
-  const rows = filteredJobInstances();
-  const page = pageRows(rows, "jobInstances");
-  $("instanceResultCount").textContent = rows.length
-    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 个执行实例`
+  const rows = state.jobInstances;
+  const page = state.jobInstancePage;
+  const start = (page.number - 1) * page.size;
+  const info = document.querySelector('[data-page-info="jobInstances"]');
+  const previous = document.querySelector('[data-page-key="jobInstances"][data-page-delta="-1"]');
+  const next = document.querySelector('[data-page-key="jobInstances"][data-page-delta="1"]');
+  if (info) info.textContent = `第 ${page.number.toLocaleString()} / ${page.total_pages.toLocaleString()} 页`;
+  if (previous) previous.disabled = !page.has_previous;
+  if (next) next.disabled = !page.has_next;
+  $("instanceResultCount").textContent = page.total_items
+    ? `显示 ${start + 1}–${Math.min(start + rows.length, page.total_items)}，共 ${page.total_items.toLocaleString()} 个执行实例`
     : "0 个执行实例";
+  const filtered = Boolean(
+    state.instanceCampaignId || $("instanceQuery").value.trim() ||
+    $("instanceStatusFilter").value !== "all" || $("instanceKindFilter").value !== "all" ||
+    $("instanceCreatedFrom").value || $("instanceCreatedTo").value
+  );
+  $("instanceTabCount").textContent = filtered
+    ? `${page.total_items.toLocaleString()} 个筛选结果`
+    : `${page.total_items.toLocaleString()} 个实例`;
+  $("instanceCampaignScope").classList.toggle("hidden", !state.instanceCampaignId);
+  $("instanceCampaignScopeLabel").textContent = state.instanceCampaignId ? `#${state.instanceCampaignId}` : "—";
   if (!rows.length) {
     $("instanceRows").innerHTML = '<tr><td colspan="8" class="empty-state">当前筛选下没有执行实例</td></tr>';
     return;
   }
-  $("instanceRows").innerHTML = page.rows.map((job) => {
+  $("instanceRows").innerHTML = rows.map((job) => {
     const visualStatus = instanceDisplayStatus(job);
     const relation = job.retry_of_job_id
       ? `人工重试自 #${job.retry_of_job_id} · 第 ${job.retry_generation} 代`
@@ -1162,11 +1172,24 @@ function renderJobInstances() {
   }).join("");
 }
 
-async function loadJobInstances() {
+async function loadJobInstances(pageNumber = state.jobInstancePage.number || 1) {
   try {
-    const response = await fetch("/api/v1/collection-jobs?limit=100");
+    const parameters = new URLSearchParams({ page: String(pageNumber), page_size: String(pageSizes.jobInstances) });
+    const status = $("instanceStatusFilter").value;
+    const query = $("instanceQuery").value.trim();
+    const kind = $("instanceKindFilter").value;
+    if (status !== "all") parameters.set("state", status);
+    if (query) parameters.set("query", query);
+    if (kind !== "all") parameters.set("job_kind", kind);
+    if ($("instanceCreatedFrom").value) parameters.set("created_from", $("instanceCreatedFrom").value);
+    if ($("instanceCreatedTo").value) parameters.set("created_to", $("instanceCreatedTo").value);
+    if (state.instanceCampaignId) parameters.set("campaign_id", String(state.instanceCampaignId));
+    const response = await fetch(`/api/v1/collection-job-instances?${parameters}`);
     if (!response.ok) throw new Error(`执行实例接口返回 ${response.status}`);
-    state.jobInstances = await response.json();
+    const payload = await response.json();
+    state.jobInstances = payload.items || [];
+    state.jobInstancePage = payload.page;
+    state.pages.jobInstances = payload.page.number;
     renderJobInstances();
     clearEndpointError("instances");
     return true;
@@ -1174,6 +1197,24 @@ async function loadJobInstances() {
     setEndpointError("instances", error);
     return false;
   }
+}
+
+function resetInstanceFilters(load = true) {
+  $("instanceQuery").value = "";
+  $("instanceStatusFilter").value = "all";
+  $("instanceKindFilter").value = "all";
+  $("instanceCreatedFrom").value = "";
+  $("instanceCreatedTo").value = "";
+  state.instanceCampaignId = null;
+  state.pages.jobInstances = 1;
+  if (load) loadJobInstances(1).then(renderOperationsBanner);
+}
+
+function showFanoutInstances(campaignId) {
+  resetInstanceFilters(false);
+  state.instanceCampaignId = Number(campaignId);
+  activateView("instances");
+  loadJobInstances(1).then(renderOperationsBanner);
 }
 
 function renderJobInstanceDetail(job) {
@@ -1659,7 +1700,20 @@ $("dataIssueFilter").addEventListener("change", () => {
 });
 $("instanceStatusFilter").addEventListener("change", () => {
   state.pages.jobInstances = 1;
-  renderJobInstances();
+  loadJobInstances(1).then(renderOperationsBanner);
+});
+$("instanceKindFilter").addEventListener("change", () => {
+  state.pages.jobInstances = 1;
+  loadJobInstances(1).then(renderOperationsBanner);
+});
+$("instanceQueryButton").addEventListener("click", () => loadJobInstances(1).then(renderOperationsBanner));
+$("instanceResetButton").addEventListener("click", () => resetInstanceFilters());
+$("instanceCampaignScopeClear").addEventListener("click", () => {
+  state.instanceCampaignId = null;
+  loadJobInstances(1).then(renderOperationsBanner);
+});
+$("instanceQuery").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") loadJobInstances(1).then(renderOperationsBanner);
 });
 $("fanoutStatusFilter").addEventListener("change", () => {
   state.pages.fanout = 1;
@@ -1725,10 +1779,10 @@ $("operationsIssuesButton").addEventListener("click", () => {
     $("fanoutStatusFilter").value = action.filter;
     state.pages.fanout = 1;
     renderFanoutCampaigns();
-  } else if (action.view === "interfaces" && action.filter) {
+  } else if (action.view === "instances" && action.filter) {
     $("instanceStatusFilter").value = action.filter;
     state.pages.jobInstances = 1;
-    renderJobInstances();
+    loadJobInstances(1).then(renderOperationsBanner);
   } else if (action.view === "overview" && action.filter) {
     $("dataIssueFilter").value = action.filter;
     state.pages.health = 1;
@@ -1753,6 +1807,10 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-page-key]");
   if (!button || button.disabled) return;
   const key = button.dataset.pageKey;
+  if (key === "jobInstances") {
+    loadJobInstances(state.jobInstancePage.number + Number(button.dataset.pageDelta)).then(renderOperationsBanner);
+    return;
+  }
   const renderers = {
     delivery: renderDelivery,
     calendarDetails: renderCalendarDetail,
@@ -1763,8 +1821,7 @@ document.addEventListener("click", (event) => {
     coveragePartitions: renderCoveragePartitions,
     batchChildren: renderBatchChildren,
     initializationSteps: renderInitializationSteps,
-    fanoutPages: renderFanoutPages,
-    jobInstances: renderJobInstances
+    fanoutPages: renderFanoutPages
   };
   state.pages[key] += Number(button.dataset.pageDelta);
   renderers[key]?.();
@@ -1810,6 +1867,8 @@ $("fanoutCampaignRows").addEventListener("click", (event) => {
   if (action && !action.disabled) {
     fanoutAction(action.dataset.fanoutId, action.dataset.fanoutAction, action);
   }
+  const instances = event.target.closest("[data-fanout-instances]");
+  if (instances) showFanoutInstances(instances.dataset.fanoutInstances);
 });
 $("fanoutPages").addEventListener("click", (event) => {
   const button = event.target.closest("[data-batch]");

@@ -1,6 +1,7 @@
 """Collection task discovery, submission and monitoring endpoints."""
 
 from dataclasses import asdict
+from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
@@ -11,6 +12,7 @@ from service.api.dependencies import (
 )
 from service.api.schemas import (
     CollectionJobRequest,
+    CollectionJobPageResponse,
     CollectionJobResponse,
     CollectionTaskSummary,
     FanoutBatchRequest,
@@ -124,6 +126,40 @@ def reconcile_fanout_campaign(
     service: FanoutCampaignServiceDependency,
 ) -> dict:
     return service.reconcile(campaign_id)
+
+
+@router.get(
+    "/collection-job-instances",
+    response_model=CollectionJobPageResponse,
+)
+def list_collection_job_instances(
+    service: CollectionJobServiceDependency,
+    instance_state: Literal[
+        "active", "attention", "complete", "retry"
+    ] | None = Query(default=None, alias="state"),
+    query: str | None = Query(default=None, min_length=1, max_length=64),
+    job_kind: Literal["leaf", "batch"] | None = None,
+    resource_class: str | None = Query(
+        default=None, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$"
+    ),
+    created_from: date | None = None,
+    created_to: date | None = None,
+    campaign_id: int | None = Query(default=None, ge=1),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> dict:
+    """Browse the full execution-instance ledger with server-side pagination."""
+    return service.page_instances(
+        state=instance_state,
+        query=query,
+        job_kind=job_kind,
+        resource_class=resource_class,
+        created_from=created_from,
+        created_to=created_to,
+        campaign_id=campaign_id,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/collection-jobs", response_model=list[CollectionJobResponse])

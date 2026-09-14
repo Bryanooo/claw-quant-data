@@ -76,6 +76,10 @@ class FakeRepository:
     def list(self, **_kwargs):
         return [self.job]
 
+    def page_instances(self, **kwargs):
+        self.page_options = kwargs
+        return [self.job], 317_107
+
     def list_attempts(self, _job_id):
         return getattr(self, "attempts", [])
 
@@ -237,6 +241,50 @@ def test_job_detail_includes_automatic_attempt_timeline():
     ]
 
 
+def test_job_instance_page_is_global_and_uses_business_date_bounds():
+    repository = FakeRepository()
+    page = CollectionJobService(repository, TASKS).page_instances(
+        state="attention",
+        query=" daily ",
+        job_kind="leaf",
+        resource_class="fanout",
+        created_from=date(2026, 9, 1),
+        created_to=date(2026, 9, 2),
+        campaign_id=42,
+        page=3,
+        page_size=25,
+    )
+
+    assert page["page"] == {
+        "number": 3,
+        "size": 25,
+        "total_items": 317_107,
+        "total_pages": 12_685,
+        "has_previous": True,
+        "has_next": True,
+    }
+    assert repository.page_options["query"] == "daily"
+    assert repository.page_options["created_from"].isoformat() == "2026-09-01T00:00:00+08:00"
+    assert repository.page_options["created_to"].isoformat() == "2026-09-03T00:00:00+08:00"
+    assert repository.page_options["campaign_id"] == 42
+
+
+def test_job_instance_page_rejects_reverse_date_range():
+    service = CollectionJobService(FakeRepository(), TASKS)
+    with pytest.raises(JobConflictError, match="created_from"):
+        service.page_instances(
+            state=None,
+            query=None,
+            job_kind=None,
+            resource_class=None,
+            created_from=date(2026, 9, 2),
+            created_to=date(2026, 9, 1),
+            campaign_id=None,
+            page=1,
+            page_size=25,
+        )
+
+
 def test_collection_job_api_submits_without_access_key():
     repository = FakeRepository()
     service = CollectionJobService(repository, TASKS)
@@ -258,6 +306,25 @@ def test_collection_job_api_submits_without_access_key():
 
     assert accepted.status_code == 202
     assert accepted.json()["status"] == "queued"
+
+
+def test_collection_job_instance_api_returns_paginated_ledger():
+    repository = FakeRepository()
+    service = CollectionJobService(repository, TASKS)
+    app = create_app(database_factory=DummyDatabase)
+    app.dependency_overrides[get_collection_job_service] = lambda: service
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/collection-job-instances",
+            params={"state": "active", "page": 2, "page_size": 25},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["page"]["total_items"] == 317_107
+    assert response.json()["items"][0]["job_id"] == 1
+    assert repository.page_options["state"] == "active"
+    assert repository.page_options["page"] == 2
 
 
 class WorkerRepository:

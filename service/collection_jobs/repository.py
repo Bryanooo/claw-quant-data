@@ -1,5 +1,7 @@
 """PostgreSQL repository for the persistent collection-job queue."""
 
+from __future__ import annotations
+
 import json
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -716,6 +718,95 @@ class JobRepository:
                 (*parameters, limit),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def page_instances(
+        self,
+        *,
+        state: str | None,
+        query: str | None,
+        job_kind: str | None,
+        resource_class: str | None,
+        created_from: Any | None,
+        created_to: Any | None,
+        campaign_id: int | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[dict], int]:
+        """Return a stable, database-filtered page from the complete job ledger."""
+        conditions: list[str] = []
+        parameters: list[Any] = []
+        if state == "active":
+            conditions.append(
+                "(status IN ('queued','running') OR "
+                "completion_status IN ('retrying','verifying','unverified'))"
+            )
+        elif state == "attention":
+            conditions.append(
+                "(status='failed' OR completion_status IN ('failed','incomplete'))"
+            )
+        elif state == "complete":
+            conditions.append(
+                "(status='success' AND completion_status IN "
+                "('complete','empty','page_complete'))"
+            )
+        elif state == "retry":
+            conditions.append("retry_generation > 0")
+        if query:
+            pattern = f"%{query}%"
+            if query.isdigit():
+                conditions.append(
+                    "(job_id=%s OR task_name ILIKE %s OR "
+                    "COALESCE(api_name, parameters->>'api_name', '') ILIKE %s)"
+                )
+                parameters.extend((int(query), pattern, pattern))
+            else:
+                conditions.append(
+                    "(task_name ILIKE %s OR "
+                    "COALESCE(api_name, parameters->>'api_name', '') ILIKE %s OR "
+                    "COALESCE(handler_key, '') ILIKE %s)"
+                )
+                parameters.extend((pattern, pattern, pattern))
+        if job_kind:
+            conditions.append("job_kind=%s")
+            parameters.append(job_kind)
+        if resource_class:
+            conditions.append("resource_class=%s")
+            parameters.append(resource_class)
+        if created_from is not None:
+            conditions.append("created_at >= %s")
+            parameters.append(created_from)
+        if created_to is not None:
+            conditions.append("created_at < %s")
+            parameters.append(created_to)
+        if campaign_id is not None:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM sys_collection_fanout_campaign_batch p "
+                "WHERE p.campaign_id=%s AND "
+                "(p.batch_job_id=sys_collection_job.job_id OR "
+                "p.batch_job_id=sys_collection_job.parent_job_id))"
+            )
+            parameters.append(campaign_id)
+        where = " AND ".join(conditions) if conditions else "TRUE"
+        offset = (page - 1) * page_size
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                f"SELECT COUNT(*) AS total FROM sys_collection_job WHERE {where}",
+                parameters,
+            )
+            total = int(cursor.fetchone()["total"])
+            cursor.execute(
+                f"""
+                SELECT * FROM sys_collection_job
+                WHERE {where}
+                ORDER BY job_id DESC
+                LIMIT %s OFFSET %s
+                """,
+                (*parameters, page_size, offset),
+            )
+            return [dict(row) for row in cursor.fetchall()], total
 
     def claim_next(
         self,

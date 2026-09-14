@@ -215,6 +215,106 @@ def test_verified_policy_scope_is_reused_across_handler_versions():
         connection.close()
 
 
+def test_collection_instance_ledger_pages_and_filters_full_database():
+    suffix = uuid4().hex[:12]
+    repository = JobRepository()
+    api_name = f"ledger_{suffix}"
+    job_ids = []
+    campaign_id = None
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        for index in range(2):
+            job, created = repository.create(
+                "tushare_interface",
+                {"api_name": api_name, "parameters": {"sample": index}},
+                max_attempts=2,
+                idempotency_key=f"integration-ledger-{suffix}-{index}",
+                api_name=api_name,
+                cadence="manual",
+                resource_class="catalog",
+            )
+            assert created
+            job_ids.append(job["job_id"])
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='success', completion_status='complete', finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (job_ids[0],),
+            )
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='failed', completion_status='incomplete', finished_at=NOW()
+                WHERE job_id=%s
+                """,
+                (job_ids[1],),
+            )
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET job_kind='batch', child_total=1, child_failed=1
+                WHERE job_id=%s
+                """,
+                (job_ids[0],),
+            )
+            cursor.execute(
+                "UPDATE sys_collection_job SET parent_job_id=%s WHERE job_id=%s",
+                (job_ids[0], job_ids[1]),
+            )
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_fanout_campaign
+                    (api_name, request, page_size, status, completion_status,
+                     idempotency_key)
+                VALUES (%s, '{}'::jsonb, 1, 'running', 'running', %s)
+                RETURNING campaign_id
+                """,
+                (api_name, f"integration-ledger-campaign-{suffix}"),
+            )
+            campaign_id = int(cursor.fetchone()[0])
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_fanout_campaign_batch
+                    (campaign_id, page_index, batch_job_id, entity_offset,
+                     next_offset, entities_selected, selected_digest)
+                VALUES (%s, 0, %s, 0, 1, 1, %s)
+                """,
+                (campaign_id, job_ids[0], "0" * 64),
+            )
+        connection.commit()
+
+        items, total = repository.page_instances(
+            state="attention",
+            query=suffix,
+            job_kind="leaf",
+            resource_class="catalog",
+            created_from=datetime.now(timezone.utc) - timedelta(days=1),
+            created_to=datetime.now(timezone.utc) + timedelta(days=1),
+            campaign_id=campaign_id,
+            page=1,
+            page_size=1,
+        )
+
+        assert total == 1
+        assert [item["job_id"] for item in items] == [job_ids[1]]
+    finally:
+        with connection.cursor() as cursor:
+            if campaign_id is not None:
+                cursor.execute(
+                    "DELETE FROM sys_collection_fanout_campaign WHERE campaign_id=%s",
+                    (campaign_id,),
+                )
+            cursor.execute(
+                "DELETE FROM sys_collection_job WHERE job_id = ANY(%s)",
+                (job_ids,),
+            )
+        connection.commit()
+        connection.close()
+
+
 def test_physical_partition_does_not_hide_known_incomplete_collection():
     suffix = uuid4().hex[:12]
     table_name = f"coverage_incomplete_{suffix}"

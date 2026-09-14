@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Claw Quant · 采集控制台</title>
-    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260911-theme-v1" />
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260914-instance-ledger-v1" />
   </head>
   <body class="theme-dark">
     <header class="topbar">
@@ -56,11 +56,14 @@
         <button class="console-tab" type="button" role="tab" aria-label="异常中心" title="异常中心" aria-selected="false" aria-controls="overviewView" data-view="overview">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5M12 17.2v.1" /></svg></span><span class="nav-copy"><strong>异常中心</strong><small id="healthTabCount">健康状态</small></span>
         </button>
-        <button class="console-tab" type="button" role="tab" aria-label="任务与接口" title="任务与接口" aria-selected="false" aria-controls="interfacesView" data-view="interfaces">
-          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.1M4 12h.1M4 18h.1" /></svg></span><span class="nav-copy"><strong>任务与接口</strong><small id="interfaceTabCount">—</small></span>
+        <button class="console-tab" type="button" role="tab" aria-label="执行实例" title="执行实例" aria-selected="false" aria-controls="instancesView" data-view="instances">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" /></svg></span><span class="nav-copy"><strong>执行实例</strong><small id="instanceTabCount">全量账本</small></span>
         </button>
         <button class="console-tab" type="button" role="tab" aria-label="扇出活动" title="扇出活动" aria-selected="false" aria-controls="fanoutView" data-view="fanout">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" /><circle cx="19" cy="6" r="2" /><circle cx="19" cy="18" r="2" /><path d="M7 12h4c3 0 3-6 6-6M11 12c3 0 3 6 6 6" /></svg></span><span class="nav-copy"><strong>扇出活动</strong><small id="fanoutTabCount">—</small></span>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-label="接口清单" title="接口清单" aria-selected="false" aria-controls="interfacesView" data-view="interfaces">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.1M4 12h.1M4 18h.1" /></svg></span><span class="nav-copy"><strong>接口清单</strong><small id="interfaceTabCount">—</small></span>
         </button>
         <button class="console-tab" type="button" role="tab" aria-label="数据资产" title="数据资产" aria-selected="false" aria-controls="coverageView" data-view="coverage">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" /></svg></span><span class="nav-copy"><strong>数据资产</strong><small id="coverageTabCount">—</small></span>
@@ -283,7 +286,7 @@
           <div>
             <p class="section-kicker">WHOLE-UNIVERSE CAMPAIGNS</p>
             <h2>全量扇出活动</h2>
-            <p id="fanoutCampaignSummary" class="section-summary">正在读取活动状态…</p>
+            <p id="fanoutCampaignSummary" class="section-summary">跨日推进一个接口的全量实体宇宙；它不是今日任务清单。</p>
           </div>
           <select id="fanoutStatusFilter" aria-label="扇出活动状态">
             <option value="all">全部活动</option>
@@ -291,6 +294,15 @@
             <option value="attention">需要处理</option>
             <option value="complete">已完成</option>
           </select>
+        </div>
+        <div class="execution-hierarchy" aria-label="扇出执行层级">
+          <article><span>1</span><div><strong>扇出活动</strong><small>冻结接口、周期和实体全集</small></div></article>
+          <i aria-hidden="true">→</i>
+          <article><span>2</span><div><strong>分页批次</strong><small>按游标切片，可暂停与恢复</small></div></article>
+          <i aria-hidden="true">→</i>
+          <article><span>3</span><div><strong>任务实例</strong><small>每个实体一次持久化执行</small></div></article>
+          <i aria-hidden="true">→</i>
+          <article><span>4</span><div><strong>自动尝试</strong><small>实例内部失败自动重试</small></div></article>
         </div>
         <div class="table-wrap">
           <table>
@@ -322,7 +334,7 @@
 
       </div>
 
-      <div id="interfacesView" class="view-panel hidden" role="tabpanel" data-view-panel="interfaces">
+      <div id="instancesView" class="view-panel hidden" role="tabpanel" data-view-panel="instances">
 
       <section class="workspace instance-workspace" aria-label="采集执行实例">
         <div class="workspace-head">
@@ -331,14 +343,27 @@
             <h2>执行实例</h2>
             <p class="section-summary">任务定义描述“做什么”；每个实例记录一次入队、执行、自动尝试、审计和人工重试链。</p>
           </div>
-          <select id="instanceStatusFilter" aria-label="执行实例状态">
-            <option value="all">全部实例</option>
-            <option value="active">排队 / 运行 / 审计</option>
-            <option value="failed">失败实例</option>
-            <option value="complete">已完成实例</option>
-            <option value="retry">人工重试实例</option>
-          </select>
+          <div class="filters instance-filters">
+            <label class="search-field"><span class="sr-only">搜索执行实例</span><input id="instanceQuery" type="search" placeholder="实例 ID、接口或任务…" /></label>
+            <select id="instanceStatusFilter" aria-label="执行实例状态">
+              <option value="all">全部状态</option>
+              <option value="active">排队 / 运行 / 审计</option>
+              <option value="attention">真实异常</option>
+              <option value="complete">已完成实例</option>
+              <option value="retry">人工重试实例</option>
+            </select>
+            <select id="instanceKindFilter" aria-label="实例类型">
+              <option value="all">叶子与批次</option>
+              <option value="leaf">叶子实例</option>
+              <option value="batch">批次实例</option>
+            </select>
+            <label class="date-field"><span>创建自</span><input id="instanceCreatedFrom" type="date" /></label>
+            <label class="date-field"><span>至</span><input id="instanceCreatedTo" type="date" /></label>
+            <button id="instanceQueryButton" class="button button-primary" type="button">查询</button>
+            <button id="instanceResetButton" class="button button-secondary" type="button">重置</button>
+          </div>
         </div>
+        <div id="instanceCampaignScope" class="instance-scope hidden"><span>仅显示扇出活动 <strong id="instanceCampaignScopeLabel">—</strong> 的任务实例</span><button id="instanceCampaignScopeClear" class="row-action" type="button">清除范围</button></div>
         <div class="table-wrap">
           <table class="instance-table">
             <thead><tr><th>实例</th><th>任务定义 / 接口</th><th>数据范围</th><th>实例状态</th><th>自动尝试</th><th>实例关系</th><th>Worker / 时间</th><th></th></tr></thead>
@@ -354,6 +379,9 @@
           </div>
         </footer>
       </section>
+      </div>
+
+      <div id="interfacesView" class="view-panel hidden" role="tabpanel" data-view-panel="interfaces">
       <section class="workspace">
         <div class="workspace-head">
           <div>
@@ -576,6 +604,6 @@
       <div id="jobInstanceDetail" class="instance-detail"><p class="empty-state">正在读取实例状态…</p></div>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260914-banner-routing-v1" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260914-instance-ledger-v1" defer></script>
   </body>
 </html>

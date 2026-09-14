@@ -482,6 +482,8 @@ coverage job 幂等更新同一审计证据，不会制造重复审计记录。
 视图选取最新版本；任何身份字段为空的记录都不会被折叠。REST 数据集会公开
 `storage_semantics`、`business_identity_fields`、`identity_confidence` 和
 `read_view`，调用方无需猜测表语义。启发式身份不创建当前视图或唯一约束。
+健康探针从对应的索引化标准表读取最大数据日期，不会为了一个日期扫描并排序整个
+`tushare_current_*` 去重视图；业务查询仍固定走当前视图，二者语义不会混用。
 
 标准化运行、隔离错误和字段漂移分别记录在 `sys_tushare_normalization_run`、
 `sys_tushare_normalization_error`、`sys_tushare_schema_drift`。健康总览可通过

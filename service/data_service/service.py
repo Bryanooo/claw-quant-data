@@ -68,6 +68,7 @@ class DataService:
             **self._dataset_summary(dataset),
             "table": dataset.table,
             "read_view": dataset.current_view,
+            "freshness_table": dataset.freshness_read_table,
             "primary_keys": list(dataset.primary_keys),
             "storage_semantics": dataset.storage_semantics,
             "business_identity_fields": list(dataset.business_identity_fields),

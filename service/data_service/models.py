@@ -37,10 +37,18 @@ class DatasetSpec:
     business_identity_fields: tuple[str, ...] = ()
     identity_confidence: str = "database_constraint"
     current_view: str | None = None
+    # Freshness probes must not force an expensive deduplicating current view
+    # to materialize merely to read MAX(date). The explicitly named storage
+    # relation carries the same partition dates and can use its date index.
+    freshness_table: str | None = None
 
     @property
     def read_table(self) -> str:
         return self.current_view or self.table
+
+    @property
+    def freshness_read_table(self) -> str:
+        return self.freshness_table or self.table
 
 
 @dataclass(frozen=True, slots=True)

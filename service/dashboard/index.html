@@ -285,6 +285,12 @@
             <h2>全量扇出活动</h2>
             <p id="fanoutCampaignSummary" class="section-summary">正在读取活动状态…</p>
           </div>
+          <select id="fanoutStatusFilter" aria-label="扇出活动状态">
+            <option value="all">全部活动</option>
+            <option value="active">正在进行</option>
+            <option value="attention">需要处理</option>
+            <option value="complete">已完成</option>
+          </select>
         </div>
         <div class="table-wrap">
           <table>
@@ -570,6 +576,6 @@
       <div id="jobInstanceDetail" class="instance-detail"><p class="empty-state">正在读取实例状态…</p></div>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260913-instance-v1" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260914-banner-routing-v1" defer></script>
   </body>
 </html>

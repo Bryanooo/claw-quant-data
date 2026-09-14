@@ -146,6 +146,14 @@ NEXT_MORNING_RELEASE_DATASETS = {
     "margin_detail": time(9, 15),
 }
 
+# ths_hot belongs to the current trade date, but its final snapshot can arrive
+# after 22:30.  With zero base grace, release_after excludes today's partition
+# until the 23:15 final patrol and includes yesterday immediately after
+# midnight.  This differs intentionally from the T+1 datasets above.
+SAME_DAY_RELEASE_DATASETS = {
+    "ths_hot": time(23, 15),
+}
+
 
 _EXPLICIT_RULES = [
         _rule("stock_daily", CoverageStrategy.TRADING_DAILY, collection_api_name="daily", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
@@ -252,7 +260,13 @@ _EXPLICIT_RULES = [
                 dataset_name,
                 CoverageStrategy.TRADING_DAILY,
                 entity_column=None,
-                release_after=NEXT_MORNING_RELEASE_DATASETS.get(dataset_name),
+                grace_days=(
+                    0 if dataset_name in SAME_DAY_RELEASE_DATASETS else 1
+                ),
+                release_after=(
+                    SAME_DAY_RELEASE_DATASETS.get(dataset_name)
+                    or NEXT_MORNING_RELEASE_DATASETS.get(dataset_name)
+                ),
                 description="按 SSE 交易日检查每日稳定发布的数据分区",
                 accept_verified_empty=(dataset_name == "kpl_concept_cons"),
             )

@@ -231,6 +231,8 @@ def test_collection_instance_ledger_pages_and_filters_full_database():
                 idempotency_key=f"integration-ledger-{suffix}-{index}",
                 api_name=api_name,
                 cadence="manual",
+                period_key="2026-09-15",
+                expected_for=date(2026, 9, 15),
                 resource_class="catalog",
             )
             assert created
@@ -1348,6 +1350,79 @@ def test_unresolved_failure_is_recovered_only_by_the_same_partition():
         assert api_name not in (
             CollectionMonitorRepository().unresolved_partition_failures()
         )
+    finally:
+        connection.rollback()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM sys_collection_job WHERE api_name=%s",
+                (api_name,),
+            )
+        connection.commit()
+        connection.close()
+
+
+def test_instance_ledger_separates_current_and_recovered_failures():
+    api_name = f"ledger_{uuid4().hex[:20]}"
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_job
+                    (task_name, api_name, parameters, status, period_key,
+                     expected_for, completion_status, finished_at)
+                VALUES
+                    ('contract_test', %s, '{}'::jsonb, 'failed', '2026-02-01',
+                     DATE '2026-02-01', 'failed', NOW()),
+                    ('contract_test', %s, '{}'::jsonb, 'failed', '2026-02-02',
+                     DATE '2026-02-02', 'failed', NOW()),
+                    ('contract_test', %s, '{}'::jsonb, 'success', '2026-02-02',
+                     DATE '2026-02-02', 'complete', NOW())
+                RETURNING job_id
+                """,
+                (api_name, api_name, api_name),
+            )
+            job_ids = [row[0] for row in cursor.fetchall()]
+        connection.commit()
+
+        repository = JobRepository()
+        common = {
+            "query": api_name,
+            "job_kind": None,
+            "resource_class": None,
+            "created_from": None,
+            "created_to": None,
+            "campaign_id": None,
+            "page": 1,
+            "page_size": 25,
+        }
+        current, current_total = repository.page_instances(
+            state="attention", **common
+        )
+        recovered, recovered_total = repository.page_instances(
+            state="recovered", **common
+        )
+        history, history_total = repository.page_instances(
+            state="failure_history", **common
+        )
+
+        assert current_total == 1
+        assert current[0]["job_id"] == job_ids[0]
+        assert current[0]["resolution_state"] == "unresolved"
+        assert recovered_total == 1
+        assert recovered[0]["job_id"] == job_ids[1]
+        assert recovered[0]["resolution_state"] == "recovered"
+        assert recovered[0]["resolved_by_job_id"] == job_ids[2]
+        successful = repository.get(job_ids[2])
+        assert successful["resolution_state"] is None
+        assert successful["resolution_reason"] is None
+        assert successful["resolved_by_job_id"] is None
+        assert successful["resolved_by_campaign_id"] is None
+        assert successful["resolved_by_audit_id"] is None
+        assert history_total == 2
+        assert {item["resolution_state"] for item in history} == {
+            "unresolved", "recovered"
+        }
     finally:
         connection.rollback()
         with connection.cursor() as cursor:

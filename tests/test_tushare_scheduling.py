@@ -193,11 +193,31 @@ def test_policy_submission_creates_one_separate_recheck_for_empty_result(monkeyp
     assert second == first
     assert len(repository.rechecks) == first
     assert third == 0
-    assert all(item["max_generations"] == 3 for item in repository.rechecks)
+    api_by_job_id = {
+        job["job_id"]: job["api_name"] for job in repository.jobs.values()
+    }
     assert all(
-        item["min_interval_seconds"] == 3 * 3600
+        item["min_interval_seconds"]
+        == (30 * 60 if api_by_job_id[item["root_job_id"]] == "ths_hot" else 3 * 3600)
+        and item["max_generations"]
+        == (5 if api_by_job_id[item["root_job_id"]] == "ths_hot" else 3)
         for item in repository.rechecks
     )
+
+
+def test_ths_hot_empty_rechecks_cannot_block_final_evening_patrol():
+    policy = scheduling._empty_recheck_policy("ths_hot", "daily")
+
+    assert policy == {
+        "min_interval_seconds": 30 * 60,
+        "max_generations": 5,
+        "window_days": 4,
+    }
+    assert scheduling._empty_recheck_policy("daily_info", "daily") == {
+        "min_interval_seconds": 3 * 3600,
+        "max_generations": 3,
+        "window_days": 4,
+    }
 
 
 def test_next_morning_empty_recheck_waits_for_publication_cutoff(monkeypatch):

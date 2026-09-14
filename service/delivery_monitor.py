@@ -1002,7 +1002,7 @@ class DeliveryMonitorService:
             {
                 key: item.get(key)
                 for key in (
-                    "api_name", "title", "delivery_status", "business_dates",
+                    "api_name", "title", "source_type", "delivery_status", "business_dates",
                     "work_id", "final_due_at", "attention",
                     "planned_attempt_total", "error_message", "validation_state",
                 )
@@ -1171,10 +1171,10 @@ class DeliveryMonitorService:
             else:
                 validation_status = "unverified"
             availability_state = None
-            if validation_status == "unverified" and rule.release_after:
-                availability_state = "waiting_publication"
-            elif validation_status == "unverified" and api_name == "ths_hot":
+            if validation_status == "unverified" and api_name == "ths_hot":
                 availability_state = "waiting_recheck"
+            elif validation_status == "unverified" and rule.release_after:
+                availability_state = "waiting_publication"
             attention = validation_status in {"missing", "partial"}
             if validation_status == "missing":
                 action = "按该数据日期创建精确补采，并在写入后重新执行覆盖审计"
@@ -1187,16 +1187,17 @@ class DeliveryMonitorService:
                     "非交易日没有强日频数据要求；任务记录仅作执行旁证，"
                     "不参与数据完整性结论"
                 )
+            elif validation_status == "unverified" and api_name == "ths_hot":
+                release = rule.release_after.strftime("%H:%M")
+                action = (
+                    f"热榜数据可能在 22:30 后形成最终批次；系统于 {release} "
+                    "执行同日最终复查，到期后仍为空才升级为异常"
+                )
             elif validation_status == "unverified" and rule.release_after:
                 release = rule.release_after.strftime("%H:%M")
                 action = (
                     f"上游在下一自然日 {release} 后发布；到期后系统自动复采并审计，"
                     "当前不判为缺失"
-                )
-            elif validation_status == "unverified" and api_name == "ths_hot":
-                action = (
-                    "热榜数据分批发布至 22:00；系统在 23:15 及后续巡航自动复查，"
-                    "成熟后仍为空才升级为异常"
                 )
             elif validation_status == "unverified":
                 action = "尚无当前规则版本的物理分区审计，不能判定缺失或完成"
@@ -1223,7 +1224,7 @@ class DeliveryMonitorService:
                         {
                             key: task.get(key)
                             for key in (
-                                "api_name", "delivery_status", "business_dates",
+                                "api_name", "source_type", "delivery_status", "business_dates",
                                 "work_id", "final_due_at", "attention",
                                 "planned_attempt_total", "error_message",
                                 "validation_state",

@@ -17,7 +17,9 @@ COMPLETION_STATUSES = {
     "verifying", "unverified", "page_complete", "incomplete", "failed",
 }
 JOB_KINDS = {"leaf", "batch"}
-INSTANCE_STATES = {"active", "attention", "complete", "retry"}
+INSTANCE_STATES = {
+    "active", "attention", "recovered", "failure_history", "complete", "retry"
+}
 
 _TASK_PRIORITIES = {
     "market": 80,

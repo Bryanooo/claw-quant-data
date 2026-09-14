@@ -327,6 +327,22 @@ def test_collection_job_instance_api_returns_paginated_ledger():
     assert repository.page_options["page"] == 2
 
 
+def test_collection_job_instance_api_supports_effective_failure_views():
+    repository = FakeRepository()
+    service = CollectionJobService(repository, TASKS)
+    app = create_app(database_factory=DummyDatabase)
+    app.dependency_overrides[get_collection_job_service] = lambda: service
+
+    with TestClient(app) as client:
+        for state in ("attention", "recovered", "failure_history"):
+            response = client.get(
+                "/api/v1/collection-job-instances",
+                params={"state": state, "page": 1, "page_size": 25},
+            )
+            assert response.status_code == 200
+            assert repository.page_options["state"] == state
+
+
 class WorkerRepository:
     def __init__(self):
         self.job = make_job(status="running", attempt=1)

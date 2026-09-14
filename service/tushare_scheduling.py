@@ -108,6 +108,20 @@ _EMPTY_RECHECK_POLICIES = {
     "quarterly": {"min_interval_seconds": 7 * 24 * 3600, "max_generations": 14, "window_days": 120},
 }
 
+# Interfaces whose publication pattern needs a tighter bounded recheck loop
+# than the cadence-wide default.  ths_hot is assembled in intraday batches and
+# the final upstream snapshot can arrive after 22:30.  A scheduler restart (or
+# an earlier empty recheck) must not make that attempt block the 23:15 patrol.
+_EMPTY_RECHECK_OVERRIDES = {
+    "ths_hot": {"min_interval_seconds": 30 * 60, "max_generations": 5},
+}
+
+
+def _empty_recheck_policy(api_name: str, cadence: str) -> dict[str, int]:
+    policy = dict(_EMPTY_RECHECK_POLICIES[cadence])
+    policy.update(_EMPTY_RECHECK_OVERRIDES.get(api_name, {}))
+    return policy
+
 # These daily interfaces can legitimately remain empty until the following
 # morning.  Do not consume a bounded empty-recheck generation before their
 # documented publication window has closed.
@@ -355,7 +369,7 @@ def submit_policy_batch(
         if not created and _publication_is_mature(contract.api_name, scope_date):
             recheck = job_repository.create_empty_recheck(
                 int(job["job_id"]),
-                **_EMPTY_RECHECK_POLICIES[cadence],
+                **_empty_recheck_policy(contract.api_name, cadence),
                 handler=handler,
             )
             submitted += int(recheck is not None)

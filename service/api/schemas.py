@@ -318,6 +318,11 @@ class CollectionJobResponse(ApiModel):
     heartbeat_at: datetime | None = None
     lease_expires_at: datetime | None = None
     error_message: str | None = None
+    resolution_state: str | None = None
+    resolution_reason: str | None = None
+    resolved_by_job_id: int | None = None
+    resolved_by_campaign_id: int | None = None
+    resolved_by_audit_id: int | None = None
     available_at: datetime
     created_at: datetime
     started_at: datetime | None = None

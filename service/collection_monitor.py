@@ -15,6 +15,7 @@ from service.tushare_scheduling import (
     DEDICATED_SCHEDULED_APIS,
 )
 from service.clock import business_now
+from service.collection_jobs.resolution import unresolved_failure_predicate
 
 
 class CollectionMonitorRepository:
@@ -198,113 +199,24 @@ class CollectionMonitorRepository:
         Period-less exploratory jobs are excluded because they do not identify
         a recoverable data partition.
         """
+        unresolved = unresolved_failure_predicate("failed")
         rows = query(
-            """
-            WITH failed AS (
-                SELECT job_id,
-                       COALESCE(api_name, parameters->>'api_name') AS api_name,
-                       CASE COALESCE(api_name, parameters->>'api_name')
-                           WHEN 'trade_cal' THEN 'trade_calendar'
-                           WHEN 'daily' THEN 'stock_daily'
-                           WHEN 'daily_basic' THEN 'stock_daily_basic'
-                           WHEN 'bak_basic' THEN 'bak_basic'
-                           WHEN 'stk_limit' THEN 'stock_limit'
-                           WHEN 'suspend_d' THEN 'stock_suspend'
-                           WHEN 'fina_indicator' THEN 'financial_indicator'
-                           WHEN 'fina_indicator_vip' THEN 'financial_indicator'
-                           WHEN 'fx_daily' THEN 'forex_daily'
-                           WHEN 'ths_daily' THEN 'industry_daily'
-                           WHEN 'balancesheet_vip' THEN 'balancesheet'
-                           WHEN 'cashflow_vip' THEN 'cashflow'
-                           WHEN 'income_vip' THEN 'income'
-                           WHEN 'express_vip' THEN 'express'
-                           WHEN 'fina_mainbz_vip' THEN 'fina_mainbz'
-                           WHEN 'forecast_vip' THEN 'forecast'
-                           ELSE COALESCE(api_name, parameters->>'api_name')
-                       END AS dataset_name,
-                       task_name, parameters, period_key, expected_for, parent_job_id,
-                       status, completion_status, completion_evidence,
-                       error_message, finished_at
-                FROM sys_collection_job
-                WHERE (status='failed' OR completion_status='incomplete')
-                  AND job_kind='leaf'
-                  AND COALESCE(api_name, parameters->>'api_name') IS NOT NULL
-                  AND (period_key IS NOT NULL OR expected_for IS NOT NULL)
-            ), unresolved AS (
-                SELECT failed.*
-                FROM failed
-                WHERE NOT (
-                    failed.status='success'
-                    AND failed.completion_status='incomplete'
-                    AND failed.expected_for IS NOT NULL
-                    AND EXISTS (
-                        SELECT 1
-                        FROM sys_collection_delivery_plan AS delivery
-                        WHERE delivery.api_name=failed.api_name
-                          AND delivery.expected_for=failed.expected_for
-                          AND NOW() <= delivery.due_at
-                    )
-                )
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM sys_collection_job AS recovered
-                    WHERE recovered.status='success'
-                      AND recovered.job_kind='leaf'
-                      AND recovered.job_id > failed.job_id
-                      AND COALESCE(
-                            recovered.api_name,
-                            recovered.parameters->>'api_name'
-                          ) = failed.api_name
-                      AND (
-                            (failed.expected_for IS NOT NULL
-                             AND recovered.expected_for=failed.expected_for)
-                         OR (failed.period_key IS NOT NULL
-                             AND recovered.period_key=failed.period_key)
-                      )
-                      AND (
-                            failed.status='failed'
-                         OR recovered.completion_status='complete'
-                      )
-                )
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM sys_collection_fanout_campaign AS recovered_campaign
-                    WHERE failed.parent_job_id IS NULL
-                      AND recovered_campaign.api_name=failed.api_name
-                      AND recovered_campaign.status='success'
-                      AND recovered_campaign.completion_status='complete'
-                      AND (
-                            failed.expected_for IS NULL
-                         OR recovered_campaign.expected_for >= failed.expected_for
-                      )
-                      AND recovered_campaign.request @>
-                          jsonb_build_object('api_name', failed.api_name)
-                      AND (
-                            COALESCE(failed.parameters->'parameters', '{}'::jsonb)
-                                = '{}'::jsonb
-                         OR recovered_campaign.request @>
-                            COALESCE(
-                                failed.parameters->'parameters', '{}'::jsonb
-                            )
-                      )
-                  )
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM sys_data_coverage_audit AS recovered_audit
-                    WHERE failed.expected_for IS NOT NULL
-                      AND recovered_audit.dataset_name=failed.dataset_name
-                      AND recovered_audit.status='complete'
-                      AND failed.expected_for BETWEEN
-                          recovered_audit.start_date AND recovered_audit.end_date
-                      AND recovered_audit.finished_at > failed.finished_at
-                  )
-            )
-            SELECT DISTINCT ON (api_name)
-                   api_name, job_id, period_key, expected_for,
-                   status, completion_status, completion_evidence,
-                   error_message, finished_at
-            FROM unresolved
-            ORDER BY api_name, finished_at DESC NULLS LAST, job_id DESC
+            f"""
+            SELECT DISTINCT ON (
+                       COALESCE(failed.api_name,
+                                failed.parameters->>'api_name')
+                   )
+                   COALESCE(failed.api_name,
+                            failed.parameters->>'api_name') AS api_name,
+                   failed.job_id, failed.period_key, failed.expected_for,
+                   failed.status, failed.completion_status,
+                   failed.completion_evidence, failed.error_message,
+                   failed.finished_at
+            FROM sys_collection_job AS failed
+            WHERE {unresolved}
+            ORDER BY COALESCE(failed.api_name,
+                              failed.parameters->>'api_name'),
+                     failed.finished_at DESC NULLS LAST, failed.job_id DESC
             """
         )
         return {row["api_name"]: row for row in rows}

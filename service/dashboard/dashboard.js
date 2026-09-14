@@ -53,7 +53,18 @@ const labels = {
   running: "运行中", retrying: "等待重试", verifying: "完整性审计中", failed: "失败", pending: "尚未运行",
   paused: "已暂停", attention: "需要处理", success: "已结束", superseded: "已由新方案替代",
   event_driven: "按事件更新", not_due: "等待发布时间", waiting: "等待任务生成",
-  queued: "已排队", overdue: "已逾期", in_progress: "交付窗口内"
+  queued: "已排队", overdue: "已逾期", in_progress: "交付窗口内",
+  unresolved: "当前未恢复", recovered: "已恢复", pending_recovery: "交付窗口内", historical: "历史记录"
+};
+const resolutionLabels = {
+  still_unresolved: "同一数据范围尚无后续恢复证据",
+  within_delivery_window: "仍在最终交付时限内，暂不升级为异常",
+  recovered_by_later_job: "已由后续执行实例恢复",
+  recovered_by_fanout_campaign: "已由完成的全量采集活动恢复",
+  recovered_by_coverage_audit: "已由后续覆盖审计证明数据完整",
+  batch_parent_history: "批次父记录，实际问题由叶子实例或活动承载",
+  scope_not_actionable: "没有可独立恢复的数据范围，仅保留为执行历史",
+  historical_non_actionable: "历史执行记录，不属于当前待处理事项"
 };
 const coverageLabels = {
   trading_daily: "交易日", trading_weekly: "完整交易周", trading_monthly: "完整月份",
@@ -96,9 +107,9 @@ const endpointLabels = {
   delivery: "今日交付",
   calendar: "数据日历",
   preflight: "运行预检",
-  health: "数据健康",
-  fanout: "扇出活动",
-  instances: "执行实例"
+  health: "待处理事项",
+  fanout: "全量采集活动",
+  instances: "执行记录"
 };
 
 function setEndpointError(source, error) {
@@ -408,6 +419,11 @@ function renderCalendarDetail() {
       ? `${labels[taskStatus] || taskStatus} · 执行日 ${(task.business_dates || []).join("、") || "—"}`
       : "无同期任务记录（不影响物理数据事实）";
     const taskWarning = item.task_attention ? " · 任务执行需关注（不改变数据结论）" : "";
+    const taskAction = task.work_id
+      ? task.source_type === "fanout"
+        ? `<button class="row-action" data-calendar-fanout="${task.work_id}">查看活动 #${task.work_id}</button>`
+        : `<button class="row-action" data-calendar-instance="${task.work_id}">查看实例 #${task.work_id}</button>`
+      : "";
     return `<tr class="${item.attention ? "delivery-row-attention" : ""}">
       <td><span class="api-name">${escapeHtml(item.dataset_name)}</span><span class="api-title">上游 ${escapeHtml(item.api_name)}</span></td>
       <td class="number">${Number(item.row_count || 0).toLocaleString()} 行<span class="completion-reason">数据日期 ${escapeHtml(item.data_date)}</span></td>
@@ -415,7 +431,7 @@ function renderCalendarDetail() {
       <td>${escapeHtml(entityEvidence)}${escapeHtml(ratio)}</td>
       <td><span class="pill status-${taskStatus}">${labels[taskStatus] || taskStatus}</span><span class="completion-reason">${escapeHtml(taskEvidence + taskWarning)}</span></td>
       <td>${escapeHtml(item.description || "—")}</td>
-      <td>${escapeHtml(item.action || "—")}</td>
+      <td><span>${escapeHtml(item.action || "—")}</span>${taskAction ? `<div class="health-actions">${taskAction}</div>` : ""}</td>
     </tr>`;
   }).join("");
 }
@@ -502,7 +518,7 @@ function renderDelivery() {
     ? `显示 ${page.start + 1}–${end}，共 ${rows.length} 项计划`
     : "0 项计划";
   if (!rows.length) {
-    $("deliveryRows").innerHTML = '<tr><td colspan="6" class="empty-state">当前筛选下没有交付计划</td></tr>';
+    $("deliveryRows").innerHTML = '<tr><td colspan="7" class="empty-state">当前筛选下没有交付计划</td></tr>';
     return;
   }
   $("deliveryRows").innerHTML = page.rows.map((item) => {
@@ -512,6 +528,11 @@ function renderDelivery() {
     const finish = item.finished_at ? formatTime(item.finished_at) : "尚未完成";
     const status = item.delivery_status || "pending";
     const source = { dedicated: "专项调度", policy: "策略队列", fanout: "全量扇出" }[item.source_type] || item.source_type;
+    const evidenceAction = item.work_id
+      ? item.source_type === "fanout"
+        ? `<button class="row-action" data-delivery-fanout="${item.work_id}">活动 #${item.work_id}</button>`
+        : `<button class="row-action" data-delivery-instance="${item.work_id}">实例 #${item.work_id}</button>`
+      : '<span class="completion-reason">尚未生成执行实体</span>';
     const evidence = item.error_message || (
       status === "not_due" ? "尚未到计划发布时间" :
       status === "waiting" ? "已到计划时间，仍在允许交付窗口内" :
@@ -527,6 +548,7 @@ function renderDelivery() {
       <td><span class="pill status-${status}">${labels[status] || status}</span><span class="completion-reason">${escapeHtml(evidence)}</span></td>
       <td class="number">${fetched} / ${stored}<span class="completion-reason">获取 / 写入</span></td>
       <td>${finish}<span class="completion-reason">截止 ${formatTime(item.due_at)}</span></td>
+      <td>${evidenceAction}</td>
     </tr>`;
   }).join("");
 }
@@ -1119,8 +1141,19 @@ async function fanoutAction(campaignId, action, button) {
 function instanceDisplayStatus(job) {
   if (job.status === "queued") return job.completion_status === "retrying" ? "retrying" : "queued";
   if (job.status === "running") return "running";
-  if (job.status === "failed") return "failed";
+  if (job.status === "failed" || ["failed", "incomplete"].includes(job.completion_status)) {
+    return job.resolution_state || "unresolved";
+  }
   return job.completion_status || job.status || "pending";
+}
+
+function instanceResolutionText(job) {
+  if (!job.resolution_state) return "";
+  const prefix = resolutionLabels[job.resolution_reason] || "";
+  if (job.resolved_by_job_id) return `${prefix} · 恢复实例 #${job.resolved_by_job_id}`;
+  if (job.resolved_by_campaign_id) return `${prefix} · 活动 #${job.resolved_by_campaign_id}`;
+  if (job.resolved_by_audit_id) return `${prefix} · 审计 #${job.resolved_by_audit_id}`;
+  return prefix;
 }
 
 function renderJobInstances() {
@@ -1152,6 +1185,7 @@ function renderJobInstances() {
   }
   $("instanceRows").innerHTML = rows.map((job) => {
     const visualStatus = instanceDisplayStatus(job);
+    const resolution = instanceResolutionText(job);
     const relation = job.retry_of_job_id
       ? `人工重试自 #${job.retry_of_job_id} · 第 ${job.retry_generation} 代`
       : job.parent_job_id
@@ -1159,15 +1193,17 @@ function renderJobInstances() {
       : "原始执行实例";
     const scope = job.expected_for || job.period_key || "按请求参数";
     const attempt = Number(job.attempt || 0);
+    const canRetry = job.status === "failed" && job.job_kind !== "batch" &&
+      (!job.resolution_state || job.resolution_state === "unresolved");
     return `<tr>
       <td><span class="instance-id">#${job.job_id}</span><span class="completion-reason">创建 ${formatTime(job.created_at)}</span></td>
       <td><span class="api-name">${escapeHtml(job.task_name)}</span><span class="api-title">接口 ${escapeHtml(job.api_name || "—")}</span></td>
       <td>${escapeHtml(scope)}<span class="completion-reason">${escapeHtml(labels[job.cadence] || job.cadence || job.resource_class || "—")}</span></td>
-      <td><span class="pill status-${visualStatus}">${labels[visualStatus] || visualStatus}</span><span class="completion-reason">${Number(job.rows_fetched || 0).toLocaleString()} 获取 / ${Number(job.rows_inserted || 0).toLocaleString()} 写入</span></td>
+      <td><span class="pill status-${visualStatus}">${labels[visualStatus] || visualStatus}</span><span class="completion-reason">原始状态 ${escapeHtml(job.status)} / ${escapeHtml(job.completion_status)}</span>${resolution ? `<span class="completion-reason">${escapeHtml(resolution)}</span>` : ""}</td>
       <td class="number">${attempt}/${job.max_attempts}<span class="completion-reason">同一实例内的自动尝试</span></td>
       <td>${escapeHtml(relation)}</td>
       <td>${escapeHtml(job.worker_id || "尚未分配")}<span class="completion-reason">${job.started_at ? `开始 ${formatTime(job.started_at)}` : `可执行 ${formatTime(job.available_at)}`}</span></td>
-      <td><div class="instance-actions"><button class="row-action" data-instance="${job.job_id}">查看进度</button><button class="row-action" data-retry="${job.job_id}" ${job.status === "failed" && job.job_kind !== "batch" ? "" : "disabled"}>重试</button></div></td>
+      <td><div class="instance-actions"><button class="row-action" data-instance="${job.job_id}">查看证据</button><button class="row-action" data-retry="${job.job_id}" ${canRetry ? "" : "disabled"}>重试</button></div></td>
     </tr>`;
   }).join("");
 }
@@ -1225,6 +1261,12 @@ function renderJobInstanceDetail(job) {
     : job.parent_job_id
     ? `本实例是批次 #${job.parent_job_id} 的可独立重试叶子。`
     : "本实例是该次逻辑工作请求的原始执行实例。";
+  const resolution = instanceResolutionText(job);
+  const recoveryAction = job.resolved_by_job_id
+    ? `<button class="row-action" data-instance="${job.resolved_by_job_id}">查看恢复实例 #${job.resolved_by_job_id}</button>`
+    : job.resolved_by_campaign_id
+    ? `<button class="row-action" data-fanout-detail="${job.resolved_by_campaign_id}">查看恢复活动 #${job.resolved_by_campaign_id}</button>`
+    : "";
   $("jobInstanceDialogTitle").textContent = `执行实例 #${job.job_id}`;
   const attempts = Array.isArray(job.attempts) ? job.attempts : [];
   const attemptTimeline = attempts.length
@@ -1240,7 +1282,7 @@ function renderJobInstanceDetail(job) {
     : '<div class="attempt-timeline"><h3>自动尝试记录</h3><p class="empty-state">该实例尚未被 Worker 领取。</p></div>';
   $("jobInstanceDetail").innerHTML = `
     <div class="instance-state-banner">
-      <div><strong>${escapeHtml(job.task_name)} · ${escapeHtml(job.api_name || "无独立接口名")}</strong><span>${escapeHtml(relation)}</span></div>
+      <div><strong>${escapeHtml(job.task_name)} · ${escapeHtml(job.api_name || "无独立接口名")}</strong><span>${escapeHtml(relation)}</span>${resolution ? `<span>${escapeHtml(resolution)}</span>` : ""}${recoveryAction}</div>
       <span class="pill status-${visualStatus}">${labels[visualStatus] || visualStatus}</span>
     </div>
     <div class="instance-detail-grid">
@@ -1723,6 +1765,12 @@ $("deliveryStatusFilter").addEventListener("change", () => {
   state.pages.delivery = 1;
   renderDelivery();
 });
+$("deliveryRows").addEventListener("click", (event) => {
+  const instance = event.target.closest("[data-delivery-instance]");
+  if (instance) showJobInstance(instance.dataset.deliveryInstance);
+  const campaign = event.target.closest("[data-delivery-fanout]");
+  if (campaign) showFanoutCampaign(campaign.dataset.deliveryFanout);
+});
 $("calendarDetailFilter").addEventListener("change", () => {
   state.pages.calendarDetails = 1;
   renderCalendarDetail();
@@ -1749,6 +1797,10 @@ $("calendarGrid").addEventListener("click", (event) => {
 $("calendarDetailRows").addEventListener("click", (event) => {
   const button = event.target.closest("[data-calendar-retry]");
   if (button && !button.disabled) retryJob(button.dataset.calendarRetry, button);
+  const instance = event.target.closest("[data-calendar-instance]");
+  if (instance) showJobInstance(instance.dataset.calendarInstance);
+  const campaign = event.target.closest("[data-calendar-fanout]");
+  if (campaign) showFanoutCampaign(campaign.dataset.calendarFanout);
 });
 document.querySelector(".console-tabs").addEventListener("click", (event) => {
   const button = event.target.closest("[data-view]");
@@ -1841,6 +1893,12 @@ $("instanceRows").addEventListener("click", (event) => {
   if (instanceButton) showJobInstance(instanceButton.dataset.instance);
   const retryButton = event.target.closest("[data-retry]");
   if (retryButton && !retryButton.disabled) retryJob(retryButton.dataset.retry, retryButton);
+});
+$("jobInstanceDetail").addEventListener("click", (event) => {
+  const instance = event.target.closest("[data-instance]");
+  if (instance) showJobInstance(instance.dataset.instance);
+  const campaign = event.target.closest("[data-fanout-detail]");
+  if (campaign) showFanoutCampaign(campaign.dataset.fanoutDetail);
 });
 $("batchChildren").addEventListener("click", async (event) => {
   const instanceButton = event.target.closest("[data-instance]");

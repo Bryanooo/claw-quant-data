@@ -13,6 +13,11 @@ import psycopg2.extras
 
 from service.config import DB_CONFIG
 from service.collection_jobs.models import BatchChildSpec, HandlerMetadata, JobLeaseLostError
+from service.collection_jobs.resolution import (
+    failure_predicate,
+    resolution_columns,
+    unresolved_failure_predicate,
+)
 
 
 class JobRepository:
@@ -248,7 +253,13 @@ class JobRepository:
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
             cursor.execute(
-                "SELECT * FROM sys_collection_job WHERE job_id = %s",
+                f"""
+                WITH selected AS (
+                    SELECT * FROM sys_collection_job WHERE job_id = %s
+                )
+                SELECT selected.*, {resolution_columns('selected')}
+                FROM selected
+                """,
                 (job_id,),
             )
             row = cursor.fetchone()
@@ -735,15 +746,19 @@ class JobRepository:
         """Return a stable, database-filtered page from the complete job ledger."""
         conditions: list[str] = []
         parameters: list[Any] = []
+        unresolved = unresolved_failure_predicate("sys_collection_job")
+        failed_history = failure_predicate("sys_collection_job")
         if state == "active":
             conditions.append(
                 "(status IN ('queued','running') OR "
                 "completion_status IN ('retrying','verifying','unverified'))"
             )
         elif state == "attention":
-            conditions.append(
-                "(status='failed' OR completion_status IN ('failed','incomplete'))"
-            )
+            conditions.append(unresolved)
+        elif state == "recovered":
+            conditions.append(f"({failed_history} AND NOT {unresolved})")
+        elif state == "failure_history":
+            conditions.append(failed_history)
         elif state == "complete":
             conditions.append(
                 "(status='success' AND completion_status IN "
@@ -792,21 +807,79 @@ class JobRepository:
             self._connection() as connection,
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
-            cursor.execute(
-                f"SELECT COUNT(*) AS total FROM sys_collection_job WHERE {where}",
-                parameters,
-            )
-            total = int(cursor.fetchone()["total"])
-            cursor.execute(
-                f"""
-                SELECT * FROM sys_collection_job
-                WHERE {where}
-                ORDER BY job_id DESC
-                LIMIT %s OFFSET %s
-                """,
-                (*parameters, page_size, offset),
-            )
-            return [dict(row) for row in cursor.fetchall()], total
+            if state == "attention":
+                # Collapse repeated failures of the same recoverable data
+                # scope, while preserving distinct affected dates/periods.
+                # Older attempts remain available through failure_history.
+                cursor.execute(
+                    f"""
+                    WITH unresolved_candidates AS MATERIALIZED (
+                        SELECT DISTINCT ON (
+                                   COALESCE(sys_collection_job.api_name,
+                                            sys_collection_job.parameters->>'api_name'),
+                                   sys_collection_job.expected_for,
+                                   sys_collection_job.period_key
+                               )
+                               sys_collection_job.*
+                        FROM sys_collection_job
+                        WHERE {where}
+                        ORDER BY COALESCE(sys_collection_job.api_name,
+                                          sys_collection_job.parameters->>'api_name'),
+                                 sys_collection_job.expected_for,
+                                 sys_collection_job.period_key,
+                                 sys_collection_job.finished_at DESC NULLS LAST,
+                                 sys_collection_job.job_id DESC
+                    ), selected AS (
+                        SELECT unresolved_candidates.*,
+                               COUNT(*) OVER() AS __total
+                        FROM unresolved_candidates
+                        ORDER BY job_id DESC
+                        LIMIT %s OFFSET %s
+                    )
+                    SELECT selected.*, {resolution_columns('selected')}
+                    FROM selected
+                    ORDER BY selected.job_id DESC
+                    """,
+                    (*parameters, page_size, offset),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    WITH selected AS (
+                        SELECT sys_collection_job.*, COUNT(*) OVER() AS __total
+                        FROM sys_collection_job
+                        WHERE {where}
+                        ORDER BY job_id DESC
+                        LIMIT %s OFFSET %s
+                    )
+                    SELECT selected.*, {resolution_columns('selected')}
+                    FROM selected
+                    ORDER BY selected.job_id DESC
+                    """,
+                    (*parameters, page_size, offset),
+                )
+            rows = [dict(row) for row in cursor.fetchall()]
+            if rows:
+                total = int(rows[0].pop("__total"))
+                for row in rows[1:]:
+                    row.pop("__total", None)
+            elif page == 1:
+                total = 0
+            else:
+                # A stale client can request a page after the result set
+                # shrinks. Only that uncommon path needs a second count.
+                count_expression = (
+                    "COUNT(DISTINCT (COALESCE(api_name, "
+                    "parameters->>'api_name'), expected_for, period_key))"
+                    if state == "attention" else "COUNT(*)"
+                )
+                cursor.execute(
+                    f"SELECT {count_expression} AS total "
+                    f"FROM sys_collection_job WHERE {where}",
+                    parameters,
+                )
+                total = int(cursor.fetchone()["total"])
+            return rows, total
 
     def claim_next(
         self,

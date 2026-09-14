@@ -162,6 +162,10 @@ tbody tr:hover { background: #f9fbfe; }
 .status-running, .status-retrying, .status-verifying { color: var(--blue); border-color: #bfdbfe; background: #eff6ff; }
 .status-empty, .status-incomplete, .status-unverified { color: var(--amber); border-color: #f0d2aa; background: #fff8ec; }
 .status-failed { color: var(--red); border-color: #efc0c0; background: #fff1f1; }
+.status-unresolved { color: var(--red); border-color: #efc0c0; background: #fff1f1; }
+.status-recovered { color: var(--green); border-color: #afe0cf; background: #eefbf7; }
+.status-pending_recovery { color: var(--blue); border-color: #bfdbfe; background: #eff6ff; }
+.status-historical { color: var(--muted); background: var(--panel-2); }
 .status-pending { color: var(--muted); }
 .coverage-complete { color: var(--green); border-color: #afe0cf; background: #eefbf7; }
 .coverage-gaps, .coverage-empty, .coverage-unverified { color: var(--amber); border-color: #f0d2aa; background: #fff8ec; }
@@ -424,6 +428,8 @@ tbody tr:hover { background: #f9fbfe; }
     letter-spacing: .16em;
   }
 
+  .navigation-label.navigation-section { margin-top: 15px; }
+
   .console-tab {
     position: relative;
     min-height: 54px;
@@ -595,13 +601,17 @@ body.theme-dark .delivery-progress { background: #263348; }
 body.theme-dark .delivery-row-attention { background: #2b1d26; }
 body.theme-dark .status-overdue,
 body.theme-dark .status-failed,
+body.theme-dark .status-unresolved,
 body.theme-dark .partition-missing { border-color: #713d45; background: #301c24; }
 body.theme-dark .status-queued,
 body.theme-dark .status-running,
 body.theme-dark .status-retrying,
 body.theme-dark .status-verifying { border-color: #355473; background: #192b40; }
 body.theme-dark .status-complete,
+body.theme-dark .status-recovered,
 body.theme-dark .coverage-complete { border-color: #285b4d; background: #17352f; }
+body.theme-dark .status-pending_recovery { border-color: #355473; background: #192b40; }
+body.theme-dark .status-historical { border-color: var(--line); background: var(--panel-2); }
 body.theme-dark .status-empty,
 body.theme-dark .status-incomplete,
 body.theme-dark .status-unverified,

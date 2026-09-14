@@ -414,7 +414,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "instance-ledger-v1" in page.text
+    assert "ops-model-v1" in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
     assert overview.json()["summary"]["interfaces"] == 244
@@ -431,11 +431,14 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "/api/v1/coverage/repairs" in dashboard_script
     assert "coverageRangeStart" in page.text
     assert "coverageDetailStatus" in page.text
-    assert "今日任务交付" in page.text
+    assert "今日数据交付" in page.text
     assert "数据日历" in page.text
     assert 'id="operationsBanner"' in page.text
     assert "正在核对服务、今日交付、历史失败与数据缺口" in page.text
-    assert "异常与可信度中心" in page.text
+    assert "待处理事项" in page.text
+    assert "全量采集活动（扇出）" in page.text
+    assert "当前未恢复失败" in page.text
+    assert "已恢复 / 非当前问题" in page.text
     assert 'role="tablist"' in page.text
     assert 'data-view-panel="interfaces"' in page.text
     assert 'data-view-panel="instances"' in page.text
@@ -453,6 +456,8 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "/api/v1/collection-job-instances?" in dashboard_script
     assert "data-fanout-instances" in dashboard_script
     assert "retry_root_job_id" in dashboard_script
+    assert "resolved_by_job_id" in dashboard_script
+    assert "data-delivery-instance" in dashboard_script
     assert 'action = { view: "fanout", filter: "active", label: "查看进行中" }' in dashboard_script
     assert 'activateView(action.view)' in dashboard_script
     assert "/api/v1/delivery/data-calendar" in dashboard_script

@@ -302,6 +302,38 @@ def test_next_morning_partition_is_not_a_gap_before_documented_release():
     assert after.evidence["before_release"] is False
 
 
+def test_ths_hot_uses_same_day_final_publication_cutoff():
+    checked_rule = COVERAGE_RULES.get("ths_hot")
+    repository = FakeCoverageRepository(expected=[date(2026, 9, 14)])
+    calculator = CoverageCalculator(repository)
+    timezone = ZoneInfo("Asia/Shanghai")
+
+    before = calculator.audit(
+        checked_rule,
+        date(2026, 9, 14),
+        date(2026, 9, 14),
+        as_of=datetime(2026, 9, 14, 23, 14, tzinfo=timezone),
+    )
+    after = calculator.audit(
+        checked_rule,
+        date(2026, 9, 14),
+        date(2026, 9, 14),
+        as_of=datetime(2026, 9, 14, 23, 15, tzinfo=timezone),
+    )
+    after_midnight = calculator.audit(
+        checked_rule,
+        date(2026, 9, 14),
+        date(2026, 9, 14),
+        as_of=datetime(2026, 9, 15, 0, 1, tzinfo=timezone),
+    )
+
+    assert checked_rule.grace_days == 0
+    assert checked_rule.release_after == time(23, 15)
+    assert before.expected_partitions == 0
+    assert after.missing_partitions == 1
+    assert after_midnight.missing_partitions == 1
+
+
 def test_market_audit_marks_thin_cross_section_as_partial():
     repository = FakeCoverageRepository(
         actual=[ActualPartition(date(2026, 8, 25), 50, 50)],

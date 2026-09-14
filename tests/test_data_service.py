@@ -6,6 +6,7 @@ from service.data_service.models import (
     DatasetSpec,
     InvalidQueryError,
 )
+from service.data_service.repository import DatasetRepository
 from service.collector_catalog import discover_collectors
 from service.data_service.interfaces import InterfaceDataService
 from service.data_service.registry import DATASETS, DatasetRegistry
@@ -88,6 +89,24 @@ def test_registry_exposes_curated_datasets():
     assert "forex_daily" in names
     assert "sge_daily" in names
     assert "tushare_raw" in names
+
+
+def test_freshness_probe_uses_indexed_storage_instead_of_current_view():
+    class CapturingDatabase:
+        def fetch_one(self, statement, _params=()):
+            self.statement = statement
+            return {"latest_value": date(2026, 9, 14)}
+
+    dataset = DATASETS.get("stock_daily_basic")
+    database = CapturingDatabase()
+
+    latest = DatasetRepository(database).latest_value(dataset)
+
+    assert latest == date(2026, 9, 14)
+    assert dataset.table == "tushare_current_daily_basic"
+    assert dataset.freshness_read_table == "tushare_norm_daily_basic"
+    assert "tushare_norm_daily_basic" in repr(database.statement)
+    assert "tushare_current_daily_basic" not in repr(database.statement)
 
 
 def test_registry_exposes_every_collector_table():

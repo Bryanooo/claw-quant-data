@@ -43,6 +43,7 @@ def _market_dataset(
     category: str = "market",
     source: str = "Tushare Pro",
     freshness_sla_hours: int = 72,
+    freshness_table: str | None = None,
 ) -> DatasetSpec:
     return DatasetSpec(
         name=name,
@@ -59,6 +60,7 @@ def _market_dataset(
         freshness_sla_hours=freshness_sla_hours,
         freshness_policy="max_age",
         source=source,
+        freshness_table=freshness_table,
     )
 
 
@@ -156,6 +158,7 @@ def _curated_datasets() -> list[DatasetSpec]:
             "stock_daily_basic",
             "A股每日基本面",
             table="tushare_current_daily_basic",
+            freshness_table="tushare_norm_daily_basic",
         ),
         _market_dataset("stock_limit", "A股每日涨跌停价格", table="stk_limit"),
         DatasetSpec(

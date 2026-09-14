@@ -69,7 +69,7 @@ class DatasetRepository:
             "SELECT max({date_column}) AS latest_value FROM {table}"
         ).format(
             date_column=sql.Identifier(dataset.date_column),
-            table=sql.Identifier(dataset.table),
+            table=sql.Identifier(dataset.freshness_read_table),
         )
         row = self._database.fetch_one(statement)
         return row["latest_value"] if row else None
@@ -107,7 +107,7 @@ class DatasetRepository:
             JOIN pg_class AS rel ON rel.oid = relations.oid
             LEFT JOIN pg_stat_user_tables AS stats ON stats.relid = rel.oid
             """,
-            (dataset.table,),
+            (dataset.freshness_read_table,),
         )
         return int(row["estimated_rows"]) if row else 0
 

@@ -12,6 +12,7 @@ const state = {
   endpointErrors: {}, isRefreshing: false, hasLoadedSnapshot: false,
   noticeKind: null,
   snapshotGeneratedAt: null, lastSuccessfulRefresh: null,
+  bannerAction: { view: "overview", filter: null },
   jobPollTimer: null,
   pages: {
     delivery: 1, calendarDetails: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
@@ -117,6 +118,12 @@ function bannerFacts() {
   const unhealthyServices = state.services.length
     ? state.services.filter((item) => item.status !== "healthy")
     : (operational.unhealthy_services || []).map((component) => ({ component, status: "unhealthy" }));
+  const activeFanout = state.fanoutCampaigns.filter((item) =>
+    ["queued", "running", "retrying"].includes(item.status)
+  ).length;
+  const activeInstances = state.jobInstances.filter((item) =>
+    ["queued", "running", "retrying", "verifying", "unverified"].includes(instanceDisplayStatus(item))
+  ).length;
   return {
     unhealthyServices,
     unresolved: Number(operationalCounts.unresolved_failures ?? healthSummary.unresolved_failures ?? collectionSummary.unresolved_failures ?? 0),
@@ -136,6 +143,8 @@ function bannerFacts() {
     dataWaiting: dataItems.filter((item) =>
       item.validation_status === "unverified" && !item.attention
     ).length,
+    activeFanout,
+    activeInstances,
     initializationStatus: operational.history?.status || (state.dataHealth?.initialization?.active || {}).status
   };
 }
@@ -152,6 +161,7 @@ function renderOperationsBanner() {
   let labelText = "正在检查";
   let titleText = "正在建立系统运行快照";
   let detailText = "正在核对服务、今日交付、历史失败与数据缺口。";
+  let action = { view: "overview", filter: null, label: "查看状态" };
 
   if (errors.length || navigator.onLine === false) {
     status = "offline";
@@ -160,6 +170,7 @@ function renderOperationsBanner() {
     detailText = errors.length
       ? `读取失败：${errors.map(([source, message]) => `${endpointLabels[source] || source}（${message}）`).join("；")}`
       : "浏览器当前处于离线状态，无法连接本地数据服务。";
+    action = { view: "overview", filter: null, label: "查看连接" };
   } else if (state.hasLoadedOperational || state.hasLoadedSnapshot) {
     const trueIssueCount = Math.max(
       facts.critical,
@@ -182,11 +193,21 @@ function renderOperationsBanner() {
       if (facts.overdue) parts.push(`${facts.overdue} 项交付逾期`);
       if (["attention", "paused"].includes(facts.initializationStatus)) parts.push("历史初始化阻塞或暂停");
       detailText = parts.join(" · ") || "异常中心已有可定位证据。";
+      action = { view: "overview", filter: "confirmed", label: "立即处理" };
     } else if (facts.active || facts.unknown || facts.initializationStatus === "running") {
       status = "warning";
       labelText = "处理中";
       titleText = "系统在线，仍有采集或完整性核验正在进行";
-      detailText = `${facts.active} 项排队/运行 · ${facts.unknown} 项完整性待确认${facts.initializationStatus === "running" ? " · 历史初始化进行中" : ""}`;
+      if (facts.activeFanout) {
+        detailText = `${facts.activeFanout} 个全量扇出活动正在执行${facts.unknown ? ` · ${facts.unknown} 项完整性待确认` : ""}`;
+        action = { view: "fanout", filter: "active", label: "查看进行中" };
+      } else if (facts.activeInstances || facts.active) {
+        detailText = `${facts.active} 项排队/运行${facts.unknown ? ` · ${facts.unknown} 项完整性待确认` : ""}`;
+        action = { view: "interfaces", filter: "active", label: "查看进行中" };
+      } else {
+        detailText = `${facts.unknown} 项完整性待确认${facts.initializationStatus === "running" ? " · 历史初始化进行中" : ""}`;
+        action = { view: "overview", filter: "unknown", label: "查看核验" };
+      }
     } else if (facts.dataStatus === "untracked" && facts.marketOpen === false) {
       status = "healthy";
       labelText = "非交易日";
@@ -195,6 +216,7 @@ function renderOperationsBanner() {
       detailText = facts.dataWaiting
         ? `${facts.dataWaiting} 项任务旁证或上游发布等待不影响今日数据结论`
         : (due ? `今日任务交付 ${due.completed_due || 0}/${due.due_now || 0}，数据日历不制造周末缺口` : "数据日历不制造周末缺口。");
+      action = { view: "today", filter: null, label: "查看今日" };
     } else if (facts.dataWaiting && facts.dataMonitored) {
       status = "healthy";
       labelText = "正常推进";
@@ -202,6 +224,7 @@ function renderOperationsBanner() {
       const due = state.delivery?.summary;
       detailText = `${facts.dataWaiting} 项等待上游约定发布时间，当前不判为缺失` +
         (due ? ` · 今日任务交付 ${due.completed_due || 0}/${due.due_now || 0}` : "");
+      action = { view: "today", filter: "active", label: "查看等待项" };
     } else {
       status = "healthy";
       labelText = "运行正常";
@@ -210,6 +233,7 @@ function renderOperationsBanner() {
       detailText = due
         ? `今日任务交付 ${due.completed_due || 0}/${due.due_now || 0} · 已确认数据问题 0`
         : "服务、任务和数据完整性检查均已通过。";
+      action = { view: "today", filter: null, label: "查看今日" };
     }
   }
 
@@ -221,7 +245,8 @@ function renderOperationsBanner() {
   freshness.textContent = state.lastSuccessfulRefresh
     ? `上次完整快照 ${formatTime(state.lastSuccessfulRefresh)}`
     : "尚无成功快照";
-  $("operationsIssuesButton").textContent = status === "critical" ? "立即处理" : "查看异常";
+  state.bannerAction = action;
+  $("operationsIssuesButton").textContent = action.label;
 }
 
 async function loadOperationalSummary() {
@@ -978,17 +1003,32 @@ async function showInitializationSteps() {
   }
 }
 
+function filteredFanoutCampaigns() {
+  const filter = $("fanoutStatusFilter").value;
+  if (filter === "active") return state.fanoutCampaigns.filter((item) =>
+    ["queued", "running", "retrying"].includes(item.status)
+  );
+  if (filter === "attention") return state.fanoutCampaigns.filter((item) =>
+    ["failed", "attention", "paused"].includes(item.status)
+  );
+  if (filter === "complete") return state.fanoutCampaigns.filter((item) =>
+    item.status === "success" || ["complete", "empty"].includes(item.completion_status)
+  );
+  return state.fanoutCampaigns;
+}
+
 function renderFanoutCampaigns() {
-  const page = pageRows(state.fanoutCampaigns, "fanout");
-  $("fanoutCampaignSummary").textContent = state.fanoutCampaigns.length
-    ? `${state.fanoutCampaigns.length} 个最近活动；进度只统计已严格验证的分页`
+  const rows = filteredFanoutCampaigns();
+  const page = pageRows(rows, "fanout");
+  $("fanoutCampaignSummary").textContent = rows.length
+    ? `${rows.length} 个匹配活动；进度只统计已严格验证的分页`
     : "尚无全量扇出活动";
-  $("fanoutResultCount").textContent = state.fanoutCampaigns.length
-    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, state.fanoutCampaigns.length)}，共 ${state.fanoutCampaigns.length} 个活动`
+  $("fanoutResultCount").textContent = rows.length
+    ? `显示 ${page.start + 1}–${Math.min(page.start + page.rows.length, rows.length)}，共 ${rows.length} 个活动`
     : "0 个活动";
   $("fanoutTabCount").textContent = `${state.fanoutCampaigns.length} 个最近活动`;
-  if (!state.fanoutCampaigns.length) {
-    $("fanoutCampaignRows").innerHTML = '<tr><td colspan="7" class="empty-state">尚无全量扇出活动</td></tr>';
+  if (!rows.length) {
+    $("fanoutCampaignRows").innerHTML = '<tr><td colspan="7" class="empty-state">当前筛选下没有扇出活动</td></tr>';
     return;
   }
   $("fanoutCampaignRows").innerHTML = page.rows.map((campaign) => {
@@ -1604,6 +1644,10 @@ $("instanceStatusFilter").addEventListener("change", () => {
   state.pages.jobInstances = 1;
   renderJobInstances();
 });
+$("fanoutStatusFilter").addEventListener("change", () => {
+  state.pages.fanout = 1;
+  renderFanoutCampaigns();
+});
 $("deliveryStatusFilter").addEventListener("change", () => {
   state.pages.delivery = 1;
   renderDelivery();
@@ -1659,8 +1703,26 @@ $("dataHealthRows").addEventListener("click", (event) => {
   if (button) showCoverageDetail(button.dataset.healthCoverageDetail);
 });
 $("operationsIssuesButton").addEventListener("click", () => {
-  activateView("overview");
-  document.querySelector("[data-view-panel=\"overview\"]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const action = state.bannerAction || { view: "overview", filter: null };
+  if (action.view === "fanout" && action.filter) {
+    $("fanoutStatusFilter").value = action.filter;
+    state.pages.fanout = 1;
+    renderFanoutCampaigns();
+  } else if (action.view === "interfaces" && action.filter) {
+    $("instanceStatusFilter").value = action.filter;
+    state.pages.jobInstances = 1;
+    renderJobInstances();
+  } else if (action.view === "overview" && action.filter) {
+    $("dataIssueFilter").value = action.filter;
+    state.pages.health = 1;
+    renderDataHealth();
+  } else if (action.view === "today" && action.filter) {
+    $("deliveryStatusFilter").value = action.filter;
+    state.pages.delivery = 1;
+    renderDelivery();
+  }
+  activateView(action.view);
+  document.querySelector(`[data-view-panel="${action.view}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 window.addEventListener("online", refreshAll);
 window.addEventListener("offline", renderOperationsBanner);

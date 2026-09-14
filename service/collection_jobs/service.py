@@ -10,7 +10,7 @@ from service.collection_jobs.fanout import FanoutPlanner
 JOB_STATUSES = {"queued", "running", "success", "failed"}
 COMPLETION_STATUSES = {
     "pending", "running", "retrying", "complete", "empty",
-    "verifying", "unverified", "incomplete", "failed",
+    "verifying", "unverified", "page_complete", "incomplete", "failed",
 }
 JOB_KINDS = {"leaf", "batch"}
 
@@ -124,6 +124,7 @@ class CollectionJobService:
         job = self._repository.get(job_id)
         if not job:
             raise JobNotFoundError(f"collection job not found: {job_id}")
+        job["attempts"] = self._repository.list_attempts(job_id)
         return job
 
     def list(
@@ -165,7 +166,11 @@ class CollectionJobService:
         *,
         idempotency_key: str | None,
     ) -> tuple[dict, bool]:
-        original = self.get(job_id)
+        # Retry decisions only need the execution-instance row. Attempt
+        # history belongs to the detail view and must not affect control flow.
+        original = self._repository.get(job_id)
+        if not original:
+            raise JobNotFoundError(f"collection job not found: {job_id}")
         if original.get("job_kind") == "batch":
             raise JobConflictError(
                 "batch parents cannot be retried; retry their failed child jobs"

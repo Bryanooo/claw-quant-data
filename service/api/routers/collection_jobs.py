@@ -138,7 +138,7 @@ def list_collection_jobs(
     period_key: str | None = Query(default=None, max_length=32),
     completion_status: Literal[
         "pending", "running", "retrying", "complete", "empty",
-        "verifying", "unverified", "incomplete", "failed",
+        "verifying", "unverified", "page_complete", "incomplete", "failed",
     ] | None = None,
     parent_job_id: int | None = Query(default=None, ge=1),
     job_kind: Literal["leaf", "batch"] | None = None,

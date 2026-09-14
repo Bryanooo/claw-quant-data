@@ -76,6 +76,9 @@ class FakeRepository:
     def list(self, **_kwargs):
         return [self.job]
 
+    def list_attempts(self, _job_id):
+        return getattr(self, "attempts", [])
+
 
 class DummyDatabase:
     def close(self):
@@ -218,6 +221,20 @@ def test_manual_retry_preserves_root_across_multiple_instance_generations():
     assert repository.create_options["retry_of_job_id"] == 3
     assert repository.create_options["retry_root_job_id"] == 1
     assert repository.create_options["retry_generation"] == 3
+
+
+def test_job_detail_includes_automatic_attempt_timeline():
+    repository = FakeRepository(job=make_job(status="success", attempt=2))
+    repository.attempts = [
+        {"attempt_number": 1, "status": "retrying"},
+        {"attempt_number": 2, "status": "success"},
+    ]
+
+    job = CollectionJobService(repository, TASKS).get(1)
+
+    assert [item["status"] for item in job["attempts"]] == [
+        "retrying", "success"
+    ]
 
 
 def test_collection_job_api_submits_without_access_key():

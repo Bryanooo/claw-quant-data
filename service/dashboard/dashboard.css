@@ -176,6 +176,13 @@ tbody tr:hover { background: #f9fbfe; }
 .instance-detail-grid span, .instance-detail-grid small { display: block; color: var(--muted); font-size: 10px; }
 .instance-detail-grid strong { display: block; margin: 5px 0; overflow-wrap: anywhere; font-size: 13px; }
 .instance-error { margin-top: 16px; padding: 13px 15px; border-left: 3px solid var(--red); color: var(--red); background: var(--panel-2); font-size: 12px; overflow-wrap: anywhere; }
+.attempt-timeline { margin-top: 18px; }
+.attempt-timeline h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: .04em; }
+.attempt-timeline article { display: grid; gap: 6px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.attempt-timeline article + article { margin-top: 8px; }
+.attempt-timeline article > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.attempt-timeline article > span, .attempt-timeline article > small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.attempt-timeline article > small { color: var(--red); }
 .row-action { padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--text); background: transparent; }
 .row-action:hover { color: var(--green); border-color: var(--green); }
 .row-action:disabled { cursor: not-allowed; opacity: .35; }

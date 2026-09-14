@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS sys_collection_job (
     CONSTRAINT ck_collection_job_completion_status CHECK (
         completion_status IN (
             'pending', 'running', 'retrying', 'complete', 'empty',
-            'verifying', 'unverified', 'incomplete', 'failed'
+            'verifying', 'unverified', 'page_complete', 'incomplete', 'failed'
         )
     ),
     CONSTRAINT ck_collection_job_handler_type CHECK (
@@ -84,6 +84,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_collection_job_recheck_source
 CREATE INDEX IF NOT EXISTS idx_collection_job_recheck_root
     ON sys_collection_job(recheck_root_job_id, recheck_generation DESC)
     WHERE recheck_root_job_id IS NOT NULL;
+
+-- Immutable execution-attempt ledger. A collection job is one durable
+-- execution instance; every worker claim is a separately observable attempt.
+CREATE TABLE IF NOT EXISTS sys_collection_job_attempt (
+    attempt_id         BIGSERIAL PRIMARY KEY,
+    job_id             BIGINT NOT NULL REFERENCES sys_collection_job(job_id)
+                       ON DELETE CASCADE,
+    attempt_number     SMALLINT NOT NULL,
+    worker_id          VARCHAR(128),
+    status             VARCHAR(24) NOT NULL,
+    retryable          BOOLEAN,
+    retry_after_seconds INTEGER,
+    rows_fetched       INTEGER,
+    rows_inserted      INTEGER NOT NULL DEFAULT 0,
+    error_message      TEXT,
+    evidence           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    started_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at        TIMESTAMPTZ,
+    CONSTRAINT ck_collection_job_attempt_number CHECK (attempt_number >= 0),
+    CONSTRAINT ck_collection_job_attempt_status CHECK (
+        status IN (
+            'running', 'success', 'retrying', 'failed', 'deferred',
+            'lease_expired'
+        )
+    )
+);
+CREATE INDEX IF NOT EXISTS idx_collection_job_attempt_job
+    ON sys_collection_job_attempt(job_id, attempt_id DESC);
+CREATE INDEX IF NOT EXISTS idx_collection_job_attempt_running
+    ON sys_collection_job_attempt(job_id, attempt_number, worker_id)
+    WHERE status='running';
 
 CREATE TABLE IF NOT EXISTS sys_collection_schedule_cursor (
     schedule_id          VARCHAR(64) PRIMARY KEY,

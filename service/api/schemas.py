@@ -256,6 +256,22 @@ class FanoutCampaignRequest(ApiModel):
     page_size: int = Field(default=100, ge=1, le=200)
 
 
+class CollectionJobAttemptResponse(ApiModel):
+    attempt_id: int
+    job_id: int
+    attempt_number: int
+    worker_id: str | None = None
+    status: str
+    retryable: bool | None = None
+    retry_after_seconds: int | None = None
+    rows_fetched: int | None = None
+    rows_inserted: int = 0
+    error_message: str | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    started_at: datetime
+    finished_at: datetime | None = None
+
+
 class InitializationRequest(ApiModel):
     profile: Literal["quick", "standard", "research", "full"] = "standard"
     history_start: date | None = None
@@ -306,6 +322,7 @@ class CollectionJobResponse(ApiModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    attempts: list[CollectionJobAttemptResponse] = Field(default_factory=list)
 
 
 class CoverageAuditRequest(ApiModel):

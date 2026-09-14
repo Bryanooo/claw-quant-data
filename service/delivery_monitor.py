@@ -37,6 +37,15 @@ CONTROL_SCHEDULES = {
     "delivery_plan_reconciler",
 }
 
+# Reference snapshots intentionally refresh on calendar days. Every other
+# dedicated ``daily`` schedule is market-data work and must not become an
+# overdue delivery merely because its cron trigger also fires on a weekend or
+# exchange holiday.
+CALENDAR_DAY_DEDICATED_SCHEDULES = {
+    "stock_basic_daily",
+    "trade_cal_daily",
+}
+
 
 def _local_datetime(day: date, value: time) -> datetime:
     return datetime.combine(day, value, SHANGHAI_TIMEZONE)
@@ -564,9 +573,13 @@ class DeliveryPlanBuilder:
         *,
         market_open: Callable[[date], bool] | None = None,
         scheduler_factory: Callable[[], Any] | None = None,
+        scope_resolver: Callable[[str, date], tuple[date, str | None]] | None = None,
+        recipe_scope_resolver: Callable[..., tuple[dict, str, date]] | None = None,
     ):
         self._market_open = market_open or self._is_market_open
         self._scheduler_factory = scheduler_factory
+        self._scope_resolver = scope_resolver or _resolved_scope
+        self._recipe_scope_resolver = recipe_scope_resolver or _recipe_scope
         self._cached_scheduler: Any | None = None
         self._scope_cache: dict[tuple[str, date], tuple[date, str | None]] = {}
 
@@ -611,12 +624,12 @@ class DeliveryPlanBuilder:
 
     def build(self, business_date: date) -> list[dict[str, Any]]:
         market_open = self._market_open(business_date)
-        plans = self._dedicated(business_date)
+        plans = self._dedicated(business_date, market_open)
         plans.extend(self._policy(business_date, market_open))
         plans.extend(self._fanout(business_date, market_open))
         return plans
 
-    def _dedicated(self, day: date) -> list[dict[str, Any]]:
+    def _dedicated(self, day: date, market_open: bool) -> list[dict[str, Any]]:
         from service.tushare_scheduling import DEDICATED_API_BY_RUN_ID
 
         scheduler = self._scheduler()
@@ -650,6 +663,12 @@ class DeliveryPlanBuilder:
                 cadence = "monthly"
             elif job.id.endswith("_quarterly"):
                 cadence = "quarterly"
+            if (
+                cadence == "daily"
+                and not market_open
+                and job.id not in CALENDAR_DAY_DEDICATED_SCHEDULES
+            ):
+                continue
             expected_for = day
             if job.id == "index_daily_finalize":
                 from service.tushare_scheduling import _latest_trade_date
@@ -719,7 +738,7 @@ class DeliveryPlanBuilder:
             scope_day = day - timedelta(days=7) if policy.cadence == "weekly" else day
             scope_key = (policy.cadence, scope_day)
             if scope_key not in self._scope_cache:
-                self._scope_cache[scope_key] = _resolved_scope(
+                self._scope_cache[scope_key] = self._scope_resolver(
                     policy.cadence, scope_day
                 )
             expected_for, _ = self._scope_cache[scope_key]
@@ -750,7 +769,7 @@ class DeliveryPlanBuilder:
         for recipe in SCHEDULED_FANOUT_RECIPES:
             if not self._cadence_due(recipe.cadence, day, market_open):
                 continue
-            _, period_key, expected_for = _recipe_scope(
+            _, period_key, expected_for = self._recipe_scope_resolver(
                 recipe, day, include_current_daily=recipe.cadence == "daily"
             )
             scheduled_for = _local_datetime(

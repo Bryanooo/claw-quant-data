@@ -405,6 +405,60 @@ def test_data_health_does_not_call_current_phase_ratio_overall_progress():
     assert "当前阶段" in history["message"]
 
 
+def test_completed_initialization_does_not_claim_every_dataset_is_verified():
+    history = DataHealthService._history(
+        {
+            "active": None,
+            "latest": {
+                "initialization_id": 66,
+                "status": "completed",
+                "profile": "full",
+            },
+        },
+        {
+            "datasets": [
+                {
+                    "dataset": "stock_daily",
+                    "auditable": True,
+                    "latest": {"status": "complete"},
+                },
+                {
+                    "dataset": "optional_event",
+                    "auditable": True,
+                    "latest": None,
+                },
+            ]
+        },
+    )
+
+    assert history["initialization_complete"] is True
+    assert history["all_datasets_verified"] is False
+    assert history["coverage_scope"]["strictly_verified_datasets"] == 1
+    assert history["coverage_scope"]["unaudited_datasets"] == 1
+    assert "全部数据集" in history["message"]
+
+
+def test_verified_empty_is_strict_but_non_temporal_prevents_all_catalog_claim():
+    history = DataHealthService._history(
+        {"latest": {"initialization_id": 66, "status": "completed"}},
+        {
+            "datasets": [
+                {
+                    "dataset": "sparse_event",
+                    "auditable": True,
+                    "latest": {"status": "empty"},
+                },
+                {"dataset": "reference", "auditable": False, "latest": None},
+            ]
+        },
+    )
+
+    assert history["coverage_scope"]["strictly_verified_datasets"] == 1
+    assert history["coverage_scope"]["verified_empty_datasets"] == 1
+    assert history["coverage_scope"]["all_auditable_datasets_verified"] is True
+    assert history["all_datasets_verified"] is False
+
+
 def test_data_health_does_not_duplicate_collection_and_coverage_incident():
     collection = {
         "summary": {

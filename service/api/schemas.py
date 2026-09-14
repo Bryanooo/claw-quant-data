@@ -325,6 +325,20 @@ class CollectionJobResponse(ApiModel):
     attempts: list[CollectionJobAttemptResponse] = Field(default_factory=list)
 
 
+class CollectionJobPageMeta(ApiModel):
+    number: int
+    size: int
+    total_items: int
+    total_pages: int
+    has_previous: bool
+    has_next: bool
+
+
+class CollectionJobPageResponse(ApiModel):
+    items: list[CollectionJobResponse]
+    page: CollectionJobPageMeta
+
+
 class CoverageAuditRequest(ApiModel):
     datasets: list[str] | None = Field(default=None, min_length=1, max_length=50)
     start_date: date | None = None

@@ -1,5 +1,9 @@
 """Application service shared by the API and future MCP adapter."""
 
+from datetime import date, datetime, time, timedelta
+
+from service.clock import SHANGHAI_TIMEZONE
+
 from service.collection_jobs.models import (
     JobConflictError,
     JobNotFoundError,
@@ -13,6 +17,7 @@ COMPLETION_STATUSES = {
     "verifying", "unverified", "page_complete", "incomplete", "failed",
 }
 JOB_KINDS = {"leaf", "batch"}
+INSTANCE_STATES = {"active", "attention", "complete", "retry"}
 
 _TASK_PRIORITIES = {
     "market": 80,
@@ -159,6 +164,59 @@ class CollectionJobService:
             job_kind=job_kind,
             limit=limit,
         )
+
+    def page_instances(
+        self,
+        *,
+        state: str | None,
+        query: str | None,
+        job_kind: str | None,
+        resource_class: str | None,
+        created_from: date | None,
+        created_to: date | None,
+        campaign_id: int | None,
+        page: int,
+        page_size: int,
+    ) -> dict:
+        if state and state not in INSTANCE_STATES:
+            raise JobConflictError(f"unsupported instance state: {state}")
+        if job_kind and job_kind not in JOB_KINDS:
+            raise JobConflictError(f"unsupported job kind: {job_kind}")
+        if created_from and created_to and created_from > created_to:
+            raise JobConflictError("created_from must not be after created_to")
+        from_time = (
+            datetime.combine(created_from, time.min, SHANGHAI_TIMEZONE)
+            if created_from else None
+        )
+        to_time = (
+            datetime.combine(
+                created_to + timedelta(days=1), time.min, SHANGHAI_TIMEZONE
+            )
+            if created_to else None
+        )
+        items, total = self._repository.page_instances(
+            state=state,
+            query=query.strip() if query else None,
+            job_kind=job_kind,
+            resource_class=resource_class,
+            created_from=from_time,
+            created_to=to_time,
+            campaign_id=campaign_id,
+            page=page,
+            page_size=page_size,
+        )
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        return {
+            "items": items,
+            "page": {
+                "number": page,
+                "size": page_size,
+                "total_items": total,
+                "total_pages": total_pages,
+                "has_previous": page > 1,
+                "has_next": page < total_pages,
+            },
+        }
 
     def retry(
         self,

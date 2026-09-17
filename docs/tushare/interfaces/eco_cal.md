@@ -90,4 +90,8 @@ date      time    country                   event         value pre_value fore_v
 `sys_tushare_normalization_error`，契约外字段保存在 `_extra_payload` 并登记到
 `sys_tushare_schema_drift`；原始响应始终可用于修复后重放。
 
+`time` 通常为 `HH:MM`，但上游历史记录也会用 `试验性` 表示发布时间尚未确定。
+这种值不是坏数据：原文保留在 `tushare_raw_record`，标准化表将其写为 `NULL`，表示
+“有事件日期、无确定时刻”，不会因此隔离整条记录或误判分页任务失败。
+
 > 权限状态来自实际 Token 探测；示例中的 Token 仅为环境变量占位符，不包含真实密钥。

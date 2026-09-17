@@ -19,6 +19,7 @@ from service.api.routers import (
     datasets,
     health,
     initialization,
+    investment_calendar,
     interfaces,
     normalization,
     sectors,
@@ -43,6 +44,7 @@ from service.data_coverage.models import (
     CoverageRuleNotFoundError,
     InvalidCoverageRequestError,
 )
+from service.investment_calendar import InvalidInvestmentCalendarRequest
 
 logger = logging.getLogger("api")
 
@@ -138,6 +140,18 @@ def create_app(
     ):
         return error_response(request, 422, "invalid_coverage_request", str(exc))
 
+    @application.exception_handler(InvalidInvestmentCalendarRequest)
+    async def invalid_investment_calendar_request(
+        request: Request,
+        exc: InvalidInvestmentCalendarRequest,
+    ):
+        return error_response(
+            request,
+            422,
+            "invalid_investment_calendar_request",
+            str(exc),
+        )
+
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
         return error_response(request, 422, "validation_error", str(exc))
@@ -168,6 +182,7 @@ def create_app(
     application.include_router(coverage.router, prefix="/api")
     application.include_router(data_health.router, prefix="/api")
     application.include_router(initialization.router, prefix="/api")
+    application.include_router(investment_calendar.router, prefix="/api")
 
     dashboard_directory = PROJECT_ROOT / "service" / "dashboard"
     application.mount(

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Claw Quant · 采集控制台</title>
-    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260915-ops-model-v1" />
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260917-investment-calendar-v1" />
   </head>
   <body class="theme-dark">
     <header class="topbar">
@@ -49,6 +49,9 @@
         <p class="navigation-label">运营</p>
         <button class="console-tab is-active" type="button" role="tab" aria-label="今日交付" title="今天应该完成哪些数据交付" aria-selected="true" aria-controls="todayView" data-view="today">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v4l2.5 1.5M21 12a9 9 0 1 1-3-6.7" /><path d="M18 3v4h-4" /></svg></span><span class="nav-copy"><strong>今日交付</strong><small id="todayTabCount">等待加载</small></span>
+        </button>
+        <button class="console-tab" type="button" role="tab" aria-label="投资日历" title="宏观数据发布与股指期货交割事件" aria-selected="false" aria-controls="investmentCalendarView" data-view="investment-calendar">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3v3M19 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /><path d="m8 16 2.4-2.5 2.2 1.8L16 11" /></svg></span><span class="nav-copy"><strong>投资日历</strong><small id="investmentCalendarTabCount">等待加载</small></span>
         </button>
         <button class="console-tab" type="button" role="tab" aria-label="数据日历" title="数据日历" aria-selected="false" aria-controls="calendarView" data-view="calendar">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3v3M19 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg></span><span class="nav-copy"><strong>数据日历</strong><small id="calendarTabCount">等待加载</small></span>
@@ -142,6 +145,56 @@
       </div>
       </section>
 
+      </div>
+
+      <div id="investmentCalendarView" class="view-panel hidden" role="tabpanel" data-view-panel="investment-calendar">
+        <section class="workspace investment-calendar-workspace" aria-label="投资事件日历">
+          <div class="workspace-head calendar-head">
+            <div>
+              <p class="section-kicker">MARKET EVENTS</p>
+              <h2>投资日历</h2>
+              <p id="investmentCalendarSummary" class="section-summary">按真实财经日历与合约交割字段展示重要事件，不使用前端推算日期。</p>
+            </div>
+            <div class="calendar-navigation">
+              <button id="investmentCalendarPrevious" class="button button-secondary" type="button" aria-label="上个月">← 上月</button>
+              <label class="calendar-month-picker"><span class="sr-only">选择月份</span><input id="investmentCalendarMonthPicker" type="month" /></label>
+              <button id="investmentCalendarToday" class="button button-secondary" type="button">回到本月</button>
+              <button id="investmentCalendarNext" class="button button-secondary" type="button" aria-label="下个月">下月 →</button>
+            </div>
+          </div>
+          <div class="investment-calendar-controls">
+            <label>重要性<select id="investmentImportanceFilter"><option value="high">核心事件</option><option value="important">全部重要事件</option><option value="all">全部事件</option></select></label>
+            <label>国家 / 地区<select id="investmentCountryFilter"><option value="">全部</option><option value="中国">中国</option><option value="美国">美国</option><option value="欧元区">欧元区</option><option value="英国">英国</option><option value="日本">日本</option></select></label>
+            <label>事件类型<select id="investmentTypeFilter"><option value="">全部</option><option value="growth">经济增长</option><option value="survey">景气调查</option><option value="inflation">通胀</option><option value="employment">就业</option><option value="central_bank">央行</option><option value="money_credit">货币信贷</option><option value="trade">进出口</option><option value="derivatives">股指交割</option></select></label>
+            <div id="investmentCalendarCoverage" class="investment-calendar-coverage">正在读取来源覆盖范围…</div>
+          </div>
+          <div class="investment-calendar-legend" aria-label="投资日历图例">
+            <span class="investment-legend-high">高重要</span>
+            <span class="investment-legend-medium">重要</span>
+            <span class="investment-legend-derivative">股指期货交割</span>
+            <span class="investment-legend-released">已发布实际值</span>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span>
+          </div>
+          <div id="investmentCalendarGrid" class="calendar-grid investment-calendar-grid" aria-label="宏观数据发布与交割事件"></div>
+        </section>
+
+        <section class="workspace investment-calendar-detail" aria-label="选中日期的重要事件明细">
+          <div class="workspace-head">
+            <div>
+              <p class="section-kicker">EVENT DETAILS</p>
+              <h2 id="investmentCalendarDetailTitle">当日重要事件</h2>
+              <p id="investmentCalendarDetailSummary" class="section-summary">点击日历中的日期查看发布时间、预测值、前值与实际值。</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="investment-event-table">
+              <thead><tr><th>时间</th><th>重要性</th><th>国家 / 地区</th><th>事件</th><th>类型</th><th>前值</th><th>预测</th><th>实际 / 状态</th><th>数据来源</th></tr></thead>
+              <tbody id="investmentCalendarDetailRows"><tr><td colspan="9" class="empty-state">请选择一个日期</td></tr></tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <div id="calendarView" class="view-panel hidden" role="tabpanel" data-view-panel="calendar">
@@ -608,6 +661,6 @@
       <div id="jobInstanceDetail" class="instance-detail"><p class="empty-state">正在读取实例状态…</p></div>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260915-ops-model-v1" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260917-investment-calendar-v1" defer></script>
   </body>
 </html>

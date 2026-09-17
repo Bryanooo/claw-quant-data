@@ -209,6 +209,16 @@ def parameters_for_policy(
             return {"start_date": resolved_trade_date, "end_date": resolved_trade_date}
     if strategy == "date_window":
         if {"start_date", "end_date"} <= input_names:
+            # The economic calendar is useful before an event happens. Refresh a
+            # rolling future window daily so GDP, PMI and central-bank releases
+            # are visible to research agents ahead of time. Historical jobs that
+            # pass explicit parameters are unaffected by this policy resolver.
+            if policy.api_name == "eco_cal":
+                anchor = datetime.strptime(resolved_trade_date, "%Y%m%d").date()
+                return {
+                    "start_date": (anchor - timedelta(days=7)).strftime("%Y%m%d"),
+                    "end_date": (anchor + timedelta(days=45)).strftime("%Y%m%d"),
+                }
             return {"start_date": resolved_trade_date, "end_date": resolved_trade_date}
         for name in ("trade_date", "date"):
             if name in input_names:

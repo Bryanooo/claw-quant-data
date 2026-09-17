@@ -11,6 +11,7 @@ from service.api.dependencies import (
     get_delivery_monitor_service,
     get_fanout_campaign_service,
     get_initialization_service,
+    get_investment_calendar_service,
     get_interface_data_service,
     get_normalization_monitor,
 )
@@ -199,6 +200,41 @@ def test_health_endpoints():
             "status": "ready",
             "database": "ok",
         }
+
+
+def test_investment_calendar_endpoints_are_under_api_namespace():
+    client, _ = make_client()
+
+    class FakeInvestmentCalendar:
+        def list_events(self, **kwargs):
+            return {
+                "start_date": kwargs["start_date"].isoformat(),
+                "end_date": kwargs["end_date"].isoformat(),
+                "events": [{"title": "中国制造业PMI"}],
+            }
+
+        def day_events(self, event_date, **kwargs):
+            return {
+                "start_date": event_date.isoformat(),
+                "end_date": event_date.isoformat(),
+                "events": [{"title": "股指期货交割日"}],
+            }
+
+    client.app.dependency_overrides[get_investment_calendar_service] = (
+        FakeInvestmentCalendar
+    )
+
+    with client:
+        monthly = client.get(
+            "/api/v1/investment-calendar",
+            params={"start_date": "2026-09-01", "end_date": "2026-09-30"},
+        )
+        daily = client.get("/api/v1/investment-calendar/2026-09-18")
+
+    assert monthly.status_code == 200
+    assert monthly.json()["events"][0]["title"] == "中国制造业PMI"
+    assert daily.status_code == 200
+    assert daily.json()["events"][0]["title"] == "股指期货交割日"
 
 
 def test_dataset_query_passes_only_whitelisted_query_shape():
@@ -414,7 +450,8 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "ops-model-v1" in page.text
+    assert "investment-calendar-v1" in page.text
+    assert 'id="investmentCalendarView"' in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
     assert overview.json()["summary"]["interfaces"] == 244

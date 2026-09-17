@@ -54,6 +54,10 @@ _RATE_LIMIT_SECONDS = {
 }
 
 _PAGE_SIZE_OVERRIDES = {
+    # Live probes on 2026-09-17 show eco_cal always returns at most 100 rows,
+    # even when limit=500/1000. Standard offsets return distinct subsequent
+    # pages, so the collector must use the real upstream boundary.
+    "eco_cal": 100,
     # Live gateway probes on 2026-09-08 returned the exact same unique rows
     # with 1,000- and 5,000-row offset pagination.  The larger page cuts
     # current market-wide requests from 6/10 pages to 2 pages respectively.
@@ -165,6 +169,10 @@ _NO_LOOP_APIS = {
 # rows, so treating that response as a complete non-paginated partition would
 # either fail forever or silently truncate a future 1000+ constituent basket.
 _OFFSET_PAGINATION_OVERRIDES = {
+    # A 45-day forward calendar window crosses the upstream 100-row boundary.
+    # Live offsets 0/100/200 returned distinct events; exhausting offsets is
+    # required to avoid silently losing future GDP, PMI and policy releases.
+    "eco_cal",
     # Official doc 27 supports market-wide trade_date requests with a 6,000
     # row call limit. Live probes on 2000-08-11, 2000-10-30 and 2026-09-04
     # prove that standard limit/offset is honored. Offset exhaustion prevents

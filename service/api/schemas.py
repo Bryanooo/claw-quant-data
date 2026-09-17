@@ -38,6 +38,7 @@ class ColumnDescription(ApiModel):
 class DatasetDescription(DatasetSummary):
     table: str
     read_view: str | None = None
+    freshness_table: str | None = None
     primary_keys: list[str]
     storage_semantics: str = "canonical_upsert"
     business_identity_fields: list[str] = Field(default_factory=list)
@@ -180,6 +181,35 @@ class RawLineageResponse(ApiModel):
     record_hash: str
     records: list[RawRecordItem]
     requests: list[RawRequestItem]
+
+
+class DataServiceEndpoint(ApiModel):
+    method: Literal["GET"]
+    path: str
+    name: str
+    description: str
+    domain: str | None = None
+    status: str | None = None
+
+
+class DataServiceLayer(ApiModel):
+    id: Literal["raw", "standard", "research"]
+    order: int
+    title: str
+    short_title: str
+    description: str
+    usage_guidance: str
+    status: str
+    coverage_note: str
+    metrics: dict[str, int]
+    endpoints: list[DataServiceEndpoint]
+    items: list[dict[str, Any]]
+
+
+class DataServiceCatalogResponse(ApiModel):
+    generated_at: datetime
+    summary: dict[str, int]
+    layers: list[DataServiceLayer]
 
 
 class NormalizationInterfaceStatus(ApiModel):

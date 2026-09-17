@@ -592,6 +592,7 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 |---|---|
 | `GET /api/health/live` | 进程存活检查 |
 | `GET /api/health/ready` | PostgreSQL 就绪检查 |
+| `GET /api/v1/data-services` | 统一发现原始审计、标准数据、研究就绪三层服务及其真实覆盖、REST 契约和明细 |
 | `GET /api/v1/datasets` | 数据集发现 |
 | `GET /api/v1/datasets/{name}` | 字段、过滤器和主键信息 |
 | `GET /api/v1/datasets/{name}/records` | 数据查询与分页 |

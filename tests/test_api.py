@@ -46,6 +46,7 @@ class FakeDataService:
         return {
             **self.list_datasets()[0],
             "table": "daily",
+            "freshness_table": "daily",
             "primary_keys": ["ts_code", "trade_date"],
             "allowed_filters": ["ts_code"],
             "max_page_size": 1000,
@@ -254,6 +255,15 @@ def test_dataset_query_passes_only_whitelisted_query_shape():
     assert response.json()["data"][0]["ts_code"] == "000001.SZ"
     assert service.query_args["exact_filters"] == {"ts_code": "000001.SZ"}
     assert service.query_args["limit"] == 20
+
+
+def test_dataset_description_contract_accepts_freshness_read_table():
+    client, _ = make_client()
+    with client:
+        response = client.get("/api/v1/datasets/stock_daily")
+
+    assert response.status_code == 200
+    assert response.json()["freshness_table"] == "daily"
 
 
 def test_dataset_query_forwards_as_of_without_treating_it_as_a_field_filter():
@@ -474,6 +484,60 @@ def test_raw_audit_endpoints_are_separate_from_standardized_interfaces():
     assert lineage.status_code == 200
 
 
+def test_data_service_catalog_exposes_three_layers_and_real_coverage():
+    client, _ = make_client()
+
+    class FakeRawArchiveService:
+        def list_interfaces(self):
+            return [
+                {
+                    "api_name": "daily",
+                    "title": "日线行情",
+                    "implementation_mode": "specialized",
+                    "document_urls": [],
+                    "request_count": 3,
+                    "successful_requests": 2,
+                    "empty_requests": 0,
+                    "failed_requests": 1,
+                    "latest_request_at": "2026-09-18T00:00:00Z",
+                    "has_records": True,
+                },
+                {
+                    "api_name": "adj_factor",
+                    "title": "复权因子",
+                    "implementation_mode": "generic_raw",
+                    "document_urls": [],
+                    "request_count": 0,
+                    "successful_requests": 0,
+                    "empty_requests": 0,
+                    "failed_requests": 0,
+                    "latest_request_at": None,
+                    "has_records": False,
+                },
+            ]
+
+    client.app.dependency_overrides[get_raw_archive_service] = FakeRawArchiveService
+    with client:
+        response = client.get("/api/v1/data-services")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [layer["id"] for layer in payload["layers"]] == [
+        "raw", "standard", "research"
+    ]
+    assert payload["summary"] == {
+        "layers": 3,
+        "raw_interfaces": 2,
+        "standard_datasets": 1,
+        "research_capabilities": 10,
+    }
+    assert payload["layers"][0]["metrics"]["observed_interfaces"] == 1
+    assert payload["layers"][1]["metrics"]["datasets"] == 1
+    assert payload["layers"][2]["items"][0]["path"].startswith(
+        "/api/v1/stocks/"
+    )
+
+
 def test_unknown_interface_returns_not_found():
     client, _ = make_client()
     client.app.dependency_overrides.pop(get_interface_data_service)
@@ -553,7 +617,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "investment-calendar-v1" in page.text
+    assert "data-services-v1" in page.text
     assert 'id="investmentCalendarView"' in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
@@ -581,6 +645,9 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "已恢复 / 非当前问题" in page.text
     assert 'role="tablist"' in page.text
     assert 'data-view-panel="interfaces"' in page.text
+    assert 'data-view-panel="data-services"' in page.text
+    assert 'id="serviceContractRows"' in page.text
+    assert 'data-page-key="dataServices"' in page.text
     assert 'data-view-panel="instances"' in page.text
     assert 'data-page-key="interfaces"' in page.text
     assert 'data-page-key="health"' in page.text
@@ -591,6 +658,8 @@ def test_collection_dashboard_and_overview_endpoint():
     assert 'id="jobInstanceDialog"' in page.text
     assert 'data-page-key="jobInstances"' in page.text
     assert "pageRows(rows, \"interfaces\")" in dashboard_script
+    assert 'fetch("/api/v1/data-services")' in dashboard_script
+    assert 'pageRows(rows, "dataServices")' in dashboard_script
     assert "pageRows(rows, \"health\")" in dashboard_script
     assert "data-health-retry" in dashboard_script
     assert "/api/v1/collection-job-instances?" in dashboard_script

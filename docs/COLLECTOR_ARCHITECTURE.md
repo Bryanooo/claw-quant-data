@@ -12,6 +12,8 @@ CollectorSpec + CollectorRequest
              ↓
           fetch
              ↓
+   raw request + raw records
+             ↓
        transform/validate
              ↓
            store
@@ -35,13 +37,14 @@ CollectorSpec + CollectorRequest
 | 类型 | 数量口径 | 数据落点 | 适用场景 |
 |---|---:|---|---|
 | 通用契约采集 | 1 个参数化类承载 95 个 API | 原始表 + 95 张强类型标准表 | 完整覆盖、审计、重放和稳定查询 |
-| 专项/等价专项 | 约 98 个类覆盖 106 个 API | 领域规范化表 | 查询、分析、完整性审计 |
+| 专项/等价专项 | 约 98 个类覆盖 106 个 API | 统一原始审计层 + 领域规范化表 | 查询、分析、完整性审计 |
 
 部分普通接口与 VIP 接口共用一个专项实现；同一个上游接口也可能派生多个业务表，
 因此“类数量”“唯一 API 数量”“业务表数量”不会相等。
 
-数据服务物理落点是192张表：97张领域专项表、94张契约标准表和1张通用原始表。
-原始表只承担无损落地、审计和重放；`tushare_norm_*` 使用明确的 `DATE`、
+数据服务物理落点是193张表：97张领域专项表、95张契约标准表和1张统一原始记录表；
+另有 `tushare_raw_request` 保存每次传输请求证据。原始层只承担无损落地、审计和
+重放；`tushare_norm_*` 使用明确的 `DATE`、
 `NUMERIC`、`BIGINT`、`TIMESTAMP` 和 `TEXT` 字段。REST Dataset Registry 从
 `CollectorContract` 与 `NormalizationContract` 生成静态允许列表。CI 和
 PostgreSQL 集成测试会同时检查表注册、字段类型、主键、过滤列和日期列。

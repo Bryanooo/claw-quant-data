@@ -1,4 +1,4 @@
-"""Tushare interface discovery and raw-record query endpoints."""
+"""Tushare interface discovery and standardized-record query endpoints."""
 
 from fastapi import APIRouter, Query, Request
 

@@ -22,6 +22,7 @@ from service.api.routers import (
     investment_calendar,
     interfaces,
     normalization,
+    raw_archive,
     sectors,
     stocks,
 )
@@ -175,6 +176,7 @@ def create_app(
     application.include_router(datasets.router, prefix="/api")
     application.include_router(interfaces.router, prefix="/api")
     application.include_router(normalization.router, prefix="/api")
+    application.include_router(raw_archive.router, prefix="/api")
     application.include_router(stocks.router, prefix="/api")
     application.include_router(sectors.router, prefix="/api")
     application.include_router(collection_jobs.router, prefix="/api")

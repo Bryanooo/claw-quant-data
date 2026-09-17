@@ -101,6 +101,87 @@ class InterfaceRecordsResponse(ApiModel):
     page: PageInfo
 
 
+class RawInterfaceSummary(ApiModel):
+    api_name: str
+    title: str
+    implementation_mode: str
+    document_urls: list[str]
+    request_count: int
+    successful_requests: int
+    empty_requests: int
+    failed_requests: int
+    latest_request_at: datetime | None = None
+    has_records: bool
+
+
+class RawRequestItem(ApiModel):
+    request_id: int
+    api_name: str
+    request_hash: str
+    logical_request_hash: str
+    request_params: dict[str, Any]
+    logical_request_params: dict[str, Any]
+    collector_name: str
+    status: Literal["success", "empty", "failed"]
+    row_count: int
+    response_hash: str | None = None
+    source_doc_id: int | None = None
+    error_message: str | None = None
+    requested_at: datetime
+    completed_at: datetime | None = None
+
+
+class RawRecordItem(ApiModel):
+    api_name: str
+    request_hash: str
+    record_hash: str
+    request_params: dict[str, Any]
+    payload: dict[str, Any]
+    source_doc_id: int | None = None
+    collected_at: datetime
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
+class RawAuditMeta(ApiModel):
+    interface: str
+    returned: int
+
+
+class RawRequestPageResponse(ApiModel):
+    data: list[RawRequestItem]
+    meta: RawAuditMeta
+    page: PageInfo
+
+
+class RawRecordPageResponse(ApiModel):
+    data: list[RawRecordItem]
+    meta: RawAuditMeta
+    page: PageInfo
+
+
+class RawCoverageResponse(ApiModel):
+    api_name: str
+    request_count: int
+    successful_requests: int
+    empty_requests: int
+    failed_requests: int
+    record_count: int
+    logical_request_count: int
+    first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    latest_request_at: datetime | None = None
+    implementation_mode: str
+    document_urls: list[str]
+
+
+class RawLineageResponse(ApiModel):
+    api_name: str
+    record_hash: str
+    records: list[RawRecordItem]
+    requests: list[RawRequestItem]
+
+
 class NormalizationInterfaceStatus(ApiModel):
     api_name: str
     table: str

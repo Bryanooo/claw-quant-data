@@ -2043,6 +2043,41 @@ def test_tushare_raw_table_has_json_contract_and_primary_key():
     assert primary_key == ("api_name", "request_hash", "record_hash")
 
 
+def test_tushare_raw_request_table_preserves_transport_and_logical_identity():
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_schema='public'
+                  AND table_name='tushare_raw_request'
+                """
+            )
+            columns = dict(cursor.fetchall())
+            cursor.execute(
+                """
+                SELECT pg_get_constraintdef(oid)
+                FROM pg_constraint
+                WHERE conrelid='tushare_raw_request'::regclass
+                  AND conname='ck_tushare_raw_request_status'
+                """
+            )
+            status_constraint = cursor.fetchone()[0]
+    finally:
+        connection.close()
+
+    assert columns["request_params"] == "jsonb"
+    assert columns["logical_request_params"] == "jsonb"
+    assert columns["request_hash"] == "character"
+    assert columns["logical_request_hash"] == "character"
+    assert all(
+        status in status_constraint
+        for status in ("success", "empty", "failed")
+    )
+
+
 def test_tushare_checkpoint_table_supports_resumable_pages():
     connection = psycopg2.connect(**DB_CONFIG)
     try:

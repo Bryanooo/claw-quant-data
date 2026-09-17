@@ -163,7 +163,7 @@ class InterfaceDataService:
             "storage_mode": (
                 "typed_standard_and_raw"
                 if mode == "generic_raw"
-                else "specialized_normalized"
+                else "specialized_standard_and_raw_audit"
             ),
             "datasets": self._dataset_names(contract),
             "records_url": (

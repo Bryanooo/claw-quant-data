@@ -187,6 +187,7 @@ class CatalogRawCollector(BaseCollector):
     pagination_mode = PaginationMode.PARTITIONED
     empty_policy = EmptyPolicy.REQUIRES_VERIFICATION
     resource_class = ResourceClass.GENERIC
+    raw_capture_mode = "request_only"
     def __init__(self, api_name: str):
         self.contract = TushareInterfaceCatalog().require_collectable(api_name)
         self.policy = TusharePolicyRegistry().get(api_name)

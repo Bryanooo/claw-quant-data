@@ -27,7 +27,7 @@ import time
 import sys
 import os
 from abc import ABC
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import calendar
 
@@ -43,6 +43,7 @@ from service.config import (
 from service.collection_jobs.context import is_durable_job_active
 from service.clock import business_now
 from service.tushare_rate_limit import install_distributed_rate_limit
+from service.tushare_raw_archive import TushareRawArchive
 from collectors.contracts import (
     CollectorRequest,
     CollectorResult,
@@ -311,6 +312,9 @@ class BaseCollector(ABC):
     resource_class = ResourceClass.MARKET
     collector_version = "1"
     required_parameters: tuple[str, ...] = ()
+    # ``request_only`` is used by CatalogRawCollector because its own store()
+    # already persists records under the same logical request identity.
+    raw_capture_mode = "records"
 
     @classmethod
     def spec(cls) -> CollectorSpec:
@@ -343,6 +347,8 @@ class BaseCollector(ABC):
         self._old_style = hasattr(self.__class__, "INTERFACE_NAME") or hasattr(self.__class__, "TABLE_NAME")
 
         self.logger = setup_logger(self.__class__.__name__)
+        self._raw_archive = TushareRawArchive()
+        self._raw_archive_requests: list[dict[str, Any]] = []
         self._sanitization_nul_characters = 0
         self._sanitization_fields: set[str] = set()
 
@@ -378,7 +384,39 @@ class BaseCollector(ABC):
 
         def counted_query(api_name, *args, **kwargs):
             self._request_count += 1
-            return rate_limited_query(api_name, *args, **kwargs)
+            requested_at = datetime.now(timezone.utc)
+            archive_parameters = dict(kwargs)
+            if args and "fields" not in archive_parameters:
+                # Tushare's stable signature is query(api_name, fields='',
+                # **kwargs). Preserve a positional field projection in the
+                # request identity without changing the provider call.
+                archive_parameters["fields"] = args[0]
+            try:
+                frame = rate_limited_query(api_name, *args, **kwargs)
+            except Exception as error:
+                try:
+                    self._raw_archive.archive_failure(
+                        api_name=api_name,
+                        parameters=archive_parameters,
+                        collector_name=self.spec().qualified_name,
+                        error=error,
+                        requested_at=requested_at,
+                    )
+                except Exception:
+                    # Audit-path availability must never hide the provider's
+                    # original exception and its retry classification.
+                    self.logger.exception("failed to archive Tushare request error")
+                raise
+            archive_evidence = self._raw_archive.archive_response(
+                api_name=api_name,
+                parameters=archive_parameters,
+                frame=frame,
+                collector_name=self.spec().qualified_name,
+                persist_records=self.raw_capture_mode == "records",
+                requested_at=requested_at,
+            )
+            self._raw_archive_requests.append(archive_evidence)
+            return frame
 
         self.pro.query = counted_query
 
@@ -680,6 +718,7 @@ class BaseCollector(ABC):
         """
         last_error = None
         self._request_count = 0
+        self._raw_archive_requests = []
         self._sanitization_nul_characters = 0
         self._sanitization_fields = set()
         for attempt in range(1, self.retry_max + 1):
@@ -703,6 +742,7 @@ class BaseCollector(ABC):
                         empty_reason="upstream_returned_no_rows",
                         evidence={
                             "empty_policy": spec.empty_policy.value,
+                            "raw_archive": self._raw_archive_evidence(),
                             "sanitization": self._sanitization_evidence(),
                         },
                     )
@@ -749,6 +789,7 @@ class BaseCollector(ABC):
                         "pagination_mode": spec.pagination_mode.value,
                         "skip_store": effective.skip_store,
                         "page_signature": page_signature,
+                        "raw_archive": self._raw_archive_evidence(),
                         "sanitization": self._sanitization_evidence(),
                     },
                 )
@@ -806,6 +847,8 @@ class BaseCollector(ABC):
         nul_characters_removed = 0
         affected_fields: set[str] = set()
         warnings: list[str] = []
+        raw_request_ids: list[int] = []
+        logical_request_hashes: set[str] = set()
 
         for page in range(max_pages):
             offset = page * page_size
@@ -822,6 +865,11 @@ class BaseCollector(ABC):
             )
             affected_fields.update(sanitization.get("affected_fields", ()))
             warnings.extend(result.warnings)
+            raw_archive = result.evidence.get("raw_archive", {})
+            raw_request_ids.extend(raw_archive.get("request_ids", ()))
+            logical_request_hashes.update(
+                raw_archive.get("logical_request_hashes", ())
+            )
 
             if result.fetched_rows:
                 signature = str(result.evidence.get("page_signature", ""))
@@ -879,6 +927,11 @@ class BaseCollector(ABC):
                         "rows_stored": stored_total,
                         "exhausted": True,
                         "skip_store": skip_store,
+                        "raw_archive": {
+                            "request_ids": raw_request_ids,
+                            "logical_request_hashes": sorted(logical_request_hashes),
+                            "records_persisted": self.raw_capture_mode == "records",
+                        },
                         "sanitization": {
                             "nul_characters_removed": nul_characters_removed,
                             "affected_fields": sorted(affected_fields),
@@ -904,6 +957,20 @@ class BaseCollector(ABC):
             "exhausted": False,
         }
         raise error
+
+    def _raw_archive_evidence(self) -> dict[str, Any]:
+        return {
+            "request_ids": [
+                item["request_id"] for item in self._raw_archive_requests
+            ],
+            "logical_request_hashes": sorted(
+                {
+                    item["logical_request_hash"]
+                    for item in self._raw_archive_requests
+                }
+            ),
+            "records_persisted": self.raw_capture_mode == "records",
+        }
 
     # ─────────────── collect：兼容旧调用方的整数返回值 ───────────────
     def collect(self, skip_store: bool = False, **params) -> int:

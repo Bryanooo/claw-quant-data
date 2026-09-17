@@ -6,6 +6,7 @@ from service.investment_calendar import (
     InvalidInvestmentCalendarRequest,
     InvestmentCalendarService,
 )
+from service.clock import business_time
 
 
 class FakeRepository:
@@ -84,10 +85,11 @@ class FakeRepository:
 
 
 def test_calendar_classifies_macro_events_and_groups_index_futures():
-    result = InvestmentCalendarService(FakeRepository()).list_events(
-        start_date=date(2026, 9, 1),
-        end_date=date(2026, 9, 30),
-    )
+    with business_time("2026-09-17T22:00:00+08:00"):
+        result = InvestmentCalendarService(FakeRepository()).list_events(
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 30),
+        )
 
     assert result["summary"] == {
         "total_events": 3,
@@ -95,6 +97,7 @@ def test_calendar_classifies_macro_events_and_groups_index_futures():
         "high_events": 3,
         "scheduled_events": 2,
         "released_events": 1,
+        "occurred_events": 1,
     }
     gdp = next(item for item in result["events"] if "GDP" in item["title"])
     assert gdp["event_type"] == "growth"
@@ -125,6 +128,37 @@ def test_calendar_filters_normal_events_by_default_and_can_return_all():
 
     assert important["summary"]["total_events"] == 2
     assert all_events["summary"]["total_events"] == 3
+
+
+def test_past_timed_event_is_occurred_even_when_actual_is_not_backfilled():
+    class FomcRepository(FakeRepository):
+        def economic_events(self, start_date, end_date):
+            return [{
+                "date": date(2026, 9, 17),
+                "time": time(2),
+                "currency": "USD",
+                "country": "美国",
+                "event": "美联储利率决议",
+                "value": "",
+                "pre_value": "3.75%",
+                "fore_value": "4.00%",
+                "_source_collected_at": datetime(
+                    2026, 9, 17, 14, tzinfo=timezone.utc
+                ),
+            }]
+
+        def index_futures_deliveries(self, start_date, end_date):
+            return []
+
+    with business_time("2026-09-17T22:00:00+08:00"):
+        result = InvestmentCalendarService(FomcRepository()).day_events(
+            date(2026, 9, 17), importance="high"
+        )
+
+    assert result["events"][0]["status"] == "occurred"
+    assert result["summary"]["scheduled_events"] == 0
+    assert result["summary"]["occurred_events"] == 1
+    assert result["summary"]["released_events"] == 0
 
 
 def test_calendar_validates_range():

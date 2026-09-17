@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import hashlib
 from typing import Any, Protocol
 
-from service.clock import business_now
+from service.clock import SHANGHAI_TIMEZONE, business_now
 from service.data_service.database import Database
 
 
@@ -130,6 +130,42 @@ def _nonempty(value: Any) -> bool:
     return value is not None and str(value).strip() not in {"", "--", "None"}
 
 
+def _economic_event_status(
+    event_date: date | str,
+    event_time: time | str | None,
+    actual: Any,
+) -> str:
+    """Separate event occurrence from the upstream actual-value backfill.
+
+    eco_cal uses Beijing calendar dates/times for global releases. The provider
+    can leave ``value`` empty after a policy event has already happened, so an
+    empty actual must not keep a past event in the scheduled state.
+    """
+    if _nonempty(actual):
+        return "released"
+    resolved_date = (
+        event_date
+        if isinstance(event_date, date)
+        else datetime.strptime(event_date, "%Y-%m-%d").date()
+    )
+    now = business_now().astimezone(SHANGHAI_TIMEZONE)
+    if resolved_date < now.date():
+        return "occurred"
+    if resolved_date > now.date() or event_time is None:
+        return "scheduled"
+    resolved_time = (
+        event_time
+        if isinstance(event_time, time)
+        else time.fromisoformat(event_time)
+    )
+    scheduled_at = datetime.combine(
+        resolved_date,
+        resolved_time,
+        tzinfo=SHANGHAI_TIMEZONE,
+    )
+    return "occurred" if scheduled_at <= now else "scheduled"
+
+
 def _importance(event: str, country: str | None) -> str:
     normalized = event.casefold()
     if any(keyword in normalized for keyword in _HIGH_KEYWORDS):
@@ -237,6 +273,10 @@ class InvestmentCalendarService:
                         "released_events": sum(
                             item["status"] == "released" for item in day_events
                         ),
+                        "occurred_events": sum(
+                            item["status"] in {"released", "occurred", "completed"}
+                            for item in day_events
+                        ),
                         "top_events": [
                             {
                                 "event_id": item["event_id"],
@@ -266,6 +306,10 @@ class InvestmentCalendarService:
                 "high_events": sum(item["importance"] == "high" for item in events),
                 "scheduled_events": sum(item["status"] == "scheduled" for item in events),
                 "released_events": sum(item["status"] == "released" for item in events),
+                "occurred_events": sum(
+                    item["status"] in {"released", "occurred", "completed"}
+                    for item in events
+                ),
             },
             "source_coverage": self._serialize_coverage(
                 self.repository.source_coverage()
@@ -321,7 +365,6 @@ class InvestmentCalendarService:
     def _economic_event(row: dict) -> dict:
         event_date = row["date"]
         title = str(row.get("event") or "未命名经济事件").strip()
-        actual_present = _nonempty(row.get("value"))
         return {
             "event_id": _event_id(
                 "eco_cal", event_date, row.get("time"), row.get("currency"),
@@ -334,7 +377,11 @@ class InvestmentCalendarService:
             "currency": row.get("currency"),
             "event_type": _event_type(title),
             "importance": _importance(title, row.get("country")),
-            "status": "released" if actual_present else "scheduled",
+            "status": _economic_event_status(
+                event_date,
+                row.get("time"),
+                row.get("value"),
+            ),
             "actual": row.get("value"),
             "forecast": row.get("fore_value"),
             "previous": row.get("pre_value"),

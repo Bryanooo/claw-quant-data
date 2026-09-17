@@ -2,6 +2,8 @@ const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
   initialization: null, fanoutCampaigns: [], jobInstances: [], focusedJob: null, freshness: [], delivery: null,
   calendar: null, calendarDetail: null, todayDataDetail: null, calendarMonth: null,
+  investmentCalendar: null, investmentCalendarDetail: null, investmentCalendarMonth: null,
+  selectedInvestmentDate: null,
   selectedCalendarDate: null,
   dataHealth: {}, healthIssues: [], timer: null,
   operationalSummary: null, hasLoadedOperational: false,
@@ -106,6 +108,7 @@ function notice(message = "", kind = "action") {
 const endpointLabels = {
   delivery: "今日交付",
   calendar: "数据日历",
+  investmentCalendar: "投资日历",
   preflight: "运行预检",
   health: "待处理事项",
   fanout: "全量采集活动",
@@ -323,6 +326,157 @@ function shiftCalendarMonth(delta) {
   state.calendarDetail = null;
   state.pages.calendarDetails = 1;
   loadCalendar().then(renderOperationsBanner);
+}
+
+function shiftInvestmentCalendarMonth(delta) {
+  const [year, month] = state.investmentCalendarMonth.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1));
+  state.investmentCalendarMonth = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+  state.selectedInvestmentDate = null;
+  state.investmentCalendarDetail = null;
+  loadInvestmentCalendar().then(renderOperationsBanner);
+}
+
+const investmentTypeLabels = {
+  growth: "经济增长", survey: "景气调查", inflation: "通胀", employment: "就业",
+  central_bank: "央行", money_credit: "货币信贷", trade: "进出口",
+  housing: "房地产", derivatives: "股指交割", speech: "讲话", other: "其他"
+};
+
+function investmentFilters() {
+  return {
+    importance: $("investmentImportanceFilter").value,
+    country: $("investmentCountryFilter").value,
+    eventType: $("investmentTypeFilter").value
+  };
+}
+
+function renderInvestmentCalendar() {
+  const payload = state.investmentCalendar;
+  if (!payload) return;
+  const summary = payload.summary || {};
+  const coverage = payload.source_coverage || {};
+  const economic = coverage.economic_calendar || {};
+  const futures = coverage.index_futures || {};
+  $("investmentCalendarMonthPicker").value = state.investmentCalendarMonth;
+  $("investmentCalendarSummary").textContent =
+    `${summary.total_events || 0} 项重要事件 · ${summary.high_events || 0} 项高重要 · ` +
+    `${summary.scheduled_events || 0} 项待发布 / 待发生 · ${summary.released_events || 0} 项已有实际值`;
+  $("investmentCalendarTabCount").textContent = `${summary.total_events || 0} 项事件`;
+  $("investmentCalendarCoverage").textContent =
+    `财经日历覆盖 ${economic.min_date || "—"} 至 ${economic.max_date || "—"} · ` +
+    `股指合约最远交割日 ${futures.max_date || "—"} · 来源更新 ${formatTime(economic.last_collected_at || futures.last_collected_at)}`;
+
+  const { startDate, endDate } = calendarMonthRange(state.investmentCalendarMonth);
+  const firstDay = new Date(`${startDate}T00:00:00+08:00`).getDay();
+  const leading = (firstDay + 6) % 7;
+  const byDate = new Map((payload.days || []).map((item) => [item.event_date, item]));
+  const today = shanghaiToday();
+  const cells = Array.from({ length: leading }, () => '<span class="calendar-spacer" aria-hidden="true"></span>');
+  let cursor = new Date(`${startDate}T00:00:00+08:00`);
+  const finalDate = new Date(`${endDate}T00:00:00+08:00`);
+  while (cursor <= finalDate) {
+    const dateKey = [cursor.getFullYear(), String(cursor.getMonth() + 1).padStart(2, "0"), String(cursor.getDate()).padStart(2, "0")].join("-");
+    const day = byDate.get(dateKey);
+    const topEvents = day?.top_events || [];
+    const dayClass = !day ? "empty" : day.derivative_events ? "derivative" : day.high_events ? "high" : "medium";
+    const eventLabels = topEvents.map((item) =>
+      `<span class="investment-event-preview importance-${item.importance}">${item.event_time ? `${escapeHtml(item.event_time.slice(0, 5))} ` : ""}${escapeHtml(item.title)}</span>`
+    ).join("");
+    cells.push(`<button type="button" class="calendar-day investment-calendar-day status-${dayClass}${dateKey === state.selectedInvestmentDate ? " is-selected" : ""}${dateKey === today ? " is-today" : ""}" data-investment-date="${dateKey}" aria-label="${dateKey}${day ? ` ${day.total_events} 项投资事件` : " 无重要投资事件"}">
+      <span class="calendar-date">${cursor.getDate()}</span>
+      ${day ? `<strong>${day.total_events} 项${day.high_events ? ` · ${day.high_events} 高重要` : ""}</strong>${eventLabels}` : '<small class="investment-no-event">无重要事件</small>'}
+    </button>`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  $("investmentCalendarGrid").innerHTML = cells.join("");
+}
+
+function renderInvestmentCalendarDetail() {
+  const payload = state.investmentCalendarDetail;
+  if (!payload) return;
+  const events = payload.events || [];
+  const selected = payload.start_date;
+  $("investmentCalendarDetailTitle").textContent = `${selected} 重要事件`;
+  $("investmentCalendarDetailSummary").textContent = events.length
+    ? `${events.length} 项事件 · ${events.filter((item) => item.importance === "high").length} 项高重要；“已发布”仅在来源含实际值时成立。`
+    : "该日没有符合当前筛选条件的重要事件。";
+  if (!events.length) {
+    $("investmentCalendarDetailRows").innerHTML = '<tr><td colspan="9" class="empty-state">该日没有符合当前筛选条件的重要事件</td></tr>';
+    return;
+  }
+  $("investmentCalendarDetailRows").innerHTML = events.map((item) => {
+    const importance = item.importance === "high" ? "高" : item.importance === "medium" ? "重要" : "一般";
+    const status = item.status === "released" ? "已发布" : item.status === "completed" ? "已发生" : "待发布 / 待发生";
+    const actual = item.actual != null && String(item.actual).trim() !== ""
+      ? `<strong>${escapeHtml(item.actual)}</strong><span class="completion-reason">已发布</span>`
+      : `<span class="pill status-${item.status === "scheduled" ? "pending" : "complete"}">${status}</span>`;
+    const contracts = item.contracts?.length
+      ? `<span class="completion-reason">${item.contracts.map((contract) => escapeHtml(contract.ts_code)).join(" · ")}</span>`
+      : "";
+    return `<tr>
+      <td class="investment-event-time">${item.event_time ? escapeHtml(item.event_time.slice(0, 5)) : "全天"}</td>
+      <td><span class="investment-importance importance-${item.importance}">${importance}</span></td>
+      <td>${escapeHtml(item.country || "—")}<span class="completion-reason">${escapeHtml(item.currency || "")}</span></td>
+      <td><span class="investment-event-title">${escapeHtml(item.title)}</span>${contracts}</td>
+      <td>${escapeHtml(investmentTypeLabels[item.event_type] || item.event_type)}</td>
+      <td>${escapeHtml(item.previous ?? "—")}</td>
+      <td>${escapeHtml(item.forecast ?? "—")}</td>
+      <td>${actual}</td>
+      <td>${escapeHtml(item.source_label)}<span class="completion-reason">采集 ${formatTime(item.source_collected_at)}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadInvestmentCalendarDetail(eventDate) {
+  if (!eventDate) return false;
+  const filters = investmentFilters();
+  const query = new URLSearchParams({ importance: filters.importance });
+  if (filters.country) query.set("country", filters.country);
+  if (filters.eventType) query.set("event_type", filters.eventType);
+  try {
+    const response = await fetch(`/api/v1/investment-calendar/${eventDate}?${query}`);
+    if (!response.ok) throw new Error(`事件明细接口返回 ${response.status}`);
+    state.investmentCalendarDetail = await response.json();
+    state.selectedInvestmentDate = eventDate;
+    renderInvestmentCalendar();
+    renderInvestmentCalendarDetail();
+    clearEndpointError("investmentCalendar");
+    return true;
+  } catch (error) {
+    setEndpointError("investmentCalendar", error);
+    notice(`无法读取 ${eventDate} 的投资事件：${error.message}`, "load-error");
+    return false;
+  }
+}
+
+async function loadInvestmentCalendar() {
+  state.investmentCalendarMonth ||= currentCalendarMonth();
+  const { startDate, endDate } = calendarMonthRange(state.investmentCalendarMonth);
+  const filters = investmentFilters();
+  const query = new URLSearchParams({
+    start_date: startDate, end_date: endDate, importance: filters.importance
+  });
+  if (filters.country) query.set("country", filters.country);
+  if (filters.eventType) query.set("event_type", filters.eventType);
+  try {
+    const response = await fetch(`/api/v1/investment-calendar?${query}`);
+    if (!response.ok) throw new Error(`投资日历接口返回 ${response.status}`);
+    state.investmentCalendar = await response.json();
+    const eventDays = state.investmentCalendar.days || [];
+    const today = shanghaiToday();
+    const preferred = eventDays.find((item) => item.event_date === today) || eventDays[0];
+    if (!state.selectedInvestmentDate || !state.selectedInvestmentDate.startsWith(state.investmentCalendarMonth)) {
+      state.selectedInvestmentDate = preferred?.event_date || (today.startsWith(state.investmentCalendarMonth) ? today : startDate);
+    }
+    renderInvestmentCalendar();
+    await loadInvestmentCalendarDetail(state.selectedInvestmentDate);
+    clearEndpointError("investmentCalendar");
+    return true;
+  } catch (error) {
+    setEndpointError("investmentCalendar", error);
+    return false;
+  }
 }
 
 function renderCalendarScope() {
@@ -1692,7 +1846,7 @@ async function refreshAll() {
   renderOperationsBanner();
   try {
     const results = await Promise.all([
-      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadDataHealth(), loadFanoutCampaigns(), loadJobInstances()
+      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadInvestmentCalendar(), loadDataHealth(), loadFanoutCampaigns(), loadJobInstances()
     ]);
     state.hasLoadedSnapshot = results.every(Boolean);
     if (state.hasLoadedSnapshot) {
@@ -1801,6 +1955,30 @@ $("calendarDetailRows").addEventListener("click", (event) => {
   if (instance) showJobInstance(instance.dataset.calendarInstance);
   const campaign = event.target.closest("[data-calendar-fanout]");
   if (campaign) showFanoutCampaign(campaign.dataset.calendarFanout);
+});
+$("investmentCalendarPrevious").addEventListener("click", () => shiftInvestmentCalendarMonth(-1));
+$("investmentCalendarNext").addEventListener("click", () => shiftInvestmentCalendarMonth(1));
+$("investmentCalendarToday").addEventListener("click", () => {
+  state.investmentCalendarMonth = currentCalendarMonth();
+  state.selectedInvestmentDate = null;
+  loadInvestmentCalendar().then(renderOperationsBanner);
+});
+$("investmentCalendarMonthPicker").addEventListener("change", (event) => {
+  if (!event.target.value) return;
+  state.investmentCalendarMonth = event.target.value;
+  state.selectedInvestmentDate = null;
+  state.investmentCalendarDetail = null;
+  loadInvestmentCalendar().then(renderOperationsBanner);
+});
+$("investmentCalendarGrid").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-investment-date]");
+  if (button) loadInvestmentCalendarDetail(button.dataset.investmentDate);
+});
+["investmentImportanceFilter", "investmentCountryFilter", "investmentTypeFilter"].forEach((id) => {
+  $(id).addEventListener("change", () => {
+    state.selectedInvestmentDate = null;
+    loadInvestmentCalendar().then(renderOperationsBanner);
+  });
 });
 document.querySelector(".console-tabs").addEventListener("click", (event) => {
   const button = event.target.closest("[data-view]");

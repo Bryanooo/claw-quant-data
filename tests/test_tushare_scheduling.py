@@ -256,6 +256,27 @@ def test_documented_alternative_parameters_use_safe_partitions(monkeypatch):
     assert policies.get("fut_weekly_detail").automatic_safe is False
 
 
+def test_economic_calendar_refreshes_a_bounded_future_window():
+    catalog = TushareInterfaceCatalog()
+    policies = TusharePolicyRegistry()
+    contract = catalog.get("eco_cal")
+
+    parameters = scheduling.parameters_for_policy(
+        policies.get("eco_cal"),
+        {item["name"] for item in contract.input_parameters},
+        today=date(2026, 9, 17),
+        trade_date="20260917",
+    )
+
+    assert parameters == {
+        "start_date": "20260910",
+        "end_date": "20261101",
+    }
+    policy = policies.get("eco_cal")
+    assert policy.pagination_mode == "offset"
+    assert policy.page_size == 100
+
+
 def test_index_periodic_policies_use_market_wide_offset_pagination():
     policies = TusharePolicyRegistry()
 

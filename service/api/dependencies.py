@@ -18,6 +18,11 @@ from service.data_service.interfaces import InterfaceDataService
 from service.initialization.service import InitializationService
 from service.normalization_monitor import NormalizationMonitorService
 from service.delivery_monitor import DeliveryMonitorService
+from service.investment_calendar import (
+    InvestmentCalendarRepository,
+    InvestmentCalendarService,
+)
+
 
 def get_data_service(request: Request) -> DataService:
     repository = DatasetRepository(request.app.state.database)
@@ -25,6 +30,12 @@ def get_data_service(request: Request) -> DataService:
 
 
 DataServiceDependency = Annotated[DataService, Depends(get_data_service)]
+
+
+def get_investment_calendar_service(request: Request) -> InvestmentCalendarService:
+    return InvestmentCalendarService(
+        InvestmentCalendarRepository(request.app.state.database)
+    )
 
 
 def get_interface_data_service(request: Request) -> InterfaceDataService:

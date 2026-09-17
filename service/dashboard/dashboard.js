@@ -1,5 +1,6 @@
 const state = {
   data: [], summary: {}, services: [], coverage: [], coverageSummary: {},
+  serviceCatalog: null, selectedServiceLayer: "raw",
   initialization: null, fanoutCampaigns: [], jobInstances: [], focusedJob: null, freshness: [], delivery: null,
   calendar: null, calendarDetail: null, todayDataDetail: null, calendarMonth: null,
   investmentCalendar: null, investmentCalendarDetail: null, investmentCalendarMonth: null,
@@ -19,7 +20,7 @@ const state = {
   jobInstancePage: { number: 1, size: 25, total_items: 0, total_pages: 1, has_previous: false, has_next: false },
   instanceCampaignId: null,
   pages: {
-    delivery: 1, calendarDetails: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1,
+    delivery: 1, calendarDetails: 1, health: 1, interfaces: 1, fanout: 1, coverage: 1, dataServices: 1,
     coveragePartitions: 1, batchChildren: 1, initializationSteps: 1, fanoutPages: 1, jobInstances: 1
   },
   dialogData: {
@@ -36,7 +37,7 @@ try {
 }
 
 const pageSizes = {
-  delivery: 15, calendarDetails: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20,
+  delivery: 15, calendarDetails: 15, health: 10, interfaces: 20, fanout: 10, coverage: 20, dataServices: 20,
   coveragePartitions: 40, batchChildren: 20, initializationSteps: 20, fanoutPages: 20, jobInstances: 25
 };
 
@@ -111,6 +112,7 @@ const endpointLabels = {
   investmentCalendar: "投资日历",
   preflight: "运行预检",
   health: "待处理事项",
+  dataServices: "数据服务目录",
   fanout: "全量采集活动",
   instances: "执行记录"
 };
@@ -868,6 +870,201 @@ function render() {
         : `<button class="row-action" data-retry="${retryJobId || ""}" ${canRetry ? "" : "disabled"}>重试</button>`}</div></td>
     </tr>`;
   }).join("");
+}
+
+const serviceMetricLabels = {
+  interfaces: "可采接口",
+  observed_interfaces: "已有请求证据",
+  interfaces_with_records: "已有原始记录",
+  interfaces_with_failed_requests: "含历史失败",
+  datasets: "标准数据集",
+  dated_datasets: "支持日期查询",
+  mapped_interfaces: "已映射上游接口",
+  direct_interface_queries: "通用接口直查",
+  capabilities: "研究能力",
+  available_capabilities: "当前可用",
+  domains: "研究领域"
+};
+
+function selectedServiceLayer() {
+  return state.serviceCatalog?.layers?.find((item) => item.id === state.selectedServiceLayer) || null;
+}
+
+function serviceLayerRows(layer) {
+  const needle = $("serviceSearchInput").value.trim().toLowerCase();
+  const items = layer?.items || [];
+  if (!needle) return items;
+  return items.filter((item) => [
+    item.api_name, item.name, item.title, item.description, item.category,
+    item.domain, item.path, item.implementation_mode, item.source
+  ].some((value) => String(value || "").toLowerCase().includes(needle)));
+}
+
+function serviceLayerStatus(item, layerId) {
+  if (layerId === "raw") {
+    const successful = Number(item.successful_requests || 0) + Number(item.empty_requests || 0);
+    if (item.has_records) return {
+      css: "complete",
+      label: "已有原始记录",
+      note: item.failed_requests
+        ? `另有 ${item.failed_requests} 次历史失败`
+        : item.request_count
+        ? "请求与原文可追溯"
+        : "保留原文；统一请求账本待后续采集"
+    };
+    if (successful) return { css: "empty", label: "已有请求证据", note: "当前响应为空，不等同采集失败" };
+    if (item.failed_requests) return { css: "failed", label: "仅有失败请求", note: "需要检查最近请求错误" };
+    return { css: "pending", label: "尚未观察", note: "统一审计上线后尚无真实请求" };
+  }
+  if (layerId === "standard") {
+    return { css: "complete", label: "契约可用", note: "数据完整性请到数据资产查看" };
+  }
+  return { css: "complete", label: "能力可用", note: "由标准数据层组合" };
+}
+
+function serviceContractRow(item, layerId) {
+  const status = serviceLayerStatus(item, layerId);
+  if (layerId === "raw") {
+    const requests = Number(item.request_count || 0).toLocaleString();
+    const successes = Number(item.successful_requests || 0).toLocaleString();
+    return `<tr>
+      <td><span class="api-name">${escapeHtml(item.api_name)}</span><span class="api-title">${escapeHtml(item.title)}</span></td>
+      <td><span class="pill">${item.implementation_mode === "generic_raw" ? "通用采集" : "专项采集"}</span><span class="completion-reason">无损请求与响应审计</span></td>
+      <td><code class="service-path">GET /api/v1/raw/${escapeHtml(item.api_name)}/requests</code></td>
+      <td class="number">${requests}<span class="completion-reason">${successes} 次成功响应 · ${Number(item.failed_requests || 0).toLocaleString()} 次历史失败</span></td>
+      <td><span class="pill status-${status.css}">${status.label}</span><span class="completion-reason">${escapeHtml(status.note)}</span></td>
+      <td><button class="row-action" data-service-contract="raw" data-service-key="${escapeHtml(item.api_name)}">查看审计</button></td>
+    </tr>`;
+  }
+  if (layerId === "standard") {
+    return `<tr>
+      <td><span class="api-name">${escapeHtml(item.name)}</span><span class="api-title">${escapeHtml(item.description)}</span></td>
+      <td><span class="pill">${escapeHtml(item.category)}</span><span class="completion-reason">${escapeHtml(item.source)}</span></td>
+      <td><code class="service-path">GET /api/v1/datasets/${escapeHtml(item.name)}/records</code></td>
+      <td><span class="number">${item.date_column ? "日期查询" : "非日期资产"}</span><span class="completion-reason">${escapeHtml(item.date_column || "以业务字段过滤")}</span></td>
+      <td><span class="pill status-${status.css}">${status.label}</span><span class="completion-reason">${escapeHtml(status.note)}</span></td>
+      <td><button class="row-action" data-service-contract="standard" data-service-key="${escapeHtml(item.name)}">查看契约</button></td>
+    </tr>`;
+  }
+  return `<tr>
+    <td><span class="api-name">${escapeHtml(item.name)}</span><span class="api-title">${escapeHtml(item.description)}</span></td>
+    <td><span class="pill">${escapeHtml(item.domain)}</span><span class="completion-reason">面向个人研究与 Agent</span></td>
+    <td><code class="service-path">${escapeHtml(item.method)} ${escapeHtml(item.path)}</code></td>
+    <td><span class="number">组合服务</span><span class="completion-reason">跨标准数据集输出</span></td>
+    <td><span class="pill status-${status.css}">${status.label}</span><span class="completion-reason">${escapeHtml(status.note)}</span></td>
+    <td><button class="row-action" data-service-contract="research" data-service-key="${escapeHtml(item.path)}">查看用法</button></td>
+  </tr>`;
+}
+
+function renderDataServices() {
+  const catalog = state.serviceCatalog;
+  if (!catalog) return;
+  const raw = catalog.layers.find((item) => item.id === "raw");
+  const standard = catalog.layers.find((item) => item.id === "standard");
+  const research = catalog.layers.find((item) => item.id === "research");
+  $("dataServicesTabCount").textContent = `${catalog.summary.layers} 层 · ${catalog.summary.research_capabilities} 项研究能力`;
+  $("dataServicesSummary").textContent = `${catalog.summary.raw_interfaces} 个上游接口可审计 · ${catalog.summary.standard_datasets} 个标准数据集 · ${catalog.summary.research_capabilities} 项研究就绪能力`;
+  $("rawLayerPrimary").textContent = `${raw.metrics.interfaces_with_records}/${raw.metrics.interfaces}`;
+  $("rawLayerSecondary").textContent = `${raw.metrics.observed_interfaces} 个接口已有完整请求账本`;
+  $("standardLayerPrimary").textContent = Number(standard.metrics.datasets).toLocaleString();
+  $("standardLayerSecondary").textContent = `${standard.metrics.dated_datasets} 个支持日期查询`;
+  $("researchLayerPrimary").textContent = Number(research.metrics.capabilities).toLocaleString();
+  $("researchLayerSecondary").textContent = `${research.metrics.domains} 个研究领域`;
+
+  document.querySelectorAll("[data-service-layer]").forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.serviceLayer === state.selectedServiceLayer);
+  });
+  const layer = selectedServiceLayer();
+  if (!layer) return;
+  const metricText = Object.entries(layer.metrics)
+    .map(([key, value]) => `${serviceMetricLabels[key] || key} ${Number(value).toLocaleString()}`)
+    .join(" · ");
+  $("serviceLayerGuidance").innerHTML = `<div><strong>${escapeHtml(layer.title)} · ${escapeHtml(layer.short_title)}</strong><span>${escapeHtml(layer.usage_guidance)} ${escapeHtml(layer.coverage_note)}</span></div><span class="pill status-running">${escapeHtml(metricText)}</span>`;
+  $("serviceContractTitle").textContent = `${layer.title}服务明细`;
+  $("serviceContractNote").textContent = layer.description;
+  const rows = serviceLayerRows(layer);
+  const page = pageRows(rows, "dataServices");
+  const end = Math.min(page.start + page.rows.length, rows.length);
+  $("serviceContractResultCount").textContent = rows.length
+    ? `显示 ${page.start + 1}–${end}，共 ${rows.length} 项服务`
+    : "0 项服务";
+  $("serviceContractRows").innerHTML = page.rows.length
+    ? page.rows.map((item) => serviceContractRow(item, layer.id)).join("")
+    : '<tr><td colspan="6" class="empty-state">当前层没有符合搜索条件的服务</td></tr>';
+}
+
+async function loadDataServices() {
+  try {
+    const response = await fetch("/api/v1/data-services");
+    if (!response.ok) throw new Error(`数据服务目录返回 ${response.status}`);
+    state.serviceCatalog = await response.json();
+    renderDataServices();
+    clearEndpointError("dataServices");
+    return true;
+  } catch (error) {
+    setEndpointError("dataServices", error);
+    $("serviceContractRows").innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    return false;
+  }
+}
+
+function serviceContractItem(layerId, key) {
+  return state.serviceCatalog?.layers?.find((layer) => layer.id === layerId)?.items?.find((item) =>
+    layerId === "raw" ? item.api_name === key : layerId === "standard" ? item.name === key : item.path === key
+  );
+}
+
+function serviceContractStats(entries) {
+  return `<div class="service-contract-stats">${entries.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "—")}</strong></article>`).join("")}</div>`;
+}
+
+async function showServiceContract(layerId, key) {
+  const item = serviceContractItem(layerId, key);
+  if (!item) return;
+  const dialog = $("serviceContractDialog");
+  $("serviceContractDialogTitle").textContent = item.title || item.description || item.name || item.api_name;
+  $("serviceContractDialogBody").innerHTML = '<p class="empty-state">正在读取服务契约…</p>';
+  dialog.showModal();
+  try {
+    if (layerId === "raw") {
+      const response = await fetch(`/api/v1/raw/${encodeURIComponent(item.api_name)}/coverage`);
+      if (!response.ok) throw new Error(`审计摘要返回 ${response.status}`);
+      const detail = await response.json();
+      $("serviceContractDialogBody").innerHTML = `${serviceContractStats([
+        ["真实请求", Number(detail.request_count || 0).toLocaleString()],
+        ["成功响应", Number(detail.successful_requests || 0).toLocaleString()],
+        ["空响应", Number(detail.empty_requests || 0).toLocaleString()],
+        ["失败请求", Number(detail.failed_requests || 0).toLocaleString()],
+        ["原始记录", Number(detail.record_count || 0).toLocaleString()],
+        ["逻辑请求", Number(detail.logical_request_count || 0).toLocaleString()]
+      ])}<div class="service-contract-copy"><strong>审计边界</strong><p>请求成功只表示上游成功返回，不代表业务完整性通过；数据完整性请到“数据资产”查看。</p><code>GET /api/v1/raw/${escapeHtml(item.api_name)}/requests</code><code>GET /api/v1/raw/${escapeHtml(item.api_name)}/records</code></div>`;
+    } else if (layerId === "standard") {
+      const response = await fetch(`/api/v1/datasets/${encodeURIComponent(item.name)}`);
+      if (!response.ok) throw new Error(`数据集契约返回 ${response.status}`);
+      const detail = await response.json();
+      $("serviceContractDialogBody").innerHTML = `${serviceContractStats([
+        ["标准表 / 视图", detail.read_view || detail.table],
+        ["日期字段", detail.date_column || "不适用"],
+        ["可用过滤器", (detail.allowed_filters || []).length],
+        ["字段数量", (detail.columns || []).length]
+      ])}<div class="service-contract-copy"><strong>稳定查询契约</strong><p>业务身份：${escapeHtml((detail.business_identity_fields || detail.primary_keys || []).join("、") || "未声明")} · 时点字段：${escapeHtml(detail.availability_column || "不支持 as_of")}</p><code>GET /api/v1/datasets/${escapeHtml(item.name)}/records?limit=100&amp;offset=0</code><p>允许过滤：${escapeHtml((detail.allowed_filters || []).join("、") || "无")}</p></div>`;
+    } else {
+      const today = new Date().toISOString().slice(0, 10);
+      let samplePath = item.path
+        .replace("{ts_code}", "000001.SZ")
+        .replace("{provider}", "ths")
+        .replace("{sector_code}", "885001.TI")
+        .replace("{event_date}", today);
+      if (item.path === "/api/v1/investment-calendar") {
+        samplePath += `?start_date=${today}&end_date=${today}`;
+      }
+      $("serviceContractDialogBody").innerHTML = `${serviceContractStats([
+        ["研究领域", item.domain], ["方法", item.method], ["状态", "可用"]
+      ])}<div class="service-contract-copy"><strong>${escapeHtml(item.name)}</strong><p>${escapeHtml(item.description)}</p><code>${escapeHtml(item.method)} ${escapeHtml(item.path)}</code><a class="button button-primary" href="${escapeHtml(samplePath)}" target="_blank" rel="noreferrer">打开示例响应</a></div>`;
+    }
+  } catch (error) {
+    $("serviceContractDialogBody").innerHTML = `<p class="empty-state error-text">${escapeHtml(error.message)}</p>`;
+  }
 }
 
 function renderSummary(summary) {
@@ -1850,7 +2047,7 @@ async function refreshAll() {
   renderOperationsBanner();
   try {
     const results = await Promise.all([
-      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadInvestmentCalendar(), loadDataHealth(), loadFanoutCampaigns(), loadJobInstances()
+      loadOperationalSummary(), loadDelivery(), loadCalendar(), loadInvestmentCalendar(), loadDataHealth(), loadDataServices(), loadFanoutCampaigns(), loadJobInstances()
     ]);
     state.hasLoadedSnapshot = results.every(Boolean);
     if (state.hasLoadedSnapshot) {
@@ -2037,6 +2234,18 @@ window.addEventListener("offline", renderOperationsBanner);
     render();
   });
 });
+$("serviceSearchInput").addEventListener("input", () => {
+  state.pages.dataServices = 1;
+  renderDataServices();
+});
+document.querySelectorAll("[data-service-layer]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.selectedServiceLayer = button.dataset.serviceLayer;
+    state.pages.dataServices = 1;
+    $("serviceSearchInput").value = "";
+    renderDataServices();
+  });
+});
 document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-page-key]");
   if (!button || button.disabled) return;
@@ -2050,6 +2259,7 @@ document.addEventListener("click", (event) => {
     calendarDetails: renderCalendarDetail,
     health: renderDataHealth,
     interfaces: render,
+    dataServices: renderDataServices,
     fanout: renderFanoutCampaigns,
     coverage: renderCoverage,
     coveragePartitions: renderCoveragePartitions,
@@ -2059,6 +2269,10 @@ document.addEventListener("click", (event) => {
   };
   state.pages[key] += Number(button.dataset.pageDelta);
   renderers[key]?.();
+});
+$("serviceContractRows").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-service-contract]");
+  if (button) showServiceContract(button.dataset.serviceContract, button.dataset.serviceKey);
 });
 $("interfaceRows").addEventListener("click", (event) => {
   const button = event.target.closest("[data-retry]");
@@ -2131,6 +2345,7 @@ $("coverageRows").addEventListener("click", (event) => {
   }
 });
 $("coverageDialogClose").addEventListener("click", () => $("coverageDialog").close());
+$("serviceContractDialogClose").addEventListener("click", () => $("serviceContractDialog").close());
 $("batchDialogClose").addEventListener("click", () => $("batchDialog").close());
 $("initializationDialogClose").addEventListener("click", () => $("initializationDialog").close());
 $("fanoutDialogClose").addEventListener("click", () => $("fanoutDialog").close());

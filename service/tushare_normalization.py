@@ -24,6 +24,14 @@ _TIME_FIELDS = {"time", "qt_time"}
 _DATE_ALIASES = {"imp_anndate"}
 _TECHNICAL_UPSTREAM_FIELDS = {"id", "create_by", "update_by", "create_time", "update_time"}
 
+# Some providers use a semantic label where a clock value would normally be
+# returned.  These values mean "time not fixed" rather than malformed data.
+# Keep the source payload losslessly in tushare_raw_record and materialize a
+# NULL typed time so one legitimate calendar row cannot quarantine a page.
+_SEMANTIC_NULLS_BY_API_FIELD: dict[tuple[str, str], frozenset[str]] = {
+    ("eco_cal", "time"): frozenset({"试验性"}),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class NormalizedField:
@@ -314,8 +322,16 @@ def _parse_date(value: Any) -> date | None:
     return date.fromisoformat(text)
 
 
-def _convert(value: Any, field: NormalizedField) -> Any:
+def _convert(
+    value: Any,
+    field: NormalizedField,
+    *,
+    api_name: str | None = None,
+) -> Any:
     if value is None or value == "":
+        return None
+    semantic_nulls = _SEMANTIC_NULLS_BY_API_FIELD.get((api_name or "", field.name))
+    if semantic_nulls and str(value).strip() in semantic_nulls:
         return None
     if field.sql_type == "DATE":
         return _parse_date(value)
@@ -403,7 +419,11 @@ class TushareNormalizer:
                 continue
             try:
                 values = tuple(
-                    _convert(canonical.get(field.name), field)
+                    _convert(
+                        canonical.get(field.name),
+                        field,
+                        api_name=api_name,
+                    )
                     for field in contract.fields
                 )
             except (InvalidOperation, TypeError, ValueError) as exc:

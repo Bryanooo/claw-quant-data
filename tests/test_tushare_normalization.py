@@ -1,6 +1,7 @@
 from service.data_service.registry import DATASETS
 from service.tushare_normalization import (
     NORMALIZATION_CONTRACTS,
+    _convert,
     normalized_table_name,
 )
 
@@ -31,6 +32,14 @@ def test_normalization_contract_uses_semantic_postgres_types():
     assert contract.identity_fields == ("trade_date", "ts_code")
     assert contract.business_identity_fields == ("trade_date", "ts_code")
     assert contract.identity_confidence == "heuristic"
+
+
+def test_economic_calendar_tentative_time_is_a_valid_unscheduled_time():
+    contract = NORMALIZATION_CONTRACTS.get("eco_cal")
+    time_field = next(field for field in contract.fields if field.name == "time")
+
+    assert _convert("09:30", time_field, api_name="eco_cal").isoformat() == "09:30:00"
+    assert _convert("试验性", time_field, api_name="eco_cal") is None
 
 
 def test_multidimensional_business_identity_is_contract_reviewed():

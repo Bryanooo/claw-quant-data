@@ -15,6 +15,7 @@ from service.data_service.registry import DATASETS
 from service.data_service.repository import DatasetRepository
 from service.data_service.service import DataService
 from service.data_service.interfaces import InterfaceDataService
+from service.data_service.raw_archive import RawArchiveRepository, RawArchiveService
 from service.initialization.service import InitializationService
 from service.normalization_monitor import NormalizationMonitorService
 from service.delivery_monitor import DeliveryMonitorService
@@ -46,6 +47,16 @@ def get_interface_data_service(request: Request) -> InterfaceDataService:
 InterfaceDataServiceDependency = Annotated[
     InterfaceDataService,
     Depends(get_interface_data_service),
+]
+
+
+def get_raw_archive_service(request: Request) -> RawArchiveService:
+    return RawArchiveService(RawArchiveRepository(request.app.state.database))
+
+
+RawArchiveServiceDependency = Annotated[
+    RawArchiveService,
+    Depends(get_raw_archive_service),
 ]
 
 

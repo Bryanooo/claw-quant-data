@@ -14,6 +14,7 @@ from service.api.dependencies import (
     get_investment_calendar_service,
     get_interface_data_service,
     get_normalization_monitor,
+    get_raw_archive_service,
 )
 from service.config import PROJECT_ROOT
 
@@ -369,6 +370,108 @@ def test_interface_discovery_and_raw_query_are_under_api_namespace():
     assert description.json()["allowed_filters"] == ["trade_date", "ts_code"]
     assert records.status_code == 200
     assert interface_service.query_args["filters"] == {"ts_code": "000001.SZ"}
+
+
+def test_raw_audit_endpoints_are_separate_from_standardized_interfaces():
+    client, _ = make_client()
+
+    class FakeRawArchiveService:
+        def list_interfaces(self):
+            return [{
+                "api_name": "daily",
+                "title": "日线行情",
+                "implementation_mode": "specialized",
+                "document_urls": [],
+                "request_count": 1,
+                "successful_requests": 1,
+                "empty_requests": 0,
+                "failed_requests": 0,
+                "latest_request_at": "2026-09-17T00:00:00Z",
+                "has_records": True,
+            }]
+
+        def list_requests(self, api_name, **kwargs):
+            return {
+                "data": [{
+                    "request_id": 7,
+                    "api_name": api_name,
+                    "request_hash": "b" * 64,
+                    "logical_request_hash": "c" * 64,
+                    "request_params": {},
+                    "logical_request_params": {},
+                    "collector_name": "DailyCollector",
+                    "status": "success",
+                    "row_count": 1,
+                    "response_hash": "d" * 64,
+                    "source_doc_id": 27,
+                    "error_message": None,
+                    "requested_at": "2026-09-17T00:00:00Z",
+                    "completed_at": "2026-09-17T00:00:01Z",
+                }],
+                "meta": {"interface": api_name, "returned": 1},
+                "page": {
+                    "limit": kwargs["limit"], "offset": kwargs["offset"],
+                    "total": 1, "has_more": False,
+                },
+            }
+
+        def list_records(self, api_name, **kwargs):
+            return {
+                "data": [{
+                    "api_name": api_name,
+                    "request_hash": "c" * 64,
+                    "record_hash": "a" * 64,
+                    "request_params": {},
+                    "payload": {"ts_code": "000001.SZ"},
+                    "source_doc_id": 27,
+                    "collected_at": "2026-09-17T00:00:01Z",
+                    "first_seen_at": "2026-09-17T00:00:01Z",
+                    "last_seen_at": "2026-09-17T00:00:01Z",
+                }],
+                "meta": {"interface": api_name, "returned": 1},
+                "page": {
+                    "limit": kwargs["limit"], "offset": kwargs["offset"],
+                    "total": None, "has_more": False,
+                },
+            }
+
+        def coverage(self, api_name):
+            return {
+                "api_name": api_name,
+                "request_count": 1,
+                "successful_requests": 1,
+                "empty_requests": 0,
+                "failed_requests": 0,
+                "record_count": 10,
+                "logical_request_count": 1,
+                "first_seen_at": "2026-09-17T00:00:01Z",
+                "last_seen_at": "2026-09-17T00:00:01Z",
+                "latest_request_at": "2026-09-17T00:00:01Z",
+                "implementation_mode": "specialized",
+                "document_urls": [],
+            }
+
+        def lineage(self, api_name, record_hash, **_kwargs):
+            return {
+                "api_name": api_name,
+                "record_hash": record_hash,
+                "records": [],
+                "requests": [],
+            }
+
+    client.app.dependency_overrides[get_raw_archive_service] = FakeRawArchiveService
+    with client:
+        interfaces = client.get("/api/v1/raw/interfaces")
+        requests = client.get("/api/v1/raw/daily/requests")
+        records = client.get("/api/v1/raw/daily/records")
+        coverage = client.get("/api/v1/raw/daily/coverage")
+        lineage = client.get(f"/api/v1/raw/daily/lineage/{'a' * 64}")
+
+    assert interfaces.status_code == 200
+    assert requests.json()["data"][0]["request_id"] == 7
+    assert records.json()["data"][0]["record_hash"] == "a" * 64
+    assert coverage.json()["record_count"] == 10
+    assert lineage.status_code == 200
 
 
 def test_unknown_interface_returns_not_found():

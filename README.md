@@ -21,6 +21,8 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 检索，交易所公告正文仍需官方外部来源补齐。预测、评级和操作建议仍属于上层 Agent。
 点时查询、板块成分语义、质量状态及接口示例见
 [研究数据 API](docs/RESEARCH_API.md)，命令行用法见 [CLI](docs/CLI.md)。
+原始审计、标准数据和研究就绪接口的边界见
+[数据服务三层契约](docs/DATA_SERVICE_LAYERS.md)。
 宏观数据发布、央行事件和股指期货交割日由独立的
 [投资日历](docs/INVESTMENT_CALENDAR.md) 提供。
 
@@ -119,8 +121,11 @@ flowchart LR
     WB --> SC
     WB --> RC
 
+    SC --> RT["tushare_raw_record<br/>JSONB 原始数据"]
+    SC --> RR["tushare_raw_request<br/>请求审计"]
     SC --> BT["规范化业务表"]
     RC --> RT["tushare_raw_record<br/>JSONB 原始数据"]
+    RC --> RR
     RC --> NT["95 张 tushare_norm_*<br/>强类型标准表"]
     RC --> CP["分页 Checkpoint"]
 
@@ -429,21 +434,26 @@ PostgreSQL 触发器根据子任务实时汇总。进程重启不会丢失批次
 
 适合 SQL、REST API、因子计算和上层研究使用。
 
-### 通用接口标准表与原始审计层
+### 接口标准表与统一原始审计层
 
 每个通用接口都有独立的 `tushare_norm_{api_name}` 标准表。业务字段和 PostgreSQL
 类型由接口契约生成；表内同时保存 `_record_hash`、`_request_hash`、上游文档编号、
 源采集时间、首次/最近观测时间、契约版本和契约外字段。REST 数据服务默认只查询
 这些标准表，不从 JSONB 动态解释业务字段。
 
-`tushare_raw_record` 保存：
+所有 Tushare 采集器都会在 SDK `query()` 边界写入统一审计层；这一步早于字段转换
+和标准表写入，因此异常响应不会在清洗失败后消失。历史专项数据不会伪造原始响应，
+专项接口从本版本部署后的新请求开始逐步形成原始覆盖。
+
+`tushare_raw_request` 保存每一次真实请求，包括完整参数、逻辑参数、返回行数、
+响应摘要、空响应和失败原因。`tushare_raw_record` 保存：
 
 - `api_name`；
 - 原始请求参数及请求哈希；
 - 单条返回记录 JSONB 及记录哈希；
 - 采集时间。
 
-它是可审计、可重放的原始证据层，不作为通用接口的默认业务查询模型。
+它们是可审计、可重放的原始证据层，不作为业务查询的默认模型。
 
 ### 系统运行表
 
@@ -561,6 +571,8 @@ curl 'http://127.0.0.1:8000/api/v1/datasets/stock_daily/records?ts_code=000001.S
 
 curl http://127.0.0.1:8000/api/v1/interfaces
 
+curl http://127.0.0.1:8000/api/v1/raw/daily/coverage
+
 curl 'http://127.0.0.1:8000/api/v1/interfaces/adj_factor/records?ts_code=000001.SZ&start_date=2026-01-01&limit=20'
 
 curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
@@ -586,6 +598,11 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `GET /api/v1/interfaces` | 发现 201 个可采接口及其数据集/原始数据路径 |
 | `GET /api/v1/interfaces/{api_name}` | 查询接口契约、文档、字段和允许过滤器 |
 | `GET /api/v1/interfaces/{api_name}/records` | 查询通用接口的强类型标准数据 |
+| `GET /api/v1/raw/interfaces` | 查看全部可采接口的原始审计覆盖和请求统计 |
+| `GET /api/v1/raw/{api_name}/requests` | 分页查询真实 Tushare 请求、空响应和失败证据 |
+| `GET /api/v1/raw/{api_name}/records` | 按请求/记录哈希查询无损 JSONB 原文 |
+| `GET /api/v1/raw/{api_name}/coverage` | 查看单个接口的原始请求与记录覆盖摘要 |
+| `GET /api/v1/raw/{api_name}/lineage/{record_hash}` | 从原始记录追溯逻辑请求 |
 | `GET /api/v1/normalization` | 查看95个通用接口的标准化健康状态 |
 | `GET /api/v1/normalization/drift` | 查看字段新增、缺失等 Schema Drift |
 | `GET /api/v1/normalization/errors` | 查看未解决或历史隔离记录 |

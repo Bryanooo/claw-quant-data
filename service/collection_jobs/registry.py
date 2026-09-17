@@ -417,7 +417,7 @@ def _run_tushare_interface(parameters: BaseModel) -> TaskExecutionResult:
             completion_status="complete" if result.fetched_rows else "empty",
             completion_evidence={
                 **dict(result.evidence),
-                "storage_mode": "specialized_normalized",
+                "storage_mode": "specialized_standard_and_raw_audit",
                 "collector_name": result.collector_name,
                 "collector_version": result.collector_version,
                 "table_name": result.table_name,

@@ -135,6 +135,7 @@ def test_durable_job_defers_long_interface_wait_without_reserving_or_sleeping(
 def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkeypatch):
     upstream_calls = []
     reservations = []
+    archived = []
 
     class FakePro:
         def query(self, api_name, *args, **parameters):
@@ -155,6 +156,10 @@ def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkey
         "service.tushare_rate_limit.reserve_tushare_request",
         lambda api_name: reservations.append(api_name),
     )
+    monkeypatch.setattr(
+        "collectors.base.TushareRawArchive.archive_response",
+        lambda _self, **values: archived.append(values),
+    )
 
     class DailyCollector(BaseCollector):
         API_NAME = "daily"
@@ -166,6 +171,9 @@ def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkey
 
     assert reservations == ["daily"]
     assert upstream_calls == [("daily", (), {"trade_date": "20260828"})]
+    assert archived[0]["api_name"] == "daily"
+    assert archived[0]["parameters"] == {"trade_date": "20260828"}
+    assert archived[0]["persist_records"] is True
     assert fake_pro._DataApi__timeout == (4.0, 45.0)
 
 
@@ -184,6 +192,10 @@ def test_base_collector_preserves_queue_rate_slot_deferral(monkeypatch):
 
     monkeypatch.setattr("tushare.pro_api", FakePro)
     monkeypatch.setattr("collectors.base.install_distributed_rate_limit", lambda pro: pro)
+    monkeypatch.setattr(
+        "collectors.base.TushareRawArchive.archive_failure",
+        lambda *_args, **_kwargs: None,
+    )
 
     class HongKongDailyCollector(BaseCollector):
         API_NAME = "hk_daily"

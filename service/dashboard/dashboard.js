@@ -361,7 +361,7 @@ function renderInvestmentCalendar() {
   $("investmentCalendarMonthPicker").value = state.investmentCalendarMonth;
   $("investmentCalendarSummary").textContent =
     `${summary.total_events || 0} 项重要事件 · ${summary.high_events || 0} 项高重要 · ` +
-    `${summary.scheduled_events || 0} 项待发布 / 待发生 · ${summary.released_events || 0} 项已有实际值`;
+    `${summary.scheduled_events || 0} 项待发生 · ${summary.occurred_events || 0} 项已发生 · ${summary.released_events || 0} 项已有实际值`;
   $("investmentCalendarTabCount").textContent = `${summary.total_events || 0} 项事件`;
   $("investmentCalendarCoverage").textContent =
     `财经日历覆盖 ${economic.min_date || "—"} 至 ${economic.max_date || "—"} · ` +
@@ -407,7 +407,11 @@ function renderInvestmentCalendarDetail() {
   }
   $("investmentCalendarDetailRows").innerHTML = events.map((item) => {
     const importance = item.importance === "high" ? "高" : item.importance === "medium" ? "重要" : "一般";
-    const status = item.status === "released" ? "已发布" : item.status === "completed" ? "已发生" : "待发布 / 待发生";
+    const status = item.status === "released"
+      ? "已发布实际值"
+      : ["occurred", "completed"].includes(item.status)
+      ? "已发生，实际值待来源回填"
+      : "待发生";
     const actual = item.actual != null && String(item.actual).trim() !== ""
       ? `<strong>${escapeHtml(item.actual)}</strong><span class="completion-reason">已发布</span>`
       : `<span class="pill status-${item.status === "scheduled" ? "pending" : "complete"}">${status}</span>`;

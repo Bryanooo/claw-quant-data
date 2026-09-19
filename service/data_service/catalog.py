@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from service.research.catalog import DERIVED_ENDPOINTS
+
 
 RAW_ENDPOINTS = (
     {
@@ -85,6 +87,7 @@ STANDARD_ENDPOINTS = (
 )
 
 RESEARCH_ENDPOINTS = (
+    *DERIVED_ENDPOINTS,
     {
         "method": "GET",
         "path": "/api/v1/stocks/{ts_code}/snapshot",

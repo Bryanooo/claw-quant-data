@@ -15,6 +15,7 @@ from service.api.dependencies import (
     get_interface_data_service,
     get_normalization_monitor,
     get_raw_archive_service,
+    get_research_service,
 )
 from service.config import PROJECT_ROOT
 
@@ -186,12 +187,69 @@ class FakeInterfaceDataService:
             },
         }
 
+
+class FakeResearchService:
+    def __init__(self):
+        self.query_args = None
+
+    def capabilities(self):
+        return {"summary": {"derived_endpoints": 7}}
+
+    def fundamentals(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": {"latest": {}}, "meta": self.query_args}
+
+    def valuation(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": {"latest": {}}, "meta": self.query_args}
+
+    def technicals(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": {"trend": {}}, "meta": self.query_args}
+
+    def capital_flow(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": {"moneyflow": {}}, "meta": self.query_args}
+
+    def event_study(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": {"car_pct": 1.2}, "meta": self.query_args}
+
+    def market_breadth(self, **kwargs):
+        self.query_args = kwargs
+        return {"data": {"advancing": 100}, "meta": kwargs}
+
+    def sector_rotation(self, provider, **kwargs):
+        self.query_args = {"provider": provider, **kwargs}
+        return {"data": {"leaders": []}, "meta": self.query_args}
+
 def make_client():
     app = create_app(database_factory=DummyDatabase)
     service = FakeDataService()
     app.dependency_overrides[get_data_service] = lambda: service
     app.dependency_overrides[get_interface_data_service] = FakeInterfaceDataService
+    app.dependency_overrides[get_research_service] = FakeResearchService
     return TestClient(app), service
+
+
+def test_research_endpoints_use_separate_namespace():
+    client, _ = make_client()
+    with client:
+        assert client.get("/api/v1/research/capabilities").status_code == 200
+        fundamentals = client.get(
+            "/api/v1/research/stocks/000001.sz/fundamentals",
+            params={"periods": 8, "as_of": "2026-09-18"},
+        )
+        assert fundamentals.status_code == 200
+        assert fundamentals.json()["meta"]["ts_code"] == "000001.SZ"
+        technicals = client.get(
+            "/api/v1/research/stocks/000001.sz/technicals",
+            params={"benchmark": "399006.sz"},
+        )
+        assert technicals.status_code == 200
+        assert technicals.json()["meta"]["benchmark"] == "399006.SZ"
+        assert client.get("/api/v1/research/market/breadth").status_code == 200
+        assert client.get("/api/v1/research/sectors/ths/rotation").status_code == 200
 
 
 def test_health_endpoints():
@@ -529,13 +587,15 @@ def test_data_service_catalog_exposes_three_layers_and_real_coverage():
         "layers": 3,
         "raw_interfaces": 2,
         "standard_datasets": 1,
-        "research_capabilities": 10,
+        "research_capabilities": 18,
     }
     assert payload["layers"][0]["metrics"]["observed_interfaces"] == 1
     assert payload["layers"][1]["metrics"]["datasets"] == 1
-    assert payload["layers"][2]["items"][0]["path"].startswith(
-        "/api/v1/stocks/"
-    )
+    research_paths = {
+        item["path"] for item in payload["layers"][2]["items"]
+    }
+    assert "/api/v1/stocks/{ts_code}/snapshot" in research_paths
+    assert "/api/v1/research/capabilities" in research_paths
 
 
 def test_unknown_interface_returns_not_found():

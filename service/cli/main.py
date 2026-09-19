@@ -173,6 +173,81 @@ def build_parser() -> argparse.ArgumentParser:
     sector_research.add_argument("--as-of")
     sector_research.set_defaults(handler=_sector_research_pack)
 
+    research = commands.add_parser(
+        "research", help="query deterministic agent-oriented research views"
+    )
+    research_commands = research.add_subparsers(
+        dest="research_command", required=True
+    )
+    research_capabilities = research_commands.add_parser(
+        "capabilities", help="list derived services and data gaps"
+    )
+    research_capabilities.set_defaults(handler=_research_capabilities)
+    research_fundamentals = research_commands.add_parser(
+        "fundamentals", help="derive multi-period fundamental metrics"
+    )
+    research_fundamentals.add_argument("ts_code", type=_ts_code)
+    research_fundamentals.add_argument(
+        "--periods", type=_bounded_integer(2, 20), default=12
+    )
+    research_fundamentals.add_argument("--as-of")
+    research_fundamentals.set_defaults(handler=_research_fundamentals)
+    research_valuation = research_commands.add_parser(
+        "valuation", help="derive valuation history and peer comparison"
+    )
+    research_valuation.add_argument("ts_code", type=_ts_code)
+    research_valuation.add_argument(
+        "--lookback-days", type=_bounded_integer(60, 1000), default=730
+    )
+    research_valuation.add_argument(
+        "--peer-limit", type=_bounded_integer(0, 50), default=20
+    )
+    research_valuation.add_argument("--as-of")
+    research_valuation.set_defaults(handler=_research_valuation)
+    research_technicals = research_commands.add_parser(
+        "technicals", help="derive technical indicators from governed daily data"
+    )
+    research_technicals.add_argument("ts_code", type=_ts_code)
+    research_technicals.add_argument(
+        "--lookback-days", type=_bounded_integer(60, 1000), default=400
+    )
+    research_technicals.add_argument("--benchmark", type=_ts_code, default="399006.SZ")
+    research_technicals.add_argument("--as-of")
+    research_technicals.set_defaults(handler=_research_technicals)
+    research_flow = research_commands.add_parser(
+        "capital-flow", help="summarize money flow, margin, northbound and chips"
+    )
+    research_flow.add_argument("ts_code", type=_ts_code)
+    research_flow.add_argument(
+        "--lookback-days", type=_bounded_integer(5, 250), default=60
+    )
+    research_flow.add_argument("--as-of")
+    research_flow.set_defaults(handler=_research_capital_flow)
+    research_event = research_commands.add_parser(
+        "event-study", help="calculate market-adjusted event returns"
+    )
+    research_event.add_argument("ts_code", type=_ts_code)
+    research_event.add_argument("--event-date", required=True)
+    research_event.add_argument("--pre-days", type=_bounded_integer(0, 60), default=5)
+    research_event.add_argument("--post-days", type=_bounded_integer(0, 120), default=10)
+    research_event.add_argument("--benchmark", type=_ts_code, default="399006.SZ")
+    research_event.set_defaults(handler=_research_event_study)
+    research_breadth = research_commands.add_parser(
+        "market-breadth", help="show market breadth and limit sentiment"
+    )
+    research_breadth.add_argument("--as-of")
+    research_breadth.set_defaults(handler=_research_market_breadth)
+    research_rotation = research_commands.add_parser(
+        "sector-rotation", help="rank provider sectors by period return"
+    )
+    research_rotation.add_argument("provider", choices=("ths", "dc", "tdx"))
+    research_rotation.add_argument(
+        "--lookback-days", type=_bounded_integer(5, 365), default=60
+    )
+    research_rotation.add_argument("--limit", type=_bounded_integer(1, 100), default=20)
+    research_rotation.add_argument("--as-of")
+    research_rotation.set_defaults(handler=_research_sector_rotation)
+
     interfaces = commands.add_parser("interfaces", help="discover Tushare interfaces")
     interface_commands = interfaces.add_subparsers(
         dest="interfaces_command",
@@ -470,6 +545,82 @@ def _sector_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
         params["as_of"] = args.as_of
     return client.get(
         f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/research-pack",
+        params=params,
+    )
+
+
+def _research_capabilities(client: ApiClient, _args: argparse.Namespace) -> Any:
+    return client.get("/v1/research/capabilities")
+
+
+def _research_fundamentals(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"periods": args.periods}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/research/stocks/{args.ts_code.upper()}/fundamentals",
+        params=params,
+    )
+
+
+def _research_valuation(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"lookback_days": args.lookback_days, "peer_limit": args.peer_limit}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/research/stocks/{args.ts_code.upper()}/valuation",
+        params=params,
+    )
+
+
+def _research_technicals(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "lookback_days": args.lookback_days,
+        "benchmark": args.benchmark.upper(),
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/research/stocks/{args.ts_code.upper()}/technicals",
+        params=params,
+    )
+
+
+def _research_capital_flow(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"lookback_days": args.lookback_days}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/research/stocks/{args.ts_code.upper()}/capital-flow",
+        params=params,
+    )
+
+
+def _research_event_study(client: ApiClient, args: argparse.Namespace) -> Any:
+    return client.get(
+        f"/v1/research/stocks/{args.ts_code.upper()}/event-study",
+        params={
+            "event_date": args.event_date,
+            "pre_days": args.pre_days,
+            "post_days": args.post_days,
+            "benchmark": args.benchmark.upper(),
+        },
+    )
+
+
+def _research_market_breadth(client: ApiClient, args: argparse.Namespace) -> Any:
+    return client.get(
+        "/v1/research/market/breadth",
+        params={"as_of": args.as_of} if args.as_of else None,
+    )
+
+
+def _research_sector_rotation(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"lookback_days": args.lookback_days, "limit": args.limit}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return client.get(
+        f"/v1/research/sectors/{args.provider}/rotation",
         params=params,
     )
 

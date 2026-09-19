@@ -23,6 +23,8 @@ from service.investment_calendar import (
     InvestmentCalendarRepository,
     InvestmentCalendarService,
 )
+from service.research.repository import ResearchRepository
+from service.research.service import ResearchService
 
 
 def get_data_service(request: Request) -> DataService:
@@ -31,6 +33,19 @@ def get_data_service(request: Request) -> DataService:
 
 
 DataServiceDependency = Annotated[DataService, Depends(get_data_service)]
+
+
+def get_research_service(request: Request) -> ResearchService:
+    return ResearchService(
+        get_data_service(request),
+        ResearchRepository(request.app.state.database),
+    )
+
+
+ResearchServiceDependency = Annotated[
+    ResearchService,
+    Depends(get_research_service),
+]
 
 
 def get_investment_calendar_service(request: Request) -> InvestmentCalendarService:

@@ -238,6 +238,38 @@ def test_stock_research_pack_cli_forwards_bounded_scope(capsys):
     ]
 
 
+def test_derived_research_cli_uses_new_namespace(capsys):
+    fundamental_path = "/v1/research/stocks/300750.SZ/fundamentals"
+    rotation_path = "/v1/research/sectors/ths/rotation"
+    client = FakeClient(
+        {
+            fundamental_path: {"data": {}, "meta": {"ts_code": "300750.SZ"}},
+            rotation_path: {"data": {"leaders": []}, "meta": {"provider": "ths"}},
+        }
+    )
+
+    assert run_cli(
+        [
+            "research", "fundamentals", "300750.sz",
+            "--periods", "8", "--as-of", "2026-09-18",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert run_cli(
+        [
+            "research", "sector-rotation", "ths",
+            "--lookback-days", "90", "--limit", "10",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert client.calls == [
+        (fundamental_path, {"periods": 8, "as_of": "2026-09-18"}),
+        (rotation_path, {"lookback_days": 90, "limit": 10}),
+    ]
+
+
 def test_sector_research_cli_commands_forward_normalized_scope(capsys):
     list_path = "/v1/sectors"
     pack_path = "/v1/sectors/ths/885001.TI/research-pack"

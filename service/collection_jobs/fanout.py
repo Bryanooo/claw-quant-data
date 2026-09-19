@@ -50,6 +50,10 @@ _DEFINITIONS = (
     FanoutDefinition("top10_cb_holders", "convertible_bond", "ts_code", "period", 20),
     FanoutDefinition("cyq_chips", "stock", "ts_code", "date_window", 1, (), 31),
     FanoutDefinition("cyq_perf", "stock", "ts_code", "date_window", 1, (), 31),
+    # The non-VIP dividend endpoint is complete per stock and has no reliable
+    # market-wide historical window. One all-history request per frozen listed
+    # stock is the bounded recovery scope used by research backfills.
+    FanoutDefinition("dividend", "stock", "ts_code", "none"),
     FanoutDefinition("dc_concept_cons", "stock", "ts_code", "trade_date"),
     FanoutDefinition("etf_sh_cons", "etf_sh", "ts_code", "trade_date"),
     FanoutDefinition("etf_sz_cons", "etf_sz", "ts_code", "trade_date"),

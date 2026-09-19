@@ -593,6 +593,14 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `GET /api/health/live` | 进程存活检查 |
 | `GET /api/health/ready` | PostgreSQL 就绪检查 |
 | `GET /api/v1/data-services` | 统一发现原始审计、标准数据、研究就绪三层服务及其真实覆盖、REST 契约和明细 |
+| `GET /api/v1/research/capabilities` | 研究能力、补采工作流与新增数据源待办 |
+| `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
+| `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
+| `GET /api/v1/research/stocks/{ts_code}/technicals` | 趋势、动量、波动、量价和相对强弱 |
+| `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 资金、两融、北向、大宗与筹码 |
+| `GET /api/v1/research/stocks/{ts_code}/event-study` | 市场调整事件收益和 CAR |
+| `GET /api/v1/research/market/breadth` | 市场宽度和涨跌停情绪 |
+| `GET /api/v1/research/sectors/{provider}/rotation` | 板块轮动强弱排名 |
 | `GET /api/v1/datasets` | 数据集发现 |
 | `GET /api/v1/datasets/{name}` | 字段、过滤器和主键信息 |
 | `GET /api/v1/datasets/{name}/records` | 数据查询与分页 |

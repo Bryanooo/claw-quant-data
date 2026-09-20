@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 基本面研究"
+  short_description: "财务质量、成长、估值与风险的可追溯研究"
+  default_prompt: "Use $claw-quant-fundamental-research to analyze this company's fundamentals and valuation with explicit data-quality caveats."

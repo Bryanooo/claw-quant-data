@@ -244,10 +244,11 @@ def test_research_endpoints_use_separate_namespace():
         assert fundamentals.json()["meta"]["ts_code"] == "000001.SZ"
         technicals = client.get(
             "/api/v1/research/stocks/000001.sz/technicals",
-            params={"benchmark": "399006.sz"},
+            params={"benchmark": "399006.sz", "chart_points": 90},
         )
         assert technicals.status_code == 200
         assert technicals.json()["meta"]["benchmark"] == "399006.SZ"
+        assert technicals.json()["meta"]["chart_points"] == 90
         assert client.get("/api/v1/research/market/breadth").status_code == 200
         assert client.get("/api/v1/research/sectors/ths/rotation").status_code == 200
 

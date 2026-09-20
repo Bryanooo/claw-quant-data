@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from service.research.service import ResearchService
+from service.research.service import ResearchService, _zigzag
 
 
 class FakeDataService:
@@ -146,7 +146,28 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     assert result["meta"]["quality"]["status"] == "ready"
     assert result["data"]["trend"]["moving_averages"]["250"] is not None
     assert result["data"]["momentum"]["rsi_14"] > 50
+    assert result["data"]["momentum"]["kdj"]["k"] is not None
+    assert result["data"]["trend_strength"]["adx_14"] is not None
+    assert result["data"]["trend"]["bull_bear_boundary"]["value"] is not None
+    assert result["data"]["trend"]["weighted_trend"]["bull_line"] is not None
+    assert result["data"]["levels"]["classic_pivots"]["pivot"] is not None
+    assert result["data"]["wave_analysis"]["status"] == "candidate_only"
+    assert len(result["data"]["chart"]["points"]) == 120
     assert result["data"]["relative_strength"]["excess_return_60d_pct"] == 0.0
+
+
+def test_zigzag_confirms_cumulative_move_without_requiring_one_day_jump():
+    rows = [
+        {"trade_date": date(2026, 9, day), "close": close}
+        for day, close in enumerate((100, 102, 105, 109), start=1)
+    ]
+
+    pivots = _zigzag(rows, 8.0)
+
+    assert pivots == [
+        {"trade_date": "2026-09-01", "price": 100.0, "type": "low", "confirmed": True},
+        {"trade_date": "2026-09-04", "price": 109.0, "type": "high", "confirmed": False},
+    ]
 
 
 def test_market_and_sector_derivations_are_evidence_carrying():
@@ -170,11 +191,11 @@ def test_capability_catalog_separates_derived_backfill_and_new_sources():
     assert catalog["summary"]["derived_endpoints"] == 7
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["summary"]["baseline_techniques"] == 35
-    assert catalog["summary"]["currently_served"] == 27
+    assert catalog["summary"]["baseline_techniques"] == 41
+    assert catalog["summary"]["currently_served"] == 33
     assert catalog["summary"]["planned_from_existing_sources"] == 3
     assert catalog["summary"]["external_or_constrained"] == 5
-    assert len(catalog["techniques"]["served"]) == 27
+    assert len(catalog["techniques"]["served"]) == 33
     assert len(catalog["techniques"]["gaps"]) == 8
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"

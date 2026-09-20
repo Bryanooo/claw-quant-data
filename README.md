@@ -605,7 +605,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 | `GET /api/v1/research/readiness` | Agent 使用的研究数据质量、覆盖、失败和初始化摘要 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
-| `GET /api/v1/research/stocks/{ts_code}/technicals` | 趋势、动量、波动、量价和相对强弱 |
+| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线、常用指标、趋势强度、量价、支撑压力、波浪候选、牛熊线和图表序列 |
 | `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 资金、两融、北向、大宗与筹码 |
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 市场调整事件收益和 CAR |
 | `GET /api/v1/research/market/breadth` | 市场宽度和涨跌停情绪 |
@@ -671,7 +671,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 
 这里的 7 个聚合分析入口是研究资源，不是 7 种分析能力；此外还有能力目录和研究
 就绪检查。当前机器可读 v1 基线为
-35 项：27 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
+41 项：33 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
 完整逐项矩阵见 [Agent 研究能力与数据动作](docs/RESEARCH_CAPABILITIES.md)。
 
 Swagger UI：<http://127.0.0.1:8000/api/docs>
@@ -691,7 +691,7 @@ Swagger UI：<http://127.0.0.1:8000/api/docs>
 ./clawq sector list --provider ths --query 人工智能 --market A
 ./clawq sector research-pack ths 885728.TI --lookback-days 180
 ./clawq research fundamentals 000001.SZ --as-of 2026-09-08
-./clawq research technicals 000001.SZ --as-of 2026-09-08
+./clawq research technicals 000001.SZ --as-of 2026-09-08 --chart-points 120
 ./clawq research calendar --start-date 2026-09-01 --end-date 2026-09-30
 ```
 

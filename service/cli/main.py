@@ -216,6 +216,9 @@ def build_parser() -> argparse.ArgumentParser:
     research_technicals.add_argument(
         "--lookback-days", type=_bounded_integer(60, 1000), default=400
     )
+    research_technicals.add_argument(
+        "--chart-points", type=_bounded_integer(30, 250), default=120
+    )
     research_technicals.add_argument("--benchmark", type=_ts_code, default="399006.SZ")
     research_technicals.add_argument("--as-of")
     research_technicals.set_defaults(handler=_research_technicals)
@@ -631,6 +634,7 @@ def _research_valuation(client: ApiClient, args: argparse.Namespace) -> Any:
 def _research_technicals(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {
         "lookback_days": args.lookback_days,
+        "chart_points": args.chart_points,
         "benchmark": args.benchmark.upper(),
     }
     if args.as_of:

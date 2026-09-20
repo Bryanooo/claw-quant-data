@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 技术面研究"
+  short_description: "K线、指标、关键价位、波浪候选与图表分析"
+  default_prompt: "Use $claw-quant-technical-research to produce a chart-led technical analysis with reproducible levels and invalidation conditions."

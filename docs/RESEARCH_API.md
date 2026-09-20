@@ -10,7 +10,7 @@
 ## 个股资料包
 
 ```http
-GET /api/v1/stocks/{ts_code}/research-pack
+GET /api/v1/research/stocks/{ts_code}/research-pack
     ?lookback_days=180
     &benchmark=399006.SZ
     &financial_periods=8
@@ -35,7 +35,7 @@ GET /api/v1/stocks/{ts_code}/research-pack
 ## 板块发现
 
 ```http
-GET /api/v1/sectors?provider=ths&query=人工智能&category=概念指数&market=A&as_of=2026-09-08&limit=100
+GET /api/v1/research/sectors?provider=ths&query=人工智能&category=概念指数&market=A&as_of=2026-09-08&limit=100
 ```
 
 支持 `ths`、`dc`、`tdx`。板块代码属于供应方命名空间，调用者必须同时保存
@@ -44,8 +44,8 @@ GET /api/v1/sectors?provider=ths&query=人工智能&category=概念指数&market
 ## 股票所属板块与可比股票
 
 ```http
-GET /api/v1/stocks/{ts_code}/sectors?provider=ths&as_of=2026-09-08
-GET /api/v1/stocks/{ts_code}/peers?provider=ths&as_of=2026-09-08&max_sectors=5&limit=50
+GET /api/v1/research/stocks/{ts_code}/sectors?provider=ths&as_of=2026-09-08
+GET /api/v1/research/stocks/{ts_code}/peers?provider=ths&as_of=2026-09-08&max_sectors=5&limit=50
 ```
 
 `sectors` 按供应方的历史成分关系解析股票所属板块。`peers` 排除宽基指数，优先使用
@@ -55,8 +55,8 @@ GET /api/v1/stocks/{ts_code}/peers?provider=ths&as_of=2026-09-08&max_sectors=5&l
 ## 板块快照与成分
 
 ```http
-GET /api/v1/sectors/{provider}/{sector_code}/snapshot?as_of=2026-09-08
-GET /api/v1/sectors/{provider}/{sector_code}/members?as_of=2026-09-08&limit=500
+GET /api/v1/research/sectors/{provider}/{sector_code}/snapshot?as_of=2026-09-08
+GET /api/v1/research/sectors/{provider}/{sector_code}/members?as_of=2026-09-08&limit=500
 ```
 
 同花顺成分按照 `in_date <= as_of < out_date` 判断；东财和通达信选择不晚于
@@ -66,7 +66,7 @@ GET /api/v1/sectors/{provider}/{sector_code}/members?as_of=2026-09-08&limit=500
 ## 板块资料包
 
 ```http
-GET /api/v1/sectors/{provider}/{sector_code}/research-pack
+GET /api/v1/research/sectors/{provider}/{sector_code}/research-pack
     ?lookback_days=180
     &member_limit=500
     &as_of=2026-09-08
@@ -80,7 +80,7 @@ GET /api/v1/sectors/{provider}/{sector_code}/research-pack
 声明了 `availability_column` 的数据集支持：
 
 ```http
-GET /api/v1/datasets/income/records
+GET /api/v1/data/datasets/income/records
     ?ts_code=000001.SZ
     &end_date=2024-03-31
     &as_of=2024-04-30

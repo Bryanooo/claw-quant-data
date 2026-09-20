@@ -154,7 +154,7 @@ class FakeInterfaceDataService:
                 "implementation_mode": "generic_raw",
                 "storage_mode": "typed_standard_and_raw",
                 "datasets": ["tushare_raw"],
-                "records_url": "/api/v1/interfaces/adj_factor/records",
+                "records_url": "/api/v1/data/interfaces/adj_factor/records",
             }
         ]
 
@@ -255,11 +255,43 @@ def test_research_endpoints_use_separate_namespace():
 def test_health_endpoints():
     client, _ = make_client()
     with client:
-        assert client.get("/api/health/live").json()["status"] == "ok"
-        assert client.get("/api/health/ready").json() == {
+        assert client.get("/api/v1/ops/health/live").json()["status"] == "ok"
+        assert client.get("/api/v1/ops/health/ready").json() == {
             "status": "ready",
             "database": "ok",
         }
+
+
+def test_openapi_uses_only_canonical_layer_namespaces_and_removes_legacy_routes():
+    client, _ = make_client()
+    with client:
+        paths = set(client.get("/api/openapi.json").json()["paths"])
+        legacy_responses = [
+            client.get("/api/v1/data-services"),
+            client.get("/api/v1/datasets"),
+            client.get("/api/v1/interfaces"),
+            client.get("/api/v1/stocks/000001.SZ/snapshot"),
+            client.get("/api/v1/sectors"),
+            client.get("/api/v1/investment-calendar"),
+            client.get("/api/v1/collection-overview"),
+            client.get("/api/v1/raw/interfaces"),
+            client.get("/api/health/live"),
+        ]
+
+    assert all(response.status_code == 404 for response in legacy_responses)
+    assert "/api/v1/data-services" not in paths
+    assert all(
+        path == "/api/v1/catalog"
+        or path.startswith(
+            (
+                "/api/v1/research/",
+                "/api/v1/data/",
+                "/api/v1/ops/",
+                "/api/v1/audit/",
+            )
+        )
+        for path in paths
+    )
 
 
 def test_investment_calendar_endpoints_are_under_api_namespace():
@@ -286,10 +318,10 @@ def test_investment_calendar_endpoints_are_under_api_namespace():
 
     with client:
         monthly = client.get(
-            "/api/v1/investment-calendar",
+            "/api/v1/research/investment-calendar",
             params={"start_date": "2026-09-01", "end_date": "2026-09-30"},
         )
-        daily = client.get("/api/v1/investment-calendar/2026-09-18")
+        daily = client.get("/api/v1/research/investment-calendar/2026-09-18")
 
     assert monthly.status_code == 200
     assert monthly.json()["events"][0]["title"] == "中国制造业PMI"
@@ -301,7 +333,7 @@ def test_dataset_query_passes_only_whitelisted_query_shape():
     client, service = make_client()
     with client:
         response = client.get(
-            "/api/v1/datasets/stock_daily/records",
+            "/api/v1/data/datasets/stock_daily/records",
             params={
                 "ts_code": "000001.SZ",
                 "start_date": "2026-01-01",
@@ -318,7 +350,7 @@ def test_dataset_query_passes_only_whitelisted_query_shape():
 def test_dataset_description_contract_accepts_freshness_read_table():
     client, _ = make_client()
     with client:
-        response = client.get("/api/v1/datasets/stock_daily")
+        response = client.get("/api/v1/data/datasets/stock_daily")
 
     assert response.status_code == 200
     assert response.json()["freshness_table"] == "daily"
@@ -328,7 +360,7 @@ def test_dataset_query_forwards_as_of_without_treating_it_as_a_field_filter():
     client, service = make_client()
     with client:
         response = client.get(
-            "/api/v1/datasets/income/records",
+            "/api/v1/data/datasets/income/records",
             params={
                 "ts_code": "000001.SZ",
                 "end_date": "2024-03-31",
@@ -345,7 +377,7 @@ def test_stock_research_pack_endpoint_passes_bounded_parameters():
     client, service = make_client()
     with client:
         response = client.get(
-            "/api/v1/stocks/300750.sz/research-pack",
+            "/api/v1/research/stocks/300750.sz/research-pack",
             params={
                 "lookback_days": 90,
                 "benchmark": "399006.sz",
@@ -369,11 +401,11 @@ def test_sector_research_endpoints_are_namespaced_and_bounded():
     client, service = make_client()
     with client:
         listed = client.get(
-            "/api/v1/sectors",
+            "/api/v1/research/sectors",
             params={"provider": "ths", "query": "人工", "limit": 20},
         )
         pack = client.get(
-            "/api/v1/sectors/ths/885001.ti/research-pack",
+            "/api/v1/research/sectors/ths/885001.ti/research-pack",
             params={
                 "lookback_days": 90,
                 "member_limit": 200,
@@ -397,11 +429,11 @@ def test_stock_sector_and_peer_endpoints_forward_point_in_time_scope():
     client, service = make_client()
     with client:
         sectors = client.get(
-            "/api/v1/stocks/300750.sz/sectors",
+            "/api/v1/research/stocks/300750.sz/sectors",
             params={"provider": "ths", "as_of": "2026-09-08"},
         )
         peers = client.get(
-            "/api/v1/stocks/300750.sz/peers",
+            "/api/v1/research/stocks/300750.sz/peers",
             params={
                 "provider": "ths", "as_of": "2026-09-08",
                 "max_sectors": 3, "limit": 20,
@@ -427,10 +459,10 @@ def test_interface_discovery_and_raw_query_are_under_api_namespace():
     client.app.dependency_overrides[get_interface_data_service] = lambda: interface_service
 
     with client:
-        interfaces = client.get("/api/v1/interfaces")
-        description = client.get("/api/v1/interfaces/adj_factor")
+        interfaces = client.get("/api/v1/data/interfaces")
+        description = client.get("/api/v1/data/interfaces/adj_factor")
         records = client.get(
-            "/api/v1/interfaces/adj_factor/records",
+            "/api/v1/data/interfaces/adj_factor/records",
             params={"ts_code": "000001.SZ", "start_date": "2026-08-01"},
         )
 
@@ -529,11 +561,11 @@ def test_raw_audit_endpoints_are_separate_from_standardized_interfaces():
 
     client.app.dependency_overrides[get_raw_archive_service] = FakeRawArchiveService
     with client:
-        interfaces = client.get("/api/v1/raw/interfaces")
-        requests = client.get("/api/v1/raw/daily/requests")
-        records = client.get("/api/v1/raw/daily/records")
-        coverage = client.get("/api/v1/raw/daily/coverage")
-        lineage = client.get(f"/api/v1/raw/daily/lineage/{'a' * 64}")
+        interfaces = client.get("/api/v1/audit/raw/interfaces")
+        requests = client.get("/api/v1/audit/raw/daily/requests")
+        records = client.get("/api/v1/audit/raw/daily/records")
+        coverage = client.get("/api/v1/audit/raw/daily/coverage")
+        lineage = client.get(f"/api/v1/audit/raw/daily/lineage/{'a' * 64}")
 
     assert interfaces.status_code == 200
     assert requests.json()["data"][0]["request_id"] == 7
@@ -593,13 +625,20 @@ def test_data_service_catalog_exposes_three_layers_and_real_coverage():
     assert [item["id"] for item in payload["audiences"]] == [
         "research", "data", "operations", "audit"
     ]
+    assert [item["path_prefixes"] for item in payload["audiences"]] == [
+        ["/api/v1/research"],
+        ["/api/v1/data"],
+        ["/api/v1/ops"],
+        ["/api/v1/audit"],
+    ]
+    assert "compatibility" not in payload
     assert payload["control_plane"]["id"] == "operations"
     assert payload["layers"][0]["metrics"]["observed_interfaces"] == 1
     assert payload["layers"][1]["metrics"]["datasets"] == 1
     research_paths = {
         item["path"] for item in payload["layers"][2]["items"]
     }
-    assert "/api/v1/stocks/{ts_code}/snapshot" in research_paths
+    assert "/api/v1/research/stocks/{ts_code}/snapshot" in research_paths
     assert "/api/v1/research/capabilities" in research_paths
 
 
@@ -608,7 +647,7 @@ def test_unknown_interface_returns_not_found():
     client.app.dependency_overrides.pop(get_interface_data_service)
 
     with client:
-        response = client.get("/api/v1/interfaces/not_an_interface")
+        response = client.get("/api/v1/data/interfaces/not_an_interface")
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "interface_not_found"
@@ -639,9 +678,9 @@ def test_normalization_health_endpoints_are_read_only_and_namespaced():
     client.app.dependency_overrides[get_normalization_monitor] = lambda: fake
 
     with client:
-        overview = client.get("/api/v1/normalization")
-        drift = client.get("/api/v1/normalization/drift")
-        errors = client.get("/api/v1/normalization/errors")
+        overview = client.get("/api/v1/audit/normalization")
+        drift = client.get("/api/v1/audit/normalization/drift")
+        errors = client.get("/api/v1/audit/normalization/errors")
 
     assert overview.status_code == 200
     assert overview.json()["summary"]["interfaces"] == 94
@@ -653,8 +692,8 @@ def test_read_endpoints_remain_open_when_legacy_key_exists(monkeypatch):
     monkeypatch.setenv("DATA_API_KEY", "reader-secret")
     client, _ = make_client()
     with client:
-        datasets = client.get("/api/v1/datasets")
-        health = client.get("/api/health/live")
+        datasets = client.get("/api/v1/data/datasets")
+        health = client.get("/api/v1/ops/health/live")
 
     assert datasets.status_code == 200
     assert health.status_code == 200
@@ -676,13 +715,13 @@ def test_collection_dashboard_and_overview_endpoint():
 
     with client:
         page = client.get("/dashboard")
-        overview = client.get("/api/v1/collection-overview")
+        overview = client.get("/api/v1/ops/collection-overview")
 
     assert page.status_code == 200
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "api-hierarchy-v3" in page.text
+    assert "api-hierarchy-v4" in page.text
     assert 'id="investmentCalendarView"' in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
@@ -692,12 +731,12 @@ def test_collection_dashboard_and_overview_endpoint():
         PROJECT_ROOT / "service" / "dashboard" / "dashboard.js"
     ).read_text(encoding="utf-8")
     assert dashboard_script.count("window.confirm(") == 7
-    assert "/api/v1/collection-fanout-campaigns" in dashboard_script
-    assert "/api/v1/data-health" in dashboard_script
+    assert "/api/v1/ops/collection-fanout-campaigns" in dashboard_script
+    assert "/api/v1/ops/data-health" in dashboard_script
     assert "data-health-coverage-detail" in dashboard_script
     assert "claw-quant:sidebar-collapsed" in dashboard_script
     assert "claw-quant:theme" in dashboard_script
-    assert "/api/v1/coverage/repairs" in dashboard_script
+    assert "/api/v1/ops/coverage/repairs" in dashboard_script
     assert "coverageRangeStart" in page.text
     assert "coverageDetailStatus" in page.text
     assert "今日数据交付" in page.text
@@ -727,14 +766,14 @@ def test_collection_dashboard_and_overview_endpoint():
     assert 'pageRows(rows, "dataServices")' in dashboard_script
     assert "pageRows(rows, \"health\")" in dashboard_script
     assert "data-health-retry" in dashboard_script
-    assert "/api/v1/collection-job-instances?" in dashboard_script
+    assert "/api/v1/ops/collection-job-instances?" in dashboard_script
     assert "data-fanout-instances" in dashboard_script
     assert "retry_root_job_id" in dashboard_script
     assert "resolved_by_job_id" in dashboard_script
     assert "data-delivery-instance" in dashboard_script
     assert 'action = { view: "fanout", filter: "active", label: "查看进行中" }' in dashboard_script
     assert 'activateView(action.view)' in dashboard_script
-    assert "/api/v1/delivery/data-calendar" in dashboard_script
+    assert "/api/v1/ops/delivery/data-calendar" in dashboard_script
     assert 'data-page-key="calendarDetails"' in page.text
     assert "last-successful-dashboard-refresh" in dashboard_script
     assert "state.endpointErrors" in dashboard_script
@@ -764,7 +803,7 @@ def test_today_delivery_endpoint_uses_business_date():
 
     with client:
         response = client.get(
-            "/api/v1/delivery/today?business_date=2026-09-08"
+            "/api/v1/ops/delivery/today?business_date=2026-09-08"
         )
 
     assert response.status_code == 200
@@ -793,7 +832,7 @@ def test_delivery_calendar_endpoint_uses_bounded_date_range():
 
     with client:
         response = client.get(
-            "/api/v1/delivery/calendar?start_date=2026-09-01&end_date=2026-09-30"
+            "/api/v1/ops/delivery/calendar?start_date=2026-09-01&end_date=2026-09-30"
         )
 
     assert response.status_code == 200
@@ -834,9 +873,9 @@ def test_delivery_data_calendar_endpoints_use_data_date():
 
     with client:
         month = client.get(
-            "/api/v1/delivery/data-calendar?start_date=2026-09-08&end_date=2026-09-09"
+            "/api/v1/ops/delivery/data-calendar?start_date=2026-09-08&end_date=2026-09-09"
         )
-        day = client.get("/api/v1/delivery/data-calendar/2026-09-08")
+        day = client.get("/api/v1/ops/delivery/data-calendar/2026-09-08")
 
     assert month.status_code == 200
     assert day.status_code == 200
@@ -874,14 +913,14 @@ def test_data_health_endpoint_is_under_api_namespace():
                 "summary": {"pending_interfaces": 3},
                 "history": None,
                 "unhealthy_services": [],
-                "full_health_url": "/api/v1/data-health",
+                "full_health_url": "/api/v1/ops/data-health",
             },
         },
     )()
 
     with client:
-        response = client.get("/api/v1/data-health")
-        summary = client.get("/api/v1/data-health/summary")
+        response = client.get("/api/v1/ops/data-health")
+        summary = client.get("/api/v1/ops/data-health/summary")
 
     assert response.status_code == 200
     assert summary.status_code == 200
@@ -918,12 +957,12 @@ def test_coverage_endpoints_use_api_namespace():
     client.app.dependency_overrides[get_coverage_service] = lambda: fake
 
     with client:
-        overview = client.get("/api/v1/coverage")
+        overview = client.get("/api/v1/ops/coverage")
         partitions = client.get(
-            "/api/v1/coverage/datasets/stock_daily/partitions"
+            "/api/v1/ops/coverage/datasets/stock_daily/partitions"
         )
         repairs = client.post(
-            "/api/v1/coverage/repairs",
+            "/api/v1/ops/coverage/repairs",
             json={
                 "dataset": "stock_daily",
                 "start_date": "2026-08-28",
@@ -977,22 +1016,22 @@ def test_initialization_lifecycle_endpoints_are_under_api_namespace():
     client.app.dependency_overrides[get_initialization_service] = FakeInitialization
 
     with client:
-        overview = client.get("/api/v1/initialization")
+        overview = client.get("/api/v1/ops/initialization")
         preflight = client.post(
-            "/api/v1/initialization/preflight",
+            "/api/v1/ops/initialization/preflight",
             json={"profile": "full", "history_end": "2026-08-28"},
         )
         created = client.post(
-            "/api/v1/initialization",
+            "/api/v1/ops/initialization",
             headers={"Idempotency-Key": "initialization-test-key"},
             json={"profile": "quick", "auto_activate": False},
         )
-        steps = client.get("/api/v1/initialization/7/steps", params={"limit": 12})
-        paused = client.post("/api/v1/initialization/7/pause")
-        resumed = client.post("/api/v1/initialization/7/resume")
-        activated = client.post("/api/v1/initialization/7/activate")
+        steps = client.get("/api/v1/ops/initialization/7/steps", params={"limit": 12})
+        paused = client.post("/api/v1/ops/initialization/7/pause")
+        resumed = client.post("/api/v1/ops/initialization/7/resume")
+        activated = client.post("/api/v1/ops/initialization/7/activate")
         full = client.post(
-            "/api/v1/initialization",
+            "/api/v1/ops/initialization",
             headers={"Idempotency-Key": "full-history-test-key"},
             json={"profile": "full", "auto_activate": False},
         )
@@ -1036,21 +1075,21 @@ def test_fanout_campaign_management_endpoints_are_under_api_namespace():
 
     with client:
         created = client.post(
-            "/api/v1/collection-fanout-campaigns",
+            "/api/v1/ops/collection-fanout-campaigns",
             headers={"Idempotency-Key": "fanout-campaign-test-key"},
             json={"api_name": "pledge_stat", "page_size": 200},
         )
         listed = client.get(
-            "/api/v1/collection-fanout-campaigns",
+            "/api/v1/ops/collection-fanout-campaigns",
             params={"status": "running", "limit": 12},
         )
-        detail = client.get("/api/v1/collection-fanout-campaigns/8")
-        paused = client.post("/api/v1/collection-fanout-campaigns/8/pause")
-        resumed = client.post("/api/v1/collection-fanout-campaigns/8/resume")
+        detail = client.get("/api/v1/ops/collection-fanout-campaigns/8")
+        paused = client.post("/api/v1/ops/collection-fanout-campaigns/8/pause")
+        resumed = client.post("/api/v1/ops/collection-fanout-campaigns/8/resume")
         reconciled = client.post(
-            "/api/v1/collection-fanout-campaigns/8/reconcile"
+            "/api/v1/ops/collection-fanout-campaigns/8/reconcile"
         )
-        schedules = client.get("/api/v1/collection-fanout-schedules")
+        schedules = client.get("/api/v1/ops/collection-fanout-schedules")
 
     assert created.status_code == 202
     assert listed.json()[0]["limit"] == 12

@@ -12,7 +12,7 @@ from service.collection_monitor import CollectionMonitorService
 from service.delivery_monitor import DeliveryMonitorService
 
 
-router = APIRouter(prefix="/v1", tags=["collection monitoring"])
+router = APIRouter(prefix="/v1/ops", tags=["operations"])
 
 
 @router.get("/collection-overview")

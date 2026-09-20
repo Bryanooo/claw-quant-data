@@ -231,7 +231,6 @@ def capability_catalog(
                 "derived research contracts have calculation semantics and quality "
                 "evidence, unlike raw and standard dataset queries"
             ),
-            "compatibility": "existing /api/v1/stocks and /api/v1/sectors routes remain unchanged",
         },
         "derived_services": list(DERIVED_ENDPOINTS),
         "techniques": {

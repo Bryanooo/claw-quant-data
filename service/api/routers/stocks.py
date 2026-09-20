@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query
 from service.api.dependencies import DataServiceDependency
 from service.api.schemas import StockResearchPackResponse, StockSnapshotResponse
 
-router = APIRouter(prefix="/v1/stocks", tags=["stocks"])
+router = APIRouter(prefix="/v1/research/stocks", tags=["research: stocks"])
 
 
 @router.get("/{ts_code}/snapshot", response_model=StockSnapshotResponse)

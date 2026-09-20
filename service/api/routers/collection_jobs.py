@@ -19,7 +19,7 @@ from service.api.schemas import (
     FanoutCampaignRequest,
 )
 
-router = APIRouter(prefix="/v1", tags=["collection jobs"])
+router = APIRouter(prefix="/v1/ops", tags=["operations"])
 IdempotencyKey = Annotated[
     str | None,
     Header(alias="Idempotency-Key", min_length=8, max_length=128),

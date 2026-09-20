@@ -8,7 +8,7 @@ from service.api.dependencies import InitializationServiceDependency
 from service.api.schemas import InitializationRequest
 
 
-router = APIRouter(prefix="/v1/initialization", tags=["initialization"])
+router = APIRouter(prefix="/v1/ops/initialization", tags=["operations"])
 IdempotencyKey = Annotated[
     str | None,
     Header(alias="Idempotency-Key", min_length=8, max_length=128),

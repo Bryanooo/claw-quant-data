@@ -419,43 +419,43 @@ def _parse_filters(values: list[str]) -> dict[str, str]:
 
 
 def _health(client: ApiClient, args: argparse.Namespace) -> dict[str, Any]:
-    result = {"live": client.get("/health/live")}
+    result = {"live": client.get("/v1/ops/health/live")}
     if not args.live_only:
-        result["ready"] = client.get("/health/ready")
+        result["ready"] = client.get("/v1/ops/health/ready")
     return result
 
 
 def _status(client: ApiClient, args: argparse.Namespace) -> Any:
     return client.get(
-        "/v1/data-health" if args.full else "/v1/data-health/summary"
+        "/v1/ops/data-health" if args.full else "/v1/ops/data-health/summary"
     )
 
 
 def _datasets_list(client: ApiClient, args: argparse.Namespace) -> list[dict[str, Any]]:
-    rows = _require_object_list(client.get("/v1/datasets"), "datasets")
+    rows = _require_object_list(client.get("/v1/data/datasets"), "datasets")
     if args.category:
         rows = [row for row in rows if row.get("category") == args.category]
     return rows
 
 
 def _datasets_describe(client: ApiClient, args: argparse.Namespace) -> Any:
-    return client.get(f"/v1/datasets/{args.dataset}")
+    return client.get(f"/v1/data/datasets/{args.dataset}")
 
 
 def _query_dataset(client: ApiClient, args: argparse.Namespace) -> Any:
     return client.get(
-        f"/v1/datasets/{args.dataset}/records",
+        f"/v1/data/datasets/{args.dataset}/records",
         params=_record_query_params(args),
     )
 
 
 def _freshness(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"dataset": args.dataset} if args.dataset else None
-    return client.get("/v1/freshness", params=params)
+    return client.get("/v1/data/freshness", params=params)
 
 
 def _stock_snapshot(client: ApiClient, args: argparse.Namespace) -> Any:
-    return client.get(f"/v1/stocks/{args.ts_code.upper()}/snapshot")
+    return client.get(f"/v1/research/stocks/{args.ts_code.upper()}/snapshot")
 
 
 def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
@@ -467,7 +467,7 @@ def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
     if args.as_of:
         params["as_of"] = args.as_of
     return client.get(
-        f"/v1/stocks/{args.ts_code.upper()}/research-pack",
+        f"/v1/research/stocks/{args.ts_code.upper()}/research-pack",
         params=params,
     )
 
@@ -482,7 +482,7 @@ def _stock_sectors(client: ApiClient, args: argparse.Namespace) -> Any:
         if value is not None
     }
     return client.get(
-        f"/v1/stocks/{args.ts_code.upper()}/sectors",
+        f"/v1/research/stocks/{args.ts_code.upper()}/sectors",
         params=params or None,
     )
 
@@ -497,7 +497,7 @@ def _stock_peers(client: ApiClient, args: argparse.Namespace) -> Any:
     if args.as_of:
         params["as_of"] = args.as_of
     return client.get(
-        f"/v1/stocks/{args.ts_code.upper()}/peers",
+        f"/v1/research/stocks/{args.ts_code.upper()}/peers",
         params=params,
     )
 
@@ -515,13 +515,13 @@ def _sector_list(client: ApiClient, args: argparse.Namespace) -> Any:
         }.items()
         if value is not None
     }
-    return client.get("/v1/sectors", params=params)
+    return client.get("/v1/research/sectors", params=params)
 
 
 def _sector_snapshot(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"as_of": args.as_of} if args.as_of else None
     return client.get(
-        f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/snapshot",
+        f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/snapshot",
         params=params,
     )
 
@@ -531,7 +531,7 @@ def _sector_members(client: ApiClient, args: argparse.Namespace) -> Any:
     if args.as_of:
         params["as_of"] = args.as_of
     return client.get(
-        f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/members",
+        f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/members",
         params=params,
     )
 
@@ -544,7 +544,7 @@ def _sector_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
     if args.as_of:
         params["as_of"] = args.as_of
     return client.get(
-        f"/v1/sectors/{args.provider}/{args.sector_code.upper()}/research-pack",
+        f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/research-pack",
         params=params,
     )
 
@@ -626,7 +626,7 @@ def _research_sector_rotation(client: ApiClient, args: argparse.Namespace) -> An
 
 
 def _interfaces_list(client: ApiClient, args: argparse.Namespace) -> list[dict[str, Any]]:
-    rows = _require_object_list(client.get("/v1/interfaces"), "interfaces")
+    rows = _require_object_list(client.get("/v1/data/interfaces"), "interfaces")
     if args.permission:
         rows = [row for row in rows if row.get("permission_status") == args.permission]
     if args.mode:
@@ -635,7 +635,7 @@ def _interfaces_list(client: ApiClient, args: argparse.Namespace) -> list[dict[s
 
 
 def _interfaces_describe(client: ApiClient, args: argparse.Namespace) -> Any:
-    return client.get(f"/v1/interfaces/{args.api_name}")
+    return client.get(f"/v1/data/interfaces/{args.api_name}")
 
 
 def _interfaces_query(client: ApiClient, args: argparse.Namespace) -> Any:
@@ -643,13 +643,13 @@ def _interfaces_query(client: ApiClient, args: argparse.Namespace) -> Any:
     if args.date_field:
         params["date_field"] = args.date_field
     return client.get(
-        f"/v1/interfaces/{args.api_name}/records",
+        f"/v1/data/interfaces/{args.api_name}/records",
         params=params,
     )
 
 
 def _coverage_summary(client: ApiClient, _args: argparse.Namespace) -> Any:
-    return client.get("/v1/coverage")
+    return client.get("/v1/ops/coverage")
 
 
 def _coverage_show(client: ApiClient, args: argparse.Namespace) -> Any:
@@ -664,7 +664,7 @@ def _coverage_show(client: ApiClient, args: argparse.Namespace) -> Any:
         if value is not None
     }
     return client.get(
-        f"/v1/coverage/datasets/{args.dataset}/partitions",
+        f"/v1/ops/coverage/datasets/{args.dataset}/partitions",
         params=params,
     )
 

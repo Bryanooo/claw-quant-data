@@ -167,7 +167,7 @@ class InterfaceDataService:
             ),
             "datasets": self._dataset_names(contract),
             "records_url": (
-                f"/api/v1/interfaces/{contract.api_name}/records"
+                f"/api/v1/data/interfaces/{contract.api_name}/records"
                 if mode == "generic_raw"
                 else None
             ),

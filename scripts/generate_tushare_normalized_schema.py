@@ -157,8 +157,8 @@ def render_doc(contract) -> str:
             else "- 当前数据视图：未创建（业务身份仍为启发式，REST 保留全部 payload 版本）"
         ),
         f"- 原始数据表：`tushare_raw_record`（`api_name={contract.api_name}`）",
-        f"- REST：`GET /api/v1/datasets/{contract.api_name}/records`",
-        f"- 接口 REST：`GET /api/v1/interfaces/{contract.api_name}/records`",
+        f"- REST：`GET /api/v1/data/datasets/{contract.api_name}/records`",
+        f"- 接口 REST：`GET /api/v1/data/interfaces/{contract.api_name}/records`",
         "- 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)",
         "",
         "## 业务字段",

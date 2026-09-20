@@ -198,7 +198,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=3)"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ops/health/ready', timeout=3)"
       interval: 5s
       timeout: 5s
       retries: 12

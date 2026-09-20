@@ -413,13 +413,13 @@ import json
 import os
 import urllib.request
 
-with urllib.request.urlopen("http://127.0.0.1:8000/api/health/ready", timeout=5) as response:
+with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/ops/health/ready", timeout=5) as response:
     payload = json.load(response)
 if payload.get("status") != "ready":
     raise SystemExit(f"REST API readiness 异常: {payload}")
 
 request = urllib.request.Request(
-    "http://127.0.0.1:8000/api/v1/datasets",
+    "http://127.0.0.1:8000/api/v1/data/datasets",
 )
 with urllib.request.urlopen(request, timeout=5) as response:
     datasets = json.load(response)
@@ -427,7 +427,7 @@ if not datasets:
     raise SystemExit("REST API 没有返回注册数据集")
 
 request = urllib.request.Request(
-    "http://127.0.0.1:8000/api/v1/collection-tasks",
+    "http://127.0.0.1:8000/api/v1/ops/collection-tasks",
 )
 with urllib.request.urlopen(request, timeout=5) as response:
     collection_tasks = json.load(response)
@@ -435,7 +435,7 @@ if not collection_tasks:
     raise SystemExit("REST API 没有返回可用采集任务")
 
 request = urllib.request.Request(
-    "http://127.0.0.1:8000/api/v1/collection-overview",
+    "http://127.0.0.1:8000/api/v1/ops/collection-overview",
 )
 with urllib.request.urlopen(request, timeout=10) as response:
     overview = json.load(response)
@@ -443,7 +443,7 @@ if overview.get("summary", {}).get("interfaces", 0) < 200:
     raise SystemExit("采集总览没有返回完整接口目录")
 
 request = urllib.request.Request(
-    "http://127.0.0.1:8000/api/v1/coverage",
+    "http://127.0.0.1:8000/api/v1/ops/coverage",
 )
 with urllib.request.urlopen(request, timeout=10) as response:
     coverage = json.load(response)
@@ -451,7 +451,7 @@ if coverage.get("summary", {}).get("datasets", 0) < 10:
     raise SystemExit("数据覆盖总览没有返回覆盖规则")
 
 request = urllib.request.Request(
-    "http://127.0.0.1:8000/api/v1/initialization",
+    "http://127.0.0.1:8000/api/v1/ops/initialization",
 )
 with urllib.request.urlopen(request, timeout=5) as response:
     initialization = json.load(response)

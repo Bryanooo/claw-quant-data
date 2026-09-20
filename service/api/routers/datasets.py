@@ -10,7 +10,7 @@ from service.api.schemas import (
     RecordsResponse,
 )
 
-router = APIRouter(prefix="/v1", tags=["datasets"])
+router = APIRouter(prefix="/v1/data", tags=["data"])
 
 _STANDARD_QUERY_PARAMETERS = {
     "date",

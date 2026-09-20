@@ -14,7 +14,7 @@ from service.api.schemas import (
 )
 
 
-router = APIRouter(prefix="/v1/raw", tags=["raw-audit"])
+router = APIRouter(prefix="/v1/audit/raw", tags=["audit"])
 
 
 @router.get("/interfaces", response_model=list[RawInterfaceSummary])

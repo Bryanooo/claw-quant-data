@@ -77,8 +77,8 @@ def run_cli(arguments, client, capsys):
 def test_health_checks_live_and_ready(capsys):
     client = FakeClient(
         {
-            "/health/live": {"status": "ok"},
-            "/health/ready": {"status": "ready", "database": "ok"},
+            "/v1/ops/health/live": {"status": "ok"},
+            "/v1/ops/health/ready": {"status": "ready", "database": "ok"},
         }
     )
 
@@ -89,14 +89,14 @@ def test_health_checks_live_and_ready(capsys):
         "live": {"status": "ok"},
         "ready": {"database": "ok", "status": "ready"},
     }
-    assert client.calls == [("/health/live", None), ("/health/ready", None)]
+    assert client.calls == [("/v1/ops/health/live", None), ("/v1/ops/health/ready", None)]
     assert captured.err == ""
 
 
 def test_status_returns_consolidated_data_health(capsys):
     client = FakeClient(
         {
-            "/v1/data-health/summary": {
+            "/v1/ops/data-health/summary": {
                 "status": "healthy",
                 "summary": {"confirmed_issue_count": 0},
             }
@@ -107,22 +107,22 @@ def test_status_returns_consolidated_data_health(capsys):
 
     assert exit_code == 0
     assert json.loads(captured.out)["status"] == "healthy"
-    assert client.calls == [("/v1/data-health/summary", None)]
+    assert client.calls == [("/v1/ops/data-health/summary", None)]
 
 
 def test_status_full_requests_expensive_health_audit(capsys):
-    client = FakeClient({"/v1/data-health": {"status": "warning"}})
+    client = FakeClient({"/v1/ops/data-health": {"status": "warning"}})
 
     exit_code, _ = run_cli(["status", "--full"], client, capsys)
 
     assert exit_code == 0
-    assert client.calls == [("/v1/data-health", None)]
+    assert client.calls == [("/v1/ops/data-health", None)]
 
 
 def test_dataset_query_builds_only_explicit_parameters(capsys):
     client = FakeClient(
         {
-            "/v1/datasets/stock_daily/records": {
+            "/v1/data/datasets/stock_daily/records": {
                 "data": [{"ts_code": "000001.SZ", "trade_date": "20260907"}],
                 "meta": {"dataset": "stock_daily", "returned": 1},
                 "page": {"limit": 20, "offset": 0, "has_more": False},
@@ -150,7 +150,7 @@ def test_dataset_query_builds_only_explicit_parameters(capsys):
     assert json.loads(captured.out)["meta"]["returned"] == 1
     assert client.calls == [
         (
-            "/v1/datasets/stock_daily/records",
+            "/v1/data/datasets/stock_daily/records",
             {
                 "ts_code": "000001.SZ",
                 "start_date": "2026-09-01",
@@ -165,7 +165,7 @@ def test_dataset_query_builds_only_explicit_parameters(capsys):
 def test_interface_query_preserves_date_field_and_normalizes_name(capsys):
     client = FakeClient(
         {
-            "/v1/interfaces/adj_factor/records": {
+            "/v1/data/interfaces/adj_factor/records": {
                 "data": [],
                 "meta": {"interface": "adj_factor"},
                 "page": {"limit": 100, "offset": 0, "has_more": False},
@@ -190,7 +190,7 @@ def test_interface_query_preserves_date_field_and_normalizes_name(capsys):
     assert exit_code == 0
     assert client.calls == [
         (
-            "/v1/interfaces/adj_factor/records",
+            "/v1/data/interfaces/adj_factor/records",
             {
                 "date": "20260907",
                 "limit": 100,
@@ -202,7 +202,7 @@ def test_interface_query_preserves_date_field_and_normalizes_name(capsys):
 
 
 def test_stock_research_pack_cli_forwards_bounded_scope(capsys):
-    path = "/v1/stocks/300750.SZ/research-pack"
+    path = "/v1/research/stocks/300750.SZ/research-pack"
     client = FakeClient({path: {"data": {}, "meta": {"ts_code": "300750.SZ"}}})
 
     exit_code, captured = run_cli(
@@ -271,8 +271,8 @@ def test_derived_research_cli_uses_new_namespace(capsys):
 
 
 def test_sector_research_cli_commands_forward_normalized_scope(capsys):
-    list_path = "/v1/sectors"
-    pack_path = "/v1/sectors/ths/885001.TI/research-pack"
+    list_path = "/v1/research/sectors"
+    pack_path = "/v1/research/sectors/ths/885001.TI/research-pack"
     client = FakeClient(
         {
             list_path: {"data": [], "meta": {}},
@@ -313,8 +313,8 @@ def test_sector_research_cli_commands_forward_normalized_scope(capsys):
 
 
 def test_stock_sector_and_peer_cli_commands(capsys):
-    sectors_path = "/v1/stocks/300750.SZ/sectors"
-    peers_path = "/v1/stocks/300750.SZ/peers"
+    sectors_path = "/v1/research/stocks/300750.SZ/sectors"
+    peers_path = "/v1/research/stocks/300750.SZ/peers"
     client = FakeClient(
         {
             sectors_path: {"data": [], "meta": {}},
@@ -345,7 +345,7 @@ def test_stock_sector_and_peer_cli_commands(capsys):
 def test_list_commands_support_deterministic_client_side_filters(capsys):
     client = FakeClient(
         {
-            "/v1/datasets": [
+            "/v1/data/datasets": [
                 {"name": "stock_daily", "category": "market"},
                 {"name": "income", "category": "finance"},
             ]
@@ -367,7 +367,7 @@ def test_list_commands_support_deterministic_client_side_filters(capsys):
 def test_csv_output_extracts_query_rows_and_encodes_nested_values(capsys):
     client = FakeClient(
         {
-            "/v1/datasets/stock_daily/records": {
+            "/v1/data/datasets/stock_daily/records": {
                 "data": [
                     {
                         "ts_code": "000001.SZ",
@@ -440,7 +440,7 @@ def test_parser_rejects_path_like_dataset_as_json(capsys):
 def test_cli_propagates_machine_readable_api_error(capsys):
     client = FakeClient(
         {
-            "/v1/datasets/missing": CliError(
+            "/v1/data/datasets/missing": CliError(
                 "dataset_not_found",
                 "unknown dataset: missing",
                 EXIT_API_CLIENT,
@@ -477,9 +477,9 @@ def test_api_client_sends_request_context_and_decodes_success():
     )
     client = ApiClient("http://localhost:8000/api/", timeout_seconds=2, opener=opener)
 
-    assert client.get("/health/live") == {"status": "ok"}
+    assert client.get("/v1/ops/health/live") == {"status": "ok"}
     request, options = opener.calls[0]
-    assert request.full_url == "http://localhost:8000/api/health/live"
+    assert request.full_url == "http://localhost:8000/api/v1/ops/health/live"
     assert options["timeout"] == 2
     assert request.get_header("Accept") == "application/json"
     assert request.get_header("X-request-id")
@@ -503,7 +503,7 @@ def test_api_client_classifies_transport_errors(error, expected_exit, expected_c
     )
 
     with pytest.raises(CliError) as raised:
-        client.get("/health/live")
+        client.get("/v1/ops/health/live")
 
     assert raised.value.exit_code == expected_exit
     assert raised.value.code == expected_code
@@ -528,7 +528,7 @@ def test_api_client_preserves_server_error_contract():
     )
 
     with pytest.raises(CliError) as raised:
-        client.get("/v1/datasets/missing")
+        client.get("/v1/data/datasets/missing")
 
     assert raised.value.code == "dataset_not_found"
     assert raised.value.exit_code == EXIT_API_CLIENT
@@ -542,7 +542,7 @@ def test_api_client_rejects_non_json_and_credentialed_urls():
         opener=FakeOpener(FakeResponse(200, b"not json")),
     )
     with pytest.raises(CliError) as raised:
-        client.get("/health/live")
+        client.get("/v1/ops/health/live")
     assert raised.value.exit_code == EXIT_INVALID_RESPONSE
 
     with pytest.raises(ValueError, match="embedded credentials"):

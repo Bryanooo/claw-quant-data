@@ -15,6 +15,13 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     },
     {
         "method": "GET",
+        "path": "/api/v1/research/readiness",
+        "name": "研究数据就绪状态",
+        "domain": "质量与可用性",
+        "description": "提供 Agent 可直接判断的时效、覆盖、失败和历史初始化摘要。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/stocks/{ts_code}/fundamentals",
         "name": "基本面分析",
         "domain": "个股研究",
@@ -223,7 +230,15 @@ def capability_catalog(
             "available_or_derivable": len(SERVED_TECHNIQUES),
             "backfill_workstreams": len(BACKFILL_WORKSTREAMS),
             "new_source_todos": len(NEW_SOURCE_TODOS),
-            "derived_endpoints": len(DERIVED_ENDPOINTS) - 1,
+            "agent_endpoints": len(DERIVED_ENDPOINTS),
+            "derived_endpoints": sum(
+                item["path"]
+                not in {
+                    "/api/v1/research/capabilities",
+                    "/api/v1/research/readiness",
+                }
+                for item in DERIVED_ENDPOINTS
+            ),
         },
         "api_namespace": {
             "path": "/api/v1/research",

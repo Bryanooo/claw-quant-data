@@ -881,8 +881,8 @@ const serviceMetricLabels = {
   dated_datasets: "支持日期查询",
   mapped_interfaces: "已映射上游接口",
   direct_interface_queries: "通用接口直查",
-  capabilities: "研究能力",
-  available_capabilities: "当前可用",
+  endpoints: "研究接口",
+  available_endpoints: "当前可用",
   domains: "研究领域"
 };
 
@@ -962,13 +962,13 @@ function renderDataServices() {
   const raw = catalog.layers.find((item) => item.id === "raw");
   const standard = catalog.layers.find((item) => item.id === "standard");
   const research = catalog.layers.find((item) => item.id === "research");
-  $("dataServicesTabCount").textContent = `${catalog.summary.layers} 层 · ${catalog.summary.research_capabilities} 项研究能力`;
-  $("dataServicesSummary").textContent = `${catalog.summary.raw_interfaces} 个上游接口可审计 · ${catalog.summary.standard_datasets} 个标准数据集 · ${catalog.summary.research_capabilities} 项研究就绪能力`;
+  $("dataServicesTabCount").textContent = `${catalog.summary.layers} 层 · ${catalog.summary.research_endpoints} 个研究接口`;
+  $("dataServicesSummary").textContent = `${catalog.summary.raw_interfaces} 个上游接口可审计 · ${catalog.summary.standard_datasets} 个标准数据集 · ${catalog.summary.research_endpoints} 个研究层接口`;
   $("rawLayerPrimary").textContent = `${raw.metrics.interfaces_with_records}/${raw.metrics.interfaces}`;
   $("rawLayerSecondary").textContent = `${raw.metrics.observed_interfaces} 个接口已有完整请求账本`;
   $("standardLayerPrimary").textContent = Number(standard.metrics.datasets).toLocaleString();
   $("standardLayerSecondary").textContent = `${standard.metrics.dated_datasets} 个支持日期查询`;
-  $("researchLayerPrimary").textContent = Number(research.metrics.capabilities).toLocaleString();
+  $("researchLayerPrimary").textContent = Number(research.metrics.endpoints).toLocaleString();
   $("researchLayerSecondary").textContent = `${research.metrics.domains} 个研究领域`;
 
   document.querySelectorAll("[data-service-layer]").forEach((button) => {

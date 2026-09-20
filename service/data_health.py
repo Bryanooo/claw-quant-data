@@ -234,7 +234,7 @@ class DataHealthService:
         }
 
     def summary(self) -> dict[str, Any]:
-        """Return a bounded operational preflight for humans and Agents.
+        """Return a bounded operational preflight for operators and clients.
 
         Full health intentionally evaluates freshness for every public table
         and delivery evidence for every scheduled interface. That is suitable

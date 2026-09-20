@@ -3,9 +3,11 @@
 service/tools — 统一数据查询接口
 =============================================================================
 
-所有 service tool 都在这里统一导出，Agent 只需记住：
+所有 service tool 都在这里统一导出，供服务端兼容代码使用：
 
     from service.tools import search_stock, is_trade_day, ...
+
+这些函数不是公开 Agent 契约；Agent 只使用 `/api/v1/research/*`。
 
 按数据域分文件：
   trade_cal.py                  — 交易日历相关

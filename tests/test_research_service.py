@@ -166,6 +166,7 @@ def test_market_and_sector_derivations_are_evidence_carrying():
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
+    assert catalog["summary"]["agent_endpoints"] == 9
     assert catalog["summary"]["derived_endpoints"] == 7
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3

@@ -54,8 +54,8 @@
 | `GET /api/v1/data/interfaces/{api_name}/records` | 查询契约通用接口的强类型标准记录 |
 | `GET /api/v1/data/freshness` | 查看数据最新日期与时效状态 |
 
-研究接口不能满足需求时才下钻这一层；Agent 不应默认自行拼装跨表研究口径，更不应
-解析原始 JSONB。
+这一层供数据工程和公式维护复核输入；不属于公开 Agent 契约。Agent 不自行拼装
+跨表研究口径，更不解析原始 JSONB。
 
 ## 3. 研究就绪层
 
@@ -64,6 +64,7 @@
 
 当前已落地：
 
+- 研究就绪检查与能力目录；
 - 个股快照、个股 Research Pack；
 - 股票所属板块和同行发现；
 - 板块搜索、快照、成分和 Research Pack；

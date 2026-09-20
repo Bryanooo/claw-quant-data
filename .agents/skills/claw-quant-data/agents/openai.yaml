@@ -1,4 +1,4 @@
 interface:
   display_name: "Claw Quant Data"
-  short_description: "Query trusted market data with health and coverage checks"
-  default_prompt: "Use $claw-quant-data to answer this market-data question with freshness and coverage evidence."
+  short_description: "Query governed research views with quality evidence"
+  default_prompt: "Use $claw-quant-data to answer this investment-research question through the research API contract."

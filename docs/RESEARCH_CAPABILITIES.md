@@ -18,7 +18,8 @@
 
 ## 已实现的派生服务
 
-8 个 REST 入口中有 1 个是能力目录、7 个是聚合研究服务。它们不是“8 种分析”，
+9 个派生 REST 入口中有 1 个能力目录、1 个研究就绪检查、7 个聚合研究服务。
+它们不是“9 种分析”，
 也不表示已经覆盖所有可能的投研方法；投研方法本身没有封闭全集。项目定义了一份
 可验收的 v1 基线：35 项核心能力中，当前 27 项已由研究接口直接服务，3 项可由
 已有 Tushare 数据补采后增加服务，另 5 项仍受外部数据源或额度约束。能力目录会
@@ -27,6 +28,7 @@
 | 接口 | 覆盖能力 |
 |---|---|
 | `GET /api/v1/research/capabilities` | 能力目录、补采工作流、新数据源待办 |
+| `GET /api/v1/research/readiness` | 面向 Agent 的研究数据时效、覆盖、失败和初始化摘要 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 财务趋势、盈利、成长、现金质量、偿债、效率、杜邦与主营构成 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | PE/PB/PS/股息率历史分位、同行中位数、DCF/DDM 输入 |
 | `GET /api/v1/research/stocks/{ts_code}/technicals` | 趋势、MACD、RSI、ATR、布林、量价、关键价位、相对强弱、复权收益 |
@@ -99,13 +101,17 @@ docker compose run --rm api python scripts/manage_research_backfills.py --status
 
 ## Agent 调用约束
 
-Agent 默认使用研究层；需要核对公式输入时读取标准层；只有排障和血缘追踪时读取
-原始层。历史研究必须传 `as_of`，并检查响应中的 `meta.quality` 和 `provenance`。
+Agent 只使用研究层；标准、运营和审计层分别供数据工程、系统管理和排障使用，
+不作为 Agent 的下钻通道。历史研究必须传 `as_of`，并检查响应中的
+`meta.quality` 和 `provenance`。
 CLI 与 REST 对应，例如：
 
 ```bash
+./clawq research readiness
+./clawq research capabilities
 ./clawq research fundamentals 000001.SZ --periods 8 --as-of 2026-09-18
 ./clawq research technicals 000001.SZ --benchmark 399006.SZ
 ./clawq research market-breadth
 ./clawq research sector-rotation ths --lookback-days 60
+./clawq research calendar --start-date 2026-09-01 --end-date 2026-09-30
 ```

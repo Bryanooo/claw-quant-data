@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 事件归因"
+  short_description: "官方证据、相对收益与时间线驱动的涨跌归因"
+  default_prompt: "Use $claw-quant-event-research to investigate this price move and separate verified facts, narratives, and inference."

@@ -270,6 +270,30 @@ def test_derived_research_cli_uses_new_namespace(capsys):
     ]
 
 
+def test_technical_research_cli_forwards_chart_scope(capsys):
+    path = "/v1/research/stocks/300750.SZ/technicals"
+    client = FakeClient({path: {"data": {"chart": {"points": []}}, "meta": {}}})
+
+    assert run_cli(
+        [
+            "research", "technicals", "300750.sz",
+            "--lookback-days", "500", "--chart-points", "180",
+            "--benchmark", "399006.sz", "--as-of", "2026-09-18",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert client.calls == [(
+        path,
+        {
+            "lookback_days": 500,
+            "chart_points": 180,
+            "benchmark": "399006.SZ",
+            "as_of": "2026-09-18",
+        },
+    )]
+
+
 def test_agent_preflight_and_calendar_cli_stay_in_research_namespace(capsys):
     readiness = "/v1/research/readiness"
     calendar = "/v1/research/investment-calendar"

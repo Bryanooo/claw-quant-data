@@ -58,11 +58,12 @@ def stock_technicals(
     ts_code: str,
     service: ResearchServiceDependency,
     lookback_days: int = Query(default=400, ge=60, le=1000),
+    chart_points: int = Query(default=120, ge=30, le=250),
     benchmark: str = Query(default="399006.SZ", pattern=r"^[0-9A-Za-z.]{4,16}$"),
     as_of: date | None = None,
 ) -> dict:
     return service.technicals(
-        ts_code.upper(), lookback_days=lookback_days,
+        ts_code.upper(), lookback_days=lookback_days, chart_points=chart_points,
         benchmark=benchmark.upper(), as_of=as_of,
     )
 

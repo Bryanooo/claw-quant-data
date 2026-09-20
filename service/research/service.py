@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
+from itertools import pairwise
 from math import sqrt
 from statistics import mean, median, pstdev
-from typing import Any, Iterable
+from typing import Any
 
-from service.data_service.models import InvalidQueryError, RecordNotFoundError
 from service.clock import business_now
+from service.data_service.models import InvalidQueryError, RecordNotFoundError
 from service.research.catalog import capability_catalog
 
 
@@ -72,6 +74,32 @@ def _moving_average(values: list[float], window: int) -> float | None:
     return mean(values[-window:])
 
 
+def _sma_series(values: list[float], window: int) -> list[float | None]:
+    """Return a position-preserving simple moving-average series."""
+
+    output: list[float | None] = []
+    for index in range(len(values)):
+        if index + 1 < window:
+            output.append(None)
+        else:
+            output.append(mean(values[index - window + 1:index + 1]))
+    return output
+
+
+def _weighted_moving_average(values: list[float], window: int) -> float | None:
+    if len(values) < window:
+        return None
+    weights = range(1, window + 1)
+    return sum(value * weight for value, weight in zip(values[-window:], weights)) / sum(weights)
+
+
+def _weighted_series(values: list[float], window: int) -> list[float | None]:
+    return [
+        _weighted_moving_average(values[:index + 1], window)
+        for index in range(len(values))
+    ]
+
+
 def _ema_series(values: list[float], window: int) -> list[float]:
     if not values:
         return []
@@ -103,6 +131,240 @@ def _max_drawdown(values: list[float]) -> float | None:
         if peak:
             worst = min(worst, value / peak - 1)
     return worst * 100
+
+
+def _stochastic(
+    highs: list[float], lows: list[float], closes: list[float], window: int = 9
+) -> tuple[float | None, float | None, float | None]:
+    if len(closes) < window:
+        return None, None, None
+    k = d = 50.0
+    for index in range(window - 1, len(closes)):
+        highest = max(highs[index - window + 1:index + 1])
+        lowest = min(lows[index - window + 1:index + 1])
+        rsv = 50.0 if highest == lowest else (closes[index] - lowest) / (highest - lowest) * 100
+        k = 2 / 3 * k + 1 / 3 * rsv
+        d = 2 / 3 * d + 1 / 3 * k
+    return k, d, 3 * k - 2 * d
+
+
+def _williams_r(
+    highs: list[float], lows: list[float], closes: list[float], window: int = 14
+) -> float | None:
+    if len(closes) < window:
+        return None
+    highest = max(highs[-window:])
+    lowest = min(lows[-window:])
+    return None if highest == lowest else (highest - closes[-1]) / (highest - lowest) * -100
+
+
+def _cci(
+    highs: list[float], lows: list[float], closes: list[float], window: int = 20
+) -> float | None:
+    if len(closes) < window:
+        return None
+    typical = [(high + low + close) / 3 for high, low, close in zip(highs, lows, closes)]
+    recent = typical[-window:]
+    average = mean(recent)
+    deviation = mean(abs(value - average) for value in recent)
+    return None if deviation == 0 else (typical[-1] - average) / (0.015 * deviation)
+
+
+def _obv(closes: list[float], volumes: list[float]) -> list[float]:
+    output = [0.0]
+    for previous, current, volume in zip(closes[:-1], closes[1:], volumes[1:]):
+        direction = 1 if current > previous else -1 if current < previous else 0
+        output.append(output[-1] + direction * volume)
+    return output
+
+
+def _mfi(
+    highs: list[float], lows: list[float], closes: list[float],
+    volumes: list[float], window: int = 14,
+) -> float | None:
+    if len(closes) <= window:
+        return None
+    typical = [(high + low + close) / 3 for high, low, close in zip(highs, lows, closes)]
+    positive = negative = 0.0
+    for previous, current, volume in zip(
+        typical[-window - 1:-1], typical[-window:], volumes[-window:]
+    ):
+        flow = current * volume
+        if current > previous:
+            positive += flow
+        elif current < previous:
+            negative += flow
+    if negative == 0:
+        return 100.0 if positive else 50.0
+    return 100 - 100 / (1 + positive / negative)
+
+
+def _adx(
+    highs: list[float], lows: list[float], closes: list[float], window: int = 14
+) -> tuple[float | None, float | None, float | None]:
+    """Return a transparent rolling approximation of Wilder ADX/+DI/-DI."""
+
+    if len(closes) < window * 2:
+        return None, None, None
+    tr: list[float] = []
+    plus_dm: list[float] = []
+    minus_dm: list[float] = []
+    for index in range(1, len(closes)):
+        up = highs[index] - highs[index - 1]
+        down = lows[index - 1] - lows[index]
+        plus_dm.append(up if up > down and up > 0 else 0.0)
+        minus_dm.append(down if down > up and down > 0 else 0.0)
+        tr.append(max(
+            highs[index] - lows[index],
+            abs(highs[index] - closes[index - 1]),
+            abs(lows[index] - closes[index - 1]),
+        ))
+    dx_values: list[float] = []
+    latest_plus = latest_minus = None
+    for index in range(window - 1, len(tr)):
+        tr_sum = sum(tr[index - window + 1:index + 1])
+        if tr_sum == 0:
+            continue
+        latest_plus = sum(plus_dm[index - window + 1:index + 1]) / tr_sum * 100
+        latest_minus = sum(minus_dm[index - window + 1:index + 1]) / tr_sum * 100
+        denominator = latest_plus + latest_minus
+        dx_values.append(0.0 if denominator == 0 else abs(latest_plus - latest_minus) / denominator * 100)
+    adx = mean(dx_values[-window:]) if len(dx_values) >= window else None
+    return adx, latest_plus, latest_minus
+
+
+def _candlestick_patterns(rows: list[dict], limit: int = 20) -> list[dict[str, Any]]:
+    patterns: list[dict[str, Any]] = []
+    recent = rows[-limit:]
+    for offset, row in enumerate(recent):
+        open_price = _number(row.get("open"))
+        high = _number(row.get("high"))
+        low = _number(row.get("low"))
+        close = _number(row.get("close"))
+        if None in (open_price, high, low, close) or high == low:
+            continue
+        assert open_price is not None and high is not None and low is not None and close is not None
+        body = abs(close - open_price)
+        span = high - low
+        upper = high - max(open_price, close)
+        lower = min(open_price, close) - low
+        observed = str(row.get("trade_date"))
+        if body / span <= 0.1:
+            patterns.append({"trade_date": observed, "pattern": "doji", "direction": "neutral"})
+        if lower >= max(body * 2, span * 0.45) and upper <= max(body, span * 0.15):
+            patterns.append({"trade_date": observed, "pattern": "hammer", "direction": "bullish_candidate"})
+        if upper >= max(body * 2, span * 0.45) and lower <= max(body, span * 0.15):
+            patterns.append({"trade_date": observed, "pattern": "shooting_star", "direction": "bearish_candidate"})
+        if offset == 0:
+            continue
+        previous = recent[offset - 1]
+        previous_open = _number(previous.get("open"))
+        previous_close = _number(previous.get("close"))
+        if previous_open is None or previous_close is None:
+            continue
+        if previous_close < previous_open and close > open_price and open_price <= previous_close and close >= previous_open:
+            patterns.append({"trade_date": observed, "pattern": "bullish_engulfing", "direction": "bullish_candidate"})
+        if previous_close > previous_open and close < open_price and open_price >= previous_close and close <= previous_open:
+            patterns.append({"trade_date": observed, "pattern": "bearish_engulfing", "direction": "bearish_candidate"})
+    return patterns
+
+
+def _zigzag(
+    rows: list[dict], threshold_pct: float
+) -> list[dict[str, Any]]:
+    """Extract confirmed volatility-filtered swing pivots plus the live extreme."""
+
+    if len(rows) < 2:
+        return []
+    closes = [_number(row.get("close")) for row in rows]
+    if any(value is None for value in closes):
+        return []
+    values = [float(value) for value in closes if value is not None]
+    threshold = threshold_pct / 100
+    direction = 0
+    extreme_index = 0
+    extreme_value = values[0]
+    initial_high_index = initial_low_index = 0
+    initial_high = initial_low = values[0]
+    pivots: list[dict[str, Any]] = []
+
+    def append(index: int, kind: str, confirmed: bool) -> None:
+        pivots.append({
+            "trade_date": str(rows[index].get("trade_date")),
+            "price": _round(values[index]),
+            "type": kind,
+            "confirmed": confirmed,
+        })
+
+    for index, value in enumerate(values[1:], start=1):
+        if direction == 0:
+            if value >= initial_high:
+                initial_high_index, initial_high = index, value
+            if value <= initial_low:
+                initial_low_index, initial_low = index, value
+            if value / initial_low - 1 >= threshold and initial_low_index < index:
+                append(initial_low_index, "low", True)
+                direction = 1
+                extreme_index, extreme_value = initial_high_index, initial_high
+            elif value / initial_high - 1 <= -threshold and initial_high_index < index:
+                append(initial_high_index, "high", True)
+                direction = -1
+                extreme_index, extreme_value = initial_low_index, initial_low
+        elif direction > 0:
+            if value >= extreme_value:
+                extreme_index, extreme_value = index, value
+            elif value / extreme_value - 1 <= -threshold:
+                append(extreme_index, "high", True)
+                direction = -1
+                extreme_index, extreme_value = index, value
+        else:
+            if value <= extreme_value:
+                extreme_index, extreme_value = index, value
+            elif value / extreme_value - 1 >= threshold:
+                append(extreme_index, "low", True)
+                direction = 1
+                extreme_index, extreme_value = index, value
+    append(extreme_index, "high" if direction > 0 else "low", False)
+    return pivots[-12:]
+
+
+def _swing_zones(
+    rows: list[dict], current: float, atr: float | None, window: int = 3
+) -> dict[str, Any]:
+    candidates: list[float] = []
+    for index in range(window, len(rows) - window):
+        low = _number(rows[index].get("low"))
+        high = _number(rows[index].get("high"))
+        around = rows[index - window:index + window + 1]
+        nearby_lows = [_number(item.get("low")) for item in around]
+        nearby_highs = [_number(item.get("high")) for item in around]
+        if low is not None and all(value is None or low <= value for value in nearby_lows):
+            candidates.append(low)
+        if high is not None and all(value is None or high >= value for value in nearby_highs):
+            candidates.append(high)
+    tolerance = max((atr or 0) * 0.5, current * 0.01)
+    clusters: list[list[float]] = []
+    for candidate in sorted(candidates):
+        target = next(
+            (cluster for cluster in clusters if abs(mean(cluster) - candidate) <= tolerance),
+            None,
+        )
+        if target is None:
+            clusters.append([candidate])
+        else:
+            target.append(candidate)
+    levels = [
+        {"price": _round(mean(cluster)), "touches": len(cluster)}
+        for cluster in clusters if len(cluster) >= 2
+    ]
+    support = sorted((item for item in levels if item["price"] <= current), key=lambda item: current - item["price"])
+    resistance = sorted((item for item in levels if item["price"] > current), key=lambda item: item["price"] - current)
+    return {
+        "support": support[:3],
+        "resistance": resistance[:3],
+        "tolerance": _round(tolerance),
+        "method": "3-bar swing pivots clustered within max(0.5×ATR14, 1% of close)",
+    }
 
 
 def _prior_year(value: date) -> date:
@@ -454,6 +716,7 @@ class ResearchService:
         ts_code: str,
         *,
         lookback_days: int = 400,
+        chart_points: int = 120,
         benchmark: str = "399006.SZ",
         as_of: date | None = None,
     ) -> dict[str, Any]:
@@ -473,15 +736,19 @@ class ResearchService:
             end=effective_as_of, limit=min(lookback_days, 1000),
         )
         prices.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+        prices = [
+            row for row in prices
+            if all(_number(row.get(field)) is not None for field in ("open", "high", "low", "close"))
+        ]
         benchmark_rows.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
         factor_by_day = {
             _day(row.get("trade_date")): _number(row.get("adj_factor"))
             for row in adjustments if _day(row.get("trade_date"))
         }
-        closes = [_number(row.get("close")) for row in prices]
-        closes = [value for value in closes if value is not None]
-        highs = [_number(row.get("high")) for row in prices]
-        lows = [_number(row.get("low")) for row in prices]
+        closes = [float(_number(row.get("close"))) for row in prices]
+        highs = [float(_number(row.get("high"))) for row in prices]
+        lows = [float(_number(row.get("low"))) for row in prices]
+        opens = [float(_number(row.get("open"))) for row in prices]
         volumes = [_number(row.get("vol")) or 0 for row in prices]
         if not closes:
             raise RecordNotFoundError(f"no daily prices found for {ts_code}")
@@ -500,10 +767,11 @@ class ResearchService:
             true_ranges.append(max(high - low, abs(high - previous) if previous else 0, abs(low - previous) if previous else 0))
         returns = [
             current / previous - 1
-            for previous, current in zip(closes[:-1], closes[1:]) if previous
+            for previous, current in pairwise(closes) if previous
         ]
         latest_close = closes[-1]
         ma = {str(window): _round(_moving_average(closes, window)) for window in (5, 10, 20, 60, 120, 250)}
+        ma_series = {window: _sma_series(closes, window) for window in (5, 10, 20, 60)}
         window20 = closes[-20:] if len(closes) >= 20 else closes
         boll_mid = mean(window20) if window20 else None
         boll_std = pstdev(window20) if len(window20) > 1 else None
@@ -543,10 +811,75 @@ class ResearchService:
                     adjusted_closes.append(close * factor / latest_factor)
         volume_5 = mean(volumes[-5:]) if len(volumes) >= 5 else None
         volume_20 = mean(volumes[-20:]) if len(volumes) >= 20 else None
+        atr14 = mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None
         trend_score = sum(
             latest_close > value for value in (ma["20"], ma["60"], ma["120"]) if value is not None
         )
         latest_rsi = _rsi(closes)
+        kdj_k, kdj_d, kdj_j = _stochastic(highs, lows, closes)
+        adx14, plus_di14, minus_di14 = _adx(highs, lows, closes)
+        obv_series = _obv(closes, volumes)
+        typical_prices = [
+            (3 * close + low + open_price + high) / 6
+            for open_price, high, low, close in zip(opens, highs, lows, closes)
+        ]
+        bull_line_series = _weighted_series(typical_prices, 20)
+        valid_bull_lines = [value for value in bull_line_series if value is not None]
+        bull_line = valid_bull_lines[-1] if valid_bull_lines else None
+        bear_line = mean(valid_bull_lines[-6:]) if len(valid_bull_lines) >= 6 else None
+        threshold_pct = max(
+            5.0,
+            min(15.0, (2 * atr14 / latest_close * 100) if atr14 and latest_close else 5.0),
+        )
+        pivots = _zigzag(prices, threshold_pct)
+        legs = []
+        for left, right in pairwise(pivots):
+            change = _pct_change(right["price"], left["price"])
+            legs.append({
+                "start_date": left["trade_date"],
+                "end_date": right["trade_date"],
+                "direction": "up" if (change or 0) >= 0 else "down",
+                "change_pct": _round(change),
+                "confirmed": bool(left["confirmed"] and right["confirmed"]),
+            })
+        swing_zones = _swing_zones(prices[-250:], latest_close, atr14)
+        previous = prices[-2] if len(prices) >= 2 else prices[-1]
+        previous_high = _number(previous.get("high"))
+        previous_low = _number(previous.get("low"))
+        previous_close = _number(previous.get("close"))
+        classic_pivot = (
+            (previous_high + previous_low + previous_close) / 3
+            if None not in (previous_high, previous_low, previous_close) else None
+        )
+        classic_levels = {
+            "pivot": _round(classic_pivot),
+            "support_1": _round(2 * classic_pivot - previous_high) if classic_pivot is not None and previous_high is not None else None,
+            "support_2": _round(classic_pivot - (previous_high - previous_low)) if classic_pivot is not None and previous_high is not None and previous_low is not None else None,
+            "resistance_1": _round(2 * classic_pivot - previous_low) if classic_pivot is not None and previous_low is not None else None,
+            "resistance_2": _round(classic_pivot + (previous_high - previous_low)) if classic_pivot is not None and previous_high is not None and previous_low is not None else None,
+            "basis_date": previous.get("trade_date"),
+            "method": "classic next-session pivot levels from prior high, low and close",
+        }
+        chart_start = max(0, len(prices) - chart_points)
+        chart_rows = []
+        for index in range(chart_start, len(prices)):
+            boll_window = closes[max(0, index - 19):index + 1]
+            boll_average = mean(boll_window) if len(boll_window) == 20 else None
+            boll_deviation = pstdev(boll_window) if len(boll_window) == 20 else None
+            chart_rows.append({
+                "trade_date": prices[index].get("trade_date"),
+                "open": _round(opens[index]),
+                "high": _round(highs[index]),
+                "low": _round(lows[index]),
+                "close": _round(closes[index]),
+                "volume": _round(volumes[index]),
+                "ma_5": _round(ma_series[5][index]),
+                "ma_10": _round(ma_series[10][index]),
+                "ma_20": _round(ma_series[20][index]),
+                "ma_60": _round(ma_series[60][index]),
+                "bollinger_upper": _round(boll_average + 2 * boll_deviation) if boll_average is not None and boll_deviation is not None else None,
+                "bollinger_lower": _round(boll_average - 2 * boll_deviation) if boll_average is not None and boll_deviation is not None else None,
+            })
         return {
             "data": {
                 "observation": {"trade_date": prices[-1].get("trade_date"), "close": latest_close},
@@ -557,10 +890,30 @@ class ResearchService:
                     "macd": _round(macd_line[-1]),
                     "macd_signal": _round(signal_line[-1]),
                     "regime": "bullish" if trend_score == 3 else "bearish" if trend_score == 0 else "mixed",
+                    "bull_bear_boundary": {
+                        "value": ma["250"],
+                        "alias": "MA250 / 年线 / 常见牛熊分界线",
+                        "state": "above" if ma["250"] is not None and latest_close > ma["250"] else "below" if ma["250"] is not None else "unavailable",
+                    },
+                    "weighted_trend": {
+                        "bull_line": _round(bull_line),
+                        "bear_line": _round(bear_line),
+                        "state": "bullish" if bull_line is not None and bear_line is not None and bull_line >= bear_line else "bearish" if bull_line is not None and bear_line is not None else "unavailable",
+                        "formula": "bull = 20-period linearly weighted average of (3C+L+O+H)/6; bear = 6-period SMA of bull",
+                        "terminology": "民间常称牛线/熊线；不把含义不统一的‘牛门线’当作标准名称",
+                    },
                 },
-                "momentum": {**momentum, "rsi_14": _round(latest_rsi)},
+                "momentum": {
+                    **momentum,
+                    "rsi_14": _round(latest_rsi),
+                    "roc_12_pct": _round(_pct_change(latest_close, closes[-13]) if len(closes) >= 13 else None),
+                    "kdj": {"k": _round(kdj_k), "d": _round(kdj_d), "j": _round(kdj_j)},
+                    "williams_r_14": _round(_williams_r(highs, lows, closes)),
+                    "cci_20": _round(_cci(highs, lows, closes)),
+                    "mfi_14": _round(_mfi(highs, lows, closes, volumes)),
+                },
                 "volatility": {
-                    "atr_14": _round(mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None),
+                    "atr_14": _round(atr14),
                     "annualized_volatility_20d_pct": _round(pstdev(returns[-20:]) * sqrt(252) * 100 if len(returns) >= 20 else None),
                     "bollinger_20": {
                         "lower": _round(boll_mid - 2 * boll_std if boll_mid is not None and boll_std is not None else None),
@@ -573,6 +926,8 @@ class ResearchService:
                     "volume_5d_average": _round(volume_5),
                     "volume_20d_average": _round(volume_20),
                     "volume_5_to_20_ratio": _round(_safe_div(volume_5, volume_20)),
+                    "obv": _round(obv_series[-1]),
+                    "obv_change_20d": _round(obv_series[-1] - obv_series[-21]) if len(obv_series) > 20 else None,
                 },
                 "levels": {
                     f"high_{window}d": _round(max(value for value in highs[-window:] if value is not None)) if len(highs) >= window else None
@@ -580,17 +935,45 @@ class ResearchService:
                 } | {
                     f"low_{window}d": _round(min(value for value in lows[-window:] if value is not None)) if len(lows) >= window else None
                     for window in (20, 60, 250)
+                } | {
+                    "swing_zones": swing_zones,
+                    "classic_pivots": classic_levels,
+                    "methodology": "rolling extrema are descriptive ranges; actionable zones require repeated swing touches or next-session pivot formulas",
+                },
+                "trend_strength": {
+                    "adx_14": _round(adx14),
+                    "plus_di_14": _round(plus_di14),
+                    "minus_di_14": _round(minus_di14),
+                },
+                "candlesticks": {
+                    "patterns": _candlestick_patterns(prices),
+                    "methodology": "deterministic OHLC geometry; every pattern is a candidate that requires trend and volume confirmation",
+                },
+                "wave_analysis": {
+                    "status": "candidate_only",
+                    "method": "volatility-adjusted ZigZag swing extraction",
+                    "threshold_pct": _round(threshold_pct),
+                    "pivots": pivots,
+                    "legs": legs,
+                    "current_leg": legs[-1]["direction"] if legs else "unavailable",
+                    "elliott_note": "Elliott labels are scenario-dependent; the API exposes reproducible pivots and does not claim one definitive wave count.",
+                    "invalidation": "a live pivot remains unconfirmed until price reverses by the configured threshold",
                 },
                 "relative_strength": {"benchmark": benchmark, **relative},
                 "total_return": {
                     "adjusted_observations": len(adjusted_closes),
                     "adjusted_return_pct": _round(_pct_change(adjusted_closes[-1], adjusted_closes[0])) if len(adjusted_closes) > 1 else None,
                 },
+                "chart": {
+                    "price_basis": "unadjusted daily OHLC; adjustment coverage is reported separately",
+                    "points": chart_rows,
+                },
             },
             "meta": {
                 "ts_code": ts_code,
                 "as_of": effective_as_of,
                 "benchmark": benchmark,
+                "chart_points": chart_points,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": [
                     {"dataset": "stock_daily", "returned": len(prices)},

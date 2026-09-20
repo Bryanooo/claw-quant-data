@@ -228,5 +228,10 @@ Agent 只能按研究层契约访问：
 Agent 不使用 `health`、`status`、`datasets`、`query`、`freshness`、`interfaces` 或
 `coverage` 命令；需要的底层事实与质量证据必须由研究层契约显式返回。
 
+`research technicals` 支持 `--chart-points 30..250`，返回可直接绘制K线、均线、
+布林带和成交量的时间序列，并同时给出K线形态、KDJ/CCI/Williams %R/MFI、ADX/DMI、
+OBV、可解释支撑压力、MA250牛熊边界和波动率调整的波浪候选。波浪结果是候选场景，
+不是确定的艾略特浪标注。
+
 第一版 CLI 只有 GET 请求，没有任务提交、重试、初始化、删除或任意 SQL 能力。
 需要管理采集时，应由用户在 Dashboard 二次确认，或明确要求使用管理 API。

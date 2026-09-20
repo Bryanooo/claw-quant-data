@@ -1,8 +1,8 @@
-# clawq：个人与 Agent 数据访问入口
+# clawq：只读 REST 命令行客户端
 
-`clawq` 是 `claw-quant-data` REST API 的只读命令行客户端。它的目标是让个人、
-脚本和 Agent 使用同一套稳定契约访问数据，而不是依赖数据库表名、手写 SQL 或
-临时 `curl` 命令。
+`clawq` 是 `claw-quant-data` REST API 的通用只读命令行客户端。公开 Agent 契约
+仅包含映射到 `/api/v1/research/*` 的 `research`、`stock` 和 `sector` 命令；其他
+命令供人工、数据工程与运维排障使用，不是 Agent 的下钻通道。
 
 ## 运行条件
 
@@ -37,8 +37,18 @@ API 地址不接受嵌入式用户名、密码、查询字符串或 URL fragment
 ```
 
 `health` 检查 API 进程和 PostgreSQL 是否可用。`status` 默认返回有界的运行状态、
-覆盖摘要、服务心跳和历史初始化进度，适合 Agent 高频预检；`status --full` 才读取
+覆盖摘要、服务心跳和历史初始化进度，适合运维客户端高频预检；`status --full` 才读取
 包含全部数据集新鲜度和交付明细的完整健康视图，响应明显更大。
+
+### Agent 研究预检
+
+```bash
+./clawq research readiness
+./clawq research capabilities
+```
+
+`readiness` 在研究命名空间内返回有界的时效、覆盖、失败和历史初始化证据，不暴露
+运营接口链接；`capabilities` 返回已服务的研究方法、补采工作流和新增数据源缺口。
 
 ### 数据集发现
 
@@ -49,7 +59,7 @@ API 地址不接受嵌入式用户名、密码、查询字符串或 URL fragment
 ```
 
 `describe` 返回数据表语义、字段、主键、允许过滤器、日期字段和最大分页大小。
-Agent 应先调用 `describe`，不能猜测过滤字段。
+数据工程调用方应先调用 `describe`，不能猜测过滤字段。
 
 ### 数据查询
 
@@ -125,6 +135,16 @@ CLI 拒绝重复过滤器、空过滤值、非法数据集名和使用 `--filter
 名称、类型、行情和成分语义，但不会错误地把不同供应方的同名板块合并为一个代码。
 Research Pack 的 `meta.quality` 会标记行情/成分缺失、成分截断以及资金流是否可用。
 
+### 投资日历
+
+```bash
+./clawq research calendar \
+  --start-date 2026-09-01 --end-date 2026-09-30 --importance high
+./clawq research calendar-day 2026-09-18 --country 中国
+```
+
+返回宏观数据、央行事件和股指期货交割安排，并保留来源、前值、预测、实际值和发布状态。
+
 ### 接口契约和标准数据
 
 ```bash
@@ -169,7 +189,7 @@ Research Pack 的 `meta.quality` 会标记行情/成分缺失、成分截断以�
 - `--pretty`：只影响 JSON 缩进；
 - 成功结果只写 `stdout`；错误只写 `stderr`。
 
-CSV/JSONL 是行式输出，因此不会包含 JSON 响应中的分页和元数据。Agent 需要判断
+CSV/JSONL 是行式输出，因此不会包含 JSON 响应中的分页和元数据。调用方需要判断
 `has_more`、数据来源或完整性时，应使用默认 JSON。
 
 ## 退出码
@@ -191,19 +211,22 @@ CSV/JSONL 是行式输出，因此不会包含 JSON 响应中的分页和元数�
 {"error":{"code":"dataset_not_found","message":"unknown dataset: missing","request_id":"...","status_code":404}}
 ```
 
-Agent 应根据 `error.code` 和退出码处理失败，不应解析自然语言错误消息。
+自动化调用方应根据 `error.code` 和退出码处理失败，不应解析自然语言错误消息。
 
-## Agent 使用约束
+## Agent 公开命令
 
-建议 Agent 按以下顺序访问：
+Agent 只能按研究层契约访问：
 
-1. `clawq health`；
-2. `clawq status`；
-3. `clawq datasets describe <name>`；
-4. `clawq freshness <name>` 和 `clawq coverage show <name>`；
-5. 使用小 `limit` 验证查询；
-6. 再按页读取所需数据；
-7. 在结论中标明数据集、日期范围、最新分区和覆盖状态。
+1. `clawq research readiness` 检查研究数据是否可用；
+2. `clawq research capabilities` 确认能力与已声明缺口；
+3. `clawq stock ...` 或 `clawq sector ...` 获取研究资料包；
+4. `clawq research fundamentals|valuation|technicals|capital-flow|event-study`；
+5. `clawq research market-breadth|sector-rotation`；
+6. `clawq research calendar|calendar-day` 查询投资事件；
+7. 在结论中标明历史时点、研究方法、来源和质量限制。
+
+Agent 不使用 `health`、`status`、`datasets`、`query`、`freshness`、`interfaces` 或
+`coverage` 命令；需要的底层事实与质量证据必须由研究层契约显式返回。
 
 第一版 CLI 只有 GET 请求，没有任务提交、重试、初始化、删除或任意 SQL 能力。
 需要管理采集时，应由用户在 Dashboard 二次确认，或明确要求使用管理 API。

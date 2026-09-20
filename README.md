@@ -15,8 +15,9 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 本项目负责数据采集、存储、质量状态和数据服务，**不包含选股策略、因子研究、
 回测、组合管理或实盘交易**。
 
-面向研究 Agent 的只读入口包括单数据集查询、股票快照和
-个股/板块 Research Pack。Research Pack 只聚合带来源信息的原始
+面向研究 Agent 的公开契约统一位于 `/api/v1/research/*`，包括研究就绪检查、
+股票快照、个股/板块 Research Pack、基本面、估值、技术面、资金、事件和投资日历。
+Research Pack 只聚合带来源信息的原始
 研究材料，并显式返回缺失项；其中 `major_news` 会按证券名称/代码做有界关键词
 检索，交易所公告正文仍需官方外部来源补齐。预测、评级和操作建议仍属于上层 Agent。
 点时查询、板块成分语义、质量状态及接口示例见
@@ -601,6 +602,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 | `GET /api/v1/ops/health/ready` | PostgreSQL 就绪检查 |
 | `GET /api/v1/catalog` | 统一发现研究、数据、运营、审计四类入口，以及原始→标准→研究三层加工关系 |
 | `GET /api/v1/research/capabilities` | 研究能力、补采工作流与新增数据源待办 |
+| `GET /api/v1/research/readiness` | Agent 使用的研究数据质量、覆盖、失败和初始化摘要 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
 | `GET /api/v1/research/stocks/{ts_code}/technicals` | 趋势、动量、波动、量价和相对强弱 |
@@ -652,7 +654,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 | `GET /api/v1/ops/delivery/data-calendar` | 按 `start_date`/`end_date` 查询最多 63 天的数据事实状态；直接核对 34 个日频数据集的物理分区与当前版本覆盖审计，任务仅作旁证 |
 | `GET /api/v1/ops/delivery/data-calendar/{data_date}` | 查询指定数据日逐数据集的物理行数、截面证据、当前审计状态、任务旁证与建议动作 |
 | `GET /api/v1/ops/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
-| `GET /api/v1/ops/data-health/summary` | 面向 CLI/Agent 的轻量健康预检，不扫描全部明细 |
+| `GET /api/v1/ops/data-health/summary` | 面向控制台和运维客户端的轻量健康预检，不扫描全部明细 |
 | `POST /api/v1/ops/collection-dispatch` | 生成最近周期补采任务 |
 | `GET /api/v1/ops/coverage` | 数据集日期覆盖总览和最近缺失日期 |
 | `GET /api/v1/ops/coverage/datasets/{name}/partitions` | 按日期及状态查询分区明细；`status=problem` 同时返回缺失和不完整分区 |
@@ -667,7 +669,8 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 | `POST /api/v1/ops/initialization/{id}/resume` | 续跑并用新幂等轮次重建失败步骤 |
 | `POST /api/v1/ops/initialization/{id}/activate` | 验收完成后切换到日常增量模式 |
 
-这里的 7 个研究数据入口是聚合资源，不是 7 种分析能力。当前机器可读 v1 基线为
+这里的 7 个聚合分析入口是研究资源，不是 7 种分析能力；此外还有能力目录和研究
+就绪检查。当前机器可读 v1 基线为
 35 项：27 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
 完整逐项矩阵见 [Agent 研究能力与数据动作](docs/RESEARCH_CAPABILITIES.md)。
 
@@ -675,30 +678,26 @@ Swagger UI：<http://127.0.0.1:8000/api/docs>
 
 ### `clawq` CLI
 
-仓库根目录提供面向个人和 Agent 的只读命令行入口。CLI 只使用 Python 标准库，
+仓库根目录提供通用只读命令行客户端。CLI 只使用 Python 标准库，
 无需在宿主机安装项目依赖；默认连接本机的 `/api` 服务：
 
 ```bash
-./clawq health
-./clawq status
-./clawq datasets list --category market
-./clawq --pretty datasets describe stock_daily
-
-./clawq query stock_daily \
-  --filter ts_code=000001.SZ \
-  --start-date 2026-01-01 \
-  --limit 20
-
+./clawq research readiness
+./clawq research capabilities
 ./clawq stock snapshot 000001.SZ
 ./clawq stock research-pack 000001.SZ --as-of 2026-09-08
 ./clawq stock sectors 300750.SZ --provider ths
 ./clawq stock peers 300750.SZ --provider ths --limit 20
 ./clawq sector list --provider ths --query 人工智能 --market A
 ./clawq sector research-pack ths 885728.TI --lookback-days 180
-./clawq freshness stock_daily
-./clawq coverage show stock_daily --status missing
-./clawq interfaces describe adj_factor
+./clawq research fundamentals 000001.SZ --as-of 2026-09-08
+./clawq research technicals 000001.SZ --as-of 2026-09-08
+./clawq research calendar --start-date 2026-09-01 --end-date 2026-09-30
 ```
+
+以上命令构成公开 Agent CLI 契约，并且只访问 `/api/v1/research/*`。`health`、
+`status`、`datasets`、`query`、`freshness`、`interfaces` 和 `coverage` 是供人工、
+数据工程或运维排障使用的通用客户端命令，不属于 Agent 契约。
 
 全局参数必须放在子命令之前。例如：
 
@@ -710,21 +709,23 @@ Swagger UI：<http://127.0.0.1:8000/api/docs>
 
 默认输出稳定的单行 JSON；`--pretty` 用于人工阅读，`--output jsonl|csv` 用于
 行式处理。错误只写入 `stderr`，并返回机器可读的 `error.code` 和稳定退出码。
-CLI 默认没有任何写命令，Agent 无法通过它创建、重试或删除采集任务。
+CLI 默认没有任何写命令；Agent Skill 只使用研究层命令，无法通过它创建、重试或
+删除采集任务，也不会下钻到数据、运营或审计层。
 
 完整命令、配置和输出契约见 [Agent 与命令行访问说明](docs/CLI.md)。
 
 ### Agent Skill
 
 仓库内置 `.agents/skills/claw-quant-data`，Codex 从仓库目录工作时会自动发现。
-也可以显式调用 `$claw-quant-data`。Skill 要求 Agent 在给出数据结论前依次检查
-服务健康度、相关数据集契约、新鲜度和覆盖证据，并明确区分“确认缺失”和“尚未
-审计”；它只复用只读 `clawq`，不会绕过控制台的管理确认流程。
+也可以显式调用 `$claw-quant-data`。Skill 要求 Agent 先读取研究就绪状态与能力
+目录，再使用研究资料包或确定性分析接口，并检查响应中的质量、来源和缺口证据；
+它不会访问数据、运营或审计命名空间，也不会绕过控制台的管理确认流程。
 
 ### Python 查询函数
 
 `service/tools/` 保留了按股票、财务、指数、资金流、板块、外汇和黄金等领域
-组织的 Python 查询函数，适合在同一 Python 环境中的研究代码直接调用。
+组织的内部兼容查询函数，不属于公开 Agent 契约。外部 Agent 只使用研究层 REST
+及其对应的 `clawq` 命令。
 
 ## 快速开始
 
@@ -1080,7 +1081,7 @@ claw-quant-data/
 │   ├── data_coverage/          # 覆盖规则、审计服务、持久化和 Auditor
 │   ├── data_service/           # Dataset Registry 和查询服务
 │   ├── initialization/         # 首次回填状态机、阶段计划和运行模式门控
-│   ├── cli/                    # 零额外依赖的只读 Agent/命令行客户端
+│   ├── cli/                    # 零额外依赖的只读 REST 命令行客户端
 │   ├── dashboard/              # 采集控制台页面
 │   ├── tools/                  # Python 查询函数
 │   ├── collection_monitor.py   # 全接口完成状态聚合

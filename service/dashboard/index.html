@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Claw Quant · 采集控制台</title>
-    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260920-api-hierarchy-v4" />
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260920-agent-research-v1" />
   </head>
   <body class="theme-dark">
     <header class="topbar">
@@ -448,7 +448,7 @@
           <div>
             <p class="section-kicker">DATA SERVICE ARCHITECTURE</p>
             <h2>接口服务导航</h2>
-            <p id="dataServicesSummary" class="section-summary">Agent 默认使用研究接口；数据、运营和审计接口按职责分开。</p>
+            <p id="dataServicesSummary" class="section-summary">Agent 只使用研究接口；数据、运营和审计接口面向维护与治理。</p>
           </div>
           <a class="button button-secondary service-doc-link" href="/api/docs" target="_blank" rel="noreferrer">打开 REST 文档</a>
         </div>
@@ -479,7 +479,7 @@
           <span class="service-flow-arrow" aria-hidden="true">→</span>
           <button class="service-layer-card" type="button" data-service-layer="research">
             <span class="service-layer-order">03</span>
-            <span class="service-layer-copy"><small>RESEARCH READY</small><strong>研究就绪层</strong><em>Agent 优先使用</em></span>
+            <span class="service-layer-copy"><small>RESEARCH READY</small><strong>研究就绪层</strong><em>Agent 唯一公开入口</em></span>
             <span class="service-layer-metric"><strong id="researchLayerPrimary">—</strong><small id="researchLayerSecondary">等待加载</small></span>
             <span class="service-layer-purpose">个股 · 板块 · 事件</span>
           </button>
@@ -753,6 +753,6 @@
       <div id="jobInstanceDetail" class="instance-detail"><p class="empty-state">正在读取实例状态…</p></div>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260920-api-hierarchy-v4" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260920-agent-research-v1" defer></script>
   </body>
 </html>

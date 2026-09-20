@@ -252,6 +252,35 @@ def test_research_endpoints_use_separate_namespace():
         assert client.get("/api/v1/research/sectors/ths/rotation").status_code == 200
 
 
+def test_research_readiness_exposes_quality_without_operations_links():
+    client, _ = make_client()
+    client.app.dependency_overrides[get_data_health_service] = lambda: type(
+        "FakeResearchReadiness",
+        (),
+        {
+            "summary": lambda self: {
+                "generated_at": "2026-09-20T00:00:00+08:00",
+                "status": "warning",
+                "scope": "operational_preflight",
+                "summary": {"datasets_with_gaps": 2},
+                "history": {"status": "complete"},
+                "unhealthy_services": [],
+                "full_health_url": "/api/v1/ops/data-health",
+            }
+        },
+    )()
+
+    with client:
+        response = client.get("/api/v1/research/readiness")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scope"] == "research_readiness"
+    assert payload["capabilities_url"] == "/api/v1/research/capabilities"
+    assert "full_health_url" not in payload
+    assert "/api/v1/ops" not in response.text
+
+
 def test_health_endpoints():
     client, _ = make_client()
     with client:
@@ -291,6 +320,27 @@ def test_openapi_uses_only_canonical_layer_namespaces_and_removes_legacy_routes(
             )
         )
         for path in paths
+    )
+
+
+def test_every_agent_tagged_rest_operation_is_in_research_namespace():
+    client, _ = make_client()
+    with client:
+        paths = client.get("/api/openapi.json").json()["paths"]
+
+    agent_operations = [
+        (path, operation)
+        for path, methods in paths.items()
+        for operation in methods.values()
+        if any(
+            str(tag).startswith("research")
+            for tag in operation.get("tags", [])
+        )
+    ]
+    assert agent_operations
+    assert all(
+        path.startswith("/api/v1/research/")
+        for path, _operation in agent_operations
     )
 
 
@@ -619,7 +669,7 @@ def test_data_service_catalog_exposes_three_layers_and_real_coverage():
         "layers": 3,
         "raw_interfaces": 2,
         "standard_datasets": 1,
-        "research_capabilities": 18,
+        "research_endpoints": 19,
     }
     assert payload["recommended_entrypoint"] == "/api/v1/research/capabilities"
     assert [item["id"] for item in payload["audiences"]] == [
@@ -721,7 +771,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "api-hierarchy-v4" in page.text
+    assert "agent-research-v1" in page.text
     assert 'id="investmentCalendarView"' in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200

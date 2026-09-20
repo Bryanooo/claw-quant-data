@@ -19,6 +19,7 @@ DEFAULT_TIMEOUT_SECONDS = 15.0
 EXIT_USAGE = 2
 _DATASET_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 _TS_CODE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+_RESEARCH_API_ROOT = "/v1/research"
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -183,6 +184,10 @@ def build_parser() -> argparse.ArgumentParser:
         "capabilities", help="list derived services and data gaps"
     )
     research_capabilities.set_defaults(handler=_research_capabilities)
+    research_readiness = research_commands.add_parser(
+        "readiness", help="check research data quality and availability"
+    )
+    research_readiness.set_defaults(handler=_research_readiness)
     research_fundamentals = research_commands.add_parser(
         "fundamentals", help="derive multi-period fundamental metrics"
     )
@@ -247,6 +252,27 @@ def build_parser() -> argparse.ArgumentParser:
     research_rotation.add_argument("--limit", type=_bounded_integer(1, 100), default=20)
     research_rotation.add_argument("--as-of")
     research_rotation.set_defaults(handler=_research_sector_rotation)
+    research_calendar = research_commands.add_parser(
+        "calendar", help="list investment events in a bounded date range"
+    )
+    research_calendar.add_argument("--start-date", required=True)
+    research_calendar.add_argument("--end-date", required=True)
+    research_calendar.add_argument(
+        "--importance", choices=("important", "high", "all"), default="important"
+    )
+    research_calendar.add_argument("--country")
+    research_calendar.add_argument("--event-type")
+    research_calendar.set_defaults(handler=_research_calendar)
+    research_calendar_day = research_commands.add_parser(
+        "calendar-day", help="list investment events for one date"
+    )
+    research_calendar_day.add_argument("event_date")
+    research_calendar_day.add_argument(
+        "--importance", choices=("important", "high", "all"), default="important"
+    )
+    research_calendar_day.add_argument("--country")
+    research_calendar_day.add_argument("--event-type")
+    research_calendar_day.set_defaults(handler=_research_calendar_day)
 
     interfaces = commands.add_parser("interfaces", help="discover Tushare interfaces")
     interface_commands = interfaces.add_subparsers(
@@ -454,8 +480,25 @@ def _freshness(client: ApiClient, args: argparse.Namespace) -> Any:
     return client.get("/v1/data/freshness", params=params)
 
 
+def _research_get(
+    client: ApiClient,
+    path: str,
+    *,
+    params: dict[str, Any] | None = None,
+) -> Any:
+    """Keep every public Agent command inside the research namespace."""
+
+    if path != _RESEARCH_API_ROOT and not path.startswith(
+        f"{_RESEARCH_API_ROOT}/"
+    ):
+        raise ValueError(f"Agent route must use {_RESEARCH_API_ROOT}: {path}")
+    return client.get(path, params=params)
+
+
 def _stock_snapshot(client: ApiClient, args: argparse.Namespace) -> Any:
-    return client.get(f"/v1/research/stocks/{args.ts_code.upper()}/snapshot")
+    return _research_get(
+        client, f"/v1/research/stocks/{args.ts_code.upper()}/snapshot"
+    )
 
 
 def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
@@ -466,7 +509,8 @@ def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
     }
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/research-pack",
         params=params,
     )
@@ -481,7 +525,8 @@ def _stock_sectors(client: ApiClient, args: argparse.Namespace) -> Any:
         }.items()
         if value is not None
     }
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/sectors",
         params=params or None,
     )
@@ -496,7 +541,8 @@ def _stock_peers(client: ApiClient, args: argparse.Namespace) -> Any:
         params["provider"] = args.provider
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/peers",
         params=params,
     )
@@ -515,12 +561,13 @@ def _sector_list(client: ApiClient, args: argparse.Namespace) -> Any:
         }.items()
         if value is not None
     }
-    return client.get("/v1/research/sectors", params=params)
+    return _research_get(client, "/v1/research/sectors", params=params)
 
 
 def _sector_snapshot(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"as_of": args.as_of} if args.as_of else None
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/snapshot",
         params=params,
     )
@@ -530,7 +577,8 @@ def _sector_members(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"limit": args.limit}
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/members",
         params=params,
     )
@@ -543,21 +591,27 @@ def _sector_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
     }
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/research-pack",
         params=params,
     )
 
 
 def _research_capabilities(client: ApiClient, _args: argparse.Namespace) -> Any:
-    return client.get("/v1/research/capabilities")
+    return _research_get(client, "/v1/research/capabilities")
+
+
+def _research_readiness(client: ApiClient, _args: argparse.Namespace) -> Any:
+    return _research_get(client, "/v1/research/readiness")
 
 
 def _research_fundamentals(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"periods": args.periods}
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/fundamentals",
         params=params,
     )
@@ -567,7 +621,8 @@ def _research_valuation(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"lookback_days": args.lookback_days, "peer_limit": args.peer_limit}
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/valuation",
         params=params,
     )
@@ -580,7 +635,8 @@ def _research_technicals(client: ApiClient, args: argparse.Namespace) -> Any:
     }
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/technicals",
         params=params,
     )
@@ -590,14 +646,16 @@ def _research_capital_flow(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"lookback_days": args.lookback_days}
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/capital-flow",
         params=params,
     )
 
 
 def _research_event_study(client: ApiClient, args: argparse.Namespace) -> Any:
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/stocks/{args.ts_code.upper()}/event-study",
         params={
             "event_date": args.event_date,
@@ -609,7 +667,8 @@ def _research_event_study(client: ApiClient, args: argparse.Namespace) -> Any:
 
 
 def _research_market_breadth(client: ApiClient, args: argparse.Namespace) -> Any:
-    return client.get(
+    return _research_get(
+        client,
         "/v1/research/market/breadth",
         params={"as_of": args.as_of} if args.as_of else None,
     )
@@ -619,8 +678,43 @@ def _research_sector_rotation(client: ApiClient, args: argparse.Namespace) -> An
     params = {"lookback_days": args.lookback_days, "limit": args.limit}
     if args.as_of:
         params["as_of"] = args.as_of
-    return client.get(
+    return _research_get(
+        client,
         f"/v1/research/sectors/{args.provider}/rotation",
+        params=params,
+    )
+
+
+def _research_calendar(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        key: value
+        for key, value in {
+            "start_date": args.start_date,
+            "end_date": args.end_date,
+            "importance": args.importance,
+            "country": args.country,
+            "event_type": args.event_type,
+        }.items()
+        if value is not None
+    }
+    return _research_get(
+        client, "/v1/research/investment-calendar", params=params
+    )
+
+
+def _research_calendar_day(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        key: value
+        for key, value in {
+            "importance": args.importance,
+            "country": args.country,
+            "event_type": args.event_type,
+        }.items()
+        if value is not None
+    }
+    return _research_get(
+        client,
+        f"/v1/research/investment-calendar/{args.event_date}",
         params=params,
     )
 

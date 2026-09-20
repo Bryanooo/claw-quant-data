@@ -2,9 +2,10 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
-from service.api.dependencies import ResearchServiceDependency
+from service.api.dependencies import ResearchServiceDependency, get_data_health_service
+from service.data_health import DataHealthService
 
 
 router = APIRouter(prefix="/v1/research", tags=["research"])
@@ -13,6 +14,19 @@ router = APIRouter(prefix="/v1/research", tags=["research"])
 @router.get("/capabilities")
 def research_capabilities(service: ResearchServiceDependency) -> dict:
     return service.capabilities()
+
+
+@router.get("/readiness")
+def research_readiness(
+    service: DataHealthService = Depends(get_data_health_service),
+) -> dict:
+    """Return bounded quality evidence without exposing the operations API."""
+
+    payload = service.summary()
+    payload["scope"] = "research_readiness"
+    payload["capabilities_url"] = "/api/v1/research/capabilities"
+    payload.pop("full_health_url", None)
+    return payload
 
 
 @router.get("/stocks/{ts_code}/fundamentals")

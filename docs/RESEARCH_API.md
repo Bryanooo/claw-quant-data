@@ -7,6 +7,13 @@
 `/api/v1/research/*`。资料包仍负责组合原始研究材料；派生接口负责统一公式、窗口、
 基准和质量证据。完整能力与数据缺口见 [RESEARCH_CAPABILITIES.md](RESEARCH_CAPABILITIES.md)。
 
+Agent 首先通过研究层检查可用性，不需要调用运营接口：
+
+```http
+GET /api/v1/research/readiness
+GET /api/v1/research/capabilities
+```
+
 ## 个股资料包
 
 ```http
@@ -75,9 +82,10 @@ GET /api/v1/research/sectors/{provider}/{sector_code}/research-pack
 资料包包括板块资料、最新行情、历史行情、历史时点成分和供应方可用的板块资金流。
 `meta.quality` 给出核心缺失、实际行情范围、资金流状态和成分是否可能因调用上限截断。
 
-## 原始数据查询与历史时点
+## 底层数据复核（不属于 Agent 契约）
 
-声明了 `availability_column` 的数据集支持：
+数据工程和人工排障可以使用标准层复核公式输入。声明了
+`availability_column` 的数据集支持：
 
 ```http
 GET /api/v1/data/datasets/income/records
@@ -87,4 +95,5 @@ GET /api/v1/data/datasets/income/records
 ```
 
 服务会同时执行 `end_date <= 2024-03-31` 和 `ann_date <= 2024-04-30`。不具备
-可靠可获得日期字段的数据集会拒绝 `as_of`，不会悄悄退化为不安全查询。
+可靠可获得日期字段的数据集会拒绝 `as_of`，不会悄悄退化为不安全查询。Agent
+不会直接调用该路径，所需来源和质量证据由研究响应中的 `meta` 返回。

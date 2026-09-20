@@ -14,7 +14,7 @@ from service.cli.client import (
     EXIT_INVALID_RESPONSE,
     EXIT_TIMEOUT,
 )
-from service.cli.main import DEFAULT_API_URL, main
+from service.cli.main import DEFAULT_API_URL, _research_get, main
 
 
 class FakeClient:
@@ -268,6 +268,58 @@ def test_derived_research_cli_uses_new_namespace(capsys):
         (fundamental_path, {"periods": 8, "as_of": "2026-09-18"}),
         (rotation_path, {"lookback_days": 90, "limit": 10}),
     ]
+
+
+def test_agent_preflight_and_calendar_cli_stay_in_research_namespace(capsys):
+    readiness = "/v1/research/readiness"
+    calendar = "/v1/research/investment-calendar"
+    calendar_day = "/v1/research/investment-calendar/2026-09-18"
+    client = FakeClient(
+        {
+            readiness: {"status": "healthy"},
+            calendar: {"events": []},
+            calendar_day: {"events": []},
+        }
+    )
+
+    assert run_cli(["research", "readiness"], client, capsys)[0] == 0
+    assert run_cli(
+        [
+            "research", "calendar",
+            "--start-date", "2026-09-01",
+            "--end-date", "2026-09-30",
+            "--importance", "high",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert run_cli(
+        ["research", "calendar-day", "2026-09-18", "--country", "中国"],
+        client,
+        capsys,
+    )[0] == 0
+
+    assert client.calls == [
+        (readiness, None),
+        (
+            calendar,
+            {
+                "start_date": "2026-09-01",
+                "end_date": "2026-09-30",
+                "importance": "high",
+            },
+        ),
+        (
+            calendar_day,
+            {"importance": "important", "country": "中国"},
+        ),
+    ]
+    assert all(call[0].startswith("/v1/research/") for call in client.calls)
+
+
+def test_research_cli_guard_rejects_lower_layer_routes():
+    with pytest.raises(ValueError, match="Agent route must use /v1/research"):
+        _research_get(FakeClient(), "/v1/data/datasets")
 
 
 def test_sector_research_cli_commands_forward_normalized_scope(capsys):

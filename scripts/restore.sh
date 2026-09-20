@@ -17,10 +17,10 @@ if [[ "${CONFIRM}" != "--yes" ]]; then
 fi
 
 docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
-    stop api worker worker-fanout worker-backfill auditor scheduler
+    stop api worker worker-fanout worker-backfill worker-news auditor scheduler
 docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
     exec -T postgres sh -c \
     'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-acl' \
     < "${BACKUP_FILE}"
 docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
-    up -d api worker worker-fanout worker-backfill auditor scheduler
+    up -d api worker worker-fanout worker-backfill worker-news auditor scheduler

@@ -215,7 +215,7 @@ verify_application_images() {
 
     expected_image="$(docker inspect --format '{{.Image}}' "$(compose ps -q api)")"
     [[ -n "${expected_image}" ]] || die "无法读取 API 镜像标识"
-    for service in api worker worker-fanout worker-backfill auditor scheduler; do
+    for service in api worker worker-fanout worker-backfill worker-news auditor scheduler; do
         container_ids="$(compose ps -q "${service}")"
         [[ -n "${container_ids}" ]] || die "应用服务没有运行容器：${service}"
         while IFS= read -r container_id; do
@@ -381,9 +381,9 @@ main() {
     [[ "${table_count}" -ge 113 ]] || die "数据库表数量异常：${table_count}"
     success "数据库迁移完成，共 ${table_count} 张表"
 
-    info "启动 REST API、三个隔离采集 Worker、覆盖 Auditor 与调度器..."
+    info "启动 REST API、四个隔离采集 Worker、覆盖 Auditor 与调度器..."
     compose up -d --force-recreate \
-        api worker worker-fanout worker-backfill auditor scheduler
+        api worker worker-fanout worker-backfill worker-news auditor scheduler
 
     info "验证调度器到 PostgreSQL 的连接..."
     compose exec -T scheduler python - <<'PY'
@@ -400,10 +400,10 @@ PY
 
     wait_for_api
     success "REST API 已进入 healthy 状态"
-    for component in scheduler worker worker-fanout worker-backfill auditor; do
+    for component in scheduler worker worker-fanout worker-backfill worker-news auditor; do
         wait_for_component "${component}"
     done
-    success "Scheduler、三个 Worker 资源池、Auditor 进程心跳正常"
+    success "Scheduler、四个 Worker 资源池、Auditor 进程心跳正常"
     verify_application_images
     success "所有应用容器均使用同一镜像"
 
@@ -486,7 +486,7 @@ PY
         die "调度器未正常运行"
     }
 
-    for worker_component in worker worker-fanout worker-backfill; do
+    for worker_component in worker worker-fanout worker-backfill worker-news; do
         worker_id="$(compose ps -q "${worker_component}")"
         [[ -n "${worker_id}" ]] || die "没有找到 ${worker_component} 容器"
         worker_state="$(docker inspect --format '{{.State.Status}}' "${worker_id}")"

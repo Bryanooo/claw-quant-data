@@ -5,6 +5,7 @@
 
 -- 1. report_rc: 卖方盈利预测数据
 CREATE TABLE IF NOT EXISTS report_rc (
+    source_key   VARCHAR(32)    NOT NULL,
     ts_code      VARCHAR(16)    NOT NULL,
     name         VARCHAR(64),
     report_date  DATE           NOT NULL,
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS report_rc (
     classify     VARCHAR(32),
     org_name     VARCHAR(128),
     author_name  VARCHAR(128),
-    quarter      VARCHAR(16)    NOT NULL,
+    quarter      VARCHAR(16),
     op_rt        NUMERIC(20,4),
     op_pr        NUMERIC(20,4),
     tp           NUMERIC(20,4),
@@ -28,7 +29,7 @@ CREATE TABLE IF NOT EXISTS report_rc (
     min_price    NUMERIC(12,4),
     imp_dg       VARCHAR(16),
     create_time  TIMESTAMP      NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (ts_code, report_date, quarter)
+    PRIMARY KEY (source_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_report_rc_date ON report_rc (report_date);

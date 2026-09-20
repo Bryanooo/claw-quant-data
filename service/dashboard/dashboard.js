@@ -995,7 +995,7 @@ function renderDataServices() {
 
 async function loadDataServices() {
   try {
-    const response = await fetch("/api/v1/data-services");
+    const response = await fetch("/api/v1/catalog");
     if (!response.ok) throw new Error(`数据服务目录返回 ${response.status}`);
     state.serviceCatalog = await response.json();
     renderDataServices();

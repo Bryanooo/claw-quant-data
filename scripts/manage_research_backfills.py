@@ -20,16 +20,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from service.collection_jobs.fanout_campaigns import FanoutCampaignService
+from service.collection_jobs.models import BatchChildSpec
 from service.collection_jobs.registry import TASKS
 from service.collection_jobs.repository import JobRepository
 from service.collection_jobs.resolution import unresolved_failure_predicate
 from service.clock import business_now
 from service.db import query
 from service.history_baselines import calendar_windows
+from service.major_news import MAJOR_NEWS_HISTORY_START, MAJOR_NEWS_SOURCES
 
 
 PREFIX = "research-backfill-v1"
-GROUPS = ("analyst", "ownership", "shareholder-return", "chips", "intraday")
+NEWS_PREFIX = "research-backfill-v2"
+GROUPS = ("news", "analyst", "ownership", "shareholder-return", "chips", "intraday")
 
 
 def _digest(value: object) -> str:
@@ -54,6 +57,106 @@ def _daily_windows(start: date, end: date) -> Iterable[tuple[date, date]]:
         cursor += timedelta(days=1)
 
 
+def _yearly_windows(start: date, end: date) -> Iterable[tuple[date, date]]:
+    cursor = start
+    while cursor <= end:
+        window_end = min(date(cursor.year, 12, 31), end)
+        yield cursor, window_end
+        cursor = window_end + timedelta(days=1)
+
+
+def queue_news(start: date, end: date) -> dict[str, int]:
+    """Queue one resumable source leaf per year.
+
+    Each leaf adaptively bisects capped ranges and persists every split and
+    verified child window. A daily quota deferral therefore resumes at the
+    first unfinished child. This reduces the base plan from 28k source/day
+    jobs to roughly 80 source/year jobs without weakening completeness proof.
+    """
+    actual_start = max(start, MAJOR_NEWS_HISTORY_START)
+    created = 0
+    batches = 0
+    for window_start, window_end in _yearly_windows(actual_start, end):
+        children = []
+        for source in MAJOR_NEWS_SOURCES:
+            parameters = {
+                "src": source,
+                "start_date": window_start.strftime("%Y%m%d"),
+                "end_date": window_end.strftime("%Y%m%d"),
+            }
+            task_parameters = {
+                "api_name": "major_news",
+                "parameters": parameters,
+                "complete": True,
+                "resume": True,
+            }
+            handler = TASKS.handler_metadata("tushare_interface", task_parameters)
+            children.append(
+                BatchChildSpec(
+                    task_name="tushare_interface",
+                    parameters=task_parameters,
+                    idempotency_key=(
+                        f"{NEWS_PREFIX}:news:job:major_news:{_digest(parameters)}"
+                    ),
+                    api_name="major_news",
+                    cadence="backfill",
+                    period_key=f"news:{window_start:%Y}:{source}",
+                    expected_for=window_end,
+                    handler=handler,
+                    priority=30,
+                    resource_class="news-backfill",
+                )
+            )
+        batch_created = _create_news_batch(children, window_start, window_end)
+        if batch_created:
+            batches += 1
+            created += len(children)
+    return {
+        "jobs_created": created,
+        "campaigns_created": 0,
+        "batches_created": batches,
+    }
+
+
+def _create_news_batch(
+    children: list[BatchChildSpec], window_start: date, window_end: date
+) -> bool:
+    _, created = JobRepository().create_batch(
+        {
+            "group": "news",
+            "api_name": "major_news",
+            "start_date": window_start.isoformat(),
+            "end_date": window_end.isoformat(),
+            "partition": "source_adaptive_window",
+        },
+        children,
+        idempotency_key=(
+            f"{NEWS_PREFIX}:news:batch:{window_start:%Y%m%d}:{window_end:%Y%m%d}"
+        ),
+        api_name="major_news",
+        cadence="backfill",
+        period_key=f"news:{window_start:%Y}",
+        expected_for=window_end,
+        completion_evidence={
+            "partition": "source_adaptive_window",
+            "leaf_count": len(children),
+        },
+        priority=30,
+        resource_class="news-backfill",
+    )
+    return created
+
+
+def supersede_legacy_news_plan() -> dict[str, int]:
+    return JobRepository().supersede_plan(
+        f"{PREFIX}:news:",
+        reason=(
+            "replaced by resumable source/year plan with durable adaptive-window "
+            "checkpoints"
+        ),
+    )
+
+
 def _create_job(
     group: str,
     api_name: str,
@@ -63,6 +166,8 @@ def _create_job(
     expected_for: date,
     page_size: int | None = None,
     max_pages: int | None = None,
+    priority: int = 20,
+    resource_class: str = "backfill",
 ) -> bool:
     task_parameters = {
         "api_name": api_name,
@@ -88,8 +193,8 @@ def _create_job(
         handler_key=handler.handler_key,
         handler_version=handler.handler_version,
         code_revision=handler.code_revision,
-        priority=20,
-        resource_class="backfill",
+        priority=priority,
+        resource_class=resource_class,
     )
     return created
 
@@ -247,6 +352,7 @@ def queue_intraday(
 
 
 def group_status(group: str) -> dict[str, object]:
+    prefix = NEWS_PREFIX if group == "news" else PREFIX
     unresolved_jobs = unresolved_failure_predicate("job")
     job_rows = query(
         """
@@ -256,7 +362,7 @@ def group_status(group: str) -> dict[str, object]:
         GROUP BY status, completion_status
         ORDER BY status, completion_status
         """,
-        (f"{PREFIX}:{group}:job:%",),
+        (f"{prefix}:{group}:job:%",),
     )
     campaign_rows = query(
         """
@@ -266,7 +372,7 @@ def group_status(group: str) -> dict[str, object]:
         GROUP BY status, completion_status
         ORDER BY status, completion_status
         """,
-        (f"{PREFIX}:{group}:fanout:%",),
+        (f"{prefix}:{group}:fanout:%",),
     )
     unresolved_row = query(
         f"""
@@ -274,7 +380,7 @@ def group_status(group: str) -> dict[str, object]:
         FROM sys_collection_job AS job
         WHERE idempotency_key LIKE %s AND {unresolved_jobs}
         """,
-        (f"{PREFIX}:{group}:job:%",),
+        (f"{prefix}:{group}:job:%",),
     )
     active_states = {"queued", "running"}
     failed_jobs = int(unresolved_row[0]["count"] or 0)
@@ -343,7 +449,11 @@ def main() -> int:
         if incomplete:
             raise SystemExit(f"cannot advance; incomplete groups: {', '.join(incomplete)}")
 
-    if group == "analyst":
+    if group == "news":
+        replaced = supersede_legacy_news_plan()
+        result = queue_news(args.start_date, args.end_date)
+        result = {**replaced, **result}
+    elif group == "analyst":
         result = queue_analyst(args.start_date, args.end_date)
     elif group == "ownership":
         result = queue_ownership(args.start_date, args.end_date)

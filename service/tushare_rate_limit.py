@@ -5,6 +5,8 @@ from functools import lru_cache
 import math
 import time
 from typing import Any
+from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 import psycopg2
 
@@ -14,6 +16,11 @@ from service.collection_jobs.context import is_durable_job_active
 
 GLOBAL_RATE_KEY = "__token_global__"
 MAX_INLINE_DURABLE_WAIT_SECONDS = 5.0
+# Live provider response on 2026-09-20 proves that this token is limited to 40
+# major_news calls per Shanghai calendar day (and 20/minute). Reserve only 35
+# so manual verification and clock skew cannot push production over quota.
+INTERFACE_DAILY_QUOTAS = {"major_news": 35}
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 class TushareRateSlotDeferredError(RuntimeError):
@@ -72,6 +79,11 @@ def reserve_tushare_request(
     processes.  The transaction is committed before sleeping so another
     process can reserve the following slot without blocking on this process.
     """
+    quota_wait = _reserve_daily_quota(
+        api_name,
+        connection_factory=connection_factory,
+        sleep=sleep,
+    )
     api_interval = (
         interface_min_interval(api_name)
         if interface_interval is None
@@ -83,7 +95,7 @@ def reserve_tushare_request(
     }
     intervals = {key: value for key, value in intervals.items() if value > 0}
     if not intervals:
-        return 0.0
+        return quota_wait
 
     connection = connection_factory(**DB_CONFIG)
     try:
@@ -146,4 +158,80 @@ def reserve_tushare_request(
     wait = max((slot - database_now).total_seconds(), 0.0)
     if wait:
         sleep(wait)
-    return wait
+    return quota_wait + wait
+
+
+def _reserve_daily_quota(
+    api_name: str,
+    *,
+    connection_factory: Callable[..., Any],
+    sleep: Callable[[float], None],
+) -> float:
+    """Reserve one call from a shared Shanghai-calendar-day allocation.
+
+    The database table retains its historical ``hourly`` name because that
+    migration has already been published. Its window columns are generic and
+    safely support this corrected daily contract.
+    """
+    limit = INTERFACE_DAILY_QUOTAS.get(api_name)
+    if limit is None:
+        return 0.0
+    total_wait = 0.0
+    while True:
+        connection = connection_factory(**DB_CONFIG)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO sys_tushare_hourly_quota(
+                        api_name, window_started_at, reservations
+                    ) VALUES (%s, NOW(), 0)
+                    ON CONFLICT (api_name) DO NOTHING
+                    """,
+                    (api_name,),
+                )
+                cursor.execute(
+                    """
+                    SELECT window_started_at, reservations, NOW()
+                    FROM sys_tushare_hourly_quota
+                    WHERE api_name = %s
+                    FOR UPDATE
+                    """,
+                    (api_name,),
+                )
+                window_started_at, reservations, database_now = cursor.fetchone()
+                local_now = database_now.astimezone(SHANGHAI)
+                day_started_at = local_now.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ).astimezone(database_now.tzinfo)
+                next_day_at = day_started_at + timedelta(days=1, minutes=5)
+                if window_started_at < day_started_at:
+                    window_started_at = day_started_at
+                    reservations = 0
+                if reservations >= limit:
+                    wait = max(
+                        (next_day_at - database_now).total_seconds(),
+                        1.0,
+                    )
+                    if is_durable_job_active():
+                        raise TushareRateSlotDeferredError(api_name, wait)
+                    connection.commit()
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE sys_tushare_hourly_quota
+                        SET window_started_at = %s, reservations = %s,
+                            updated_at = NOW()
+                        WHERE api_name = %s
+                        """,
+                        (window_started_at, reservations + 1, api_name),
+                    )
+                    connection.commit()
+                    return total_wait
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        sleep(wait)
+        total_wait += wait

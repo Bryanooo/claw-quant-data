@@ -160,6 +160,86 @@ RESEARCH_ENDPOINTS = (
     },
 )
 
+OPERATIONS_ENDPOINTS = (
+    {
+        "method": "GET",
+        "path": "/api/v1/collection-overview",
+        "name": "采集运营总览",
+        "description": "查看活动任务、真实未恢复异常和当前采集吞吐。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/collection-jobs",
+        "name": "执行实例",
+        "description": "分页筛选持久化任务实例及其尝试、重试和恢复关系。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/delivery/data-calendar",
+        "name": "数据日历",
+        "description": "按数据日期查看预期数据集的业务完整性，而不是任务创建日期。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data-health",
+        "name": "数据健康",
+        "description": "查看时效、完整性和待修复数据资产。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/initialization",
+        "name": "初始化与历史补采",
+        "description": "查看安装后的历史初始化阶段和进度。",
+    },
+)
+
+
+def _audiences() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "research",
+            "title": "研究接口",
+            "audience": "研究者与 Agent",
+            "description": "默认入口；返回可直接用于基本面、技术面、板块和事件研究的语义对象。",
+            "entrypoint": "/api/v1/research/capabilities",
+            "path_prefixes": [
+                "/api/v1/research", "/api/v1/stocks", "/api/v1/sectors",
+                "/api/v1/investment-calendar",
+            ],
+            "priority": 1,
+        },
+        {
+            "id": "data",
+            "title": "数据接口",
+            "audience": "需要底层字段的研究代码",
+            "description": "稳定数据集契约、上游映射、过滤、分页和历史时点查询。",
+            "entrypoint": "/api/v1/datasets",
+            "path_prefixes": ["/api/v1/datasets", "/api/v1/interfaces"],
+            "priority": 2,
+        },
+        {
+            "id": "operations",
+            "title": "运营接口",
+            "audience": "控制台与管理员",
+            "description": "任务编排、执行实例、异常、数据日历、覆盖审计和初始化。",
+            "entrypoint": "/api/v1/collection-overview",
+            "path_prefixes": [
+                "/api/v1/collection", "/api/v1/delivery", "/api/v1/coverage",
+                "/api/v1/data-health", "/api/v1/initialization",
+            ],
+            "priority": 3,
+        },
+        {
+            "id": "audit",
+            "title": "审计接口",
+            "audience": "排障和数据治理",
+            "description": "无损原始响应、请求账本、血缘与标准化漂移；不作为研究默认入口。",
+            "entrypoint": "/api/v1/raw/interfaces",
+            "path_prefixes": ["/api/v1/raw", "/api/v1/normalization"],
+            "priority": 4,
+        },
+    ]
+
 
 def build_data_service_catalog(
     *,
@@ -205,7 +285,7 @@ def build_data_service_catalog(
             "title": "标准数据层",
             "short_title": "稳定数据契约",
             "description": "将上游数据标准化为强类型数据集，提供字段、主键、日期、过滤和分页契约。",
-            "usage_guidance": "Agent 和研究代码的默认查询入口。",
+            "usage_guidance": "研究接口不满足时再下钻；Agent 不应默认从这里自行拼装研究口径。",
             "status": "operational",
             "coverage_note": "数据集是否完整由时效与日期覆盖审计判定，登记成功不等于历史数据完整。",
             "metrics": {
@@ -223,7 +303,7 @@ def build_data_service_catalog(
             "title": "研究就绪层",
             "short_title": "可直接研究",
             "description": "组合多个标准数据集，向个人研究和 Agent 提供个股、板块与事件语义对象。",
-            "usage_guidance": "优先用于股票/板块研究；需要底层字段时再下钻标准层。",
+            "usage_guidance": "研究者与 Agent 的默认入口；需要底层字段时再下钻标准层。",
             "status": "operational",
             "coverage_note": "当前覆盖个股、板块和投资事件，因子、回测与组合研究属于后续独立系统。",
             "metrics": {
@@ -237,6 +317,19 @@ def build_data_service_catalog(
     ]
     return {
         "generated_at": datetime.now(timezone.utc),
+        "recommended_entrypoint": "/api/v1/research/capabilities",
+        "audiences": _audiences(),
+        "control_plane": {
+            "id": "operations",
+            "title": "运营控制面",
+            "description": "运营接口管理数据生产过程，不属于原始→标准→研究的数据加工层。",
+            "endpoints": list(OPERATIONS_ENDPOINTS),
+        },
+        "compatibility": {
+            "policy": "non_breaking",
+            "note": "现有 REST 路径继续兼容；/api/v1/catalog 是统一发现入口。",
+            "legacy_catalog": "/api/v1/data-services",
+        },
         "summary": {
             "layers": len(layers),
             "raw_interfaces": len(raw_interfaces),

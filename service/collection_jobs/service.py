@@ -11,14 +11,16 @@ from service.collection_jobs.models import (
 from service.collection_jobs.registry import TaskRegistry
 from service.collection_jobs.fanout import FanoutPlanner
 
-JOB_STATUSES = {"queued", "running", "success", "failed"}
+JOB_STATUSES = {"queued", "running", "success", "failed", "superseded"}
 COMPLETION_STATUSES = {
     "pending", "running", "retrying", "complete", "empty",
     "verifying", "unverified", "page_complete", "incomplete", "failed",
+    "superseded",
 }
 JOB_KINDS = {"leaf", "batch"}
 INSTANCE_STATES = {
-    "active", "attention", "recovered", "failure_history", "complete", "retry"
+    "active", "attention", "recovered", "failure_history", "complete", "retry",
+    "superseded",
 }
 
 _TASK_PRIORITIES = {

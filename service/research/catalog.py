@@ -65,7 +65,67 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
 )
 
 
+# This is a deliberately bounded v1 research baseline, not a claim that eight
+# HTTP routes exhaust every possible investment-research method.  One route is
+# a cohesive resource that exposes several stable calculations.  Keeping the
+# individual techniques explicit prevents a route count from being mistaken
+# for capability coverage and makes every remaining gap auditable.
+SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
+    # Fundamentals (8)
+    {"id": "financial-trend", "name": "多期财务趋势", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "profitability", "name": "盈利能力", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "growth", "name": "成长能力", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "dupont", "name": "杜邦分解", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "cash-quality", "name": "现金流与利润质量", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "solvency", "name": "偿债能力", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "operating-efficiency", "name": "营运效率", "domain": "基本面", "endpoint": "fundamentals"},
+    {"id": "business-segments", "name": "主营构成", "domain": "基本面", "endpoint": "fundamentals"},
+    # Valuation (3)
+    {"id": "valuation-history", "name": "历史估值分位", "domain": "估值", "endpoint": "valuation"},
+    {"id": "peer-valuation", "name": "同行估值对比", "domain": "估值", "endpoint": "valuation"},
+    {"id": "valuation-inputs", "name": "DCF/DDM 输入事实", "domain": "估值", "endpoint": "valuation"},
+    # Technical and risk (8)
+    {"id": "trend", "name": "趋势与均线", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "momentum", "name": "MACD/RSI 动量", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "volatility", "name": "ATR/布林波动", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "volume-price", "name": "量价关系", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "breakout-levels", "name": "突破与关键价位", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "relative-strength", "name": "相对强弱", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "adjusted-return", "name": "复权收益", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "drawdown-risk", "name": "回撤风险", "domain": "技术面", "endpoint": "technicals"},
+    # Capital, event and market (8)
+    {"id": "main-money-flow", "name": "主力资金流", "domain": "资金", "endpoint": "capital-flow"},
+    {"id": "margin-financing", "name": "两融行为", "domain": "资金", "endpoint": "capital-flow"},
+    {"id": "northbound-holdings", "name": "北向持仓", "domain": "资金", "endpoint": "capital-flow"},
+    {"id": "block-trade", "name": "大宗交易", "domain": "资金", "endpoint": "capital-flow"},
+    {"id": "chip-distribution", "name": "筹码分布", "domain": "资金", "endpoint": "capital-flow"},
+    {"id": "event-study", "name": "事件窗口异常收益", "domain": "事件", "endpoint": "event-study"},
+    {"id": "market-breadth", "name": "市场宽度", "domain": "市场", "endpoint": "market-breadth"},
+    {"id": "sector-rotation", "name": "板块轮动", "domain": "板块", "endpoint": "sector-rotation"},
+)
+
+
+GAP_TECHNIQUES: tuple[dict[str, Any], ...] = (
+    {"id": "analyst-revisions", "name": "一致预期与盈利修正", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "analyst"},
+    {"id": "ownership-behavior", "name": "股东与机构行为", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "ownership"},
+    {"id": "shareholder-return", "name": "总股东回报", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "shareholder-return"},
+    {"id": "announcement-evidence", "name": "公告原文证据", "domain": "事件", "status": "missing", "action": "new_source", "source_todo": "official-announcements"},
+    {"id": "governance-risk", "name": "治理、诉讼与监管风险", "domain": "基本面", "status": "missing", "action": "new_source", "source_todo": "official-announcements"},
+    {"id": "news-events", "name": "新闻事件检测", "domain": "事件", "status": "partial", "action": "derive_and_source", "source_todo": "news-and-sentiment"},
+    {"id": "news-sentiment", "name": "情绪与新闻冲击", "domain": "事件", "status": "partial", "action": "derive_and_source", "source_todo": "news-and-sentiment"},
+    {"id": "market-microstructure", "name": "订单失衡与冲击成本", "domain": "微观结构", "status": "constrained", "action": "new_source", "source_todo": "level2-microstructure"},
+)
+
+
 BACKFILL_WORKSTREAMS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "news-history",
+        "group": "news",
+        "name": "多来源新闻历史",
+        "interfaces": ["major_news"],
+        "status": "planned",
+        "reason": "旧策略没有按新闻来源扇出，历史记录仅覆盖新浪财经的少量日期。",
+    },
     {
         "id": "analyst-consensus-history",
         "group": "analyst",
@@ -123,9 +183,9 @@ NEW_SOURCE_TODOS: tuple[dict[str, Any], ...] = (
     {
         "id": "news-and-sentiment",
         "name": "持续新闻与舆情数据源",
-        "status": "todo",
+        "status": "partial",
         "required_for": ["事件检测", "情绪分析", "新闻冲击"],
-        "acceptance": "覆盖稳定、来源可追踪、正文可检索，并能按证券和事件去重绑定。",
+        "acceptance": "major_news 多来源历史完成后仍需证券实体绑定、事件去重和情绪派生；快讯需另行取得合法数据源。",
     },
     {
         "id": "level2-microstructure",
@@ -149,8 +209,18 @@ def capability_catalog(
         backfills.append(item)
     return {
         "summary": {
-            "core_techniques": 35,
-            "available_or_derivable": 27,
+            "baseline_techniques": len(SERVED_TECHNIQUES) + len(GAP_TECHNIQUES),
+            "currently_served": len(SERVED_TECHNIQUES),
+            "planned_from_existing_sources": sum(
+                item["action"] == "backfill" for item in GAP_TECHNIQUES
+            ),
+            "external_or_constrained": sum(
+                item["action"] != "backfill" for item in GAP_TECHNIQUES
+            ),
+            # Kept for clients that consumed the original fields. They now
+            # mean the explicit v1 baseline and techniques served today.
+            "core_techniques": len(SERVED_TECHNIQUES) + len(GAP_TECHNIQUES),
+            "available_or_derivable": len(SERVED_TECHNIQUES),
             "backfill_workstreams": len(BACKFILL_WORKSTREAMS),
             "new_source_todos": len(NEW_SOURCE_TODOS),
             "derived_endpoints": len(DERIVED_ENDPOINTS) - 1,
@@ -164,6 +234,11 @@ def capability_catalog(
             "compatibility": "existing /api/v1/stocks and /api/v1/sectors routes remain unchanged",
         },
         "derived_services": list(DERIVED_ENDPOINTS),
+        "techniques": {
+            "scope": "claw-quant-data v1 baseline; not all possible research methods",
+            "served": [dict(item, status="served") for item in SERVED_TECHNIQUES],
+            "gaps": list(GAP_TECHNIQUES),
+        },
         "backfills": backfills,
         "new_source_todos": list(NEW_SOURCE_TODOS),
     }

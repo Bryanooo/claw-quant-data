@@ -36,6 +36,65 @@ class JobRepository:
         finally:
             connection.close()
 
+    def supersede_plan(self, idempotency_prefix: str, *, reason: str) -> dict[str, int]:
+        """Neutralize an obsolete queued plan without erasing its audit trail.
+
+        Active leaves make replacement unsafe, so the transaction fails
+        closed. Parent batches are marked first; the batch-refresh trigger can
+        then skip tens of thousands of redundant aggregate recalculations.
+        """
+        pattern = f"{idempotency_prefix}%"
+        evidence = json.dumps(
+            {"verified": False, "superseded": True, "reason": reason},
+            ensure_ascii=False,
+        )
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT job_id, status
+                FROM sys_collection_job
+                WHERE idempotency_key LIKE %s
+                  AND job_kind='leaf'
+                  AND status IN ('queued','running')
+                FOR UPDATE
+                """,
+                (pattern,),
+            )
+            active = cursor.fetchall()
+            running = [row[0] for row in active if row[1] == "running"]
+            if running:
+                raise RuntimeError(
+                    "cannot supersede a plan with running leaves: "
+                    + ", ".join(str(value) for value in running[:10])
+                )
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='superseded', completion_status='superseded',
+                    completion_evidence=completion_evidence || %s::jsonb,
+                    error_message=NULL, worker_id=NULL,
+                    lease_expires_at=NULL, finished_at=NOW()
+                WHERE idempotency_key LIKE %s
+                  AND job_kind='batch'
+                  AND status IN ('queued','running')
+                """,
+                (evidence, pattern),
+            )
+            parents = cursor.rowcount
+            cursor.execute(
+                """
+                UPDATE sys_collection_job
+                SET status='superseded', completion_status='superseded',
+                    completion_evidence=completion_evidence || %s::jsonb,
+                    error_message=NULL, available_at=NOW(), finished_at=NOW()
+                WHERE idempotency_key LIKE %s
+                  AND job_kind='leaf' AND status='queued'
+                """,
+                (evidence, pattern),
+            )
+            leaves = cursor.rowcount
+        return {"parents_superseded": parents, "leaves_superseded": leaves}
+
     def create(
         self,
         task_name: str,
@@ -766,6 +825,8 @@ class JobRepository:
             )
         elif state == "retry":
             conditions.append("retry_generation > 0")
+        elif state == "superseded":
+            conditions.append("status='superseded'")
         if query:
             pattern = f"%{query}%"
             if query.isdigit():

@@ -167,7 +167,14 @@ def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
     assert catalog["summary"]["derived_endpoints"] == 7
-    assert catalog["summary"]["backfill_workstreams"] == 5
+    assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["backfills"][0]["status"] == "running"
-    assert catalog["backfills"][0]["active"] == 2
+    assert catalog["summary"]["baseline_techniques"] == 35
+    assert catalog["summary"]["currently_served"] == 27
+    assert catalog["summary"]["planned_from_existing_sources"] == 3
+    assert catalog["summary"]["external_or_constrained"] == 5
+    assert len(catalog["techniques"]["served"]) == 27
+    assert len(catalog["techniques"]["gaps"]) == 8
+    analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
+    assert analyst["status"] == "running"
+    assert analyst["active"] == 2

@@ -112,11 +112,19 @@ def main() -> int:
 
     generated_at = datetime.now(SHANGHAI).isoformat()
     confirmed = sum(bool(item["confirmed"]) for item in results)
+    accessible = sum(
+        any(
+            probe["classification"] in {"accessible", "accessible_rate_limited"}
+            for probe in item["probes"]
+        )
+        for item in results
+    )
     report = {
         "generated_at": generated_at,
         "probe_attempts": args.attempts,
         "total": len(results),
         "confirmed_denied": confirmed,
+        "newly_accessible": accessible,
         "changed_or_inconclusive": len(results) - confirmed,
         "interfaces": results,
     }
@@ -131,9 +139,10 @@ def main() -> int:
         "",
         f"- 复核时间：`{generated_at}`",
         "- Token：从运行环境读取，报告不保存 Token 或其派生值",
-        f"- 双重探测：每个接口 `{args.attempts}` 次",
+        f"- 每个接口探测：`{args.attempts}` 次",
         f"- 契约标记无权限：`{len(results)}`",
         f"- 仍明确返回无权限：`{confirmed}`",
+        f"- 已变为可访问（含限频）：`{accessible}`",
         f"- 权限变化或无法确认：`{len(results) - confirmed}`",
         "",
         "| 接口 | 结论 | 返回码 | 官方文档 |",
@@ -141,7 +150,17 @@ def main() -> int:
     ]
     for item in results:
         codes = ", ".join(str(probe["code"]) for probe in item["probes"])
-        conclusion = "确认无权限" if item["confirmed"] else "需人工复核"
+        classifications = {
+            probe["classification"] for probe in item["probes"]
+        }
+        if item["confirmed"]:
+            conclusion = "确认无权限"
+        elif "accessible_rate_limited" in classifications:
+            conclusion = "可访问（限频），待迁移契约"
+        elif "accessible" in classifications:
+            conclusion = "可访问，待迁移契约"
+        else:
+            conclusion = "需人工复核"
         lines.append(
             f"| `{item['api_name']}` | {conclusion} | `{codes}` | "
             f"[文档]({item['official_url']}) |"

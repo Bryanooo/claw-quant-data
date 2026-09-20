@@ -576,7 +576,7 @@ def test_data_service_catalog_exposes_three_layers_and_real_coverage():
 
     client.app.dependency_overrides[get_raw_archive_service] = FakeRawArchiveService
     with client:
-        response = client.get("/api/v1/data-services")
+        response = client.get("/api/v1/catalog")
 
     assert response.status_code == 200
     payload = response.json()
@@ -589,6 +589,11 @@ def test_data_service_catalog_exposes_three_layers_and_real_coverage():
         "standard_datasets": 1,
         "research_capabilities": 18,
     }
+    assert payload["recommended_entrypoint"] == "/api/v1/research/capabilities"
+    assert [item["id"] for item in payload["audiences"]] == [
+        "research", "data", "operations", "audit"
+    ]
+    assert payload["control_plane"]["id"] == "operations"
     assert payload["layers"][0]["metrics"]["observed_interfaces"] == 1
     assert payload["layers"][1]["metrics"]["datasets"] == 1
     research_paths = {
@@ -677,7 +682,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert "采集控制台" in page.text
     assert 'id="sidebarToggle"' in page.text
     assert 'id="themeToggle"' in page.text
-    assert "data-services-v1" in page.text
+    assert "api-hierarchy-v3" in page.text
     assert 'id="investmentCalendarView"' in page.text
     assert "访问密钥" not in page.text
     assert overview.status_code == 200
@@ -718,7 +723,7 @@ def test_collection_dashboard_and_overview_endpoint():
     assert 'id="jobInstanceDialog"' in page.text
     assert 'data-page-key="jobInstances"' in page.text
     assert "pageRows(rows, \"interfaces\")" in dashboard_script
-    assert 'fetch("/api/v1/data-services")' in dashboard_script
+    assert 'fetch("/api/v1/catalog")' in dashboard_script
     assert 'pageRows(rows, "dataServices")' in dashboard_script
     assert "pageRows(rows, \"health\")" in dashboard_script
     assert "data-health-retry" in dashboard_script

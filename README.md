@@ -79,8 +79,10 @@ PostgreSQL，并通过 REST API、Python 查询函数和采集 Dashboard 为上�
 2026-09-08 的共享 DNS 故障、漏报原因和治理验证见
 [历史补采 DNS 故障复盘](reports/history_backfill_dns_incident_2026-09-08.md)。
 当前 Token 的逐接口双重权限复核见
-[Tushare 权限复核报告](reports/tushare_permission_recheck.md)：39 个接口明确无权限，
-`rt_hk_k` 已确认新开通并完成采集、标准化和查询链路验证。
+[Tushare 权限复核报告](reports/tushare_permission_recheck.md)。2026-09-20 再次实测原
+39 个拒绝项，其中 38 个仍明确无权限，`us_daily` 已变为可访问但限频 1 次/分钟；
+它在完成契约迁移和标准表验收前不会被误报为已实现。逐类免费候选、覆盖差异和推荐
+顺序见[免费替代源评估](docs/FREE_DATA_SOURCE_ALTERNATIVES.md)。
 
 ### 为什么 201 个接口只有 98 个采集器类
 
@@ -161,6 +163,7 @@ flowchart LR
 | `worker` | 仅领取日常专项、市场、财务和目录策略任务，保留关键增量执行槽 |
 | `worker-fanout` | 仅领取安全周期扇出任务，处理大依赖宇宙的分片 |
 | `worker-backfill` | 仅领取初始化和显式历史回填，不阻塞日常更新 |
+| `worker-news` | 仅领取低频额度的新闻历史补采，不占用其他补采执行槽 |
 | `auditor` | 独立计算日期和标的截面完整性，并为可信缺口生成有界补采任务 |
 | `api` | 提供数据查询、任务管理、完整性总览、覆盖明细和 Dashboard |
 
@@ -188,9 +191,11 @@ stateDiagram-v2
 1. 基础依赖：交易日历、股票/基金/可转债基础资料；
 2. 核心历史：按交易日回填股票与全市场指数日线、每日基本面、资金流和涨跌停；
 3. 财务历史：回填已过披露截止日的报告期，包含披露计划、快报、预告和主营构成；
-4. 目录历史：宏观利率/账户统计按年分区，高数量转融通按月分区并分页穷尽；
+4. 目录历史：宏观利率/账户统计按年分区，高数量转融通按月分区并分页穷尽；`full`
+   计划 v3 同时回填多来源新闻、卖方研报、股东持仓、回购解禁和基金持仓；
 5. 最新基线：为其余安全自动接口建立一次最新数据基线；
-6. 全量扇出：对需要依赖宇宙的接口冻结清单并持久化分片执行；
+6. 全量扇出：对需要依赖宇宙的接口冻结清单并持久化分片执行，并覆盖历史股东、
+   分红和筹码窗口；
 7. 覆盖验收：用独立 Auditor 判断预期日期、报告期和标的截面是否完整。
 
 只有同时满足下面四个条件，系统才把历史初始化标记为 `completed`：
@@ -405,10 +410,12 @@ PostgreSQL 触发器根据子任务实时汇总。进程重启不会丢失批次
 总数和 SHA-256 摘要；Scheduler 只在上一页所有子任务均成功并有 `verified=true`
 完整性证据后生成下一页。活动运行期间的上市、退市或分类变化由下一周期的新活动
 接收，不会把两个宇宙拼在一起，也不会让长任务因清单正常变化而中断。
-`full` 初始化会在独立的“全量扇出”阶段自动执行 20 类安全基线：其中 18 类冻结
+`full` 初始化会在独立的“全量扇出”阶段自动执行安全基线：其中常规基线冻结
 实体宇宙后安全扇出，`fund_nav`/`fund_portfolio` 改用全市场日期/报告期分页；除转债利率/
 评级、期货合约、中信/申万行业成分和全股票质押统计外，还覆盖基金净值/持仓，
-以及必须按本地冻结实体宇宙拆分的筹码、股东、审计意见、指数权重与周月频复权数据。
+以及必须按本地冻结实体宇宙拆分的筹码、股东、分红、审计意见、指数权重与周月频
+复权数据。研究历史分区同时在“目录历史”阶段采集，多来源新闻会按来源和时间窗口
+证明穷尽，不会把单一来源或 400 行上限响应当成完整。
 带日期窗口的接口严格受各自最大窗口约束；事件型基线允许经过完整宇宙验证的空结果，
 但不会把零行直接当成成功。
 
@@ -592,7 +599,8 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 |---|---|
 | `GET /api/health/live` | 进程存活检查 |
 | `GET /api/health/ready` | PostgreSQL 就绪检查 |
-| `GET /api/v1/data-services` | 统一发现原始审计、标准数据、研究就绪三层服务及其真实覆盖、REST 契约和明细 |
+| `GET /api/v1/catalog` | 统一发现研究、数据、运营、审计四类入口，以及原始→标准→研究三层加工关系 |
+| `GET /api/v1/data-services` | 旧版目录兼容路径；新客户端使用 `/api/v1/catalog` |
 | `GET /api/v1/research/capabilities` | 研究能力、补采工作流与新增数据源待办 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
@@ -659,6 +667,10 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `POST /api/v1/initialization/{id}/pause` | 暂停初始化协调（不强杀已运行任务） |
 | `POST /api/v1/initialization/{id}/resume` | 续跑并用新幂等轮次重建失败步骤 |
 | `POST /api/v1/initialization/{id}/activate` | 验收完成后切换到日常增量模式 |
+
+这里的 7 个研究数据入口是聚合资源，不是 7 种分析能力。当前机器可读 v1 基线为
+35 项：27 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
+完整逐项矩阵见 [Agent 研究能力与数据动作](docs/RESEARCH_CAPABILITIES.md)。
 
 Swagger UI：<http://127.0.0.1:8000/api/docs>
 
@@ -960,6 +972,7 @@ docker compose ps
 docker compose logs -f worker
 docker compose logs -f worker-fanout
 docker compose logs -f worker-backfill
+docker compose logs -f worker-news
 docker compose logs -f scheduler
 docker compose logs -f auditor
 curl http://127.0.0.1:8000/api/health/ready
@@ -1029,6 +1042,7 @@ docker compose down
 | `ROUTINE_WORKER_RESOURCE_CLASSES` | `scheduled,generic,reference,market,moneyflow,finance,catalog,default` | 日常 Worker 允许领取的资源类别 |
 | `FANOUT_WORKER_RESOURCE_CLASSES` | `fanout` | 周期扇出 Worker 允许领取的资源类别 |
 | `BACKFILL_WORKER_RESOURCE_CLASSES` | `initialization,backfill` | 初始化/回填 Worker 允许领取的资源类别 |
+| `NEWS_WORKER_RESOURCE_CLASSES` | `news-backfill` | 新闻历史补采 Worker 允许领取的资源类别 |
 | `SCHEDULE_RECONCILE_LOOKBACK_DAYS` | `8` | 专项计划停机补发的最大回看天数 |
 | `APP_REVISION` | `0.1.0` | 写入任务记录的镜像、Git SHA 或发布版本标识 |
 | `COVERAGE_POLL_INTERVAL_SECONDS` | `5` | Auditor 空闲轮询间隔 |

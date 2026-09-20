@@ -6,6 +6,7 @@ import pytest
 from service.tushare_rate_limit import (
     GLOBAL_RATE_KEY,
     TushareRateSlotDeferredError,
+    _reserve_daily_quota,
     reserve_tushare_request,
 )
 
@@ -130,6 +131,53 @@ def test_durable_job_defers_long_interface_wait_without_reserving_or_sleeping(
     assert connection.rolled_back is True
     assert updates == []
     assert sleeps == []
+
+
+def test_major_news_daily_quota_defers_until_next_shanghai_day(monkeypatch):
+    now = datetime(2026, 9, 20, 13, 0, tzinfo=timezone.utc)
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def execute(self, _statement, _params):
+            pass
+
+        def fetchone(self):
+            return datetime(2026, 9, 19, 16, 0, tzinfo=timezone.utc), 35, now
+
+    class Connection:
+        rolled_back = False
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            raise AssertionError("a deferred reservation must not commit")
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            pass
+
+    connection = Connection()
+    monkeypatch.setattr(
+        "service.tushare_rate_limit.is_durable_job_active", lambda: True
+    )
+
+    with pytest.raises(TushareRateSlotDeferredError) as raised:
+        _reserve_daily_quota(
+            "major_news",
+            connection_factory=lambda **_kwargs: connection,
+            sleep=lambda _seconds: None,
+        )
+
+    assert raised.value.retry_after_seconds == 11100
+    assert connection.rolled_back is True
 
 
 def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkeypatch):

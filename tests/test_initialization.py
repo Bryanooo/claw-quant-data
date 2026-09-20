@@ -10,6 +10,7 @@ from service.initialization.service import (
     FULL_FANOUT_BASELINES,
     FULL_HISTORY_START,
     FULL_INITIALIZATION_BASELINES,
+    FULL_RESEARCH_HISTORY_INTERFACES,
     InitializationService,
     PLANNING_BATCH_SIZE,
     _published_quarter_ends,
@@ -224,7 +225,9 @@ def test_full_initialization_preflight_freezes_a_complete_plan():
     assert result["plan_version"] >= 2
     assert len(result["plan_fingerprint"]) == 64
     assert result["checks"]["interfaces"] == len(
-        set(FULL_INITIALIZATION_BASELINES) | {"index_daily", "kpl_concept_cons", "disclosure_date", "express", "forecast", "fina_mainbz"}
+        set(FULL_INITIALIZATION_BASELINES)
+        | set(FULL_RESEARCH_HISTORY_INTERFACES)
+        | {"index_daily", "kpl_concept_cons", "disclosure_date", "express", "forecast", "fina_mainbz"}
     )
     assert result["warnings"][0]["code"] == "non_trading_history_end"
 
@@ -526,6 +529,67 @@ def test_catalog_history_uses_bounded_windows_and_all_libor_currencies():
     assert calls["slb_sec_detail"][0] == {
         "start_date": "20260101", "end_date": "20260131"
     }
+
+
+def test_version_three_full_initialization_includes_research_history():
+    repository = PlanningRepository()
+    jobs = PlanningJobs()
+    service = InitializationService(
+        repository=repository, job_service=jobs, coverage_service=PlanningCoverage()
+    )
+
+    assert service._plan_catalog_history(
+        campaign(
+            profile="full",
+            history_start=date(2026, 9, 17),
+            history_end=date(2026, 9, 18),
+            current_phase=3,
+            phase_name="catalog_history",
+            options={"plan_version": 3},
+        ),
+        set(),
+    ) is True
+
+    research = {}
+    research_options = {}
+    for _task_name, parameters, options in jobs.calls:
+        research.setdefault(parameters["api_name"], []).append(parameters)
+        research_options.setdefault(parameters["api_name"], []).append(options)
+    assert len(research["major_news"]) == 9
+    assert len(research["report_rc"]) == 2
+    assert research["major_news"][0]["parameters"] == {
+        "src": "新华网", "start_date": "20260917", "end_date": "20260918"
+    }
+    assert research_options["major_news"][0]["api_name"] == "major_news"
+    assert research_options["major_news"][0]["resource_class"] == "news-backfill"
+    assert research_options["report_rc"][0]["resource_class"] == "initialization"
+    assert len(research["stk_holdertrade"]) == 1
+    assert len(research["repurchase"]) == 1
+
+
+def test_version_three_full_initialization_declares_research_fanout_history():
+    service = InitializationService(
+        repository=PlanningRepository(),
+        job_service=PlanningJobs(),
+        coverage_service=PlanningCoverage(),
+        fanout_service=PlanningFanout(),
+    )
+
+    requests = service._research_fanout_requests(
+        campaign(
+            profile="full",
+            history_start=date(2026, 1, 1),
+            history_end=date(2026, 9, 18),
+            options={"plan_version": 3},
+        )
+    )
+
+    names = [api_name for _key, api_name, _request, _allow_empty, _expected_for in requests]
+    assert "top10_holders" in names
+    assert "top10_floatholders" in names
+    assert "dividend" in names
+    assert names.count("cyq_chips") == 9
+    assert names.count("cyq_perf") == 9
 
 
 def test_full_history_verification_respects_dataset_start_dates():

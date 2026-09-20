@@ -304,6 +304,7 @@ def test_offset_pagination_checkpoints_every_page(monkeypatch):
     pages = {
         0: (2, "page-1"),
         2: (1, "page-2"),
+        3: (0, "empty"),
     }
     calls = []
     saved = []
@@ -337,7 +338,7 @@ def test_offset_pagination_checkpoints_every_page(monkeypatch):
     rows = collector.collect_paginated(page_size=2, max_pages=5, ts_code="510300.SH")
 
     assert rows == 3
-    assert [item["offset"] for item in calls] == [0, 2]
+    assert [item["offset"] for item in calls] == [0, 2, 3]
     assert len(saved) == 2
     assert finished and finished[-1][1] == "success"
     assert collector.completion_evidence["verified"] is True

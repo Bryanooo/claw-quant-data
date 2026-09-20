@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterator
 
+from service.major_news import MAJOR_NEWS_SOURCES
+
 
 CATALOG_WINDOW_HISTORY = {
     "gz_index": date(1990, 12, 19),
@@ -19,6 +21,25 @@ CATALOG_MONTHLY_WINDOW_HISTORY = {
     "slb_len_mm": date(2012, 1, 1),
     "slb_sec": date(2012, 1, 1),
     "slb_sec_detail": date(2012, 1, 1),
+}
+
+# Research-layer facts that were historically absent despite their interfaces
+# being collectable. Full initialization treats these as durable history, not
+# as an operator-run repair script. Analyst reports remain calendar-day scoped;
+# news uses large source windows because its collector persists adaptive split
+# checkpoints and can resume safely after the strict daily request quota.
+RESEARCH_DAILY_WINDOW_HISTORY = {
+    "report_rc": date(2010, 1, 1),
+}
+RESEARCH_MONTHLY_WINDOW_HISTORY = {
+    "stk_holdertrade": date(2010, 1, 1),
+    "stk_holdernumber": date(2010, 1, 1),
+    "hk_hold": date(2017, 3, 17),
+    "repurchase": date(2015, 1, 1),
+    "share_float": date(2005, 1, 1),
+}
+RESEARCH_SOURCE_ADAPTIVE_WINDOW_HISTORY = {
+    "major_news": (date(2018, 1, 1), MAJOR_NEWS_SOURCES),
 }
 LIBOR_CURRENCIES = ("USD", "EUR", "JPY", "GBP", "CHF")
 
@@ -106,4 +127,57 @@ def catalog_history_partitions(
                     end_date=window_end,
                     variant=variant,
                     parameters=parameters,
+                )
+
+
+def research_history_partitions(
+    history_start: date, history_end: date
+) -> Iterator[HistoryPartition]:
+    recipes = (
+        *((name, start, False) for name, start in RESEARCH_DAILY_WINDOW_HISTORY.items()),
+        *((name, start, True) for name, start in RESEARCH_MONTHLY_WINDOW_HISTORY.items()),
+    )
+    for api_name, reliable_start, monthly in recipes:
+        start = max(history_start, reliable_start)
+        if start > history_end:
+            continue
+        windows = (
+            calendar_windows(start, history_end, monthly=True)
+            if monthly
+            else (
+                (start + timedelta(days=offset), start + timedelta(days=offset))
+                for offset in range((history_end - start).days + 1)
+            )
+        )
+        for window_start, window_end in windows:
+            yield HistoryPartition(
+                api_name=api_name,
+                start_date=window_start,
+                end_date=window_end,
+                variant=None,
+                parameters={
+                    "start_date": window_start.strftime("%Y%m%d"),
+                    "end_date": window_end.strftime("%Y%m%d"),
+                },
+            )
+    for api_name, (reliable_start, variants) in (
+        RESEARCH_SOURCE_ADAPTIVE_WINDOW_HISTORY.items()
+    ):
+        start = max(history_start, reliable_start)
+        if start > history_end:
+            continue
+        for window_start, window_end in calendar_windows(
+            start, history_end, monthly=False
+        ):
+            for variant in variants:
+                yield HistoryPartition(
+                    api_name=api_name,
+                    start_date=window_start,
+                    end_date=window_end,
+                    variant=variant,
+                    parameters={
+                        "src": variant,
+                        "start_date": window_start.strftime("%Y%m%d"),
+                        "end_date": window_end.strftime("%Y%m%d"),
+                    },
                 )

@@ -135,7 +135,8 @@ def reconcile_fanout_campaign(
 def list_collection_job_instances(
     service: CollectionJobServiceDependency,
     instance_state: Literal[
-        "active", "attention", "recovered", "failure_history", "complete", "retry"
+        "active", "attention", "recovered", "failure_history", "complete", "retry",
+        "superseded",
     ] | None = Query(default=None, alias="state"),
     query: str | None = Query(default=None, min_length=1, max_length=64),
     job_kind: Literal["leaf", "batch"] | None = None,

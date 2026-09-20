@@ -269,7 +269,7 @@ function renderOperationsBanner() {
 
 async function loadOperationalSummary() {
   try {
-    const response = await fetch("/api/v1/data-health/summary");
+    const response = await fetch("/api/v1/ops/data-health/summary");
     if (!response.ok) throw new Error(`运行预检接口返回 ${response.status}`);
     state.operationalSummary = await response.json();
     state.hasLoadedOperational = true;
@@ -441,7 +441,7 @@ async function loadInvestmentCalendarDetail(eventDate) {
   if (filters.country) query.set("country", filters.country);
   if (filters.eventType) query.set("event_type", filters.eventType);
   try {
-    const response = await fetch(`/api/v1/investment-calendar/${eventDate}?${query}`);
+    const response = await fetch(`/api/v1/research/investment-calendar/${eventDate}?${query}`);
     if (!response.ok) throw new Error(`事件明细接口返回 ${response.status}`);
     state.investmentCalendarDetail = await response.json();
     state.selectedInvestmentDate = eventDate;
@@ -466,7 +466,7 @@ async function loadInvestmentCalendar() {
   if (filters.country) query.set("country", filters.country);
   if (filters.eventType) query.set("event_type", filters.eventType);
   try {
-    const response = await fetch(`/api/v1/investment-calendar?${query}`);
+    const response = await fetch(`/api/v1/research/investment-calendar?${query}`);
     if (!response.ok) throw new Error(`投资日历接口返回 ${response.status}`);
     state.investmentCalendar = await response.json();
     const eventDays = state.investmentCalendar.days || [];
@@ -599,7 +599,7 @@ function renderCalendarDetail() {
 async function loadCalendarDetail(dataDate) {
   if (!dataDate) return false;
   try {
-    const response = await fetch(`/api/v1/delivery/data-calendar/${dataDate}`);
+    const response = await fetch(`/api/v1/ops/delivery/data-calendar/${dataDate}`);
     if (!response.ok) throw new Error(`日期明细接口返回 ${response.status}`);
     state.calendarDetail = await response.json();
     state.selectedCalendarDate = dataDate;
@@ -617,7 +617,7 @@ async function loadCalendar() {
   state.calendarMonth ||= currentCalendarMonth();
   const { startDate, endDate } = calendarMonthRange(state.calendarMonth);
   try {
-    const response = await fetch(`/api/v1/delivery/data-calendar?start_date=${startDate}&end_date=${endDate}`);
+    const response = await fetch(`/api/v1/ops/delivery/data-calendar?start_date=${startDate}&end_date=${endDate}`);
     if (!response.ok) throw new Error(`数据日历接口返回 ${response.status}`);
     state.calendar = await response.json();
     const available = state.calendar.days || [];
@@ -717,8 +717,8 @@ async function loadDelivery() {
   try {
     const today = shanghaiToday();
     const [response, dataResponse] = await Promise.all([
-      fetch("/api/v1/delivery/today"),
-      fetch(`/api/v1/delivery/data-calendar/${today}`)
+      fetch("/api/v1/ops/delivery/today"),
+      fetch(`/api/v1/ops/delivery/data-calendar/${today}`)
     ]);
     if (!response.ok) throw new Error(`今日交付接口返回 ${response.status}`);
     if (!dataResponse.ok) throw new Error(`今日数据事实接口返回 ${dataResponse.status}`);
@@ -930,7 +930,7 @@ function serviceContractRow(item, layerId) {
     return `<tr>
       <td><span class="api-name">${escapeHtml(item.api_name)}</span><span class="api-title">${escapeHtml(item.title)}</span></td>
       <td><span class="pill">${item.implementation_mode === "generic_raw" ? "通用采集" : "专项采集"}</span><span class="completion-reason">无损请求与响应审计</span></td>
-      <td><code class="service-path">GET /api/v1/raw/${escapeHtml(item.api_name)}/requests</code></td>
+      <td><code class="service-path">GET /api/v1/audit/raw/${escapeHtml(item.api_name)}/requests</code></td>
       <td class="number">${requests}<span class="completion-reason">${successes} 次成功响应 · ${Number(item.failed_requests || 0).toLocaleString()} 次历史失败</span></td>
       <td><span class="pill status-${status.css}">${status.label}</span><span class="completion-reason">${escapeHtml(status.note)}</span></td>
       <td><button class="row-action" data-service-contract="raw" data-service-key="${escapeHtml(item.api_name)}">查看审计</button></td>
@@ -940,7 +940,7 @@ function serviceContractRow(item, layerId) {
     return `<tr>
       <td><span class="api-name">${escapeHtml(item.name)}</span><span class="api-title">${escapeHtml(item.description)}</span></td>
       <td><span class="pill">${escapeHtml(item.category)}</span><span class="completion-reason">${escapeHtml(item.source)}</span></td>
-      <td><code class="service-path">GET /api/v1/datasets/${escapeHtml(item.name)}/records</code></td>
+      <td><code class="service-path">GET /api/v1/data/datasets/${escapeHtml(item.name)}/records</code></td>
       <td><span class="number">${item.date_column ? "日期查询" : "非日期资产"}</span><span class="completion-reason">${escapeHtml(item.date_column || "以业务字段过滤")}</span></td>
       <td><span class="pill status-${status.css}">${status.label}</span><span class="completion-reason">${escapeHtml(status.note)}</span></td>
       <td><button class="row-action" data-service-contract="standard" data-service-key="${escapeHtml(item.name)}">查看契约</button></td>
@@ -1027,7 +1027,7 @@ async function showServiceContract(layerId, key) {
   dialog.showModal();
   try {
     if (layerId === "raw") {
-      const response = await fetch(`/api/v1/raw/${encodeURIComponent(item.api_name)}/coverage`);
+      const response = await fetch(`/api/v1/audit/raw/${encodeURIComponent(item.api_name)}/coverage`);
       if (!response.ok) throw new Error(`审计摘要返回 ${response.status}`);
       const detail = await response.json();
       $("serviceContractDialogBody").innerHTML = `${serviceContractStats([
@@ -1037,9 +1037,9 @@ async function showServiceContract(layerId, key) {
         ["失败请求", Number(detail.failed_requests || 0).toLocaleString()],
         ["原始记录", Number(detail.record_count || 0).toLocaleString()],
         ["逻辑请求", Number(detail.logical_request_count || 0).toLocaleString()]
-      ])}<div class="service-contract-copy"><strong>审计边界</strong><p>请求成功只表示上游成功返回，不代表业务完整性通过；数据完整性请到“数据资产”查看。</p><code>GET /api/v1/raw/${escapeHtml(item.api_name)}/requests</code><code>GET /api/v1/raw/${escapeHtml(item.api_name)}/records</code></div>`;
+      ])}<div class="service-contract-copy"><strong>审计边界</strong><p>请求成功只表示上游成功返回，不代表业务完整性通过；数据完整性请到“数据资产”查看。</p><code>GET /api/v1/audit/raw/${escapeHtml(item.api_name)}/requests</code><code>GET /api/v1/audit/raw/${escapeHtml(item.api_name)}/records</code></div>`;
     } else if (layerId === "standard") {
-      const response = await fetch(`/api/v1/datasets/${encodeURIComponent(item.name)}`);
+      const response = await fetch(`/api/v1/data/datasets/${encodeURIComponent(item.name)}`);
       if (!response.ok) throw new Error(`数据集契约返回 ${response.status}`);
       const detail = await response.json();
       $("serviceContractDialogBody").innerHTML = `${serviceContractStats([
@@ -1047,7 +1047,7 @@ async function showServiceContract(layerId, key) {
         ["日期字段", detail.date_column || "不适用"],
         ["可用过滤器", (detail.allowed_filters || []).length],
         ["字段数量", (detail.columns || []).length]
-      ])}<div class="service-contract-copy"><strong>稳定查询契约</strong><p>业务身份：${escapeHtml((detail.business_identity_fields || detail.primary_keys || []).join("、") || "未声明")} · 时点字段：${escapeHtml(detail.availability_column || "不支持 as_of")}</p><code>GET /api/v1/datasets/${escapeHtml(item.name)}/records?limit=100&amp;offset=0</code><p>允许过滤：${escapeHtml((detail.allowed_filters || []).join("、") || "无")}</p></div>`;
+      ])}<div class="service-contract-copy"><strong>稳定查询契约</strong><p>业务身份：${escapeHtml((detail.business_identity_fields || detail.primary_keys || []).join("、") || "未声明")} · 时点字段：${escapeHtml(detail.availability_column || "不支持 as_of")}</p><code>GET /api/v1/data/datasets/${escapeHtml(item.name)}/records?limit=100&amp;offset=0</code><p>允许过滤：${escapeHtml((detail.allowed_filters || []).join("、") || "无")}</p></div>`;
     } else {
       const today = new Date().toISOString().slice(0, 10);
       let samplePath = item.path
@@ -1055,7 +1055,7 @@ async function showServiceContract(layerId, key) {
         .replace("{provider}", "ths")
         .replace("{sector_code}", "885001.TI")
         .replace("{event_date}", today);
-      if (item.path === "/api/v1/investment-calendar") {
+      if (item.path === "/api/v1/research/investment-calendar") {
         samplePath += `?start_date=${today}&end_date=${today}`;
       }
       $("serviceContractDialogBody").innerHTML = `${serviceContractStats([
@@ -1177,7 +1177,7 @@ function renderServiceDiagnostics() {
 
 async function loadDataHealth() {
   try {
-    const response = await fetch("/api/v1/data-health");
+    const response = await fetch("/api/v1/ops/data-health");
     if (!response.ok) throw new Error(`数据健康接口返回 ${response.status}`);
     const payload = await response.json();
     state.dataHealth = payload;
@@ -1205,7 +1205,7 @@ async function loadDataHealth() {
 async function loadOverview() {
   $("refreshButton").disabled = true;
   try {
-    const response = await fetch("/api/v1/collection-overview");
+    const response = await fetch("/api/v1/ops/collection-overview");
     if (!response.ok) throw new Error(`状态接口返回 ${response.status}`);
     const payload = await response.json();
     state.data = payload.interfaces;
@@ -1299,7 +1299,7 @@ function renderInitialization(payload) {
 
 async function loadInitialization() {
   try {
-    const response = await fetch("/api/v1/initialization");
+    const response = await fetch("/api/v1/ops/initialization");
     if (!response.ok) throw new Error(`初始化接口返回 ${response.status}`);
     renderInitialization(await response.json());
   } catch (error) {
@@ -1321,7 +1321,7 @@ async function initializationAction() {
   const button = $("initializationActionButton");
   button.disabled = true;
   try {
-    let url = "/api/v1/initialization";
+    let url = "/api/v1/ops/initialization";
     const options = { method: "POST", headers: {} };
     if (action === "start") {
       options.headers["Content-Type"] = "application/json";
@@ -1374,7 +1374,7 @@ async function showInitializationSteps() {
   $("initializationSteps").innerHTML = '<p class="empty-state">正在读取…</p>';
   $("initializationDialog").showModal();
   try {
-    const response = await fetch(`/api/v1/initialization/${campaign.initialization_id}/steps?limit=2000`);
+    const response = await fetch(`/api/v1/ops/initialization/${campaign.initialization_id}/steps?limit=2000`);
     if (!response.ok) throw new Error(`步骤接口返回 ${response.status}`);
     state.dialogData.initializationSteps = await response.json();
     state.pages.initializationSteps = 1;
@@ -1434,7 +1434,7 @@ function renderFanoutCampaigns() {
 
 async function loadFanoutCampaigns() {
   try {
-    const response = await fetch("/api/v1/collection-fanout-campaigns?limit=200");
+    const response = await fetch("/api/v1/ops/collection-fanout-campaigns?limit=200");
     if (!response.ok) throw new Error(`扇出活动接口返回 ${response.status}`);
     state.fanoutCampaigns = await response.json();
     renderFanoutCampaigns();
@@ -1461,7 +1461,7 @@ async function showFanoutCampaign(campaignId) {
   $("fanoutPages").innerHTML = '<p class="empty-state">正在读取…</p>';
   if (!$("fanoutDialog").open) $("fanoutDialog").showModal();
   try {
-    const response = await fetch(`/api/v1/collection-fanout-campaigns/${campaignId}`);
+    const response = await fetch(`/api/v1/ops/collection-fanout-campaigns/${campaignId}`);
     if (!response.ok) throw new Error(`活动明细返回 ${response.status}`);
     const campaign = await response.json();
     $("fanoutDialogTitle").textContent = `${campaign.api_name} · 活动 #${campaign.campaign_id}`;
@@ -1480,7 +1480,7 @@ async function fanoutAction(campaignId, action, button) {
   if (!window.confirm(`确认${wording}全量扇出活动 #${campaignId}？当前正在运行的子任务不会被强制中断。`)) return;
   button.disabled = true;
   try {
-    const response = await fetch(`/api/v1/collection-fanout-campaigns/${campaignId}/${action}`, { method: "POST" });
+    const response = await fetch(`/api/v1/ops/collection-fanout-campaigns/${campaignId}/${action}`, { method: "POST" });
     if (!response.ok) {
       const body = await response.json();
       throw new Error(body.error?.message || `活动操作返回 ${response.status}`);
@@ -1575,7 +1575,7 @@ async function loadJobInstances(pageNumber = state.jobInstancePage.number || 1) 
     if ($("instanceCreatedFrom").value) parameters.set("created_from", $("instanceCreatedFrom").value);
     if ($("instanceCreatedTo").value) parameters.set("created_to", $("instanceCreatedTo").value);
     if (state.instanceCampaignId) parameters.set("campaign_id", String(state.instanceCampaignId));
-    const response = await fetch(`/api/v1/collection-job-instances?${parameters}`);
+    const response = await fetch(`/api/v1/ops/collection-job-instances?${parameters}`);
     if (!response.ok) throw new Error(`执行实例接口返回 ${response.status}`);
     const payload = await response.json();
     state.jobInstances = payload.items || [];
@@ -1660,7 +1660,7 @@ async function showJobInstance(jobId) {
   $("jobInstanceDetail").innerHTML = '<p class="empty-state">正在读取实例状态…</p>';
   if (state.jobPollTimer) window.clearTimeout(state.jobPollTimer);
   try {
-    const response = await fetch(`/api/v1/collection-jobs/${jobId}`);
+    const response = await fetch(`/api/v1/ops/collection-jobs/${jobId}`);
     if (!response.ok) throw new Error(`实例明细返回 ${response.status}`);
     const job = await response.json();
     renderJobInstanceDetail(job);
@@ -1678,7 +1678,7 @@ async function retryJob(jobId, button) {
   }
   button.disabled = true;
   try {
-    const response = await fetch(`/api/v1/collection-jobs/${jobId}/retry`, {
+    const response = await fetch(`/api/v1/ops/collection-jobs/${jobId}/retry`, {
       method: "POST",
       headers: {
         "Idempotency-Key": `dashboard-retry-${jobId}-${Date.now()}`
@@ -1731,7 +1731,7 @@ async function showBatch(jobId) {
   $("batchChildren").innerHTML = '<p class="empty-state">正在读取…</p>';
   if (!$("batchDialog").open) $("batchDialog").showModal();
   try {
-    const response = await fetch(`/api/v1/collection-jobs?parent_job_id=${jobId}&limit=200`);
+    const response = await fetch(`/api/v1/ops/collection-jobs?parent_job_id=${jobId}&limit=200`);
     if (!response.ok) throw new Error(`批次明细返回 ${response.status}`);
     state.dialogData.batchChildren = await response.json();
     state.pages.batchChildren = 1;
@@ -1749,7 +1749,7 @@ async function dispatchLatest() {
   }
   $("dispatchButton").disabled = true;
   try {
-    const response = await fetch("/api/v1/collection-dispatch", {
+    const response = await fetch("/api/v1/ops/collection-dispatch", {
       method: "POST"
     });
     if (!response.ok) {
@@ -1868,7 +1868,7 @@ function coverageRangeValues() {
 
 async function loadCoverage() {
   try {
-    const response = await fetch("/api/v1/coverage");
+    const response = await fetch("/api/v1/ops/coverage");
     if (!response.ok) throw new Error(`覆盖接口返回 ${response.status}`);
     const payload = await response.json();
     state.coverage = payload.datasets;
@@ -1885,7 +1885,7 @@ async function runCoverageAudit() {
   }
   $("coverageAuditButton").disabled = true;
   try {
-    const response = await fetch("/api/v1/coverage/audits", {
+    const response = await fetch("/api/v1/ops/coverage/audits", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1919,7 +1919,7 @@ async function runCoverageRangeAudit() {
   const button = $("coverageRangeAuditButton");
   button.disabled = true;
   try {
-    const response = await fetch("/api/v1/coverage/audits", {
+    const response = await fetch("/api/v1/ops/coverage/audits", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1956,7 +1956,7 @@ async function runCoverageRangeRepair() {
   const button = $("coverageRangeRepairButton");
   button.disabled = true;
   try {
-    const response = await fetch("/api/v1/coverage/repairs", {
+    const response = await fetch("/api/v1/ops/coverage/repairs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2015,7 +2015,7 @@ async function loadCoveragePartitions() {
     if ($("coverageDetailStart").value) query.set("start_date", $("coverageDetailStart").value);
     if ($("coverageDetailEnd").value) query.set("end_date", $("coverageDetailEnd").value);
     if ($("coverageDetailStatus").value) query.set("status", $("coverageDetailStatus").value);
-    const response = await fetch(`/api/v1/coverage/datasets/${encodeURIComponent(dataset)}/partitions?${query}`);
+    const response = await fetch(`/api/v1/ops/coverage/datasets/${encodeURIComponent(dataset)}/partitions?${query}`);
     if (!response.ok) throw new Error(`日期明细返回 ${response.status}`);
     const payload = await response.json();
     state.dialogData.coveragePartitions = payload.partitions || [];

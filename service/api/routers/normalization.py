@@ -10,7 +10,7 @@ from service.api.schemas import (
 )
 
 
-router = APIRouter(prefix="/v1/normalization", tags=["normalization"])
+router = APIRouter(prefix="/v1/audit/normalization", tags=["audit"])
 
 
 @router.get("", response_model=NormalizationOverview)

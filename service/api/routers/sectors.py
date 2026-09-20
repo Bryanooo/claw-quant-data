@@ -13,7 +13,7 @@ from service.api.schemas import (
 )
 
 
-router = APIRouter(prefix="/v1/sectors", tags=["sectors"])
+router = APIRouter(prefix="/v1/research/sectors", tags=["research: sectors"])
 
 
 @router.get("", response_model=SectorListResponse)

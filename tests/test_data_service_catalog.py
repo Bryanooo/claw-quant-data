@@ -27,7 +27,7 @@ def test_catalog_distinguishes_registration_from_observed_raw_coverage():
         ],
         interfaces=[
             {"api_name": "daily", "datasets": ["stock_daily"], "records_url": None},
-            {"api_name": "adj_factor", "datasets": ["adj_factor"], "records_url": "/api/v1/interfaces/adj_factor/records"},
+            {"api_name": "adj_factor", "datasets": ["adj_factor"], "records_url": "/api/v1/data/interfaces/adj_factor/records"},
         ],
     )
 

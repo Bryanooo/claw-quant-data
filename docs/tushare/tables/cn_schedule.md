@@ -10,8 +10,8 @@
 - 业务身份可信度：`contract_reviewed`
 - 当前数据视图：`tushare_current_cn_schedule`
 - 原始数据表：`tushare_raw_record`（`api_name=cn_schedule`）
-- REST：`GET /api/v1/datasets/cn_schedule/records`
-- 接口 REST：`GET /api/v1/interfaces/cn_schedule/records`
+- REST：`GET /api/v1/data/datasets/cn_schedule/records`
+- 接口 REST：`GET /api/v1/data/interfaces/cn_schedule/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

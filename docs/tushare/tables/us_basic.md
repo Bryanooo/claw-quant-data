@@ -10,8 +10,8 @@
 - 业务身份可信度：`contract_reviewed`
 - 当前数据视图：`tushare_current_us_basic`
 - 原始数据表：`tushare_raw_record`（`api_name=us_basic`）
-- REST：`GET /api/v1/datasets/us_basic/records`
-- 接口 REST：`GET /api/v1/interfaces/us_basic/records`
+- REST：`GET /api/v1/data/datasets/us_basic/records`
+- 接口 REST：`GET /api/v1/data/interfaces/us_basic/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

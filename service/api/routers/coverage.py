@@ -8,7 +8,7 @@ from fastapi import APIRouter, Header, Query, Response, status
 from service.api.dependencies import CoverageServiceDependency
 from service.api.schemas import CoverageAuditRequest, CoverageRepairRequest
 
-router = APIRouter(prefix="/v1/coverage", tags=["data coverage"])
+router = APIRouter(prefix="/v1/ops/coverage", tags=["operations"])
 IdempotencyKey = Annotated[
     str | None,
     Header(alias="Idempotency-Key", min_length=8, max_length=128),

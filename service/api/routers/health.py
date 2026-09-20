@@ -5,10 +5,10 @@ from fastapi import APIRouter, Request
 from service.api.schemas import LiveResponse, ReadyResponse
 from service.config import APP_VERSION
 
-router = APIRouter(tags=["health"])
+router = APIRouter(prefix="/v1/ops/health", tags=["operations"])
 
 
-@router.get("/health/live", response_model=LiveResponse)
+@router.get("/live", response_model=LiveResponse)
 def live() -> dict:
     return {
         "status": "ok",
@@ -17,7 +17,7 @@ def live() -> dict:
     }
 
 
-@router.get("/health/ready", response_model=ReadyResponse)
+@router.get("/ready", response_model=ReadyResponse)
 def ready(request: Request) -> dict:
     row = request.app.state.database.fetch_one("SELECT 1 AS ok")
     return {

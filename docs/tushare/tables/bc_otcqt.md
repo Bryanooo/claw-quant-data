@@ -10,8 +10,8 @@
 - 业务身份可信度：`contract_reviewed`
 - 当前数据视图：`tushare_current_bc_otcqt`
 - 原始数据表：`tushare_raw_record`（`api_name=bc_otcqt`）
-- REST：`GET /api/v1/datasets/bc_otcqt/records`
-- 接口 REST：`GET /api/v1/interfaces/bc_otcqt/records`
+- REST：`GET /api/v1/data/datasets/bc_otcqt/records`
+- 接口 REST：`GET /api/v1/data/interfaces/bc_otcqt/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

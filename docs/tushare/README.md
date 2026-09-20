@@ -22,7 +22,7 @@
 任务和 19 个周期全量扇出。接口实现、自动编排、历史回填和当前有数据是不同状态；
 各状态的定义与剩余 16 个接口未自动运行的原因见
 [采集完整性与可靠性策略](COLLECTION_RELIABILITY.md)，实时状态以
-`GET /api/v1/collection-overview` 为准。
+`GET /api/v1/ops/collection-overview` 为准。
 
 ## 完整接口列表
 

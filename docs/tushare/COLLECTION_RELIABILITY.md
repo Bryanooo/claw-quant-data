@@ -31,7 +31,7 @@
 
 这 16 个接口仍有通用或专项采集实现，但不会用猜测参数自动调用。当前已为 36 个
 契约明确的代码/枚举扇出接口建立白名单规划；接口清单可由
-`GET /api/v1/collection-batches/fanout-definitions` 查询。低频权限、二维因子参数、
+`GET /api/v1/ops/collection-batches/fanout-definitions` 查询。低频权限、二维因子参数、
 缺失依赖清单或契约不足的接口仍不会进入批量队列。
 
 ### 覆盖规则版本化与无损重审
@@ -68,7 +68,7 @@
 
 ## 受控父子批次
 
-`POST /api/v1/collection-batches/fanout` 只接受服务端注册的接口和范围字段。规划器：
+`POST /api/v1/ops/collection-batches/fanout` 只接受服务端注册的接口和范围字段。规划器：
 
 - 只从 `stock_basic`、`index_basic` 或白名单 `tushare_norm_*` 标准表中已允许的依赖接口
   读取证券清单，不接受调用方提供 SQL、表名或任意代码数组；
@@ -95,7 +95,7 @@ Worker 领取；数据库触发器在每次子任务变化后汇总数量、行�
 `sys_collection_fanout_campaign` 和 `sys_collection_fanout_campaign_batch`
 持久化，而不是依赖进程内循环：
 
-- `POST /api/v1/collection-fanout-campaigns` 创建活动，Scheduler 每 20 秒协调一次；
+- `POST /api/v1/ops/collection-fanout-campaigns` 创建活动，Scheduler 每 20 秒协调一次；
 - 首个分页把完整有序实体清单写入
   `sys_collection_fanout_campaign_entity`，并冻结来源、总数和摘要；后续页面只从
   该快照读取，实时清单变化留给下一周期；
@@ -118,7 +118,7 @@ Worker 领取；数据库触发器在每次子任务变化后汇总数量、行�
 股票、转债和指数依赖宇宙，避免用无参数探测代替真实首采。
 
 周期配方由 [service/fanout_scheduling.py](../../service/fanout_scheduling.py)
-显式维护，可通过 `GET /api/v1/collection-fanout-schedules` 查询。每日活动包含
+显式维护，可通过 `GET /api/v1/ops/collection-fanout-schedules` 查询。每日活动包含
 股票因子、东财资金流、ETF 成分、TDX 成分、期权/期货交易所分区等已验证配方；
 它们在独立 `worker-fanout` 中运行，不占用核心行情任务执行槽。活动叶子任务按
 `daily > weekly > monthly > backfill` 设置队列优先级。
@@ -235,7 +235,7 @@ Worker 领取；数据库触发器在每次子任务变化后汇总数量、行�
 - Scheduler、三个 Worker 池、Auditor 每 15 秒写入数据库心跳；心跳同时记录池
   接受的资源类别，状态接口汇总每个池的排队、运行和最近失败数量；容器健康检查会拒绝只剩
   数据库连接、但业务循环已经卡死的假健康状态。
-- `/api/v1/collection-overview` 及控制台底部状态现在分别统计“历史补采”和“日常
+- `/api/v1/ops/collection-overview` 及控制台底部状态现在分别统计“历史补采”和“日常
   扇出”的活动数、排队数与运行数。判断初始化是否结束时只看历史工作负载，不再因
   当天自动生成的例行采集活动而误判为“历史采集仍在持续”。
 - `industry_daily` 只检查交易日期分区：`ths_index` 契约没有退市或失效日期，直接
@@ -355,7 +355,7 @@ SSE 日期覆盖审计；从官方首个日期样本 2024-10-14 起，完整初�
   1 日由成功任务及耗尽证据证明上游确实返回空，覆盖率为 100%；
 - 目录历史恢复的 971 个预期分区全部存在，活动、失败和无验证证据均为 0；
 - 201 个可采接口均有实现，185 个进入安全自动编排。接口是否已有正行数证据以
-  `GET /api/v1/collection-overview` 的实时结果为准；未自动运行的 16 个接口均需要
+  `GET /api/v1/ops/collection-overview` 的实时结果为准；未自动运行的 16 个接口均需要
   显式业务范围或属于实时按需数据，不能用猜测参数制造无界任务。`hk_daily`
   首采正在等待低频接口窗口，`p_list` 则连续完整请求均由上游返回空，不能把它们
   伪装成“已经有数据”；
@@ -365,7 +365,7 @@ SSE 日期覆盖审计；从官方首个日期样本 2024-10-14 起，完整初�
 前的旧审计结果。例如 `index_daily` 的 84 个 `partial` 在物理表中其实已经修复，
 重新审计后才归零。因此日常判断必须同时查看审计完成时间、后续采集任务时间和
 物理分区；自动审计在启动预检和每日 09:30 会使用不同幂等阶段再次执行，人工修复
-完成后则应立即通过控制台或 `POST /api/v1/coverage/audits` 重新闭环，不能引用旧审计
+完成后则应立即通过控制台或 `POST /api/v1/ops/coverage/audits` 重新闭环，不能引用旧审计
 作为最终结论。
 
 当前仍需明确的能力边界是：193 个数据集中有 40 个可以按权威日历推断“应该存在”
@@ -403,7 +403,7 @@ Tushare `stk_limit` 接口的数据起点。真实 Token 逐年、逐日探测�
 
 覆盖总览的“最新审计”按被审计区间的 `end_date` 优先，其次才按执行时间排序。
 这样历史单日修复审计不会覆盖最近 120 天的全局审计结论。统一状态入口
-`GET /api/v1/data-health` 同时聚合采集任务、覆盖、时效和初始化，但保持四类证据
+`GET /api/v1/ops/data-health` 同时聚合采集任务、覆盖、时效和初始化，但保持四类证据
 彼此独立：真实缺失/截面不完整、空数据集、尚未首采、尚未证明完整。控制台对前两类
 使用“已确认”，对后两类使用“完整性未知”，不会用一个含糊的红色失败数混在一起。
 
@@ -431,7 +431,7 @@ Tushare `stk_limit` 接口的数据起点。真实 Token 逐年、逐日探测�
 单例，因此另 1 个“新建初始化”活动用例按设计跳过。
 
 重新执行历史初始化前，应先调用
-`POST /api/v1/initialization/preflight`。预检不会创建任务，会一次性验证任务注册、
+`POST /api/v1/ops/initialization/preflight`。预检不会创建任务，会一次性验证任务注册、
 接口可采契约、全量扇出配方、严格覆盖规则和专项采集器白名单，并返回稳定的
 `plan_version` 与 `plan_fingerprint`；初始化活动也会持久化这两个值。这样部署缺件
 会在开始前阻断，而不是运行数小时后才暴露。最新基线若截止日在周末，会统一使用
@@ -491,7 +491,7 @@ coverage job 幂等更新同一审计证据，不会制造重复审计记录。
 
 标准化运行、隔离错误和字段漂移分别记录在 `sys_tushare_normalization_run`、
 `sys_tushare_normalization_error`、`sys_tushare_schema_drift`。健康总览可通过
-`GET /api/v1/normalization` 查询；未解决的警告级漂移或隔离错误会使对应接口状态
+`GET /api/v1/audit/normalization` 查询；未解决的警告级漂移或隔离错误会使对应接口状态
 降级，信息级上游技术字段只保留审计证据，不制造误告警。
 
 PostgreSQL 的 `text` 和 `jsonb` 不能表示 NUL 字符。通用与专项采集统一在存储边界
@@ -511,7 +511,7 @@ PostgreSQL 的 `text` 和 `jsonb` 不能表示 NUL 字符。通用与专项采�
 日、周、月、季度的补采清单；父子批次会显示成功、失败和待处理子任务数量，
 全量扇出活动会显示已验证实体/分页进度并支持暂停、继续和逐层下钻。所有主列表及
 弹窗明细都限制单页行数，筛选会重置页码，避免长历史任务一次性渲染。状态 API 为
-`GET /api/v1/collection-overview`。
+`GET /api/v1/ops/collection-overview`。
 
 数据日历以业务表的物理数据日期为唯一日期主键，而不是任务的 `business_date`
 （执行日期）。系统直接查询 34 个配置为 `trading_daily` 的受监控数据集，并将
@@ -528,9 +528,9 @@ PostgreSQL 的 `text` 和 `jsonb` 不能表示 NUL 字符。通用与专项采�
 普通任务只有 `completion_evidence.verified=true`（或等价的嵌套验证结果）才能作为任务
 完成证据；扇出任务则以全部子任务聚合后的 campaign 完成状态为准。点击日期优先查看
 逐数据集物理行数、覆盖/截面证据和修复建议，同时保留所有任务执行日。月查询使用
-`GET /api/v1/delivery/data-calendar?start_date=...&end_date=...`，单日明细使用
-`GET /api/v1/delivery/data-calendar/{data_date}`，范围最多 63 天。兼容接口
-`GET /api/v1/delivery/calendar` 仍按任务执行日展示，但不再作为控制台的数据完整性口径。
+`GET /api/v1/ops/delivery/data-calendar?start_date=...&end_date=...`，单日明细使用
+`GET /api/v1/ops/delivery/data-calendar/{data_date}`，范围最多 63 天。兼容接口
+`GET /api/v1/ops/delivery/calendar` 仍按任务执行日展示，但不再作为控制台的数据完整性口径。
 读取历史月份会查询实际业务表，所以 1990-12-19 起的核心历史行情可以在日历中看到；
 页面支持月份直接跳转。计划功能启用前的日期通常显示“已有数据 / 待审计”，因为物理
 存在不等于 34 个当前数据契约均完整。历史任务记录缺失不再导致整段历史日历空白。
@@ -546,8 +546,8 @@ PostgreSQL 的 `text` 和 `jsonb` 不能表示 NUL 字符。通用与专项采�
 不能通过关闭完整性保护或把空结果改写成完成来消除告警。
 
 覆盖审计页支持按数据集和起止日期查询 `missing` / `partial` 明细。指定范围补采采用
-“先审计、后修复”的证据链：`POST /api/v1/coverage/audits` 只读检查本地业务表，
-`POST /api/v1/coverage/repairs` 只对持久化审计已确认且存在安全参数映射的分区生成
+“先审计、后修复”的证据链：`POST /api/v1/ops/coverage/audits` 只读检查本地业务表，
+`POST /api/v1/ops/coverage/repairs` 只对持久化审计已确认且存在安全参数映射的分区生成
 幂等任务，不把未审计日期、非交易日或观察型数据误判为缺失。初始化总览同时返回
 当前阶段已物化范围和 queued/running 工作范围，避免用总目标区间冒充正在采集区间。
 

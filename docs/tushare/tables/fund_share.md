@@ -10,8 +10,8 @@
 - 业务身份可信度：`contract_reviewed`
 - 当前数据视图：`tushare_current_fund_share`
 - 原始数据表：`tushare_raw_record`（`api_name=fund_share`）
-- REST：`GET /api/v1/datasets/fund_share/records`
-- 接口 REST：`GET /api/v1/interfaces/fund_share/records`
+- REST：`GET /api/v1/data/datasets/fund_share/records`
+- 接口 REST：`GET /api/v1/data/interfaces/fund_share/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

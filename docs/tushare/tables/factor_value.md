@@ -10,8 +10,8 @@
 - 业务身份可信度：`heuristic`
 - 当前数据视图：未创建（业务身份仍为启发式，REST 保留全部 payload 版本）
 - 原始数据表：`tushare_raw_record`（`api_name=factor_value`）
-- REST：`GET /api/v1/datasets/factor_value/records`
-- 接口 REST：`GET /api/v1/interfaces/factor_value/records`
+- REST：`GET /api/v1/data/datasets/factor_value/records`
+- 接口 REST：`GET /api/v1/data/interfaces/factor_value/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

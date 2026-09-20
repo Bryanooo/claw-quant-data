@@ -205,13 +205,13 @@ stateDiagram-v2
 3. 扇出活动的冻结宇宙、分页游标和全部叶子任务均完成，且最终覆盖审计只能是
    `complete`；`observed_only` 仅表示看到了数据，不能作为完整性验收；
 4. PostgreSQL 中的运行模式已原子切换为 `daily`。只有这一步完成，控制台和
-   `GET /api/v1/data-health` 才会报告历史采集完成。
+   `GET /api/v1/ops/data-health` 才会报告历史采集完成。
 
 初始化响应中的 `completion_gate` 会逐项展示这些门槛是否满足。当前阶段的百分比
 只代表该阶段，不能被解释为全历史完成率。
 
 这里的 `completed` 只证明安装时配置的初始化计划及核心验收范围已经完成，不等于
-目录中每一个数据集的全部历史都经过严格验证。`GET /api/v1/data-health` 会同时返回
+目录中每一个数据集的全部历史都经过严格验证。`GET /api/v1/ops/data-health` 会同时返回
 `history.coverage_scope`：严格验证、仅观察和未审计数据集分别计数；只有
 `all_datasets_verified=true` 时，客户端才可以声称全目录历史均已验证。非时间序列
 数据集没有历史分区契约，会单独计入 `non_auditable_datasets`，不会被静默当作已验证。
@@ -572,21 +572,21 @@ Dashboard 可以：
 数据均按数据集查询；原始 JSONB 只承担审计和重放：
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/datasets
+curl http://127.0.0.1:8000/api/v1/data/datasets
 
-curl 'http://127.0.0.1:8000/api/v1/datasets/stock_daily/records?ts_code=000001.SZ&limit=20'
+curl 'http://127.0.0.1:8000/api/v1/data/datasets/stock_daily/records?ts_code=000001.SZ&limit=20'
 
-curl http://127.0.0.1:8000/api/v1/interfaces
+curl http://127.0.0.1:8000/api/v1/data/interfaces
 
-curl http://127.0.0.1:8000/api/v1/raw/daily/coverage
+curl http://127.0.0.1:8000/api/v1/audit/raw/daily/coverage
 
-curl 'http://127.0.0.1:8000/api/v1/interfaces/adj_factor/records?ts_code=000001.SZ&start_date=2026-01-01&limit=20'
+curl 'http://127.0.0.1:8000/api/v1/data/interfaces/adj_factor/records?ts_code=000001.SZ&start_date=2026-01-01&limit=20'
 
-curl http://127.0.0.1:8000/api/v1/stocks/000001.SZ/snapshot
+curl http://127.0.0.1:8000/api/v1/research/stocks/000001.SZ/snapshot
 
-curl 'http://127.0.0.1:8000/api/v1/sectors?provider=ths&query=人工智能&market=A'
+curl 'http://127.0.0.1:8000/api/v1/research/sectors?provider=ths&query=人工智能&market=A'
 
-curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_days=180'
+curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?lookback_days=180'
 ```
 
 日期参数同时支持 `YYYY-MM-DD` 和 `YYYYMMDD`。通用查询默认返回 100 行，
@@ -597,10 +597,9 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 
 | 接口 | 用途 |
 |---|---|
-| `GET /api/health/live` | 进程存活检查 |
-| `GET /api/health/ready` | PostgreSQL 就绪检查 |
+| `GET /api/v1/ops/health/live` | 进程存活检查 |
+| `GET /api/v1/ops/health/ready` | PostgreSQL 就绪检查 |
 | `GET /api/v1/catalog` | 统一发现研究、数据、运营、审计四类入口，以及原始→标准→研究三层加工关系 |
-| `GET /api/v1/data-services` | 旧版目录兼容路径；新客户端使用 `/api/v1/catalog` |
 | `GET /api/v1/research/capabilities` | 研究能力、补采工作流与新增数据源待办 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
@@ -609,64 +608,64 @@ curl 'http://127.0.0.1:8000/api/v1/sectors/ths/885728.TI/research-pack?lookback_
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 市场调整事件收益和 CAR |
 | `GET /api/v1/research/market/breadth` | 市场宽度和涨跌停情绪 |
 | `GET /api/v1/research/sectors/{provider}/rotation` | 板块轮动强弱排名 |
-| `GET /api/v1/datasets` | 数据集发现 |
-| `GET /api/v1/datasets/{name}` | 字段、过滤器和主键信息 |
-| `GET /api/v1/datasets/{name}/records` | 数据查询与分页 |
-| `GET /api/v1/interfaces` | 发现 201 个可采接口及其数据集/原始数据路径 |
-| `GET /api/v1/interfaces/{api_name}` | 查询接口契约、文档、字段和允许过滤器 |
-| `GET /api/v1/interfaces/{api_name}/records` | 查询通用接口的强类型标准数据 |
-| `GET /api/v1/raw/interfaces` | 查看全部可采接口的原始审计覆盖和请求统计 |
-| `GET /api/v1/raw/{api_name}/requests` | 分页查询真实 Tushare 请求、空响应和失败证据 |
-| `GET /api/v1/raw/{api_name}/records` | 按请求/记录哈希查询无损 JSONB 原文 |
-| `GET /api/v1/raw/{api_name}/coverage` | 查看单个接口的原始请求与记录覆盖摘要 |
-| `GET /api/v1/raw/{api_name}/lineage/{record_hash}` | 从原始记录追溯逻辑请求 |
-| `GET /api/v1/normalization` | 查看95个通用接口的标准化健康状态 |
-| `GET /api/v1/normalization/drift` | 查看字段新增、缺失等 Schema Drift |
-| `GET /api/v1/normalization/errors` | 查看未解决或历史隔离记录 |
-| `GET /api/v1/freshness` | 数据最新日期和新鲜度 |
-| `GET /api/v1/stocks/{ts_code}/snapshot` | 股票综合快照 |
-| `GET /api/v1/stocks/{ts_code}/research-pack` | 带历史时点约束、来源和质量状态的个股研究资料包 |
-| `GET /api/v1/stocks/{ts_code}/sectors` | 查询股票在指定历史时点所属的供应方板块 |
-| `GET /api/v1/stocks/{ts_code}/peers` | 按共同板块数量发现可比股票 |
-| `GET /api/v1/sectors` | 跨同花顺、东财、通达信发现和搜索板块 |
-| `GET /api/v1/sectors/{provider}/{code}/snapshot` | 板块资料、最新行情和成分摘要 |
-| `GET /api/v1/sectors/{provider}/{code}/members` | 指定历史时点的板块成分 |
-| `GET /api/v1/sectors/{provider}/{code}/research-pack` | 板块行情、成分、资金流和质量状态资料包 |
-| `GET /api/v1/investment-calendar` | 按起止日期查询重要宏观数据发布、央行事件与股指期货交割日；支持重要性、国家和类型筛选 |
-| `GET /api/v1/investment-calendar/{event_date}` | 查询指定日期的事件时间、前值、预测、实际值、状态、合约与来源 |
-| `GET /api/v1/collection-tasks` | 可提交的任务类型 |
-| `POST /api/v1/collection-jobs` | 提交持久化采集任务 |
-| `GET /api/v1/collection-jobs` | 按接口、周期和状态查询任务历史 |
-| `GET /api/v1/collection-job-instances` | 服务端分页查询完整执行实例账本；`state=attention` 仅查当前未恢复失败，`recovered` 查已恢复/非当前问题，`failure_history` 查全部失败历史；支持关键字、类型、创建日期与活动范围 |
-| `POST /api/v1/collection-jobs/{id}/retry` | 重试失败任务 |
-| `GET /api/v1/collection-batches/fanout-definitions` | 查询允许安全扇出的接口、依赖和边界 |
-| `POST /api/v1/collection-batches/fanout` | 创建有界、持久化父子回填批次 |
-| `GET /api/v1/collection-fanout-campaigns` | 查询跨分页全量扇出活动及已验证进度 |
-| `GET /api/v1/collection-fanout-schedules` | 查询已启用的日/周/月安全扇出配方 |
-| `POST /api/v1/collection-fanout-campaigns` | 创建自动续页的全量扇出活动 |
-| `GET /api/v1/collection-fanout-campaigns/{id}` | 查询活动与每个父子批次的完整证据 |
-| `POST /api/v1/collection-fanout-campaigns/{id}/pause` | 暂停生成后续分页（不强杀运行中子任务） |
-| `POST /api/v1/collection-fanout-campaigns/{id}/resume` | 重排失败子任务并继续活动 |
-| `GET /api/v1/collection-overview` | 全接口采集状态与完成证据 |
-| `GET /api/v1/delivery/today` | 查询当日持久化交付计划、截至当前/全日进度、逾期和真实异常；可传 `business_date` |
-| `GET /api/v1/delivery/calendar` | 兼容的任务执行日日历；主控制台不再用它判断某天数据是否齐全 |
-| `GET /api/v1/delivery/data-calendar` | 按 `start_date`/`end_date` 查询最多 63 天的数据事实状态；直接核对 34 个日频数据集的物理分区与当前版本覆盖审计，任务仅作旁证 |
-| `GET /api/v1/delivery/data-calendar/{data_date}` | 查询指定数据日逐数据集的物理行数、截面证据、当前审计状态、任务旁证与建议动作 |
-| `GET /api/v1/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
-| `GET /api/v1/data-health/summary` | 面向 CLI/Agent 的轻量健康预检，不扫描全部明细 |
-| `POST /api/v1/collection-dispatch` | 生成最近周期补采任务 |
-| `GET /api/v1/coverage` | 数据集日期覆盖总览和最近缺失日期 |
-| `GET /api/v1/coverage/datasets/{name}/partitions` | 按日期及状态查询分区明细；`status=problem` 同时返回缺失和不完整分区 |
-| `POST /api/v1/coverage/audits` | 异步提交有界覆盖审计 |
-| `POST /api/v1/coverage/repairs` | 为指定范围内已经审计确认的安全缺口生成幂等补采任务 |
-| `GET /api/v1/coverage/jobs` | 查看覆盖审计队列 |
-| `GET /api/v1/initialization` | 查询运行模式、当前和最近一次初始化活动 |
-| `POST /api/v1/initialization/preflight` | 不创建任务，预检完整计划并返回版本、指纹、阻断项和提醒 |
-| `POST /api/v1/initialization` | 创建一次分阶段、可恢复的初始采集 |
-| `GET /api/v1/initialization/{id}/steps` | 查看每个初始化步骤及其采集/审计任务 |
-| `POST /api/v1/initialization/{id}/pause` | 暂停初始化协调（不强杀已运行任务） |
-| `POST /api/v1/initialization/{id}/resume` | 续跑并用新幂等轮次重建失败步骤 |
-| `POST /api/v1/initialization/{id}/activate` | 验收完成后切换到日常增量模式 |
+| `GET /api/v1/data/datasets` | 数据集发现 |
+| `GET /api/v1/data/datasets/{name}` | 字段、过滤器和主键信息 |
+| `GET /api/v1/data/datasets/{name}/records` | 数据查询与分页 |
+| `GET /api/v1/data/interfaces` | 发现 201 个可采接口及其数据集/原始数据路径 |
+| `GET /api/v1/data/interfaces/{api_name}` | 查询接口契约、文档、字段和允许过滤器 |
+| `GET /api/v1/data/interfaces/{api_name}/records` | 查询通用接口的强类型标准数据 |
+| `GET /api/v1/audit/raw/interfaces` | 查看全部可采接口的原始审计覆盖和请求统计 |
+| `GET /api/v1/audit/raw/{api_name}/requests` | 分页查询真实 Tushare 请求、空响应和失败证据 |
+| `GET /api/v1/audit/raw/{api_name}/records` | 按请求/记录哈希查询无损 JSONB 原文 |
+| `GET /api/v1/audit/raw/{api_name}/coverage` | 查看单个接口的原始请求与记录覆盖摘要 |
+| `GET /api/v1/audit/raw/{api_name}/lineage/{record_hash}` | 从原始记录追溯逻辑请求 |
+| `GET /api/v1/audit/normalization` | 查看95个通用接口的标准化健康状态 |
+| `GET /api/v1/audit/normalization/drift` | 查看字段新增、缺失等 Schema Drift |
+| `GET /api/v1/audit/normalization/errors` | 查看未解决或历史隔离记录 |
+| `GET /api/v1/data/freshness` | 数据最新日期和新鲜度 |
+| `GET /api/v1/research/stocks/{ts_code}/snapshot` | 股票综合快照 |
+| `GET /api/v1/research/stocks/{ts_code}/research-pack` | 带历史时点约束、来源和质量状态的个股研究资料包 |
+| `GET /api/v1/research/stocks/{ts_code}/sectors` | 查询股票在指定历史时点所属的供应方板块 |
+| `GET /api/v1/research/stocks/{ts_code}/peers` | 按共同板块数量发现可比股票 |
+| `GET /api/v1/research/sectors` | 跨同花顺、东财、通达信发现和搜索板块 |
+| `GET /api/v1/research/sectors/{provider}/{code}/snapshot` | 板块资料、最新行情和成分摘要 |
+| `GET /api/v1/research/sectors/{provider}/{code}/members` | 指定历史时点的板块成分 |
+| `GET /api/v1/research/sectors/{provider}/{code}/research-pack` | 板块行情、成分、资金流和质量状态资料包 |
+| `GET /api/v1/research/investment-calendar` | 按起止日期查询重要宏观数据发布、央行事件与股指期货交割日；支持重要性、国家和类型筛选 |
+| `GET /api/v1/research/investment-calendar/{event_date}` | 查询指定日期的事件时间、前值、预测、实际值、状态、合约与来源 |
+| `GET /api/v1/ops/collection-tasks` | 可提交的任务类型 |
+| `POST /api/v1/ops/collection-jobs` | 提交持久化采集任务 |
+| `GET /api/v1/ops/collection-jobs` | 按接口、周期和状态查询任务历史 |
+| `GET /api/v1/ops/collection-job-instances` | 服务端分页查询完整执行实例账本；`state=attention` 仅查当前未恢复失败，`recovered` 查已恢复/非当前问题，`failure_history` 查全部失败历史；支持关键字、类型、创建日期与活动范围 |
+| `POST /api/v1/ops/collection-jobs/{id}/retry` | 重试失败任务 |
+| `GET /api/v1/ops/collection-batches/fanout-definitions` | 查询允许安全扇出的接口、依赖和边界 |
+| `POST /api/v1/ops/collection-batches/fanout` | 创建有界、持久化父子回填批次 |
+| `GET /api/v1/ops/collection-fanout-campaigns` | 查询跨分页全量扇出活动及已验证进度 |
+| `GET /api/v1/ops/collection-fanout-schedules` | 查询已启用的日/周/月安全扇出配方 |
+| `POST /api/v1/ops/collection-fanout-campaigns` | 创建自动续页的全量扇出活动 |
+| `GET /api/v1/ops/collection-fanout-campaigns/{id}` | 查询活动与每个父子批次的完整证据 |
+| `POST /api/v1/ops/collection-fanout-campaigns/{id}/pause` | 暂停生成后续分页（不强杀运行中子任务） |
+| `POST /api/v1/ops/collection-fanout-campaigns/{id}/resume` | 重排失败子任务并继续活动 |
+| `GET /api/v1/ops/collection-overview` | 全接口采集状态与完成证据 |
+| `GET /api/v1/ops/delivery/today` | 查询当日持久化交付计划、截至当前/全日进度、逾期和真实异常；可传 `business_date` |
+| `GET /api/v1/ops/delivery/calendar` | 兼容的任务执行日日历；主控制台不再用它判断某天数据是否齐全 |
+| `GET /api/v1/ops/delivery/data-calendar` | 按 `start_date`/`end_date` 查询最多 63 天的数据事实状态；直接核对 34 个日频数据集的物理分区与当前版本覆盖审计，任务仅作旁证 |
+| `GET /api/v1/ops/delivery/data-calendar/{data_date}` | 查询指定数据日逐数据集的物理行数、截面证据、当前审计状态、任务旁证与建议动作 |
+| `GET /api/v1/ops/data-health` | 统一数据健康视图：缺失、时效、完整性证据和历史初始化状态 |
+| `GET /api/v1/ops/data-health/summary` | 面向 CLI/Agent 的轻量健康预检，不扫描全部明细 |
+| `POST /api/v1/ops/collection-dispatch` | 生成最近周期补采任务 |
+| `GET /api/v1/ops/coverage` | 数据集日期覆盖总览和最近缺失日期 |
+| `GET /api/v1/ops/coverage/datasets/{name}/partitions` | 按日期及状态查询分区明细；`status=problem` 同时返回缺失和不完整分区 |
+| `POST /api/v1/ops/coverage/audits` | 异步提交有界覆盖审计 |
+| `POST /api/v1/ops/coverage/repairs` | 为指定范围内已经审计确认的安全缺口生成幂等补采任务 |
+| `GET /api/v1/ops/coverage/jobs` | 查看覆盖审计队列 |
+| `GET /api/v1/ops/initialization` | 查询运行模式、当前和最近一次初始化活动 |
+| `POST /api/v1/ops/initialization/preflight` | 不创建任务，预检完整计划并返回版本、指纹、阻断项和提醒 |
+| `POST /api/v1/ops/initialization` | 创建一次分阶段、可恢复的初始采集 |
+| `GET /api/v1/ops/initialization/{id}/steps` | 查看每个初始化步骤及其采集/审计任务 |
+| `POST /api/v1/ops/initialization/{id}/pause` | 暂停初始化协调（不强杀已运行任务） |
+| `POST /api/v1/ops/initialization/{id}/resume` | 续跑并用新幂等轮次重建失败步骤 |
+| `POST /api/v1/ops/initialization/{id}/activate` | 验收完成后切换到日常增量模式 |
 
 这里的 7 个研究数据入口是聚合资源，不是 7 种分析能力。当前机器可读 v1 基线为
 35 项：27 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
@@ -780,16 +779,16 @@ USD/EUR/JPY/GBP/CHF，避免把默认 USD 误当全部币种。事件、名单�
 也可以通过 REST 启动；请求立即返回，采集在后台继续：
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/initialization/preflight \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/initialization/preflight \
   -H "Content-Type: application/json" \
   -d '{"profile":"full","history_end":"2026-09-05"}'
 
-curl -X POST http://127.0.0.1:8000/api/v1/initialization \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/initialization \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: first-initialization-$(date +%s)" \
   -d '{"profile":"standard","auto_activate":true}'
 
-curl http://127.0.0.1:8000/api/v1/initialization
+curl http://127.0.0.1:8000/api/v1/ops/initialization
 ```
 
 `auto_activate=false` 会在覆盖验收通过后停留在 `ready`，等待控制台二次确认；
@@ -850,7 +849,7 @@ python collectors/scheduler.py
 ### 提交专项采集任务
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/collection-jobs \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/collection-jobs \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: daily-000001-20260725' \
   -d '{
@@ -866,7 +865,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/collection-jobs \
 ### 提交通用 Tushare 接口任务
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/collection-jobs \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/collection-jobs \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: cn-cpi-202601-202606' \
   -d '{
@@ -887,13 +886,13 @@ curl -X POST http://127.0.0.1:8000/api/v1/collection-jobs \
 ### 查询某个接口的任务历史
 
 ```bash
-curl 'http://127.0.0.1:8000/api/v1/collection-jobs?api_name=cn_cpi&limit=20'
+curl 'http://127.0.0.1:8000/api/v1/ops/collection-jobs?api_name=cn_cpi&limit=20'
 ```
 
 ### 分页查询完整执行实例账本
 
 ```bash
-curl 'http://127.0.0.1:8000/api/v1/collection-job-instances?page=1&page_size=25&state=attention&created_from=2026-09-01&created_to=2026-09-14'
+curl 'http://127.0.0.1:8000/api/v1/ops/collection-job-instances?page=1&page_size=25&state=attention&created_from=2026-09-01&created_to=2026-09-14'
 ```
 
 `state` 可取 `active`、`attention`、`complete`、`retry`；省略表示全部。
@@ -905,7 +904,7 @@ curl 'http://127.0.0.1:8000/api/v1/collection-job-instances?page=1&page_size=25&
 ### 创建受控扇出回填批次
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/collection-batches/fanout \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/collection-batches/fanout \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: cyq-chips-20260828-page-0' \
   -d '{
@@ -918,19 +917,19 @@ curl -X POST http://127.0.0.1:8000/api/v1/collection-batches/fanout \
 ```
 
 响应是一条父批次任务。使用
-`GET /api/v1/collection-jobs?parent_job_id={job_id}` 查询子任务；下一批从响应
+`GET /api/v1/ops/collection-jobs?parent_job_id={job_id}` 查询子任务；下一批从响应
 `completion_evidence.plan.next_offset` 继续。日期窗口、报告期、枚举、最大子任务
 数和依赖来源均由服务端白名单约束，不能通过请求指定表名或任意扇出参数。
 
 ### 创建自动续页的全量扇出活动
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/collection-fanout-campaigns \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/collection-fanout-campaigns \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: pledge-stat-full-$(date +%s)" \
   -d '{"api_name":"pledge_stat","page_size":200}'
 
-curl http://127.0.0.1:8000/api/v1/collection-fanout-campaigns/1
+curl http://127.0.0.1:8000/api/v1/ops/collection-fanout-campaigns/1
 ```
 
 `page_size` 是每个父批次允许的最大子任务数，范围为 1–200。活动的
@@ -947,11 +946,11 @@ curl http://127.0.0.1:8000/api/v1/collection-fanout-campaigns/1
 ### 查询与重新审计日期覆盖
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/coverage
+curl http://127.0.0.1:8000/api/v1/ops/coverage
 
-curl 'http://127.0.0.1:8000/api/v1/coverage/datasets/stock_daily/partitions?status=missing&limit=100'
+curl 'http://127.0.0.1:8000/api/v1/ops/coverage/datasets/stock_daily/partitions?status=missing&limit=100'
 
-curl -X POST http://127.0.0.1:8000/api/v1/coverage/audits \
+curl -X POST http://127.0.0.1:8000/api/v1/ops/coverage/audits \
   -H 'Content-Type: application/json' \
   -H "Idempotency-Key: manual-coverage-$(date +%s)" \
   -d '{"datasets":["stock_daily"],"start_date":"2026-01-01","end_date":"2026-08-28"}'
@@ -975,7 +974,7 @@ docker compose logs -f worker-backfill
 docker compose logs -f worker-news
 docker compose logs -f scheduler
 docker compose logs -f auditor
-curl http://127.0.0.1:8000/api/health/ready
+curl http://127.0.0.1:8000/api/v1/ops/health/ready
 ```
 
 ### 查看队列和 checkpoint

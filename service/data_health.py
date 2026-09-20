@@ -294,7 +294,7 @@ class DataHealthService:
             },
             "history": self._history(initialization, coverage),
             "unhealthy_services": unhealthy_services,
-            "full_health_url": "/api/v1/data-health",
+            "full_health_url": "/api/v1/ops/data-health",
         }
 
     @staticmethod

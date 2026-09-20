@@ -68,5 +68,5 @@
 
 本次修复证明补采能够继续，并不表示全历史已经完成。只有 #66 依次完成核心历史、
 财务历史、目录历史、最新基线、全量扇出和最终覆盖验收，并进入 `completed`，系统才
-会报告全历史完成。Dashboard 和 `GET /api/v1/data-health` 必须继续以初始化状态为
+会报告全历史完成。Dashboard 和 `GET /api/v1/ops/data-health` 必须继续以初始化状态为
 准，不得用最近 120 天 `missing_partitions=0` 替代全历史结论。

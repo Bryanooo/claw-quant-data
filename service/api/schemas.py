@@ -211,7 +211,6 @@ class DataServiceCatalogResponse(ApiModel):
     recommended_entrypoint: str
     audiences: list[dict[str, Any]]
     control_plane: dict[str, Any]
-    compatibility: dict[str, Any]
     summary: dict[str, int]
     layers: list[DataServiceLayer]
 

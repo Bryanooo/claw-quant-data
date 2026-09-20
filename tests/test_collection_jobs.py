@@ -293,7 +293,7 @@ def test_collection_job_api_submits_without_access_key():
 
     with TestClient(app) as client:
         accepted = client.post(
-            "/api/v1/collection-jobs",
+            "/api/v1/ops/collection-jobs",
             headers={
                 "Idempotency-Key": "daily-20260725",
             },
@@ -316,7 +316,7 @@ def test_collection_job_instance_api_returns_paginated_ledger():
 
     with TestClient(app) as client:
         response = client.get(
-            "/api/v1/collection-job-instances",
+            "/api/v1/ops/collection-job-instances",
             params={"state": "active", "page": 2, "page_size": 25},
         )
 
@@ -336,7 +336,7 @@ def test_collection_job_instance_api_supports_effective_failure_views():
     with TestClient(app) as client:
         for state in ("attention", "recovered", "failure_history", "superseded"):
             response = client.get(
-                "/api/v1/collection-job-instances",
+                "/api/v1/ops/collection-job-instances",
                 params={"state": state, "page": 1, "page_size": 25},
             )
             assert response.status_code == 200

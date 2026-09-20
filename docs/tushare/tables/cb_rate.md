@@ -10,8 +10,8 @@
 - 业务身份可信度：`contract_reviewed`
 - 当前数据视图：`tushare_current_cb_rate`
 - 原始数据表：`tushare_raw_record`（`api_name=cb_rate`）
-- REST：`GET /api/v1/datasets/cb_rate/records`
-- 接口 REST：`GET /api/v1/interfaces/cb_rate/records`
+- REST：`GET /api/v1/data/datasets/cb_rate/records`
+- 接口 REST：`GET /api/v1/data/interfaces/cb_rate/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

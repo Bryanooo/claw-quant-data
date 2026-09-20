@@ -10,7 +10,7 @@ from service.api.schemas import (
 )
 
 
-router = APIRouter(prefix="/v1/interfaces", tags=["interfaces"])
+router = APIRouter(prefix="/v1/data/interfaces", tags=["data"])
 
 _STANDARD_QUERY_PARAMETERS = {
     "date_field",

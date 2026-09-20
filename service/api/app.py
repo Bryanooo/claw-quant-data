@@ -12,11 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from service.api.routers import (
+    catalog,
     collection_jobs,
     collection_monitor,
     coverage,
     data_health,
-    data_services,
     datasets,
     health,
     initialization,
@@ -186,7 +186,7 @@ def create_app(
     application.include_router(collection_monitor.router, prefix="/api")
     application.include_router(coverage.router, prefix="/api")
     application.include_router(data_health.router, prefix="/api")
-    application.include_router(data_services.router, prefix="/api")
+    application.include_router(catalog.router, prefix="/api")
     application.include_router(initialization.router, prefix="/api")
     application.include_router(investment_calendar.router, prefix="/api")
 

@@ -1,4 +1,4 @@
-"""Machine-readable catalog for the three public data-service layers."""
+"""Machine-readable catalog for the public API namespaces and data layers."""
 
 from __future__ import annotations
 
@@ -11,31 +11,31 @@ from service.research.catalog import DERIVED_ENDPOINTS
 RAW_ENDPOINTS = (
     {
         "method": "GET",
-        "path": "/api/v1/raw/interfaces",
+        "path": "/api/v1/audit/raw/interfaces",
         "name": "原始审计覆盖",
         "description": "查看可采接口的请求、失败和原始记录覆盖。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/raw/{api_name}/requests",
+        "path": "/api/v1/audit/raw/{api_name}/requests",
         "name": "上游请求账本",
         "description": "分页查看真实 Tushare 请求参数与传输结果。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/raw/{api_name}/records",
+        "path": "/api/v1/audit/raw/{api_name}/records",
         "name": "原始记录",
         "description": "查询无损 JSONB 原文及其请求身份。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/raw/{api_name}/coverage",
+        "path": "/api/v1/audit/raw/{api_name}/coverage",
         "name": "接口审计摘要",
         "description": "查看单个接口的请求和记录覆盖摘要。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/raw/{api_name}/lineage/{record_hash}",
+        "path": "/api/v1/audit/raw/{api_name}/lineage/{record_hash}",
         "name": "原始血缘",
         "description": "从一条原始记录追溯产生它的逻辑请求。",
     },
@@ -44,45 +44,39 @@ RAW_ENDPOINTS = (
 STANDARD_ENDPOINTS = (
     {
         "method": "GET",
-        "path": "/api/v1/datasets",
+        "path": "/api/v1/data/datasets",
         "name": "数据集目录",
         "description": "发现已登记的标准化数据资产。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/datasets/{dataset_name}",
+        "path": "/api/v1/data/datasets/{dataset_name}",
         "name": "数据集契约",
         "description": "查看字段、业务主键、日期和过滤能力。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/datasets/{dataset_name}/records",
+        "path": "/api/v1/data/datasets/{dataset_name}/records",
         "name": "标准记录查询",
         "description": "按字段、日期范围和历史时点查询强类型记录。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/interfaces",
+        "path": "/api/v1/data/interfaces",
         "name": "上游映射",
         "description": "查看 Tushare 接口到标准数据集的实现映射。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/interfaces/{api_name}/records",
+        "path": "/api/v1/data/interfaces/{api_name}/records",
         "name": "通用接口标准查询",
         "description": "查询契约通用采集器产生的强类型标准记录。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/freshness",
+        "path": "/api/v1/data/freshness",
         "name": "时效状态",
         "description": "查看数据集最新日期与时效判定。",
-    },
-    {
-        "method": "GET",
-        "path": "/api/v1/coverage",
-        "name": "日期覆盖",
-        "description": "查看日期或报告期完整性证据。",
     },
 )
 
@@ -90,70 +84,70 @@ RESEARCH_ENDPOINTS = (
     *DERIVED_ENDPOINTS,
     {
         "method": "GET",
-        "path": "/api/v1/stocks/{ts_code}/snapshot",
+        "path": "/api/v1/research/stocks/{ts_code}/snapshot",
         "name": "个股快照",
         "description": "组合基础信息、行情、估值、资金流和财务指标。",
         "domain": "个股研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/stocks/{ts_code}/research-pack",
+        "path": "/api/v1/research/stocks/{ts_code}/research-pack",
         "name": "个股研究包",
         "description": "返回时点安全的历史行情、财务和基准比较研究上下文。",
         "domain": "个股研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/stocks/{ts_code}/sectors",
+        "path": "/api/v1/research/stocks/{ts_code}/sectors",
         "name": "股票所属板块",
         "description": "发现股票在 THS、DC、TDX 体系中的板块归属。",
         "domain": "关系发现",
     },
     {
         "method": "GET",
-        "path": "/api/v1/stocks/{ts_code}/peers",
+        "path": "/api/v1/research/stocks/{ts_code}/peers",
         "name": "同行发现",
         "description": "通过共同板块发现可比较股票，并保留来源证据。",
         "domain": "关系发现",
     },
     {
         "method": "GET",
-        "path": "/api/v1/sectors",
+        "path": "/api/v1/research/sectors",
         "name": "板块搜索",
         "description": "跨供应商发现和筛选行业、概念及主题板块。",
         "domain": "板块研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/sectors/{provider}/{sector_code}/snapshot",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/snapshot",
         "name": "板块快照",
         "description": "组合板块资料、行情、成分和资金流状态。",
         "domain": "板块研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/sectors/{provider}/{sector_code}/members",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/members",
         "name": "板块成分",
         "description": "按历史时点读取板块成分股。",
         "domain": "板块研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/sectors/{provider}/{sector_code}/research-pack",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/research-pack",
         "name": "板块研究包",
         "description": "返回板块趋势、资金流、成分与研究上下文。",
         "domain": "板块研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/investment-calendar",
+        "path": "/api/v1/research/investment-calendar",
         "name": "投资日历范围",
         "description": "查询宏观数据、政策事件和衍生品交割安排。",
         "domain": "事件研究",
     },
     {
         "method": "GET",
-        "path": "/api/v1/investment-calendar/{event_date}",
+        "path": "/api/v1/research/investment-calendar/{event_date}",
         "name": "单日投资事件",
         "description": "查看指定日期的重要投资事件和发布结果。",
         "domain": "事件研究",
@@ -163,33 +157,45 @@ RESEARCH_ENDPOINTS = (
 OPERATIONS_ENDPOINTS = (
     {
         "method": "GET",
-        "path": "/api/v1/collection-overview",
+        "path": "/api/v1/ops/collection-overview",
         "name": "采集运营总览",
         "description": "查看活动任务、真实未恢复异常和当前采集吞吐。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/collection-jobs",
+        "path": "/api/v1/ops/collection-jobs",
         "name": "执行实例",
         "description": "分页筛选持久化任务实例及其尝试、重试和恢复关系。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/delivery/data-calendar",
+        "path": "/api/v1/ops/delivery/data-calendar",
         "name": "数据日历",
         "description": "按数据日期查看预期数据集的业务完整性，而不是任务创建日期。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/data-health",
+        "path": "/api/v1/ops/data-health",
         "name": "数据健康",
         "description": "查看时效、完整性和待修复数据资产。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/initialization",
+        "path": "/api/v1/ops/initialization",
         "name": "初始化与历史补采",
         "description": "查看安装后的历史初始化阶段和进度。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/ops/coverage",
+        "name": "日期覆盖",
+        "description": "查看日期或报告期完整性证据。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/ops/health/ready",
+        "name": "服务就绪状态",
+        "description": "检查 API 与 PostgreSQL 是否可以正常提供服务。",
     },
 )
 
@@ -202,10 +208,7 @@ def _audiences() -> list[dict[str, Any]]:
             "audience": "研究者与 Agent",
             "description": "默认入口；返回可直接用于基本面、技术面、板块和事件研究的语义对象。",
             "entrypoint": "/api/v1/research/capabilities",
-            "path_prefixes": [
-                "/api/v1/research", "/api/v1/stocks", "/api/v1/sectors",
-                "/api/v1/investment-calendar",
-            ],
+            "path_prefixes": ["/api/v1/research"],
             "priority": 1,
         },
         {
@@ -213,8 +216,8 @@ def _audiences() -> list[dict[str, Any]]:
             "title": "数据接口",
             "audience": "需要底层字段的研究代码",
             "description": "稳定数据集契约、上游映射、过滤、分页和历史时点查询。",
-            "entrypoint": "/api/v1/datasets",
-            "path_prefixes": ["/api/v1/datasets", "/api/v1/interfaces"],
+            "entrypoint": "/api/v1/data/datasets",
+            "path_prefixes": ["/api/v1/data"],
             "priority": 2,
         },
         {
@@ -222,11 +225,8 @@ def _audiences() -> list[dict[str, Any]]:
             "title": "运营接口",
             "audience": "控制台与管理员",
             "description": "任务编排、执行实例、异常、数据日历、覆盖审计和初始化。",
-            "entrypoint": "/api/v1/collection-overview",
-            "path_prefixes": [
-                "/api/v1/collection", "/api/v1/delivery", "/api/v1/coverage",
-                "/api/v1/data-health", "/api/v1/initialization",
-            ],
+            "entrypoint": "/api/v1/ops/collection-overview",
+            "path_prefixes": ["/api/v1/ops"],
             "priority": 3,
         },
         {
@@ -234,8 +234,8 @@ def _audiences() -> list[dict[str, Any]]:
             "title": "审计接口",
             "audience": "排障和数据治理",
             "description": "无损原始响应、请求账本、血缘与标准化漂移；不作为研究默认入口。",
-            "entrypoint": "/api/v1/raw/interfaces",
-            "path_prefixes": ["/api/v1/raw", "/api/v1/normalization"],
+            "entrypoint": "/api/v1/audit/raw/interfaces",
+            "path_prefixes": ["/api/v1/audit"],
             "priority": 4,
         },
     ]
@@ -324,11 +324,6 @@ def build_data_service_catalog(
             "title": "运营控制面",
             "description": "运营接口管理数据生产过程，不属于原始→标准→研究的数据加工层。",
             "endpoints": list(OPERATIONS_ENDPOINTS),
-        },
-        "compatibility": {
-            "policy": "non_breaking",
-            "note": "现有 REST 路径继续兼容；/api/v1/catalog 是统一发现入口。",
-            "legacy_catalog": "/api/v1/data-services",
         },
         "summary": {
             "layers": len(layers),

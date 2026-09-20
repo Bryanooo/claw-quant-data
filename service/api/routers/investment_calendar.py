@@ -9,7 +9,10 @@ from service.api.dependencies import get_investment_calendar_service
 from service.investment_calendar import InvestmentCalendarService
 
 
-router = APIRouter(prefix="/v1/investment-calendar", tags=["investment calendar"])
+router = APIRouter(
+    prefix="/v1/research/investment-calendar",
+    tags=["research: investment calendar"],
+)
 
 
 @router.get("")

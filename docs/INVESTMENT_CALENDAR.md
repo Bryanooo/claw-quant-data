@@ -34,13 +34,13 @@ CPI/PPI、利率决议、非农、失业率、货币信贷、工业与消费、�
 查询一个月（单次最多 63 天）：
 
 ```bash
-curl 'http://127.0.0.1:8000/api/v1/investment-calendar?start_date=2026-09-01&end_date=2026-09-30&importance=high'
+curl 'http://127.0.0.1:8000/api/v1/research/investment-calendar?start_date=2026-09-01&end_date=2026-09-30&importance=high'
 ```
 
 查询指定日期：
 
 ```bash
-curl 'http://127.0.0.1:8000/api/v1/investment-calendar/2026-09-18?importance=important'
+curl 'http://127.0.0.1:8000/api/v1/research/investment-calendar/2026-09-18?importance=important'
 ```
 
 可选参数：

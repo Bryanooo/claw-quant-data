@@ -2,17 +2,17 @@
 
 接口首先按使用者分为四类，避免把研究查询和系统管理混在一起：
 
-1. **研究接口**（默认）：`/api/v1/research/*`、`/stocks/*`、`/sectors/*`；
-2. **数据接口**：`/api/v1/datasets/*`、`/interfaces/*`；
-3. **运营接口**：`/api/v1/collection*`、`/delivery/*`、`/coverage/*`、`/initialization/*`；
-4. **审计接口**：`/api/v1/raw/*`、`/normalization/*`。
+1. **研究接口**（默认）：`/api/v1/research/*`；
+2. **数据接口**：`/api/v1/data/*`；
+3. **运营接口**：`/api/v1/ops/*`；
+4. **审计接口**：`/api/v1/audit/*`。
 
 前三个数据抽象层则描述数据加工关系，不是四类使用入口的重复菜单：原始事实经
 标准化后成为研究对象；运营接口是独立控制面，不参与这条加工链路。
 
 统一服务目录由 `GET /api/v1/catalog` 提供。它返回四类使用入口、三层加工关系、
 运营控制面、覆盖指标和 REST 契约；控制台“数据服务”页面也以该目录为唯一事实
-来源。`GET /api/v1/data-services` 暂时兼容旧客户端，并已在 OpenAPI 中标记为旧入口。
+来源。旧路径不提供兼容别名，调用方应以目录和 OpenAPI 中的规范路径为准。
 
 ## 1. 原始审计层
 
@@ -30,11 +30,11 @@
 
 | REST 接口 | 用途 |
 |---|---|
-| `GET /api/v1/raw/interfaces` | 查看每个可采接口是否已有原始记录，以及请求成功、空响应、失败统计 |
-| `GET /api/v1/raw/{api_name}/requests` | 分页查看真实上游请求和传输结果 |
-| `GET /api/v1/raw/{api_name}/records` | 按请求哈希、记录哈希和采集时间查询原始 JSONB |
-| `GET /api/v1/raw/{api_name}/coverage` | 查看原始请求与记录覆盖摘要 |
-| `GET /api/v1/raw/{api_name}/lineage/{record_hash}` | 从一条原始记录追溯产生它的逻辑请求 |
+| `GET /api/v1/audit/raw/interfaces` | 查看每个可采接口是否已有原始记录，以及请求成功、空响应、失败统计 |
+| `GET /api/v1/audit/raw/{api_name}/requests` | 分页查看真实上游请求和传输结果 |
+| `GET /api/v1/audit/raw/{api_name}/records` | 按请求哈希、记录哈希和采集时间查询原始 JSONB |
+| `GET /api/v1/audit/raw/{api_name}/coverage` | 查看原始请求与记录覆盖摘要 |
+| `GET /api/v1/audit/raw/{api_name}/lineage/{record_hash}` | 从一条原始记录追溯产生它的逻辑请求 |
 
 这里的请求 `success` 只表示 Tushare 成功返回响应，不等同于业务完整性通过。
 完整性仍由采集器校验和 Coverage Auditor 判定。
@@ -47,13 +47,12 @@
 
 | REST 接口 | 用途 |
 |---|---|
-| `GET /api/v1/datasets` | 发现已登记的数据资产 |
-| `GET /api/v1/datasets/{name}` | 查看表结构、业务身份、日期列和允许过滤器 |
-| `GET /api/v1/datasets/{name}/records` | 查询标准化记录，支持 `as_of` 的数据集可做历史时点约束 |
-| `GET /api/v1/interfaces` | 从上游接口视角查看实现方式及其对应数据集 |
-| `GET /api/v1/interfaces/{api_name}/records` | 查询契约通用接口的强类型标准记录 |
-| `GET /api/v1/freshness` | 查看数据最新日期与时效状态 |
-| `GET /api/v1/coverage` | 查看日期或报告期完整性证据 |
+| `GET /api/v1/data/datasets` | 发现已登记的数据资产 |
+| `GET /api/v1/data/datasets/{name}` | 查看表结构、业务身份、日期列和允许过滤器 |
+| `GET /api/v1/data/datasets/{name}/records` | 查询标准化记录，支持 `as_of` 的数据集可做历史时点约束 |
+| `GET /api/v1/data/interfaces` | 从上游接口视角查看实现方式及其对应数据集 |
+| `GET /api/v1/data/interfaces/{api_name}/records` | 查询契约通用接口的强类型标准记录 |
+| `GET /api/v1/data/freshness` | 查看数据最新日期与时效状态 |
 
 研究接口不能满足需求时才下钻这一层；Agent 不应默认自行拼装跨表研究口径，更不应
 解析原始 JSONB。
@@ -89,8 +88,10 @@
 
 | REST 接口 | 用途 |
 |---|---|
-| `GET /api/v1/collection-overview` | 当前运营总览和真实未恢复异常 |
-| `GET /api/v1/collection-jobs` | 全量执行实例及自动尝试/人工重试关系 |
-| `GET /api/v1/delivery/data-calendar` | 按数据日期查看完整性，不使用任务日期替代 |
-| `GET /api/v1/data-health` | 数据集时效和质量状态 |
-| `GET /api/v1/initialization` | 初始化和历史补采进度 |
+| `GET /api/v1/ops/collection-overview` | 当前运营总览和真实未恢复异常 |
+| `GET /api/v1/ops/collection-jobs` | 全量执行实例及自动尝试/人工重试关系 |
+| `GET /api/v1/ops/delivery/data-calendar` | 按数据日期查看完整性，不使用任务日期替代 |
+| `GET /api/v1/ops/data-health` | 数据集时效和质量状态 |
+| `GET /api/v1/ops/initialization` | 初始化和历史补采进度 |
+| `GET /api/v1/ops/coverage` | 查看日期或报告期完整性证据 |
+| `GET /api/v1/ops/health/ready` | 检查 API 与 PostgreSQL 是否就绪 |

@@ -6,7 +6,7 @@ from service.api.dependencies import get_data_health_service
 from service.data_health import DataHealthService
 
 
-router = APIRouter(prefix="/v1", tags=["data health"])
+router = APIRouter(prefix="/v1/ops", tags=["operations"])
 
 
 @router.get("/data-health")

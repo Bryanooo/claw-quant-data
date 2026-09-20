@@ -10,8 +10,8 @@
 - 业务身份可信度：`contract_reviewed`
 - 当前数据视图：`tushare_current_fut_weekly_detail`
 - 原始数据表：`tushare_raw_record`（`api_name=fut_weekly_detail`）
-- REST：`GET /api/v1/datasets/fut_weekly_detail/records`
-- 接口 REST：`GET /api/v1/interfaces/fut_weekly_detail/records`
+- REST：`GET /api/v1/data/datasets/fut_weekly_detail/records`
+- 接口 REST：`GET /api/v1/data/interfaces/fut_weekly_detail/records`
 - 标准化实现：[service/tushare_normalization.py](../../../service/tushare_normalization.py)
 
 ## 业务字段

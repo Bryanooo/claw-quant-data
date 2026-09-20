@@ -429,6 +429,28 @@ def _run_tushare_interface(parameters: BaseModel) -> TaskExecutionResult:
     if values.fields:
         request["fields"] = values.fields
     collector = CatalogRawCollector(values.api_name)
+    if values.api_name == "major_news" and values.complete:
+        from service.major_news import (
+            MajorNewsCheckpointRepository,
+            collect_major_news_window,
+        )
+
+        fields = request.pop("fields", None)
+        if not fields:
+            raise RuntimeError("major_news requires explicit complete output fields")
+        evidence = collect_major_news_window(
+            collector,
+            request,
+            fields=fields,
+            checkpoints=MajorNewsCheckpointRepository(),
+        )
+        fetched = int(evidence["rows_fetched"])
+        return TaskExecutionResult(
+            rows_inserted=int(evidence["rows_stored"]),
+            rows_fetched=fetched,
+            completion_status="complete" if fetched else "empty",
+            completion_evidence=evidence,
+        )
     if not values.complete:
         stored = collector.collect(**request)
         return TaskExecutionResult(
@@ -664,7 +686,7 @@ TASKS = TaskRegistry(
             TushareInterfaceParameters,
             _run_tushare_interface,
             handler_type="generic",
-            handler_version="4",
+            handler_version="5",
         ),
     ]
 )

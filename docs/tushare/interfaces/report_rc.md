@@ -87,6 +87,14 @@ ts_code        name      report_date   classify   org_name quarter     eps      
 
 ## claw-quant 存储契约
 
-该接口由专用采集器写入规范化业务表，主键和字段转换以链接代码为准。
+该接口由专用采集器写入规范化业务表。`quarter` 是上游可空字段；业务表使用
+`source_key` 作为主键，它由股票、研报日期/标题、券商、作者和预测报告期共同
+生成，避免同日同股票的多家券商预测互相覆盖。历史原始响应可使用
+[`scripts/restore_report_rc_from_raw.py`](../../../scripts/restore_report_rc_from_raw.py)
+无损重建业务表。
+
+虽然官方参数表没有列出 `limit/offset`，2026-09-20 的真实探测确认不同 offset
+返回不同数据。采集器必须持续翻页到明确的空页才会标记完成；短页本身不是完整性
+证据，因为上游可能采用小于请求 `limit` 的内部返回上限。
 
 > 权限状态来自实际 Token 探测；示例中的 Token 仅为环境变量占位符，不包含真实密钥。

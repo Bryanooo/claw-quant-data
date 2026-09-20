@@ -20,16 +20,26 @@ def main() -> int:
         ),
         required=True,
     )
+    parser.add_argument("--resource-class")
     args = parser.parse_args()
 
     threshold = int(os.getenv("SERVICE_HEARTBEAT_MAX_AGE_SECONDS", "90"))
+    resource_filter = (
+        "AND details->'resource_classes' ? %s" if args.resource_class else ""
+    )
+    parameters = (
+        (args.component, args.resource_class)
+        if args.resource_class
+        else (args.component,)
+    )
     rows = query(
-        """
+        f"""
         SELECT EXTRACT(EPOCH FROM (NOW() - MAX(last_seen_at))) AS age_seconds
         FROM sys_service_heartbeat
         WHERE component = %s
+        {resource_filter}
         """,
-        (args.component,),
+        parameters,
     )
     age = rows[0]["age_seconds"] if rows else None
     if age is None or float(age) > threshold:

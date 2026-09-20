@@ -181,6 +181,19 @@ def test_rate_limit_error_exposes_retry_delay(monkeypatch):
     assert captured.value.retry_after_seconds == 30
 
 
+def test_hourly_quota_defers_the_whole_exhausted_window(monkeypatch):
+    collector = _collector_without_init()
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **_params: (_ for _ in ()).throw(Exception("频率超限(30次/小时)")),
+    )
+
+    with pytest.raises(CollectorRateLimitError) as captured:
+        collector.collect()
+    assert captured.value.retry_after_seconds == 3600
+
+
 def test_daily_quota_waits_until_next_shanghai_reset(monkeypatch):
     collector = _collector_without_init()
     monkeypatch.setattr(
@@ -223,7 +236,7 @@ def test_collect_skip_store(monkeypatch):
 
 def test_specialized_offset_pagination_exhausts_and_aggregates(monkeypatch):
     collector = _collector_without_init()
-    page_sizes = {0: 2, 2: 2, 4: 1}
+    page_sizes = {0: 2, 2: 2, 4: 1, 5: 0}
     calls = []
 
     def fetch(**params):
@@ -242,10 +255,10 @@ def test_specialized_offset_pagination_exhausts_and_aggregates(monkeypatch):
         trade_date="20260831",
     )
 
-    assert [call["offset"] for call in calls] == [0, 2, 4]
+    assert [call["offset"] for call in calls] == [0, 2, 4, 5]
     assert result.fetched_rows == 5
     assert result.stored_rows == 5
-    assert result.request_count == 3
+    assert result.request_count == 4
     assert result.partitions == ("20260831",)
     assert result.evidence["verified"] is True
     assert result.evidence["exhausted"] is True

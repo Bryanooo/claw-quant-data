@@ -5,6 +5,29 @@ import pytest
 from scripts import manage_research_backfills as backfills
 
 
+def test_news_backfill_uses_resumable_source_year_scopes(monkeypatch):
+    captured = []
+
+    def fake_create(children, window_start, window_end):
+        captured.append((children, window_start, window_end))
+        return True
+
+    monkeypatch.setattr(backfills, "_create_news_batch", fake_create)
+
+    result = backfills.queue_news(date(2026, 9, 17), date(2026, 9, 18))
+
+    assert result == {"jobs_created": 9, "campaigns_created": 0, "batches_created": 1}
+    assert captured[0][0][0].parameters["parameters"] == {
+        "src": "新华网", "start_date": "20260917", "end_date": "20260918"
+    }
+    assert captured[0][0][-1].parameters["parameters"] == {
+        "src": "财联社", "start_date": "20260917", "end_date": "20260918"
+    }
+    assert all(child.api_name == "major_news" for child in captured[0][0])
+    assert all(child.resource_class == "news-backfill" for child in captured[0][0])
+    assert captured[0][1:] == (date(2026, 9, 17), date(2026, 9, 18))
+
+
 def test_analyst_backfill_uses_independently_verifiable_daily_scopes(monkeypatch):
     captured = []
 

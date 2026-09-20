@@ -2391,7 +2391,7 @@ def test_empty_results_create_bounded_separately_auditable_rechecks():
         assert first["recheck_of_job_id"] == root_job_id
         assert first["recheck_root_job_id"] == root_job_id
         assert first["recheck_generation"] == 1
-        assert first["handler_version"] == "4"
+        assert first["handler_version"] == "5"
         assert repository.create_empty_recheck(
             root_job_id,
             min_interval_seconds=1,

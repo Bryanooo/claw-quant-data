@@ -1,8 +1,9 @@
 {
-  "generated_at": "2026-09-09T18:09:20.002198+08:00",
+  "generated_at": "2026-09-20T00:51:36.311567+08:00",
   "probe_attempts": 2,
-  "total": 40,
-  "confirmed_denied": 39,
+  "total": 39,
+  "confirmed_denied": 38,
+  "newly_accessible": 1,
   "changed_or_inconclusive": 1,
   "interfaces": [
     {
@@ -506,26 +507,6 @@
       ]
     },
     {
-      "api_name": "rt_hk_k",
-      "official_url": "https://tushare.pro/document/2?doc_id=383",
-      "documented_permission": "无权限",
-      "confirmed": false,
-      "probes": [
-        {
-          "attempt": 1,
-          "classification": "accessible",
-          "code": 0,
-          "message": ""
-        },
-        {
-          "attempt": 2,
-          "classification": "accessible",
-          "code": 0,
-          "message": ""
-        }
-      ]
-    },
-    {
       "api_name": "rt_idx_k",
       "official_url": "https://tushare.pro/document/2?doc_id=403",
       "documented_permission": "无权限",
@@ -709,19 +690,19 @@
       "api_name": "us_daily",
       "official_url": "https://tushare.pro/document/2?doc_id=254",
       "documented_permission": "无权限",
-      "confirmed": true,
+      "confirmed": false,
       "probes": [
         {
           "attempt": 1,
-          "classification": "denied",
+          "classification": "accessible_rate_limited",
           "code": 40203,
-          "message": "抱歉，您没有接口(us_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+          "message": "抱歉，您访问接口(us_daily)频率超限(1次/分钟)，具体频次详情：https://tushare.pro/document/1?doc_id=108。"
         },
         {
           "attempt": 2,
-          "classification": "denied",
+          "classification": "accessible_rate_limited",
           "code": 40203,
-          "message": "抱歉，您没有接口(us_daily)访问权限，权限的具体详情访问：https://tushare.pro/document/1?doc_id=108。"
+          "message": "抱歉，您访问接口(us_daily)频率超限(1次/分钟)，具体频次详情：https://tushare.pro/document/1?doc_id=108。"
         }
       ]
     },

@@ -152,6 +152,23 @@ services:
       retries: 3
       start_period: 20s
 
+  worker-news:
+    <<: *app-service
+    environment:
+      <<: *app-environment
+      # Persist under the existing worker-backfill heartbeat enum. The monitor
+      # exposes this resource-isolated instance as the logical worker-news
+      # component, so deployments do not need a blocking ALTER TABLE.
+      WORKER_COMPONENT: worker-backfill
+      WORKER_RESOURCE_CLASSES: ${NEWS_WORKER_RESOURCE_CLASSES:-news-backfill}
+    command: ["python", "-m", "service.collection_jobs.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-backfill", "--resource-class", "news-backfill"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   auditor:
     <<: *app-service
     command:

@@ -51,6 +51,8 @@ class TushareCollectionPolicy:
 _RATE_LIMIT_SECONDS = {
     "hk_daily": 3600.0,
     "stk_mins": 3600.0,
+    # Current token contract: 20 calls/minute. Keep a safety margin.
+    "major_news": 3.2,
 }
 
 _PAGE_SIZE_OVERRIDES = {
@@ -89,6 +91,10 @@ _MAX_PAGES_OVERRIDES = {
 # generation. ``daily`` doc 27 states 6,000 rows per request.
 _DOCUMENTED_ROW_LIMIT_OVERRIDES = {
     "daily": 6000,
+    # Official doc 195 states a hard 400-row response limit.  The API has no
+    # offset contract, so complete collection must fan out by source and split
+    # time windows until every leaf returns fewer than 400 rows.
+    "major_news": 400,
 }
 
 _DEPENDENCY_FANOUT = {
@@ -169,6 +175,11 @@ _NO_LOOP_APIS = {
 # rows, so treating that response as a complete non-paginated partition would
 # either fail forever or silently truncate a future 1000+ constituent basket.
 _OFFSET_PAGINATION_OVERRIDES = {
+    # Live verification on 2026-09-20 returned distinct report rows at
+    # offsets 0 and 10 for the capped 2018-08-15 partition. Daily report
+    # volumes can land exactly on 1,000/3,000/5,000, so explicit exhaustion
+    # is required before a research-history leaf may be called complete.
+    "report_rc",
     # A 45-day forward calendar window crosses the upstream 100-row boundary.
     # Live offsets 0/100/200 returned distinct events; exhausting offsets is
     # required to avoid silently losing future GDP, PMI and policy releases.
@@ -236,10 +247,10 @@ _OFFSET_PAGINATION_OVERRIDES = {
     "hk_hold",
 }
 
-# hk_daily is a separately purchased, one-request-per-hour interface. A single
-# exact-date request per business day is bounded and the distributed limiter
-# guarantees that manual/retry activity cannot violate the provider interval.
-_SAFE_LOW_FREQUENCY_APIS = {"hk_daily"}
+# These low-frequency interfaces have dedicated bounded orchestration plus a
+# distributed limiter. hk_daily uses one exact-date request; major_news uses
+# source windows with durable adaptive-split checkpoints and a daily quota.
+_SAFE_LOW_FREQUENCY_APIS = {"hk_daily", "major_news"}
 
 
 def _parameter_names(contract: TushareInterfaceContract) -> set[str]:
@@ -381,7 +392,7 @@ def derive_policy(contract: TushareInterfaceContract) -> TushareCollectionPolicy
     elif not contract.document_ids:
         reason = "project extension lacks a complete official input contract"
     elif contract.api_name in _SAFE_LOW_FREQUENCY_APIS:
-        reason = "safe exact-date daily request with distributed low-frequency pacing"
+        reason = "dedicated bounded orchestration with distributed low-frequency pacing"
     elif contract.api_name in _RATE_LIMIT_SECONDS:
         reason = "requires dedicated low-frequency scheduling"
     elif strategy in {"ts_code_fanout", "dependency_fanout"}:

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Claw Quant · 采集控制台</title>
-    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260918-data-services-v1" />
+    <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260920-api-hierarchy-v3" />
   </head>
   <body class="theme-dark">
     <header class="topbar">
@@ -411,6 +411,7 @@
               <option value="failure_history">全部失败记录</option>
               <option value="complete">已完成实例</option>
               <option value="retry">人工重试实例</option>
+              <option value="superseded">已被新计划替代</option>
             </select>
             <select id="instanceKindFilter" aria-label="实例类型">
               <option value="all">叶子与批次</option>
@@ -446,11 +447,20 @@
         <div class="workspace-head data-services-head">
           <div>
             <p class="section-kicker">DATA SERVICE ARCHITECTURE</p>
-            <h2>三层数据服务</h2>
-            <p id="dataServicesSummary" class="section-summary">从可追责的上游事实，逐层提升为 Agent 可直接使用的研究对象。</p>
+            <h2>接口服务导航</h2>
+            <p id="dataServicesSummary" class="section-summary">Agent 默认使用研究接口；数据、运营和审计接口按职责分开。</p>
           </div>
           <a class="button button-secondary service-doc-link" href="/api/docs" target="_blank" rel="noreferrer">打开 REST 文档</a>
         </div>
+
+        <div class="service-audience-grid" aria-label="按使用者划分的接口入口">
+          <a class="service-audience-card is-primary" href="/api/v1/research/capabilities" target="_blank" rel="noreferrer"><small>DEFAULT FOR AGENTS</small><strong>研究接口</strong><span>基本面 · 技术面 · 板块 · 事件</span><code>/api/v1/research/*</code></a>
+          <a class="service-audience-card" href="/api/v1/datasets" target="_blank" rel="noreferrer"><small>STABLE CONTRACTS</small><strong>数据接口</strong><span>数据集 · 字段 · 过滤 · 历史时点</span><code>/api/v1/datasets/*</code></a>
+          <a class="service-audience-card" href="/api/v1/collection-overview" target="_blank" rel="noreferrer"><small>CONTROL PLANE</small><strong>运营接口</strong><span>任务 · 实例 · 异常 · 数据日历</span><code>/api/v1/collection* · /delivery/*</code></a>
+          <a class="service-audience-card" href="/api/v1/raw/interfaces" target="_blank" rel="noreferrer"><small>DIAGNOSTICS</small><strong>审计接口</strong><span>原始记录 · 请求账本 · 血缘 · 漂移</span><code>/api/v1/raw/*</code></a>
+        </div>
+
+        <div class="service-layer-caption"><strong>数据加工链路</strong><span>以下三层表示数据从原始事实到研究对象的加工关系；运营接口属于独立控制面。</span></div>
 
         <div class="service-layer-flow" aria-label="数据服务处理链路">
           <button class="service-layer-card is-selected" type="button" data-service-layer="raw">
@@ -743,6 +753,6 @@
       <div id="jobInstanceDetail" class="instance-detail"><p class="empty-state">正在读取实例状态…</p></div>
     </dialog>
 
-    <script src="/dashboard-assets/dashboard.js?v=20260918-data-services-v1" defer></script>
+    <script src="/dashboard-assets/dashboard.js?v=20260920-api-hierarchy-v3" defer></script>
   </body>
 </html>

@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS sys_collection_job (
     started_at       TIMESTAMPTZ,
     finished_at      TIMESTAMPTZ,
     CONSTRAINT ck_collection_job_status
-        CHECK (status IN ('queued', 'running', 'success', 'failed')),
+        CHECK (status IN ('queued', 'running', 'success', 'failed', 'superseded')),
     CONSTRAINT ck_collection_job_attempts
         CHECK (attempt >= 0 AND max_attempts BETWEEN 1 AND 5),
     CONSTRAINT ck_collection_job_priority CHECK (priority BETWEEN 0 AND 100),
@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS sys_collection_job (
     CONSTRAINT ck_collection_job_completion_status CHECK (
         completion_status IN (
             'pending', 'running', 'retrying', 'complete', 'empty',
-            'verifying', 'unverified', 'page_complete', 'incomplete', 'failed'
+            'verifying', 'unverified', 'page_complete', 'incomplete', 'failed',
+            'superseded'
         )
     ),
     CONSTRAINT ck_collection_job_handler_type CHECK (

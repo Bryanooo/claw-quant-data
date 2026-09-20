@@ -413,27 +413,6 @@ class CatalogRawCollector(BaseCollector):
                     stored_total,
                     previous_hash,
                 )
-                if fetched < requested_size:
-                    self.completion_evidence = self._completion_evidence(
-                        verified=True,
-                        mode="offset",
-                        scope_hash=scope_hash,
-                        page_size=requested_size,
-                        pages_completed=pages,
-                        rows_fetched=fetched_total,
-                        rows_stored=stored_total,
-                        exhausted=True,
-                    )
-                    self._finish_checkpoint(
-                        scope_hash,
-                        "success",
-                        offset,
-                        pages,
-                        fetched_total,
-                        stored_total,
-                        previous_hash,
-                    )
-                    return stored_total
             raise IncompleteCollectionError(
                 f"{self.API_NAME} reached max_pages={requested_pages} before exhaustion"
             )

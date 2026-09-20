@@ -45,6 +45,10 @@ FORMAT_ONLY_CHECKSUM_ALIASES = {
         "f1820901ad5e93b9f46e9f9151624549222f8761617ebb9178c5a081b74a3831":
             "f5af597f1461914817865da87b1dd3a05489040a315d27a43c123a5cb42c4931",
     },
+    "057_major_news_resumable_plan": {
+        "7e757e9088da3d7ac4b277f527c98d8610a49bd6e6fc61db16962f8a376f7c00":
+            "105d50b5310bccff8d9e1d3bff05c73afbd1ce5e0a6082387f3ac4c6b948c929",
+    },
 }
 
 

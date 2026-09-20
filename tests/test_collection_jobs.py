@@ -334,7 +334,7 @@ def test_collection_job_instance_api_supports_effective_failure_views():
     app.dependency_overrides[get_collection_job_service] = lambda: service
 
     with TestClient(app) as client:
-        for state in ("attention", "recovered", "failure_history"):
+        for state in ("attention", "recovered", "failure_history", "superseded"):
             response = client.get(
                 "/api/v1/collection-job-instances",
                 params={"state": state, "page": 1, "page_size": 25},
@@ -639,7 +639,7 @@ def test_task_registry_snapshots_deterministic_handlers():
 
     assert generic.handler_type == "generic"
     assert generic.handler_key == "catalog_typed:cn_cpi"
-    assert generic.handler_version == "4"
+    assert generic.handler_version == "5"
     assert dedicated.handler_type == "dedicated"
     assert dedicated.handler_key.endswith(":_run_stock_daily")
     assert dedicated.handler_version == "2"

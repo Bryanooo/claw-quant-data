@@ -22,11 +22,22 @@ class CollectionMonitorRepository:
     def service_health(self) -> list[dict]:
         return query(
             """
-            SELECT DISTINCT ON (component)
-                   component, instance_id, details, last_seen_at,
+            WITH logical_heartbeat AS (
+                SELECT CASE
+                           WHEN component='worker-backfill'
+                            AND details->'resource_classes' ? 'news-backfill'
+                           THEN 'worker-news'
+                           ELSE component
+                       END AS logical_component,
+                       instance_id, details, last_seen_at
+                FROM sys_service_heartbeat
+            )
+            SELECT DISTINCT ON (logical_component)
+                   logical_component AS component,
+                   instance_id, details, last_seen_at,
                    EXTRACT(EPOCH FROM (NOW() - last_seen_at)) AS age_seconds
-            FROM sys_service_heartbeat
-            ORDER BY component, last_seen_at DESC
+            FROM logical_heartbeat
+            ORDER BY logical_component, last_seen_at DESC
             """
         )
 
@@ -38,33 +49,45 @@ class CollectionMonitorRepository:
                    COUNT(*) FILTER (WHERE job.status='running' AND job.job_kind='leaf')::INTEGER AS running,
                    COUNT(*) FILTER (
                        WHERE job.status='failed'
-                         AND job.finished_at >= NOW() - INTERVAL '24 hours'
+                         AND (job.expected_for IS NOT NULL OR job.period_key IS NOT NULL)
                          AND NOT EXISTS (
                              SELECT 1 FROM sys_collection_job AS recovered
-                             WHERE recovered.job_id > job.job_id
+                             WHERE job.expected_for IS NOT NULL
+                               AND recovered.job_id > job.job_id
                                AND recovered.status='success'
+                               AND recovered.job_kind='leaf'
                               AND COALESCE(
                                      recovered.api_name,
-                                     recovered.parameters->>'api_name',
-                                     recovered.task_name
+                                     recovered.parameters->>'api_name'
                                    )=COALESCE(
                                      job.api_name,
-                                     job.parameters->>'api_name',
-                                     job.task_name
+                                     job.parameters->>'api_name'
                                    )
-                               AND (
-                                     (job.expected_for IS NOT NULL
-                                      AND recovered.expected_for=job.expected_for)
-                                  OR (job.period_key IS NOT NULL
-                                      AND recovered.period_key=job.period_key)
-                                  OR (job.expected_for IS NULL
-                                      AND job.period_key IS NULL)
-                               )
+                               AND recovered.expected_for=job.expected_for
+                         )
+                         AND NOT EXISTS (
+                             SELECT 1 FROM sys_collection_job AS recovered
+                             WHERE job.period_key IS NOT NULL
+                               AND recovered.job_id > job.job_id
+                               AND recovered.status='success'
+                               AND recovered.job_kind='leaf'
+                               AND COALESCE(
+                                     recovered.api_name,
+                                     recovered.parameters->>'api_name'
+                                   )=COALESCE(
+                                     job.api_name,
+                                     job.parameters->>'api_name'
+                                   )
+                               AND recovered.period_key=job.period_key
                          )
                    )::INTEGER AS failed_24h
             FROM sys_collection_job AS job
             WHERE job.job_kind='leaf'
-              AND (job.status IN ('queued','running') OR job.finished_at >= NOW() - INTERVAL '24 hours')
+              AND (
+                    job.status IN ('queued','running')
+                 OR (job.status='failed'
+                     AND job.finished_at >= NOW() - INTERVAL '24 hours')
+              )
             GROUP BY resource_class
             ORDER BY resource_class
             """
@@ -236,6 +259,7 @@ def _service_health_view(item: dict[str, Any]) -> dict[str, Any]:
         "scheduler": "调度器",
         "worker": "日常 Worker",
         "worker-backfill": "历史补采 Worker",
+        "worker-news": "新闻补采 Worker",
         "worker-fanout": "扇出 Worker",
         "auditor": "覆盖审计器",
         "backup": "数据库备份",
@@ -244,6 +268,7 @@ def _service_health_view(item: dict[str, Any]) -> dict[str, Any]:
         "scheduler": "检查 scheduler 容器日志；恢复前不会生成新的定时任务",
         "worker": "检查 worker 容器日志与日常队列；必要时重启该容器",
         "worker-backfill": "检查 worker-backfill 容器日志；日常采集不受该组件影响",
+        "worker-news": "检查 worker-news 容器日志；新闻补采独立限频，不影响其他任务",
         "worker-fanout": "检查 worker-fanout 容器日志与扇出队列",
         "auditor": "检查 auditor 容器日志；采集可继续，但完整性状态不会更新",
         "backup": "检查 backup 容器日志和最近备份时间；采集数据仍保存在 PostgreSQL 中",

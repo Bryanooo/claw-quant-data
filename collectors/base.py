@@ -93,7 +93,7 @@ class PartialCollectionError(CollectorError):
         )
 
 
-def _tushare_error(error: Exception) -> CollectorError | None:
+def classify_tushare_error(error: Exception) -> CollectorError | None:
     """Classify HTTP-200 Tushare errors that should not use blind retries."""
     message = str(error)
     if "频率超限" in message or "访问频率" in message:
@@ -110,10 +110,16 @@ def _tushare_error(error: Exception) -> CollectorError | None:
                 hour=0, minute=5, second=0, microsecond=0
             )
             retry_after = max(math.ceil((reset_at - now).total_seconds()), 60)
+        elif match.group(2) == "小时":
+            # Once an hourly allocation is exhausted, spacing the next retry
+            # by 3600/N seconds is wrong: every sibling job will hit the same
+            # exhausted window and burn an attempt.  Defer the interface for
+            # a full window; JobRepository propagates delays >= 1 hour to all
+            # queued leaves for this API.
+            retry_after = 3600
         else:
             count = max(int(match.group(1)), 1)
-            window = {"分钟": 60, "小时": 3600}[match.group(2)]
-            retry_after = max(window // count, 1)
+            retry_after = max(60 // count, 1)
         return CollectorRateLimitError(message, retry_after)
     permanent_markers = (
         "没有接口",
@@ -125,6 +131,10 @@ def _tushare_error(error: Exception) -> CollectorError | None:
     if any(marker in message for marker in permanent_markers):
         return NonRetryableCollectorError(message)
     return None
+
+
+# Backward-compatible private alias for older imports and persisted workers.
+_tushare_error = classify_tushare_error
 
 def get_db_conn():
     """获取数据库连接"""
@@ -850,8 +860,9 @@ class BaseCollector(ABC):
         raw_request_ids: list[int] = []
         logical_request_hashes: set[str] = set()
 
-        for page in range(max_pages):
-            offset = page * page_size
+        offset = 0
+        pages_attempted = 0
+        while pages_attempted < max_pages:
             result = self.run(
                 skip_store=skip_store,
                 **params,
@@ -889,7 +900,7 @@ class BaseCollector(ABC):
                 stored_total += result.stored_rows
                 pages_completed += 1
 
-            if result.fetched_rows < page_size:
+            if result.fetched_rows == 0:
                 partition = next(
                     (
                         str(params[name])
@@ -938,6 +949,8 @@ class BaseCollector(ABC):
                         },
                     },
                 )
+            offset += result.fetched_rows
+            pages_attempted += 1
 
         error = PartialCollectionError(
             [

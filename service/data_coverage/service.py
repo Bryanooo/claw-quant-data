@@ -23,7 +23,7 @@ BUSINESS_TIMEZONE = ZoneInfo("Asia/Shanghai")
 PARTITION_STATUSES = {
     "present", "partial", "missing", "pending", "observed_only", "problem",
 }
-JOB_STATUSES = {"queued", "running", "success", "failed"}
+JOB_STATUSES = {"queued", "running", "success", "failed", "superseded"}
 MAX_MANUAL_REPAIRS = 4000
 
 

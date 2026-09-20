@@ -27,7 +27,9 @@ from service.history_baselines import (
     INITIALIZATION_STRICT_COVERAGE_LOOKBACK_DAYS,
     INITIALIZATION_TRANSPORT_VERIFIED_DATASETS,
     FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS,
+    calendar_windows,
     catalog_history_partitions,
+    research_history_partitions,
 )
 from service.config import (
     INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS,
@@ -53,7 +55,7 @@ PROFILE_DAYS = {
     "full": None,
 }
 PLANNING_BATCH_SIZE = 500
-INITIALIZATION_PLAN_VERSION = 2
+INITIALIZATION_PLAN_VERSION = 3
 CORE_TASKS = ("stock_daily", "stock_daily_basic", "moneyflow", "stock_limit")
 TRANSIENT_AUTO_RECOVERY_CATEGORIES = frozenset({"network", "timeout", "quota"})
 FULL_HISTORY_DATASET_STARTS = {
@@ -121,6 +123,24 @@ FULL_INITIALIZATION_BASELINES = (
     "fund_nav",
     "fund_portfolio",
 )
+FULL_RESEARCH_HISTORY_INTERFACES = (
+    "major_news",
+    "report_rc",
+    "stk_holdertrade",
+    "stk_holdernumber",
+    "hk_hold",
+    "repurchase",
+    "share_float",
+    "fund_portfolio",
+)
+FULL_RESEARCH_HISTORY_FANOUTS = (
+    "top10_holders",
+    "top10_floatholders",
+    "dividend",
+    "cyq_chips",
+    "cyq_perf",
+)
+RESEARCH_FANOUT_PLANNING_BATCH_SIZE = 20
 _EMPTY_FANOUT_BASELINES = {
     "top10_cb_holders", "cyq_chips", "cyq_perf", "fina_audit",
     "stk_rewards", "top10_floatholders", "top10_holders", "index_weight",
@@ -251,6 +271,7 @@ class InitializationService:
         if profile == "full":
             required_interfaces.update(AUXILIARY_FINANCE_INTERFACES)
             required_interfaces.update(FULL_INITIALIZATION_BASELINES)
+            required_interfaces.update(FULL_RESEARCH_HISTORY_INTERFACES)
         for api_name in sorted(required_interfaces):
             try:
                 contract = catalog.get(api_name)
@@ -269,7 +290,9 @@ class InitializationService:
                 })
 
         if profile == "full":
-            for api_name in sorted(FULL_FANOUT_BASELINES):
+            for api_name in sorted(
+                set(FULL_FANOUT_BASELINES) | set(FULL_RESEARCH_HISTORY_FANOUTS)
+            ):
                 if api_name not in FANOUT_DEFINITIONS:
                     errors.append({
                         "code": "missing_fanout_recipe",
@@ -345,7 +368,17 @@ class InitializationService:
             "history_end": resolved_end.isoformat(),
             "tasks": sorted(required_tasks),
             "interfaces": sorted(required_interfaces),
-            "fanout": sorted(FULL_FANOUT_BASELINES if profile == "full" else ()),
+            "fanout": sorted(
+                set(FULL_FANOUT_BASELINES) | set(FULL_RESEARCH_HISTORY_FANOUTS)
+                if profile == "full" else ()
+            ),
+            "research_history": sorted(
+                FULL_RESEARCH_HISTORY_INTERFACES if profile == "full" else ()
+            ),
+            "constrained_exclusions": (
+                ["stk_mins: token permits only two requests per day"]
+                if profile == "full" else []
+            ),
             "verification": list(VERIFICATION_DATASETS),
             "scheduled_collectors": sorted(schedule_ids),
         }
@@ -696,6 +729,11 @@ class InitializationService:
             from service.tushare_scheduling import DEDICATED_API_BY_RUN_ID
 
             api_name = DEDICATED_API_BY_RUN_ID.get(parameters.get("schedule_id"))
+        elif task_name == "tushare_interface":
+            api_name = parameters.get("api_name")
+        resource_class = (
+            "news-backfill" if api_name == "major_news" else "initialization"
+        )
         job, _ = self._job_service.submit(
             task_name,
             parameters,
@@ -708,7 +746,7 @@ class InitializationService:
             period_key=period_key,
             expected_for=expected_for,
             priority=30,
-            resource_class="initialization",
+            resource_class=resource_class,
         )
         self._repository.add_collection_step(
             initialization_id,
@@ -880,7 +918,87 @@ class InitializationService:
             expected_for=period,
             existing_steps=existing_steps,
         )
+        if self._plan_version(campaign) >= 3:
+            created = 0
+            for (
+                step_key,
+                api_name,
+                request,
+                allow_empty,
+                expected_for,
+            ) in self._research_fanout_requests(campaign):
+                if step_key in existing_steps:
+                    continue
+                if created >= RESEARCH_FANOUT_PLANNING_BATCH_SIZE:
+                    return False
+                fanout, _ = self._fanout_service.submit(
+                    request,
+                    idempotency_key=_safe_key(
+                        f"init-{initialization_id}-r{round_number}-{step_key}"
+                    ),
+                    initialization_id=initialization_id,
+                    cadence="initialization",
+                    period_key=step_key.removeprefix("research-fanout:"),
+                    expected_for=expected_for,
+                    reuse_scope=True,
+                )
+                self._repository.add_fanout_step(
+                    initialization_id,
+                    campaign["current_phase"],
+                    step_key,
+                    fanout["campaign_id"],
+                    allow_empty=allow_empty,
+                )
+                existing_steps.add(step_key)
+                created += 1
         return True
+
+    @staticmethod
+    def _research_fanout_requests(
+        campaign: dict,
+    ) -> list[tuple[str, str, dict[str, Any], bool, date]]:
+        start = campaign["history_start"]
+        end = campaign["history_end"]
+        requests: list[tuple[str, str, dict[str, Any], bool, date]] = []
+
+        holder_start = max(start, date(end.year - 5, 1, 1))
+        for period in _published_quarter_ends(holder_start, end):
+            for api_name in ("top10_holders", "top10_floatholders"):
+                compact = period.strftime("%Y%m%d")
+                requests.append((
+                    f"research-fanout:{api_name}:{compact}",
+                    api_name,
+                    {"api_name": api_name, "period": period, "page_size": 200},
+                    True,
+                    period,
+                ))
+
+        requests.append((
+            "research-fanout:dividend:all-listed-history",
+            "dividend",
+            {"api_name": "dividend", "page_size": 200},
+            True,
+            end,
+        ))
+
+        chip_start = max(start, date(2018, 1, 1))
+        for window_start, window_end in calendar_windows(
+            chip_start, end, monthly=True
+        ):
+            for api_name in ("cyq_chips", "cyq_perf"):
+                requests.append((
+                    f"research-fanout:{api_name}:{window_start:%Y-%m}",
+                    api_name,
+                    {
+                        "api_name": api_name,
+                        "start_date": window_start,
+                        "end_date": window_end,
+                        "page_size": 200,
+                    },
+                    True,
+                    window_end,
+                ))
+        return requests
 
     @staticmethod
     def _fanout_baseline_request(api_name: str, campaign: dict) -> dict:
@@ -1078,6 +1196,61 @@ class InitializationService:
                 existing_steps=existing_steps,
             )
             created += 1
+        if campaign["profile"] == "full" and self._plan_version(campaign) >= 3:
+            for partition in research_history_partitions(history_start, history_end):
+                step_key = f"research-history:{partition.key}"
+                if step_key in existing_steps:
+                    continue
+                if created >= PLANNING_BATCH_SIZE:
+                    return False
+                page_size = 5000 if partition.api_name != "major_news" else None
+                task_parameters = {
+                    "api_name": partition.api_name,
+                    "parameters": partition.parameters,
+                    "complete": True,
+                    "resume": True,
+                }
+                if page_size:
+                    task_parameters.update(page_size=page_size, max_pages=200)
+                self._submit_collection(
+                    campaign,
+                    step_key,
+                    "tushare_interface",
+                    task_parameters,
+                    allow_empty=True,
+                    require_verified=True,
+                    period_key=partition.key,
+                    expected_for=partition.end_date,
+                    existing_steps=existing_steps,
+                )
+                created += 1
+
+            for period in _published_quarter_ends(history_start, history_end):
+                compact = period.strftime("%Y%m%d")
+                step_key = f"research-history:fund_portfolio:{compact}"
+                if step_key in existing_steps:
+                    continue
+                if created >= PLANNING_BATCH_SIZE:
+                    return False
+                self._submit_collection(
+                    campaign,
+                    step_key,
+                    "tushare_interface",
+                    {
+                        "api_name": "fund_portfolio",
+                        "parameters": {"period": compact},
+                        "complete": True,
+                        "page_size": 5000,
+                        "max_pages": 500,
+                        "resume": True,
+                    },
+                    allow_empty=True,
+                    require_verified=True,
+                    period_key=f"fund_portfolio:{compact}",
+                    expected_for=period,
+                    existing_steps=existing_steps,
+                )
+                created += 1
         return True
 
     def _plan_latest_baseline(self, campaign: dict, existing_steps: set[str]) -> bool:
@@ -1355,18 +1528,29 @@ class InitializationService:
                 len(FINANCE_TASKS) + len(AUXILIARY_FINANCE_INTERFACES)
             )
         if phase == 3:
-            return 0 if profile == "quick" else len(
-                catalog_history_partitions(start, end)
-            )
+            if profile == "quick":
+                return 0
+            total = sum(1 for _ in catalog_history_partitions(start, end))
+            if profile == "full" and self._plan_version(campaign) >= 3:
+                total += sum(1 for _ in research_history_partitions(start, end))
+                total += len(_published_quarter_ends(start, end))
+            return total
         if phase == 5:
             if profile != "full":
                 return 0
             nav_start = max(start, end - timedelta(days=365))
             fund_partitions = (end - nav_start).days + 2  # daily NAV + one portfolio
-            return len(FULL_FANOUT_BASELINES) + fund_partitions
+            total = len(FULL_FANOUT_BASELINES) + fund_partitions
+            if self._plan_version(campaign) >= 3:
+                total += len(self._research_fanout_requests(campaign))
+            return total
         if phase == 6:
             return len(VERIFICATION_DATASETS) if profile != "quick" else 2
         return None
+
+    @staticmethod
+    def _plan_version(campaign: dict) -> int:
+        return int((campaign.get("options") or {}).get("plan_version") or 2)
 
     def _decorate_step(self, step: dict) -> dict:
         result = dict(step)

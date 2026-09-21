@@ -37,8 +37,8 @@ Ichimoku、Donchian、Supertrend、StochRSI 和 CMF。最后一个实时 ZigZag 
 | 黄金9999 `Au99.99` | 2016-01-04 至 2026-09-18 | 2,604 | 年度分片补采后日/周/月可用 |
 
 26 个补采分片全部 `success/complete`，没有通过关闭完整性保护绕过。`full` 初始化计划
-v5 已将 `fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` 纳入逐交易日历史计划，后续重装不会
-再次只留下最近几个月。
+v6 已将 `adj_factor`、`fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` 纳入逐交易日历史
+计划，后续重装不会再次只留下最近几个月或缺失股票全历史复权因子。
 
 ## 能力边界
 

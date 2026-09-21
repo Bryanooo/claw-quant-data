@@ -148,6 +148,15 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
         "stock_daily": stock + benchmark,
         "index_daily": benchmark,
         "adj_factor": factors,
+        "stock_daily_basic": [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": row["trade_date"],
+                "turnover_rate_f": 1 + index / 100,
+                "volume_ratio": 1.2,
+            }
+            for index, row in enumerate(stock)
+        ],
     }
     result = ResearchService(FakeDataService(datasets), FakeRepository()).technicals(
         "000001.SZ", as_of=date(2026, 9, 18)
@@ -179,6 +188,10 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     assert result["data"]["trend"]["systems"]["parabolic_sar"]["status"] == "ready"
     assert result["data"]["momentum"]["stochastic_rsi_14"] is not None
     assert result["data"]["volume_price"]["chaikin_money_flow_20"] is not None
+    volume_analysis = result["data"]["volume_price"]["analysis"]
+    assert volume_analysis["price_volume_regime"]["classification"]
+    assert volume_analysis["anchored_vwap_proxy"]["anchors"]["60_period"]["value"] is not None
+    assert volume_analysis["turnover"]["status"] == "ready"
     assert result["data"]["volatility"]["downside_risk"]["status"] == "ready"
     assert result["data"]["levels"]["gaps"]["status"] == "ready"
     assert len(result["data"]["chart"]["points"]) == 120
@@ -412,11 +425,11 @@ def test_capability_catalog_separates_derived_backfill_and_new_sources():
     assert catalog["summary"]["derived_endpoints"] == 9
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["summary"]["baseline_techniques"] == 56
-    assert catalog["summary"]["currently_served"] == 48
+    assert catalog["summary"]["baseline_techniques"] == 59
+    assert catalog["summary"]["currently_served"] == 51
     assert catalog["summary"]["planned_from_existing_sources"] == 3
     assert catalog["summary"]["external_or_constrained"] == 5
-    assert len(catalog["techniques"]["served"]) == 48
+    assert len(catalog["techniques"]["served"]) == 51
     assert len(catalog["techniques"]["gaps"]) == 8
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"

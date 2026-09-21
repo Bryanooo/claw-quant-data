@@ -105,7 +105,7 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "valuation-history", "name": "历史估值分位", "domain": "估值", "endpoint": "valuation"},
     {"id": "peer-valuation", "name": "同行估值对比", "domain": "估值", "endpoint": "valuation"},
     {"id": "valuation-inputs", "name": "DCF/DDM 输入事实", "domain": "估值", "endpoint": "valuation"},
-    # Technical and risk (28)
+    # Technical and risk (31)
     {"id": "candlestick-chart", "name": "K线与图表序列", "domain": "技术面", "endpoint": "technicals"},
     {"id": "candlestick-patterns", "name": "K线形态识别", "domain": "技术面", "endpoint": "technicals"},
     {"id": "trend", "name": "趋势与均线", "domain": "技术面", "endpoint": "technicals"},
@@ -134,6 +134,9 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "price-gaps", "name": "价格缺口与回补状态", "domain": "技术面", "endpoint": "technicals"},
     {"id": "downside-risk", "name": "下行波动、历史VaR与Expected Shortfall", "domain": "风险", "endpoint": "technicals"},
     {"id": "benchmark-risk", "name": "Beta、相关性、Alpha、跟踪误差与信息比率", "domain": "风险", "endpoint": "technicals"},
+    {"id": "volume-regime", "name": "量能异常与价量四象限", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "volume-confirmation", "name": "突破量能确认与价量背离", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "turnover-vwap", "name": "换手率归一化与日线锚定VWAP代理", "domain": "技术面", "endpoint": "technicals"},
     # Capital, event and market (8)
     {"id": "main-money-flow", "name": "主力资金流", "domain": "资金", "endpoint": "capital-flow"},
     {"id": "margin-financing", "name": "两融行为", "domain": "资金", "endpoint": "capital-flow"},

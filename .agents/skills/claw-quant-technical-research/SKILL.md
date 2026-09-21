@@ -26,7 +26,9 @@ Analyze in this order:
 1. Price structure and K-line patterns.
 2. Trend regime and strength: moving averages, MACD, ADX/DMI, Aroon, PSAR, MA250 boundary.
 3. Momentum and exhaustion: RSI, KDJ, CCI, Williams %R, MFI, ROC.
-4. Volume confirmation: volume ratios and OBV.
+4. Volume confirmation: activity Z-score/percentile, the four price-volume regimes, breakout
+   confirmation, OBV/A-D divergence, PVT, Force Index, Ease of Movement, turnover normalization,
+   and daily-bar anchored VWAP proxies. Never describe the proxies as intraday VWAP.
 5. Volatility and risk: ATR, Bollinger, drawdown, downside deviation, historical VaR/ES and
    Sortino. When a benchmark is supplied, include Beta, correlation, Alpha, tracking error and
    information ratio using the same aligned window.

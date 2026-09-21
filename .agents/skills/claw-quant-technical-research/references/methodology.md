@@ -64,6 +64,26 @@ schools differ and use the returned `methodology` instead of silently substituti
   aligned close-to-close returns for the named window. Do not compare metrics from different windows
   or benchmarks as if they shared a sample.
 
+## Volume and price
+
+- `activity` compares the five-bar average with the twenty-bar average, and reports the latest
+  volume's 120-bar Z-score and 250-bar percentile. `expanding` requires at least 1.2×; `contracting`
+  requires at most 0.8×.
+- `price_volume_regime` is descriptive: price up/down is combined with expanding/contracting
+  volume. A selling-exhaustion label is only a candidate and does not confirm a reversal.
+- `breakout_confirmation` requires a close outside the prior twenty completed bars. Confirmation
+  requires latest volume of at least 1.2× the prior-twenty average.
+- OBV and A/D divergence requires price to move at least 2% over the named window while the
+  cumulative volume indicator moves oppositely. Treat it as a candidate until price structure
+  confirms it.
+- PVT, A/D, Force Index, and Ease of Movement raw levels are instrument-specific. Compare their
+  direction and history, not their numeric levels across assets.
+- `anchored_vwap_proxy` volume-weights the daily typical price `(H+L+C)/3`. It is useful for
+  daily positioning but is not session VWAP or a price-volume profile. Those require intraday or
+  trade data.
+- Raw traded quantity is not adjustment-factor normalized. For stocks, prefer free-float turnover
+  when comparing across share-capital changes.
+
 ## Waves
 
 `wave_analysis` uses a volatility-adjusted ZigZag threshold bounded between 5% and 15%.

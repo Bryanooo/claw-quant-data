@@ -55,7 +55,7 @@ PROFILE_DAYS = {
     "full": None,
 }
 PLANNING_BATCH_SIZE = 500
-INITIALIZATION_PLAN_VERSION = 5
+INITIALIZATION_PLAN_VERSION = 6
 CORE_TASKS = ("stock_daily", "stock_daily_basic", "moneyflow", "stock_limit")
 TRANSIENT_AUTO_RECOVERY_CATEGORIES = frozenset({"network", "timeout", "quota"})
 FULL_HISTORY_DATASET_STARTS = {
@@ -79,6 +79,10 @@ CORE_INTERFACE_PAGE_SIZES = {"index_daily": 5000, "kpl_concept_cons": 3000}
 # Exact trading-day scopes stay below upstream caps and have auditable
 # completion semantics; the worker remains resumable across thousands of jobs.
 RESEARCH_MARKET_HISTORY_STARTS = {
+    # Stock research is not point-in-time reliable when prices are complete
+    # but the adjustment series is only recent. Collecting by trade date
+    # covers the whole stock universe efficiently during full initialization.
+    "adj_factor": FULL_HISTORY_START,
     "fund_daily": date(2010, 1, 1),
     "fund_adj": date(2010, 1, 1),
     "sge_daily": date(2002, 10, 30),
@@ -1244,6 +1248,8 @@ class InitializationService:
                     history_start, history_end
                 ):
                     for api_name, reliable_start in RESEARCH_MARKET_HISTORY_STARTS.items():
+                        if api_name == "adj_factor" and self._plan_version(campaign) < 6:
+                            continue
                         if trade_date < max(history_start, reliable_start):
                             continue
                         compact = trade_date.strftime("%Y%m%d")
@@ -1579,6 +1585,17 @@ class InitializationService:
             if profile == "full" and self._plan_version(campaign) >= 3:
                 total += sum(1 for _ in research_history_partitions(start, end))
                 total += len(_published_quarter_ends(start, end))
+                if self._plan_version(campaign) >= 4:
+                    market_starts = {
+                        api_name: reliable_start
+                        for api_name, reliable_start in RESEARCH_MARKET_HISTORY_STARTS.items()
+                        if api_name != "adj_factor" or self._plan_version(campaign) >= 6
+                    }
+                    total += sum(
+                        trade_date >= max(start, reliable_start)
+                        for trade_date in self._repository.trade_dates(start, end)
+                        for reliable_start in market_starts.values()
+                    )
             return total
         if phase == 5:
             if profile != "full":

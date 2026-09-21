@@ -19,6 +19,7 @@ from service.research.technical_indicators import (
     parabolic_sar as _parabolic_sar,
     relative_risk_metrics as _relative_risk_metrics,
 )
+from service.research.volume_price import volume_price_analysis as _volume_price_analysis
 
 
 def _number(value: Any) -> float | None:
@@ -1083,6 +1084,7 @@ def _timeframe_analysis(
     *,
     timeframe: str,
     chart_points: int,
+    turnover_rows: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Calculate one consistent technical contract for any OHLCV instrument."""
 
@@ -1234,6 +1236,12 @@ def _timeframe_analysis(
             "obv": _round(obv_series[-1]),
             "chaikin_money_flow_20": _round(
                 _chaikin_money_flow(highs, lows, closes, volumes)
+            ),
+            "analysis": _volume_price_analysis(
+                # Weekly and monthly aggregates include the current open
+                # period for charting, but an incomplete bar must not drive a
+                # completed-period volume regime or breakout conclusion.
+                structure_prices, turnover_rows=turnover_rows
             ),
         },
         "levels": {
@@ -1699,6 +1707,10 @@ class ResearchService:
             "adj_factor", filters={"ts_code": ts_code}, start=start,
             end=effective_as_of, max_records=min(lookback_days, 5000),
         )
+        turnover_rows = self._load_many(
+            "stock_daily_basic", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, max_records=min(lookback_days, 5000),
+        )
         prices.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
         prices = [
             row for row in prices
@@ -1902,6 +1914,9 @@ class ResearchService:
                     "chaikin_money_flow_20": _round(
                         _chaikin_money_flow(highs, lows, closes, volumes)
                     ),
+                    "analysis": _volume_price_analysis(
+                        prices, turnover_rows=turnover_rows
+                    ),
                 },
                 "levels": {
                     f"high_{window}d": _round(max(value for value in highs[-window:] if value is not None)) if len(highs) >= window else None
@@ -1949,7 +1964,8 @@ class ResearchService:
                 },
                 "timeframes": {
                     "1d": _timeframe_analysis(
-                        prices, timeframe="1d", chart_points=chart_points
+                        prices, timeframe="1d", chart_points=chart_points,
+                        turnover_rows=turnover_rows,
                     ),
                     "1w": _timeframe_analysis(
                         weekly_prices, timeframe="1w", chart_points=chart_points
@@ -1970,6 +1986,7 @@ class ResearchService:
                     {"dataset": "stock_daily", "returned": source_price_count},
                     {"dataset": "index_daily", "returned": len(benchmark_rows)},
                     {"dataset": "adj_factor", "returned": len(adjustments)},
+                    {"dataset": "stock_daily_basic", "returned": len(turnover_rows)},
                 ],
                 "price_adjustment": adjustment_meta,
                 "quality": {
@@ -2026,6 +2043,7 @@ class ResearchService:
             )
         source_price_count = len(prices)
         adjustment_rows: list[dict] = []
+        turnover_rows: list[dict] = []
         adjustment_meta: dict[str, Any] = {
             "status": "not_applicable", "price_basis": "raw"
         }
@@ -2045,6 +2063,14 @@ class ResearchService:
             prices, adjustment_meta = _adjust_ohlcv(
                 prices, adjustment_rows, dataset=adjustment_dataset
             )
+        if normalized_type == "stock":
+            turnover_rows = self._load_many(
+                "stock_daily_basic",
+                filters={"ts_code": code},
+                start=start,
+                end=effective_as_of,
+                max_records=min(lookback_days, 5000),
+            )
         identity = None
         if basic_dataset:
             basic_rows = self._load(basic_dataset, filters={"ts_code": code}, limit=1)
@@ -2052,7 +2078,10 @@ class ResearchService:
         weekly = _resample_ohlcv(prices, "1w")
         monthly = _resample_ohlcv(prices, "1mo")
         timeframes = {
-            "1d": _timeframe_analysis(prices, timeframe="1d", chart_points=chart_points),
+            "1d": _timeframe_analysis(
+                prices, timeframe="1d", chart_points=chart_points,
+                turnover_rows=turnover_rows,
+            ),
             "1w": _timeframe_analysis(weekly, timeframe="1w", chart_points=chart_points),
             "1mo": _timeframe_analysis(monthly, timeframe="1mo", chart_points=chart_points),
         }
@@ -2127,6 +2156,7 @@ class ResearchService:
                 "provenance": [
                     {"dataset": dataset, "returned": source_price_count},
                     *([{"dataset": adjustment_dataset, "returned": len(adjustment_rows)}] if adjustment_dataset else []),
+                    *([{"dataset": "stock_daily_basic", "returned": len(turnover_rows)}] if normalized_type == "stock" else []),
                     {"dataset": "index_daily", "returned": len(benchmark_rows)},
                 ],
                 "price_adjustment": adjustment_meta,

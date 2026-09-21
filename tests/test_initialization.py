@@ -611,6 +611,57 @@ def test_version_five_full_initialization_includes_cross_asset_market_history():
     assert all(item["require_verified"] is True for item in cross_asset_steps)
 
 
+def test_version_six_full_initialization_includes_stock_adjustment_history():
+    repository = PlanningRepository(
+        trade_dates=(date(2026, 9, 17), date(2026, 9, 18))
+    )
+    jobs = PlanningJobs()
+    service = InitializationService(
+        repository=repository, job_service=jobs, coverage_service=PlanningCoverage()
+    )
+
+    assert service._plan_catalog_history(
+        campaign(
+            profile="full",
+            history_start=date(2026, 9, 17),
+            history_end=date(2026, 9, 18),
+            current_phase=3,
+            phase_name="catalog_history",
+            options={"plan_version": 6},
+        ),
+        set(),
+    ) is True
+
+    requests = [
+        parameters
+        for _task_name, parameters, _options in jobs.calls
+        if parameters["api_name"] == "adj_factor"
+    ]
+    assert [item["parameters"] for item in requests] == [
+        {"trade_date": "20260917"},
+        {"trade_date": "20260918"},
+    ]
+    assert all(item["complete"] is True and item["resume"] is True for item in requests)
+
+    v5_size = service._phase_logical_total(campaign(
+        profile="full",
+        history_start=date(2026, 9, 17),
+        history_end=date(2026, 9, 18),
+        current_phase=3,
+        phase_name="catalog_history",
+        options={"plan_version": 5},
+    ))
+    v6_size = service._phase_logical_total(campaign(
+        profile="full",
+        history_start=date(2026, 9, 17),
+        history_end=date(2026, 9, 18),
+        current_phase=3,
+        phase_name="catalog_history",
+        options={"plan_version": 6},
+    ))
+    assert v6_size - v5_size == 2
+
+
 def test_version_three_full_initialization_declares_research_fanout_history():
     service = InitializationService(
         repository=PlanningRepository(),

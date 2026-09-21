@@ -230,7 +230,7 @@ Agent 不使用 `health`、`status`、`datasets`、`query`、`freshness`、`inte
 
 `research technicals` 和 `research instrument-technicals` 支持 `--chart-points 30..250`，返回可直接绘制K线、均线、
 布林带和成交量的时间序列，并同时给出K线形态、KDJ/CCI/Williams %R/MFI、ADX/DMI、
-OBV/CMF、Ichimoku、Donchian、Supertrend、Aroon/PSAR、价格缺口、六类枢轴、确认波段斐波那契回撤、
+OBV/CMF、量能异常/价量四象限/突破确认/背离/换手率/日线VWAP代理、Ichimoku、Donchian、Supertrend、Aroon/PSAR、价格缺口、六类枢轴、确认波段斐波那契回撤、
 可解释支撑压力、MA250牛熊边界、波动率调整的波浪候选和缠论候选结构；同时提供
 日、周、月三个周期与长期年度摘要。波浪与缠论买卖点结果都是带失效条件的候选场景，
 不是确定的浪型或交易指令。

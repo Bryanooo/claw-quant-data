@@ -193,8 +193,8 @@ stateDiagram-v2
 2. 核心历史：按交易日回填股票与全市场指数日线、每日基本面、资金流和涨跌停；
 3. 财务历史：回填已过披露截止日的报告期，包含披露计划、快报、预告和主营构成；
 4. 目录历史：宏观利率/账户统计按年分区，高数量转融通按月分区并分页穷尽；`full`
-   计划 v4 同时回填多来源新闻、卖方研报、股东持仓、回购解禁、基金持仓，以及
-   ETF、THS板块和SGE现货逐交易日历史；
+   计划 v5 同时回填多来源新闻、卖方研报、股东持仓、回购解禁、基金持仓，以及
+   ETF日线与复权因子、THS板块和SGE现货逐交易日历史；
 5. 最新基线：为其余安全自动接口建立一次最新数据基线；
 6. 全量扇出：对需要依赖宇宙的接口冻结清单并持久化分片执行，并覆盖历史股东、
    分红和筹码窗口；
@@ -606,7 +606,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 | `GET /api/v1/research/readiness` | Agent 使用的研究数据质量、覆盖、失败和初始化摘要 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
-| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线、趋势/动量/量价体系、六类枢轴、确认波段斐波那契回撤、缠论候选结构和图表序列 |
+| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线/缺口、趋势/动量/量价/下行风险、基准风险、六类枢轴、斐波那契回撤、缠论候选结构和图表序列 |
 | `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月技术体系与长期趋势 |
 | `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 资金、两融、北向、大宗与筹码 |
 | `GET /api/v1/research/stocks/{ts_code}/repurchase-progress` | 回购方案、累计实施进度、执行均价和公告后市场表现 |
@@ -674,7 +674,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 
 这里的 9 个聚合分析入口是研究资源，不是 9 种分析能力；此外还有能力目录和研究
 就绪检查。当前机器可读 v1 基线为
-52 项：44 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
+56 项：48 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
 完整逐项矩阵见 [Agent 研究能力与数据动作](docs/RESEARCH_CAPABILITIES.md)。
 
 Swagger UI：<http://127.0.0.1:8000/api/docs>

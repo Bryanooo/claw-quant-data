@@ -12,6 +12,13 @@ from typing import Any
 from service.clock import business_now
 from service.data_service.models import InvalidQueryError, RecordNotFoundError
 from service.research.catalog import capability_catalog
+from service.research.technical_indicators import (
+    aroon as _aroon,
+    downside_risk as _downside_risk,
+    gap_analysis as _gap_analysis,
+    parabolic_sar as _parabolic_sar,
+    relative_risk_metrics as _relative_risk_metrics,
+)
 
 
 def _number(value: Any) -> float | None:
@@ -935,6 +942,63 @@ def _resample_ohlcv(rows: list[dict], timeframe: str) -> list[dict]:
     return bars
 
 
+def _adjust_ohlcv(
+    rows: list[dict], adjustments: list[dict], *, dataset: str,
+) -> tuple[list[dict], dict[str, Any]]:
+    """Put OHLC on the latest factor basis without mixing adjusted/raw history."""
+
+    factors = {
+        observed: factor
+        for row in adjustments
+        if (observed := _day(row.get("trade_date"))) is not None
+        and (factor := _number(row.get("adj_factor"))) not in (None, 0)
+    }
+    ordered = sorted(rows, key=lambda row: _day(row.get("trade_date")) or date.min)
+    matched = [row for row in ordered if _day(row.get("trade_date")) in factors]
+    if not matched:
+        return ordered, {
+            "dataset": dataset,
+            "status": "missing",
+            "matched": 0,
+            "source_rows": len(ordered),
+            "price_basis": "raw",
+            "warning": "adjustment factors are unavailable; long-horizon returns and levels may cross corporate-action discontinuities",
+        }
+    latest_day = _day(ordered[-1].get("trade_date")) if ordered else None
+    if latest_day not in factors:
+        return ordered, {
+            "dataset": dataset,
+            "status": "stale",
+            "matched": len(matched),
+            "source_rows": len(ordered),
+            "price_basis": "raw",
+            "warning": "the latest price has no adjustment factor; adjusted analysis was not mixed with raw history",
+        }
+    latest_factor = factors[latest_day]
+    adjusted: list[dict] = []
+    for row in matched:
+        observed = _day(row.get("trade_date"))
+        factor = factors[observed]
+        scale = factor / latest_factor
+        item = dict(row)
+        for field in ("open", "high", "low", "close", "pre_close"):
+            value = _number(row.get(field))
+            if value is not None:
+                item[field] = value * scale
+        adjusted.append(item)
+    complete = len(adjusted) == len(ordered)
+    return adjusted, {
+        "dataset": dataset,
+        "status": "applied" if complete else "partial_history",
+        "matched": len(adjusted),
+        "source_rows": len(ordered),
+        "coverage_pct": _round(len(adjusted) / len(ordered) * 100 if ordered else None),
+        "price_basis": "latest-factor-adjusted",
+        "latest_factor": latest_factor,
+        "warning": None if complete else "analysis is limited to dates with factors; raw and adjusted prices were not mixed",
+    }
+
+
 def _pivot_systems(previous: dict) -> dict[str, Any]:
     """Return the commonly used deterministic next-period pivot families."""
 
@@ -1130,6 +1194,8 @@ def _timeframe_analysis(
                 "donchian_20": _donchian(highs, lows, latest_close, 20),
                 "donchian_55": _donchian(highs, lows, latest_close, 55),
                 "supertrend_10_3": _supertrend(highs, lows, closes),
+                "aroon_25": _aroon(highs, lows),
+                "parabolic_sar": _parabolic_sar(highs, lows, closes),
             },
         },
         "momentum": {
@@ -1154,10 +1220,17 @@ def _timeframe_analysis(
                 "upper": _round(boll_mid + 2 * boll_std if boll_mid is not None and boll_std is not None else None),
             },
             "max_drawdown_pct": _round(_max_drawdown(closes)),
+            "downside_risk": _downside_risk(returns, periods_per_year),
         },
         "volume_price": {
             "volume_5_average": _round(mean(volumes[-5:]) if len(volumes) >= 5 else None),
             "volume_20_average": _round(mean(volumes[-20:]) if len(volumes) >= 20 else None),
+            "volume_5_to_20_ratio": _round(
+                _safe_div(
+                    mean(volumes[-5:]) if len(volumes) >= 5 else None,
+                    mean(volumes[-20:]) if len(volumes) >= 20 else None,
+                )
+            ),
             "obv": _round(obv_series[-1]),
             "chaikin_money_flow_20": _round(
                 _chaikin_money_flow(highs, lows, closes, volumes)
@@ -1168,6 +1241,7 @@ def _timeframe_analysis(
             "pivot_systems": pivot_systems,
             "classic_pivots": pivot_systems.get("classic", {}),
             "fibonacci_retracement": fibonacci_retracement,
+            "gaps": _gap_analysis(prices[-500:]),
         },
         "trend_strength": {"adx_14": _round(adx14), "plus_di_14": _round(plus_di14), "minus_di_14": _round(minus_di14)},
         "candlesticks": {"patterns": _candlestick_patterns(prices)},
@@ -1630,11 +1704,11 @@ class ResearchService:
             row for row in prices
             if all(_number(row.get(field)) is not None for field in ("open", "high", "low", "close"))
         ]
+        source_price_count = len(prices)
         benchmark_rows.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
-        factor_by_day = {
-            _day(row.get("trade_date")): _number(row.get("adj_factor"))
-            for row in adjustments if _day(row.get("trade_date"))
-        }
+        prices, adjustment_meta = _adjust_ohlcv(
+            prices, adjustments, dataset="adj_factor"
+        )
         closes = [float(_number(row.get("close"))) for row in prices]
         highs = [float(_number(row.get("high"))) for row in prices]
         lows = [float(_number(row.get("low"))) for row in prices]
@@ -1669,36 +1743,43 @@ class ResearchService:
             f"return_{window}d_pct": _round(_pct_change(latest_close, closes[-window - 1]) if len(closes) > window else None)
             for window in (20, 60, 120, 250)
         }
-        benchmark_by_day = {
-            _day(row.get("trade_date")): _number(row.get("close"))
-            for row in benchmark_rows if _day(row.get("trade_date")) and _number(row.get("close")) is not None
-        }
-        stock_by_day = {
-            _day(row.get("trade_date")): _number(row.get("close"))
-            for row in prices if _day(row.get("trade_date")) and _number(row.get("close")) is not None
-        }
-        common_days = sorted(set(stock_by_day) & set(benchmark_by_day))
-        relative: dict[str, float | None] = {}
-        for window in (20, 60, 120):
-            if len(common_days) > window:
-                first, last = common_days[-window - 1], common_days[-1]
-                stock_return = _pct_change(stock_by_day[last], stock_by_day[first])
-                benchmark_return = _pct_change(benchmark_by_day[last], benchmark_by_day[first])
-                relative[f"excess_return_{window}d_pct"] = _round(
-                    stock_return - benchmark_return
-                    if stock_return is not None and benchmark_return is not None else None
-                )
-            else:
-                relative[f"excess_return_{window}d_pct"] = None
+        adjustment_safe = adjustment_meta["status"] in {"applied", "partial_history"}
+        relative: dict[str, Any]
+        if adjustment_safe:
+            benchmark_by_day = {
+                _day(row.get("trade_date")): _number(row.get("close"))
+                for row in benchmark_rows if _day(row.get("trade_date")) and _number(row.get("close")) is not None
+            }
+            stock_by_day = {
+                _day(row.get("trade_date")): _number(row.get("close"))
+                for row in prices if _day(row.get("trade_date")) and _number(row.get("close")) is not None
+            }
+            common_days = sorted(set(stock_by_day) & set(benchmark_by_day))
+            relative = {"status": "ready" if common_days else "missing"}
+            for window in (20, 60, 120):
+                if len(common_days) > window:
+                    first, last = common_days[-window - 1], common_days[-1]
+                    stock_return = _pct_change(stock_by_day[last], stock_by_day[first])
+                    benchmark_return = _pct_change(benchmark_by_day[last], benchmark_by_day[first])
+                    relative[f"excess_return_{window}d_pct"] = _round(
+                        stock_return - benchmark_return
+                        if stock_return is not None and benchmark_return is not None else None
+                    )
+                else:
+                    relative[f"excess_return_{window}d_pct"] = None
+            relative["risk_metrics"] = _relative_risk_metrics(
+                [float(stock_by_day[observed]) for observed in common_days],
+                [float(benchmark_by_day[observed]) for observed in common_days],
+            )
+        else:
+            relative = {
+                "status": "unavailable_unadjusted",
+                "warning": "relative returns and risk metrics require current adjustment factors",
+                **{f"excess_return_{window}d_pct": None for window in (20, 60, 120)},
+                "risk_metrics": {"status": "unavailable_unadjusted", "windows": {}},
+            }
 
-        adjusted_closes: list[float] = []
-        latest_factor = factor_by_day.get(_day(prices[-1].get("trade_date")))
-        if latest_factor:
-            for row in prices:
-                close = _number(row.get("close"))
-                factor = factor_by_day.get(_day(row.get("trade_date")))
-                if close is not None and factor is not None:
-                    adjusted_closes.append(close * factor / latest_factor)
+        adjusted_closes = closes if adjustment_safe else []
         volume_5 = mean(volumes[-5:]) if len(volumes) >= 5 else None
         volume_20 = mean(volumes[-20:]) if len(volumes) >= 20 else None
         atr14 = mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None
@@ -1787,6 +1868,8 @@ class ResearchService:
                         "donchian_20": _donchian(highs, lows, latest_close, 20),
                         "donchian_55": _donchian(highs, lows, latest_close, 55),
                         "supertrend_10_3": _supertrend(highs, lows, closes),
+                        "aroon_25": _aroon(highs, lows),
+                        "parabolic_sar": _parabolic_sar(highs, lows, closes),
                     },
                 },
                 "momentum": {
@@ -1808,6 +1891,7 @@ class ResearchService:
                         "upper": _round(boll_mid + 2 * boll_std if boll_mid is not None and boll_std is not None else None),
                     },
                     "max_drawdown_pct": _round(_max_drawdown(closes)),
+                    "downside_risk": _downside_risk(returns, 252),
                 },
                 "volume_price": {
                     "volume_5d_average": _round(volume_5),
@@ -1830,6 +1914,7 @@ class ResearchService:
                     "classic_pivots": classic_levels,
                     "pivot_systems": pivot_systems,
                     "fibonacci_retracement": fibonacci_retracement,
+                    "gaps": _gap_analysis(prices[-500:]),
                     "methodology": "rolling extrema are descriptive ranges; actionable zones require repeated swing touches or next-session pivot formulas",
                 },
                 "trend_strength": {
@@ -1854,11 +1939,12 @@ class ResearchService:
                 "chan_analysis": chan_analysis,
                 "relative_strength": {"benchmark": benchmark, **relative},
                 "total_return": {
+                    "status": "ready" if adjustment_safe else "unavailable_unadjusted",
                     "adjusted_observations": len(adjusted_closes),
                     "adjusted_return_pct": _round(_pct_change(adjusted_closes[-1], adjusted_closes[0])) if len(adjusted_closes) > 1 else None,
                 },
                 "chart": {
-                    "price_basis": "unadjusted daily OHLC; adjustment coverage is reported separately",
+                    "price_basis": adjustment_meta["price_basis"],
                     "points": chart_rows,
                 },
                 "timeframes": {
@@ -1881,13 +1967,17 @@ class ResearchService:
                 "chart_points": chart_points,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": [
-                    {"dataset": "stock_daily", "returned": len(prices)},
+                    {"dataset": "stock_daily", "returned": source_price_count},
                     {"dataset": "index_daily", "returned": len(benchmark_rows)},
                     {"dataset": "adj_factor", "returned": len(adjustments)},
                 ],
+                "price_adjustment": adjustment_meta,
                 "quality": {
-                    "status": "ready" if len(prices) >= 250 else "warning",
-                    "warnings": [] if len(prices) >= 250 else ["fewer than 250 daily observations"],
+                    "status": "ready" if len(prices) >= 250 and not adjustment_meta.get("warning") else "warning",
+                    "warnings": (
+                        ([] if len(prices) >= 250 else ["fewer than 250 daily observations"])
+                        + ([str(adjustment_meta["warning"])] if adjustment_meta.get("warning") else [])
+                    ),
                 },
             },
         }
@@ -1934,6 +2024,27 @@ class ResearchService:
             raise RecordNotFoundError(
                 f"no governed {normalized_type} prices found for {code}"
             )
+        source_price_count = len(prices)
+        adjustment_rows: list[dict] = []
+        adjustment_meta: dict[str, Any] = {
+            "status": "not_applicable", "price_basis": "raw"
+        }
+        adjustment_dataset = (
+            "adj_factor" if normalized_type == "stock"
+            else "fund_adj" if normalized_type in {"fund", "etf"}
+            else None
+        )
+        if adjustment_dataset:
+            adjustment_rows = self._load_many(
+                adjustment_dataset,
+                filters={"ts_code": code},
+                start=start,
+                end=effective_as_of,
+                max_records=min(lookback_days, 5000),
+            )
+            prices, adjustment_meta = _adjust_ohlcv(
+                prices, adjustment_rows, dataset=adjustment_dataset
+            )
         identity = None
         if basic_dataset:
             basic_rows = self._load(basic_dataset, filters={"ts_code": code}, limit=1)
@@ -1947,7 +2058,11 @@ class ResearchService:
         }
         benchmark_rows: list[dict] = []
         relative: dict[str, Any] = {"benchmark": benchmark, "status": "not_requested"}
-        if benchmark:
+        adjustment_safe = (
+            adjustment_dataset is None
+            or adjustment_meta["status"] in {"applied", "partial_history"}
+        )
+        if benchmark and adjustment_safe:
             benchmark_rows = self._load_many(
                 "index_daily", filters={"ts_code": benchmark}, start=start,
                 end=effective_as_of,
@@ -1972,11 +2087,25 @@ class ResearchService:
                     if asset_return is not None and benchmark_return is not None:
                         value = asset_return - benchmark_return
                 relative[f"excess_return_{window}d_pct"] = _round(value)
+            relative["risk_metrics"] = _relative_risk_metrics(
+                [float(asset_by_day[observed]) for observed in common],
+                [float(benchmark_by_day[observed]) for observed in common],
+            )
+        elif benchmark:
+            relative = {
+                "benchmark": benchmark,
+                "status": "unavailable_unadjusted",
+                "warning": "relative returns and risk metrics require current adjustment factors",
+                **{f"excess_return_{window}d_pct": None for window in (20, 60, 120, 250)},
+                "risk_metrics": {"status": "unavailable_unadjusted", "windows": {}},
+            }
         warnings = []
         if len(prices) < 250:
             warnings.append(f"only {len(prices)} daily observations; long-cycle signals are limited")
         if timeframes["1mo"]["observations"] < 24:
             warnings.append("fewer than 24 monthly bars")
+        if adjustment_meta.get("warning"):
+            warnings.append(str(adjustment_meta["warning"]))
         return {
             "data": {
                 "instrument": {
@@ -1996,9 +2125,11 @@ class ResearchService:
                 "as_of": effective_as_of,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": [
-                    {"dataset": dataset, "returned": len(prices)},
+                    {"dataset": dataset, "returned": source_price_count},
+                    *([{"dataset": adjustment_dataset, "returned": len(adjustment_rows)}] if adjustment_dataset else []),
                     {"dataset": "index_daily", "returned": len(benchmark_rows)},
                 ],
+                "price_adjustment": adjustment_meta,
                 "quality": {
                     "status": "ready" if not warnings else "warning",
                     "warnings": warnings,

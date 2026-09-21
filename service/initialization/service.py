@@ -55,7 +55,7 @@ PROFILE_DAYS = {
     "full": None,
 }
 PLANNING_BATCH_SIZE = 500
-INITIALIZATION_PLAN_VERSION = 4
+INITIALIZATION_PLAN_VERSION = 5
 CORE_TASKS = ("stock_daily", "stock_daily_basic", "moneyflow", "stock_limit")
 TRANSIENT_AUTO_RECOVERY_CATEGORIES = frozenset({"network", "timeout", "quota"})
 FULL_HISTORY_DATASET_STARTS = {
@@ -80,6 +80,7 @@ CORE_INTERFACE_PAGE_SIZES = {"index_daily": 5000, "kpl_concept_cons": 3000}
 # completion semantics; the worker remains resumable across thousands of jobs.
 RESEARCH_MARKET_HISTORY_STARTS = {
     "fund_daily": date(2010, 1, 1),
+    "fund_adj": date(2010, 1, 1),
     "sge_daily": date(2002, 10, 30),
     "ths_daily": date(2020, 1, 1),
 }
@@ -134,6 +135,7 @@ FULL_INITIALIZATION_BASELINES = (
 )
 FULL_RESEARCH_HISTORY_INTERFACES = (
     "fund_daily",
+    "fund_adj",
     "major_news",
     "report_rc",
     "stk_holdertrade",

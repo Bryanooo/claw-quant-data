@@ -50,6 +50,19 @@ schools differ and use the returned `methodology` instead of silently substituti
 - `weighted_trend.bull_line` is the 20-period linearly weighted average of
   `(3×close+low+open+high)/6`; `bear_line` is its six-period simple average. This is reported
   separately because informal names such as “牛门线” are not standardized.
+- `Aroon(25)` measures how recently the rolling high and low occurred. `Parabolic SAR` is an
+  iterative trailing reversal system. They overlap other trend evidence and are not extra votes.
+
+## Gaps and risk
+
+- A full up-gap requires the current low above the prior high; a full down-gap requires the current
+  high below the prior low. `filled` means a later bar crossed the far boundary; otherwise inspect
+  `fill_progress_pct`.
+- Historical VaR and Expected Shortfall use observed returns without assuming a normal
+  distribution. Sortino uses a zero target; this assumption is explicit in the response.
+- Benchmark Beta, correlation, zero-risk-free-rate Alpha, tracking error, and information ratio use
+  aligned close-to-close returns for the named window. Do not compare metrics from different windows
+  or benchmarks as if they shared a sample.
 
 ## Waves
 

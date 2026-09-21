@@ -5,6 +5,7 @@ import pytest
 
 from service.research.service import (
     ResearchService,
+    _adjust_ohlcv,
     _chan_analysis,
     _fibonacci_retracement,
     _pivot_systems,
@@ -174,10 +175,40 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     assert result["data"]["chan_analysis"]["variant"].startswith("deterministic")
     assert result["data"]["trend"]["systems"]["ichimoku"]["state"] != "unavailable"
     assert result["data"]["trend"]["systems"]["supertrend_10_3"]["status"] == "ready"
+    assert result["data"]["trend"]["systems"]["aroon_25"]["status"] == "ready"
+    assert result["data"]["trend"]["systems"]["parabolic_sar"]["status"] == "ready"
     assert result["data"]["momentum"]["stochastic_rsi_14"] is not None
     assert result["data"]["volume_price"]["chaikin_money_flow_20"] is not None
+    assert result["data"]["volatility"]["downside_risk"]["status"] == "ready"
+    assert result["data"]["levels"]["gaps"]["status"] == "ready"
     assert len(result["data"]["chart"]["points"]) == 120
+    assert result["data"]["chart"]["price_basis"] == "latest-factor-adjusted"
+    assert result["data"]["total_return"]["status"] == "ready"
     assert result["data"]["relative_strength"]["excess_return_60d_pct"] == 0.0
+    assert result["data"]["relative_strength"]["risk_metrics"]["windows"]["60"]["status"] == "ready"
+
+
+def test_stock_relative_risk_is_suppressed_without_adjustment_factors():
+    stock = _daily_rows("000001.SZ")
+    benchmark = _daily_rows("399006.SZ", base=20)
+    result = ResearchService(
+        FakeDataService({
+            "stock_basic": [{"ts_code": "000001.SZ"}],
+            "stock_daily": stock,
+            "index_daily": benchmark,
+        }),
+        FakeRepository(),
+    ).technicals("000001.SZ", as_of=date(2026, 9, 18))
+
+    relative = result["data"]["relative_strength"]
+    assert result["meta"]["price_adjustment"]["status"] == "missing"
+    assert result["meta"]["quality"]["status"] == "warning"
+    assert relative["status"] == "unavailable_unadjusted"
+    assert relative["excess_return_60d_pct"] is None
+    assert relative["risk_metrics"]["windows"] == {}
+    assert result["data"]["total_return"]["status"] == "unavailable_unadjusted"
+    assert result["data"]["total_return"]["adjusted_return_pct"] is None
+    assert result["data"]["chart"]["price_basis"] == "raw"
 
 
 def test_common_pivot_families_have_auditable_prior_bar_basis():
@@ -190,6 +221,33 @@ def test_common_pivot_families_have_auditable_prior_bar_basis():
     assert systems["fibonacci"]["resistance_2"] == pytest.approx(114.0267)
     assert systems["cpr"]["basis_date"] == date(2026, 9, 18)
     assert systems["demark"]["method"].startswith("DeMark")
+
+
+def test_adjusted_ohlcv_never_mixes_factor_covered_and_raw_history():
+    rows = [
+        {"trade_date": date(2026, 1, 1), "open": 100, "high": 102, "low": 98, "close": 100},
+        {"trade_date": date(2026, 1, 2), "open": 50, "high": 51, "low": 49, "close": 50},
+    ]
+    complete, complete_meta = _adjust_ohlcv(
+        rows,
+        [
+            {"trade_date": date(2026, 1, 1), "adj_factor": 1},
+            {"trade_date": date(2026, 1, 2), "adj_factor": 2},
+        ],
+        dataset="fund_adj",
+    )
+    partial, partial_meta = _adjust_ohlcv(
+        rows,
+        [{"trade_date": date(2026, 1, 2), "adj_factor": 2}],
+        dataset="fund_adj",
+    )
+
+    assert complete_meta["status"] == "applied"
+    assert complete[0]["close"] == pytest.approx(50)
+    assert complete[1]["close"] == pytest.approx(50)
+    assert partial_meta["status"] == "partial_history"
+    assert len(partial) == 1
+    assert partial[0]["trade_date"] == date(2026, 1, 2)
 
 
 def test_fibonacci_retracement_uses_only_last_confirmed_swing():
@@ -273,6 +331,29 @@ def test_instrument_technicals_supports_non_stock_assets(
     }
 
 
+def test_instrument_relative_risk_is_suppressed_without_adjustment_factors():
+    datasets = {
+        "fund_daily": _daily_rows("512480.SH", count=300),
+        "fund_basic": [{"ts_code": "512480.SH", "name": "半导体ETF"}],
+        "index_daily": _daily_rows("000300.SH", count=300, base=20),
+    }
+
+    result = ResearchService(
+        FakeDataService(datasets), FakeRepository()
+    ).instrument_technicals(
+        "etf", "512480.SH", benchmark="000300.SH"
+    )
+
+    relative = result["data"]["relative_strength"]
+    assert result["meta"]["price_adjustment"]["status"] == "missing"
+    assert relative["status"] == "unavailable_unadjusted"
+    assert relative["excess_return_60d_pct"] is None
+    assert relative["risk_metrics"]["windows"] == {}
+    assert result["meta"]["provenance"][-1] == {
+        "dataset": "index_daily", "returned": 0
+    }
+
+
 def test_repurchase_progress_uses_latest_cumulative_execution_not_sum():
     datasets = {
         "stock_basic": [{"ts_code": "300750.SZ"}],
@@ -331,11 +412,11 @@ def test_capability_catalog_separates_derived_backfill_and_new_sources():
     assert catalog["summary"]["derived_endpoints"] == 9
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["summary"]["baseline_techniques"] == 52
-    assert catalog["summary"]["currently_served"] == 44
+    assert catalog["summary"]["baseline_techniques"] == 56
+    assert catalog["summary"]["currently_served"] == 48
     assert catalog["summary"]["planned_from_existing_sources"] == 3
     assert catalog["summary"]["external_or_constrained"] == 5
-    assert len(catalog["techniques"]["served"]) == 44
+    assert len(catalog["techniques"]["served"]) == 48
     assert len(catalog["techniques"]["gaps"]) == 8
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"

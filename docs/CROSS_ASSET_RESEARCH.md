@@ -18,6 +18,9 @@
 
 枢轴包括 Classic、Fibonacci、Woodie、Camarilla、DeMark 与 CPR，并为每组保留前一
 完成周期的 `basis_date`。重复摆动形成的支撑/压力与公式枢轴分开表达。
+每个周期还独立返回确认波段斐波那契回撤/扩展、缠论分型/笔/中枢候选，以及
+Ichimoku、Donchian、Supertrend、StochRSI 和 CMF。最后一个实时 ZigZag 拐点不会
+被用作斐波那契锚点；缠论候选会披露固定算法口径，不把流派判断包装成事实。
 
 ## 真实数据库验收（2026-09-21）
 

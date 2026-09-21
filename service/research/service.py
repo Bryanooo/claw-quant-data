@@ -199,6 +199,138 @@ def _mfi(
     return 100 - 100 / (1 + positive / negative)
 
 
+def _stochastic_rsi(values: list[float], window: int = 14) -> float | None:
+    """Return StochRSI on a 0-100 scale using reproducible simple-window RSI."""
+
+    if len(values) < window * 2 + 1:
+        return None
+    # Only the latest ``window`` RSI observations are required for StochRSI.
+    # Bound each input slice as well, avoiding quadratic copying on long histories.
+    rsi_values = [
+        value
+        for index in range(len(values) - window, len(values))
+        if (value := _rsi(values[index - window:index + 1], window)) is not None
+    ]
+    recent = rsi_values[-window:]
+    if len(recent) < window:
+        return None
+    low, high = min(recent), max(recent)
+    return 50.0 if high == low else (recent[-1] - low) / (high - low) * 100
+
+
+def _chaikin_money_flow(
+    highs: list[float], lows: list[float], closes: list[float],
+    volumes: list[float], window: int = 20,
+) -> float | None:
+    if len(closes) < window:
+        return None
+    weighted = 0.0
+    total_volume = 0.0
+    for high, low, close, volume in zip(
+        highs[-window:], lows[-window:], closes[-window:], volumes[-window:]
+    ):
+        multiplier = 0.0 if high == low else ((close - low) - (high - close)) / (high - low)
+        weighted += multiplier * volume
+        total_volume += volume
+    return None if total_volume == 0 else weighted / total_volume
+
+
+def _ichimoku(
+    highs: list[float], lows: list[float], close: float,
+) -> dict[str, Any]:
+    def midpoint(window: int) -> float | None:
+        if len(highs) < window:
+            return None
+        return (max(highs[-window:]) + min(lows[-window:])) / 2
+
+    conversion = midpoint(9)
+    base = midpoint(26)
+    span_a = (conversion + base) / 2 if conversion is not None and base is not None else None
+    span_b = midpoint(52)
+    cloud_low = min(span_a, span_b) if span_a is not None and span_b is not None else None
+    cloud_high = max(span_a, span_b) if span_a is not None and span_b is not None else None
+    state = (
+        "above_cloud" if cloud_high is not None and close > cloud_high
+        else "below_cloud" if cloud_low is not None and close < cloud_low
+        else "inside_cloud" if cloud_low is not None
+        else "unavailable"
+    )
+    return {
+        "conversion_9": _round(conversion),
+        "base_26": _round(base),
+        "leading_span_a": _round(span_a),
+        "leading_span_b_52": _round(span_b),
+        "state": state,
+        "projection_periods": 26,
+        "method": "9/26/52 Ichimoku values; leading spans are current projections, not future observations",
+    }
+
+
+def _donchian(
+    highs: list[float], lows: list[float], close: float, window: int,
+) -> dict[str, Any]:
+    if len(highs) < window:
+        return {"window": window, "status": "insufficient_history"}
+    upper = max(highs[-window:])
+    lower = min(lows[-window:])
+    prior_upper = max(highs[-window - 1:-1]) if len(highs) > window else None
+    prior_lower = min(lows[-window - 1:-1]) if len(lows) > window else None
+    signal = (
+        "up_breakout" if prior_upper is not None and close > prior_upper
+        else "down_breakout" if prior_lower is not None and close < prior_lower
+        else "inside_channel"
+    )
+    return {
+        "window": window,
+        "upper": _round(upper),
+        "middle": _round((upper + lower) / 2),
+        "lower": _round(lower),
+        "signal": signal,
+        "method": "current channel uses rolling extremes; breakout compares close with the prior completed channel",
+    }
+
+
+def _supertrend(
+    highs: list[float], lows: list[float], closes: list[float],
+    window: int = 10, multiplier: float = 3.0,
+) -> dict[str, Any]:
+    if len(closes) < window + 1:
+        return {"status": "insufficient_history", "window": window, "multiplier": multiplier}
+    true_ranges = [highs[0] - lows[0]]
+    for index in range(1, len(closes)):
+        true_ranges.append(max(
+            highs[index] - lows[index],
+            abs(highs[index] - closes[index - 1]),
+            abs(lows[index] - closes[index - 1]),
+        ))
+    final_upper = final_lower = trend = None
+    direction = 1
+    for index in range(window - 1, len(closes)):
+        atr = mean(true_ranges[index - window + 1:index + 1])
+        midpoint = (highs[index] + lows[index]) / 2
+        basic_upper = midpoint + multiplier * atr
+        basic_lower = midpoint - multiplier * atr
+        if final_upper is None:
+            final_upper, final_lower = basic_upper, basic_lower
+        else:
+            previous_close = closes[index - 1]
+            final_upper = basic_upper if basic_upper < final_upper or previous_close > final_upper else final_upper
+            final_lower = basic_lower if basic_lower > final_lower or previous_close < final_lower else final_lower
+        if direction < 0 and closes[index] > final_upper:
+            direction = 1
+        elif direction > 0 and closes[index] < final_lower:
+            direction = -1
+        trend = final_lower if direction > 0 else final_upper
+    return {
+        "status": "ready",
+        "window": window,
+        "multiplier": multiplier,
+        "value": _round(trend),
+        "direction": "bullish" if direction > 0 else "bearish",
+        "method": "rolling simple ATR Supertrend; signal changes only after close crosses the active band",
+    }
+
+
 def _adx(
     highs: list[float], lows: list[float], closes: list[float], window: int = 14
 ) -> tuple[float | None, float | None, float | None]:
@@ -328,6 +460,395 @@ def _zigzag(
     return pivots[-12:]
 
 
+def _fibonacci_retracement(
+    pivots: list[dict[str, Any]], current_price: float,
+) -> dict[str, Any]:
+    """Project retracement and extension levels from the last completed swing."""
+
+    confirmed = [pivot for pivot in pivots if pivot.get("confirmed")]
+    if len(confirmed) < 2:
+        return {
+            "status": "insufficient_structure",
+            "method": "last two confirmed volatility-filtered ZigZag pivots",
+        }
+    start, end = confirmed[-2], confirmed[-1]
+    start_price = _number(start.get("price"))
+    end_price = _number(end.get("price"))
+    if start_price is None or end_price is None or start_price == end_price:
+        return {"status": "insufficient_structure"}
+    direction = "up" if end_price > start_price else "down"
+    span = abs(end_price - start_price)
+    retracement_ratios = (0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0)
+    extension_ratios = (1.272, 1.618, 2.0)
+    retracements = {
+        f"{ratio * 100:g}": _round(
+            end_price - span * ratio if direction == "up"
+            else end_price + span * ratio
+        )
+        for ratio in retracement_ratios
+    }
+    extensions = {
+        f"{ratio * 100:g}": _round(
+            start_price + span * ratio if direction == "up"
+            else start_price - span * ratio
+        )
+        for ratio in extension_ratios
+    }
+    retracement_pct = (
+        (end_price - current_price) / span * 100
+        if direction == "up"
+        else (current_price - end_price) / span * 100
+    )
+    nearest_name, nearest_price = min(
+        retracements.items(), key=lambda item: abs(float(item[1]) - current_price)
+    )
+    live = pivots[-1] if pivots and not pivots[-1].get("confirmed") else None
+    return {
+        "status": "ready",
+        "direction": direction,
+        "anchor_start": start,
+        "anchor_end": end,
+        "retracement_levels": retracements,
+        "extension_levels": extensions,
+        "current_retracement_pct": _round(retracement_pct),
+        "nearest_retracement": {"ratio_pct": float(nearest_name), "price": nearest_price},
+        "invalidation_price": _round(start_price),
+        "live_pivot_excluded": live,
+        "method": "last two confirmed volatility-filtered ZigZag pivots; the live pivot is never an anchor",
+    }
+
+
+def _chan_normalized_bars(rows: list[dict]) -> list[dict[str, Any]]:
+    """Remove containing K-line relationships using one documented Chan variant."""
+
+    normalized: list[dict[str, Any]] = []
+    for source_index, row in enumerate(rows):
+        high = _number(row.get("high"))
+        low = _number(row.get("low"))
+        opened = _number(row.get("open"))
+        close = _number(row.get("close"))
+        if None in (high, low, opened, close):
+            continue
+        bar = {
+            "start_date": str(row.get("trade_date")),
+            "end_date": str(row.get("trade_date")),
+            "open": opened,
+            "high": high,
+            "low": low,
+            "close": close,
+            "source_start_index": source_index,
+            "source_end_index": source_index,
+            "source_bars": 1,
+        }
+        if not normalized:
+            normalized.append(bar)
+            continue
+        previous = normalized[-1]
+        contains = (
+            (bar["high"] >= previous["high"] and bar["low"] <= previous["low"])
+            or (previous["high"] >= bar["high"] and previous["low"] <= bar["low"])
+        )
+        if not contains:
+            normalized.append(bar)
+            continue
+        if len(normalized) >= 2:
+            before = normalized[-2]
+            upward = previous["high"] >= before["high"] and previous["low"] >= before["low"]
+            downward = previous["high"] <= before["high"] and previous["low"] <= before["low"]
+        else:
+            upward = bar["close"] >= previous["close"]
+            downward = not upward
+        if not upward and not downward:
+            upward = bar["close"] >= previous["close"]
+        previous.update({
+            "end_date": bar["end_date"],
+            "high": max(previous["high"], bar["high"]) if upward else min(previous["high"], bar["high"]),
+            "low": max(previous["low"], bar["low"]) if upward else min(previous["low"], bar["low"]),
+            "close": bar["close"],
+            "source_end_index": source_index,
+            "source_bars": previous["source_bars"] + 1,
+        })
+    return normalized
+
+
+def _chan_fractals(bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    fractals: list[dict[str, Any]] = []
+    for index in range(1, len(bars) - 1):
+        left, middle, right = bars[index - 1:index + 2]
+        is_top = (
+            middle["high"] > left["high"] and middle["high"] >= right["high"]
+            and middle["low"] > left["low"] and middle["low"] >= right["low"]
+        )
+        is_bottom = (
+            middle["low"] < left["low"] and middle["low"] <= right["low"]
+            and middle["high"] < left["high"] and middle["high"] <= right["high"]
+        )
+        if is_top or is_bottom:
+            kind = "top" if is_top else "bottom"
+            fractals.append({
+                "normalized_index": index,
+                "trade_date": middle["end_date"],
+                "type": kind,
+                "price": _round(middle["high"] if is_top else middle["low"]),
+                "source_index": middle["source_end_index"],
+                "confirmed": True,
+            })
+    return fractals
+
+
+def _chan_strokes(
+    fractals: list[dict[str, Any]], macd_histogram: list[float],
+    minimum_separation: int = 4,
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    for fractal in fractals:
+        if not selected:
+            selected.append(fractal)
+            continue
+        previous = selected[-1]
+        if fractal["type"] == previous["type"]:
+            more_extreme = (
+                fractal["price"] > previous["price"]
+                if fractal["type"] == "top"
+                else fractal["price"] < previous["price"]
+            )
+            if more_extreme:
+                selected[-1] = fractal
+            continue
+        if fractal["normalized_index"] - previous["normalized_index"] >= minimum_separation:
+            selected.append(fractal)
+    strokes: list[dict[str, Any]] = []
+    for index, (start, end) in enumerate(pairwise(selected)):
+        source_start = int(start["source_index"])
+        source_end = int(end["source_index"])
+        energy = sum(abs(value) for value in macd_histogram[source_start:source_end + 1])
+        strokes.append({
+            "index": index,
+            "start_date": start["trade_date"],
+            "end_date": end["trade_date"],
+            "start_price": start["price"],
+            "end_price": end["price"],
+            "direction": "up" if end["price"] > start["price"] else "down",
+            "high": max(start["price"], end["price"]),
+            "low": min(start["price"], end["price"]),
+            "normalized_bar_span": end["normalized_index"] - start["normalized_index"] + 1,
+            "change_pct": _round(_pct_change(end["price"], start["price"])),
+            "macd_histogram_energy": _round(energy),
+            "confirmed": True,
+        })
+    return strokes
+
+
+def _chan_segments(strokes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return explicit three-stroke extension candidates, not subjective final segments."""
+
+    segments: list[dict[str, Any]] = []
+    for index in range(2, len(strokes)):
+        first, middle, third = strokes[index - 2:index + 1]
+        if first["direction"] != third["direction"]:
+            continue
+        extends = (
+            third["end_price"] > first["end_price"]
+            if third["direction"] == "up"
+            else third["end_price"] < first["end_price"]
+        )
+        if not extends:
+            continue
+        segments.append({
+            "start_stroke_index": first["index"],
+            "end_stroke_index": third["index"],
+            "start_date": first["start_date"],
+            "end_date": third["end_date"],
+            "start_price": first["start_price"],
+            "end_price": third["end_price"],
+            "direction": third["direction"],
+            "confirmed": True,
+            "method": "three alternating strokes with the third extending the first",
+        })
+    return segments
+
+
+def _chan_centers(strokes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    centers: list[dict[str, Any]] = []
+    for index in range(2, len(strokes)):
+        group = strokes[index - 2:index + 1]
+        lower = max(stroke["low"] for stroke in group)
+        upper = min(stroke["high"] for stroke in group)
+        if lower > upper:
+            continue
+        candidate = {
+            "start_stroke_index": group[0]["index"],
+            "end_stroke_index": group[-1]["index"],
+            "start_date": group[0]["start_date"],
+            "end_date": group[-1]["end_date"],
+            "lower": _round(lower),
+            "upper": _round(upper),
+            "middle": _round((lower + upper) / 2),
+            "stroke_count": 3,
+            "confirmed": True,
+        }
+        if centers and candidate["start_stroke_index"] <= centers[-1]["end_stroke_index"]:
+            merged_lower = max(float(centers[-1]["lower"]), lower)
+            merged_upper = min(float(centers[-1]["upper"]), upper)
+            if merged_lower <= merged_upper:
+                centers[-1].update({
+                    "end_stroke_index": candidate["end_stroke_index"],
+                    "end_date": candidate["end_date"],
+                    "lower": _round(merged_lower),
+                    "upper": _round(merged_upper),
+                    "middle": _round((merged_lower + merged_upper) / 2),
+                    "stroke_count": candidate["end_stroke_index"] - centers[-1]["start_stroke_index"] + 1,
+                })
+                continue
+        centers.append(candidate)
+    return centers
+
+
+def _chan_divergences_and_signals(
+    strokes: list[dict[str, Any]], centers: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    divergences: list[dict[str, Any]] = []
+    signals: list[dict[str, Any]] = []
+    first_signal_by_stroke: dict[int, dict[str, Any]] = {}
+    latest_center = centers[-1] if centers else None
+    for index in range(2, len(strokes)):
+        previous, current = strokes[index - 2], strokes[index]
+        if previous["direction"] != current["direction"]:
+            continue
+        previous_energy = _number(previous.get("macd_histogram_energy"))
+        current_energy = _number(current.get("macd_histogram_energy"))
+        price_extends = (
+            current["end_price"] > previous["end_price"]
+            if current["direction"] == "up"
+            else current["end_price"] < previous["end_price"]
+        )
+        if not price_extends or previous_energy in (None, 0) or current_energy is None:
+            continue
+        energy_ratio = current_energy / previous_energy
+        if energy_ratio >= 0.8:
+            continue
+        kind = "bearish" if current["direction"] == "up" else "bullish"
+        divergence = {
+            "stroke_index": current["index"],
+            "trade_date": current["end_date"],
+            "type": kind,
+            "price": current["end_price"],
+            "energy_ratio": _round(energy_ratio),
+            "method": "price extends the prior same-direction stroke while absolute MACD histogram energy falls below 80%",
+        }
+        divergences.append(divergence)
+        signal = {
+            "stroke_index": current["index"],
+            "trade_date": current["end_date"],
+            "type": "first_sell_candidate" if kind == "bearish" else "first_buy_candidate",
+            "price": current["end_price"],
+            "basis": "same-direction stroke MACD-energy divergence",
+            "confirmed": True,
+        }
+        signals.append(signal)
+        first_signal_by_stroke[current["index"]] = signal
+
+    for first_index, first in first_signal_by_stroke.items():
+        revisit_index = first_index + 2
+        if revisit_index >= len(strokes):
+            continue
+        revisit = strokes[revisit_index]
+        buy = first["type"] == "first_buy_candidate"
+        holds = (
+            revisit["direction"] == "down" and revisit["end_price"] > first["price"]
+            if buy else
+            revisit["direction"] == "up" and revisit["end_price"] < first["price"]
+        )
+        if holds:
+            signals.append({
+                "stroke_index": revisit["index"],
+                "trade_date": revisit["end_date"],
+                "type": "second_buy_candidate" if buy else "second_sell_candidate",
+                "price": revisit["end_price"],
+                "basis": "the second same-direction test does not break the first divergence extreme",
+                "confirmed": True,
+            })
+
+    if latest_center:
+        start = int(latest_center["end_stroke_index"]) + 1
+        upper = float(latest_center["upper"])
+        lower = float(latest_center["lower"])
+        for index in range(start, len(strokes) - 1):
+            breakout, pullback = strokes[index:index + 2]
+            if (
+                breakout["direction"] == "up" and breakout["end_price"] > upper
+                and pullback["direction"] == "down" and pullback["end_price"] > upper
+            ):
+                signals.append({
+                    "stroke_index": pullback["index"], "trade_date": pullback["end_date"],
+                    "type": "third_buy_candidate", "price": pullback["end_price"],
+                    "basis": "upward center breakout followed by a pullback that remains above the center",
+                    "confirmed": True,
+                })
+            if (
+                breakout["direction"] == "down" and breakout["end_price"] < lower
+                and pullback["direction"] == "up" and pullback["end_price"] < lower
+            ):
+                signals.append({
+                    "stroke_index": pullback["index"], "trade_date": pullback["end_date"],
+                    "type": "third_sell_candidate", "price": pullback["end_price"],
+                    "basis": "downward center breakout followed by a rebound that remains below the center",
+                    "confirmed": True,
+                })
+    unique_signals = list({(item["type"], item["stroke_index"]): item for item in signals}.values())
+    return divergences, sorted(unique_signals, key=lambda item: item["stroke_index"])
+
+
+def _chan_analysis(rows: list[dict], current_price: float) -> dict[str, Any]:
+    """Return a deterministic, auditable Chan-structure candidate contract."""
+
+    normalized = _chan_normalized_bars(rows)
+    fractals = _chan_fractals(normalized)
+    closes = [float(_number(row.get("close"))) for row in rows]
+    ema12 = _ema_series(closes, 12)
+    ema26 = _ema_series(closes, 26)
+    macd = [left - right for left, right in zip(ema12, ema26)]
+    signal = _ema_series(macd, 9)
+    histogram = [line - signal_value for line, signal_value in zip(macd, signal)]
+    strokes = _chan_strokes(fractals, histogram)
+    segments = _chan_segments(strokes)
+    centers = _chan_centers(strokes)
+    divergences, signals = _chan_divergences_and_signals(strokes, centers)
+    latest_center = centers[-1] if centers else None
+    position = (
+        "above_center" if latest_center and current_price > latest_center["upper"]
+        else "below_center" if latest_center and current_price < latest_center["lower"]
+        else "inside_center" if latest_center
+        else "unavailable"
+    )
+    return {
+        "status": "ready" if centers else "limited_structure",
+        "variant": "deterministic inclusion/fractal/stroke candidate",
+        "normalized_bar_count": len(normalized),
+        "source_bar_count": len(rows),
+        "fractals": fractals[-30:],
+        "strokes": strokes[-20:],
+        "segment_candidates": segments[-12:],
+        "centers": centers[-8:],
+        "divergences": divergences[-8:],
+        "signals": signals[-12:],
+        "current_position": position,
+        "methodology": {
+            "inclusion": "containing bars merge in the inferred direction before fractal detection",
+            "fractal": "three normalized bars with both high and low above/below their neighbors",
+            "stroke": "alternating confirmed fractals separated by at least four normalized-bar indices (five bars inclusive)",
+            "segment": "three alternating strokes whose third stroke extends the first; exposed as a candidate",
+            "center": "intersection of the price ranges of at least three consecutive strokes",
+            "divergence": "new price extreme with same-direction MACD histogram energy below 80% of the prior stroke",
+            "signals": "first/second/third buy-sell points are structural candidates, never execution advice",
+        },
+        "limitations": [
+            "Chan schools differ on inclusion, stroke and segment rules; this response identifies its exact variant",
+            "the latest unconfirmed source-bar structure is not promoted to a fractal or stroke",
+        ],
+    }
+
+
 def _swing_zones(
     rows: list[dict], current: float, atr: float | None, window: int = 3
 ) -> dict[str, Any]:
@@ -405,7 +926,12 @@ def _resample_ohlcv(rows: list[dict], timeframe: str) -> list[dict]:
             "vol": sum(_number(row.get("vol")) or 0 for row in group),
             "amount": sum(_number(row.get("amount")) or 0 for row in group),
             "source_observations": len(group),
+            "period_complete": True,
         })
+    if bars:
+        # The latest aggregate can still be the live week/month.  Indicators may
+        # describe it, but structural confirmation must not depend on it.
+        bars[-1]["period_complete"] = False
     return bars
 
 
@@ -535,7 +1061,14 @@ def _timeframe_analysis(
     bull_line = valid_bull[-1] if valid_bull else None
     bear_line = mean(valid_bull[-6:]) if len(valid_bull) >= 6 else None
     threshold_pct = max(5.0, min(15.0, 2 * atr14 / latest_close * 100 if atr14 else 5.0))
-    zigzag = _zigzag(prices, threshold_pct)
+    structure_prices = (
+        prices
+        if timeframe == "1d"
+        else [row for row in prices if row.get("period_complete", True)]
+    )
+    zigzag = _zigzag(structure_prices, threshold_pct)
+    fibonacci_retracement = _fibonacci_retracement(zigzag, latest_close)
+    chan_analysis = _chan_analysis(structure_prices, latest_close)
     legs = [
         {
             "start_date": left["trade_date"],
@@ -572,7 +1105,11 @@ def _timeframe_analysis(
         "status": "ready" if len(prices) >= minimum_history else "limited_history",
         "timeframe": timeframe,
         "observations": len(prices),
-        "observation": {"trade_date": prices[-1].get("trade_date"), "close": latest_close},
+        "observation": {
+            "trade_date": prices[-1].get("trade_date"),
+            "close": latest_close,
+            "period_complete": prices[-1].get("period_complete", True),
+        },
         "trend": {
             "moving_averages": ma,
             "ema_12": _round(ema12[-1]), "ema_26": _round(ema26[-1]),
@@ -588,6 +1125,12 @@ def _timeframe_analysis(
                 "state": "bullish" if bull_line is not None and bear_line is not None and bull_line >= bear_line else "bearish" if bull_line is not None and bear_line is not None else "unavailable",
                 "formula": "bull=20-period LWMA((3C+L+O+H)/6); bear=SMA6(bull)",
             },
+            "systems": {
+                "ichimoku": _ichimoku(highs, lows, latest_close),
+                "donchian_20": _donchian(highs, lows, latest_close, 20),
+                "donchian_55": _donchian(highs, lows, latest_close, 55),
+                "supertrend_10_3": _supertrend(highs, lows, closes),
+            },
         },
         "momentum": {
             **{
@@ -595,6 +1138,7 @@ def _timeframe_analysis(
                 for window in (4, 12, 20, 60)
             },
             "rsi_14": _round(_rsi(closes)),
+            "stochastic_rsi_14": _round(_stochastic_rsi(closes)),
             "roc_12_pct": _round(_pct_change(latest_close, closes[-13]) if len(closes) >= 13 else None),
             "kdj": {"k": _round(kdj_k), "d": _round(kdj_d), "j": _round(kdj_j)},
             "williams_r_14": _round(_williams_r(highs, lows, closes)),
@@ -615,11 +1159,15 @@ def _timeframe_analysis(
             "volume_5_average": _round(mean(volumes[-5:]) if len(volumes) >= 5 else None),
             "volume_20_average": _round(mean(volumes[-20:]) if len(volumes) >= 20 else None),
             "obv": _round(obv_series[-1]),
+            "chaikin_money_flow_20": _round(
+                _chaikin_money_flow(highs, lows, closes, volumes)
+            ),
         },
         "levels": {
             "swing_zones": _swing_zones(prices[-250:], latest_close, atr14),
             "pivot_systems": pivot_systems,
             "classic_pivots": pivot_systems.get("classic", {}),
+            "fibonacci_retracement": fibonacci_retracement,
         },
         "trend_strength": {"adx_14": _round(adx14), "plus_di_14": _round(plus_di14), "minus_di_14": _round(minus_di14)},
         "candlesticks": {"patterns": _candlestick_patterns(prices)},
@@ -628,6 +1176,7 @@ def _timeframe_analysis(
             "threshold_pct": _round(threshold_pct), "pivots": zigzag, "legs": legs,
             "current_leg": legs[-1]["direction"] if legs else "unavailable",
         },
+        "chan_analysis": chan_analysis,
         "chart": {"price_basis": "source OHLCV", "points": chart},
     }
 
@@ -1173,6 +1722,8 @@ class ResearchService:
             min(15.0, (2 * atr14 / latest_close * 100) if atr14 and latest_close else 5.0),
         )
         pivots = _zigzag(prices, threshold_pct)
+        fibonacci_retracement = _fibonacci_retracement(pivots, latest_close)
+        chan_analysis = _chan_analysis(prices, latest_close)
         legs = []
         for left, right in pairwise(pivots):
             change = _pct_change(right["price"], left["price"])
@@ -1231,10 +1782,17 @@ class ResearchService:
                         "formula": "bull = 20-period linearly weighted average of (3C+L+O+H)/6; bear = 6-period SMA of bull",
                         "terminology": "民间常称牛线/熊线；不把含义不统一的‘牛门线’当作标准名称",
                     },
+                    "systems": {
+                        "ichimoku": _ichimoku(highs, lows, latest_close),
+                        "donchian_20": _donchian(highs, lows, latest_close, 20),
+                        "donchian_55": _donchian(highs, lows, latest_close, 55),
+                        "supertrend_10_3": _supertrend(highs, lows, closes),
+                    },
                 },
                 "momentum": {
                     **momentum,
                     "rsi_14": _round(latest_rsi),
+                    "stochastic_rsi_14": _round(_stochastic_rsi(closes)),
                     "roc_12_pct": _round(_pct_change(latest_close, closes[-13]) if len(closes) >= 13 else None),
                     "kdj": {"k": _round(kdj_k), "d": _round(kdj_d), "j": _round(kdj_j)},
                     "williams_r_14": _round(_williams_r(highs, lows, closes)),
@@ -1257,6 +1815,9 @@ class ResearchService:
                     "volume_5_to_20_ratio": _round(_safe_div(volume_5, volume_20)),
                     "obv": _round(obv_series[-1]),
                     "obv_change_20d": _round(obv_series[-1] - obv_series[-21]) if len(obv_series) > 20 else None,
+                    "chaikin_money_flow_20": _round(
+                        _chaikin_money_flow(highs, lows, closes, volumes)
+                    ),
                 },
                 "levels": {
                     f"high_{window}d": _round(max(value for value in highs[-window:] if value is not None)) if len(highs) >= window else None
@@ -1268,6 +1829,7 @@ class ResearchService:
                     "swing_zones": swing_zones,
                     "classic_pivots": classic_levels,
                     "pivot_systems": pivot_systems,
+                    "fibonacci_retracement": fibonacci_retracement,
                     "methodology": "rolling extrema are descriptive ranges; actionable zones require repeated swing touches or next-session pivot formulas",
                 },
                 "trend_strength": {
@@ -1289,6 +1851,7 @@ class ResearchService:
                     "elliott_note": "Elliott labels are scenario-dependent; the API exposes reproducible pivots and does not claim one definitive wave count.",
                     "invalidation": "a live pivot remains unconfirmed until price reverses by the configured threshold",
                 },
+                "chan_analysis": chan_analysis,
                 "relative_strength": {"benchmark": benchmark, **relative},
                 "total_return": {
                     "adjusted_observations": len(adjusted_closes),

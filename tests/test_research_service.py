@@ -3,7 +3,13 @@ from decimal import Decimal
 
 import pytest
 
-from service.research.service import ResearchService, _pivot_systems, _zigzag
+from service.research.service import (
+    ResearchService,
+    _chan_analysis,
+    _fibonacci_retracement,
+    _pivot_systems,
+    _zigzag,
+)
 
 
 class FakeDataService:
@@ -158,8 +164,18 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     }
     assert result["data"]["timeframes"]["1w"]["observations"] > 40
     assert result["data"]["timeframes"]["1mo"]["observations"] >= 10
+    assert result["data"]["timeframes"]["1mo"]["observation"]["period_complete"] is False
+    assert (
+        result["data"]["timeframes"]["1mo"]["chan_analysis"]["source_bar_count"]
+        == result["data"]["timeframes"]["1mo"]["observations"] - 1
+    )
     assert result["data"]["long_horizon"]["calendar_year_returns"]
     assert result["data"]["wave_analysis"]["status"] == "candidate_only"
+    assert result["data"]["chan_analysis"]["variant"].startswith("deterministic")
+    assert result["data"]["trend"]["systems"]["ichimoku"]["state"] != "unavailable"
+    assert result["data"]["trend"]["systems"]["supertrend_10_3"]["status"] == "ready"
+    assert result["data"]["momentum"]["stochastic_rsi_14"] is not None
+    assert result["data"]["volume_price"]["chaikin_money_flow_20"] is not None
     assert len(result["data"]["chart"]["points"]) == 120
     assert result["data"]["relative_strength"]["excess_return_60d_pct"] == 0.0
 
@@ -174,6 +190,57 @@ def test_common_pivot_families_have_auditable_prior_bar_basis():
     assert systems["fibonacci"]["resistance_2"] == pytest.approx(114.0267)
     assert systems["cpr"]["basis_date"] == date(2026, 9, 18)
     assert systems["demark"]["method"].startswith("DeMark")
+
+
+def test_fibonacci_retracement_uses_only_last_confirmed_swing():
+    result = _fibonacci_retracement(
+        [
+            {"trade_date": "2026-01-01", "price": 100, "type": "low", "confirmed": True},
+            {"trade_date": "2026-02-01", "price": 200, "type": "high", "confirmed": True},
+            {"trade_date": "2026-02-20", "price": 160, "type": "low", "confirmed": False},
+        ],
+        150,
+    )
+
+    assert result["status"] == "ready"
+    assert result["direction"] == "up"
+    assert result["retracement_levels"]["23.6"] == pytest.approx(176.4)
+    assert result["retracement_levels"]["61.8"] == pytest.approx(138.2)
+    assert result["extension_levels"]["161.8"] == pytest.approx(261.8)
+    assert result["current_retracement_pct"] == pytest.approx(50.0)
+    assert result["live_pivot_excluded"]["price"] == 160
+
+
+def test_chan_candidate_contract_builds_fractals_strokes_and_centers():
+    closes = [
+        100, 102, 104, 106, 108,
+        106, 104, 102, 100,
+        102, 104, 106, 110,
+        108, 106, 104, 102,
+        104, 106, 108, 112,
+        110, 108, 106, 104,
+    ]
+    rows = [
+        {
+            "trade_date": date(2026, 1, 1) + timedelta(days=index),
+            "open": close - 0.2,
+            "high": close + 1,
+            "low": close - 1,
+            "close": close,
+            "vol": 1000 + index,
+        }
+        for index, close in enumerate(closes)
+    ]
+
+    result = _chan_analysis(rows, closes[-1])
+
+    assert result["status"] == "ready"
+    assert len(result["fractals"]) >= 5
+    assert len(result["strokes"]) >= 4
+    assert result["segment_candidates"]
+    assert result["centers"]
+    assert result["current_position"] in {"above_center", "inside_center", "below_center"}
+    assert "signals" in result
 
 
 @pytest.mark.parametrize(
@@ -264,11 +331,11 @@ def test_capability_catalog_separates_derived_backfill_and_new_sources():
     assert catalog["summary"]["derived_endpoints"] == 9
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["summary"]["baseline_techniques"] == 44
-    assert catalog["summary"]["currently_served"] == 36
+    assert catalog["summary"]["baseline_techniques"] == 52
+    assert catalog["summary"]["currently_served"] == 44
     assert catalog["summary"]["planned_from_existing_sources"] == 3
     assert catalog["summary"]["external_or_constrained"] == 5
-    assert len(catalog["techniques"]["served"]) == 36
+    assert len(catalog["techniques"]["served"]) == 44
     assert len(catalog["techniques"]["gaps"]) == 8
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"

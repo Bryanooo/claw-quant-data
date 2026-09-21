@@ -17,6 +17,24 @@
 Every family uses the prior completed bar of the requested timeframe. Do not mix a daily pivot
 with a weekly claim or present six nearby formulas as six independent confirmations.
 
+## Fibonacci retracement
+
+`fibonacci_retracement` is not the Fibonacci pivot family. It anchors to the latest two confirmed
+volatility-filtered ZigZag pivots and returns 23.6%, 38.2%, 50%, 61.8%, and 78.6% retracement plus
+127.2%, 161.8%, and 200% extension levels. The live pivot is disclosed but excluded as an anchor.
+If fewer than two pivots are confirmed, report that the structure is insufficient.
+The latest weekly/monthly aggregate is marked incomplete and excluded from structural confirmation.
+
+## Chan structure
+
+`chan_analysis` implements one auditable candidate variant: merge containing bars in the inferred
+direction; confirm three-bar top/bottom fractals; connect alternating fractals whose indices are
+at least four apart (five bars inclusive) into strokes; expose three-stroke extension segments; and define a center
+as the common price interval of at least three consecutive strokes. Divergence requires a new
+same-direction price extreme with absolute MACD-histogram energy below 80% of the prior stroke.
+First, second, and third buy/sell labels are structural candidates only. Always state that Chan
+schools differ and use the returned `methodology` instead of silently substituting another variant.
+
 ## Timeframes
 
 - `1d`, `1w`, and `1mo` are calculated from the same governed daily OHLCV source. Weekly bars

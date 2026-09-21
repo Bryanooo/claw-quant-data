@@ -21,7 +21,7 @@
 11 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、9 个聚合研究服务。
 它们不是“11 种分析”，
 也不表示已经覆盖所有可能的投研方法；投研方法本身没有封闭全集。项目定义了一份
-可验收的 v1 基线：44 项核心能力中，当前 36 项已由研究接口直接服务，3 项可由
+可验收的 v1 基线：52 项核心能力中，当前 44 项已由研究接口直接服务，3 项可由
 已有 Tushare 数据补采后增加服务，另 5 项仍受外部数据源或额度约束。能力目录会
 返回逐项 `techniques.served` 和 `techniques.gaps`，不再只给一个容易误解的总数。
 
@@ -31,21 +31,36 @@
 | `GET /api/v1/research/readiness` | 面向 Agent 的研究数据时效、覆盖、失败和初始化摘要 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 财务趋势、盈利、成长、现金质量、偿债、效率、杜邦与主营构成 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | PE/PB/PS/股息率历史分位、同行中位数、DCF/DDM 输入 |
-| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线与形态、MA/MACD/ADX、RSI/KDJ/CCI/Williams/MFI、ATR/布林、OBV、可解释支撑压力、牛熊线、波浪候选、相对强弱和绘图序列 |
-| `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月同口径指标、六类枢轴和长期趋势 |
+| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线与形态、MA/MACD/ADX、RSI/KDJ/CCI/Williams/MFI/StochRSI、ATR/布林、OBV/CMF、Ichimoku、Donchian、Supertrend、六类枢轴、确认波段斐波那契回撤、缠论候选结构、相对强弱和绘图序列 |
+| `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月同口径技术体系、斐波那契回撤、缠论候选结构和长期趋势 |
 | `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 个股资金流、两融、北向、大宗和筹码状态 |
 | `GET /api/v1/research/stocks/{ts_code}/repurchase-progress` | 结构化回购方案、最新累计实施进度、执行均价与公告后相对收益 |
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 事件窗口收益、基准收益、异常收益和 CAR |
 | `GET /api/v1/research/market/breadth` | 涨跌分布、均线扩散、成交和涨跌停情绪 |
 | `GET /api/v1/research/sectors/{provider}/rotation` | THS/DC/TDX 当前有效板块内按日收益复利的强弱排序，并披露实际数据日与滞后 |
 
-当前 36 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 16 项、
+当前 44 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 24 项、
 资金与筹码 5 项、回购进展 1 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项。仍有 8 项缺口：
 一致预期修正、股东与机构行为、总股东回报可以用现有接口补齐；公告证据、治理风险、
 新闻事件、新闻情绪和微观结构需要派生能力或新数据源。逐项机器可读状态以能力目录为准。
 
 这些接口只输出可复现的研究事实和指标，不输出买卖建议。估值模型不会在缺少增长、
 折现率等显式假设时伪造“合理价格”。
+
+### 技术结构的确认口径
+
+- `levels.fibonacci_retracement` 只使用最近两个已确认 ZigZag 拐点，最后一个实时拐点
+  永远不作为锚点；返回 23.6%、38.2%、50%、61.8%、78.6% 回撤和
+  127.2%、161.8%、200% 扩展。
+- `chan_analysis` 先消除 K 线包含关系，再生成确认分型、笔、三笔延伸线段候选、
+  三笔价格交集形成的中枢、MACD 面积背驰以及一二三类买卖点候选。缠论流派在笔和
+  线段定义上并不统一，因此接口固定披露本系统采用的规则，所有买卖点都标记为候选，
+  不能直接作为交易指令。
+- 两项结构分析都在 `1d`、`1w`、`1mo` 独立计算；最新周/月聚合棒明确标记为
+  `period_complete=false`，可以描述盘中/期内状态，但不会参与分型、笔、中枢或确认波段锚点。
+
+仍需其他数据才能可靠补充的技术能力包括：分钟级锚定 VWAP、成交量分布、盘口订单
+失衡、冲击成本和期权隐含波动率曲面。系统不会使用日线成交额或收盘价伪造这些结果。
 
 ## 待补采的现有接口
 

@@ -1,0 +1,29 @@
+apiVersion: hibro.ai/v1alpha1
+kind: Agent
+metadata:
+  name: Claw Quant Research Agent
+  slug: claw-quant-research
+  description: Read-only fundamental, technical, event, sector, ETF and commodity research over governed Claw Quant APIs
+spec:
+  engine: codex
+  instructions: instructions.md
+  skills:
+    - name: claw-quant-data
+      path: skills/claw-quant-data
+    - name: fundamental-research
+      path: skills/fundamental-research
+    - name: technical-research
+      path: skills/technical-research
+    - name: event-research
+      path: skills/event-research
+    - name: cross-asset-research
+      path: skills/cross-asset-research
+  workspace:
+    strategy: persistent
+    access: read-only
+  approvalPolicy: strict
+  networkPolicy: allow
+  maxConcurrency: 2
+  modalities:
+    - text
+    - image

@@ -116,6 +116,24 @@ _EMPTY_RECHECK_OVERRIDES = {
     "ths_hot": {"min_interval_seconds": 30 * 60, "max_generations": 5},
 }
 
+# A successful response is not publication-final for event-style interfaces:
+# another announcement can arrive after the first evening patrol.  These APIs
+# therefore receive a small number of separately audited refreshes even when
+# the first result was non-empty.  The exact same scope is re-read and upserted.
+_LATE_ARRIVAL_RECHECK_APIS = {
+    "anns_d",
+    "dividend",
+    "fund_div",
+    "repurchase",
+    "share_float",
+    "stk_holdertrade",
+}
+_LATE_ARRIVAL_RECHECK_POLICY = {
+    "min_interval_seconds": 3 * 3600,
+    "max_generations": 3,
+    "window_days": 4,
+}
+
 
 def _empty_recheck_policy(api_name: str, cadence: str) -> dict[str, int]:
     policy = dict(_EMPTY_RECHECK_POLICIES[cadence])
@@ -383,6 +401,13 @@ def submit_policy_batch(
                 handler=handler,
             )
             submitted += int(recheck is not None)
+            if recheck is None and contract.api_name in _LATE_ARRIVAL_RECHECK_APIS:
+                late_recheck = job_repository.create_late_arrival_recheck(
+                    int(job["job_id"]),
+                    **_LATE_ARRIVAL_RECHECK_POLICY,
+                    handler=handler,
+                )
+                submitted += int(late_recheck is not None)
     return submitted
 
 

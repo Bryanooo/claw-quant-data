@@ -57,7 +57,7 @@ def stock_valuation(
 def stock_technicals(
     ts_code: str,
     service: ResearchServiceDependency,
-    lookback_days: int = Query(default=400, ge=60, le=1000),
+    lookback_days: int = Query(default=3000, ge=60, le=5000),
     chart_points: int = Query(default=120, ge=30, le=250),
     benchmark: str = Query(default="399006.SZ", pattern=r"^[0-9A-Za-z.]{4,16}$"),
     as_of: date | None = None,
@@ -65,6 +65,33 @@ def stock_technicals(
     return service.technicals(
         ts_code.upper(), lookback_days=lookback_days, chart_points=chart_points,
         benchmark=benchmark.upper(), as_of=as_of,
+    )
+
+
+@router.get("/instruments/{asset_type}/{code}/technicals")
+def instrument_technicals(
+    asset_type: str,
+    code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=3000, ge=60, le=5000),
+    chart_points: int = Query(default=120, ge=30, le=250),
+    benchmark: str | None = Query(
+        default=None, pattern=r"^[0-9A-Za-z.]{4,16}$"
+    ),
+    provider: str | None = Query(default=None, pattern=r"^[a-zA-Z0-9_-]{2,16}$"),
+    as_of: date | None = None,
+) -> dict:
+    """Return one multi-timeframe contract for stock/index/ETF/sector/spot."""
+
+    normalized_code = code if asset_type.lower() == "spot" else code.upper()
+    return service.instrument_technicals(
+        asset_type,
+        normalized_code,
+        lookback_days=lookback_days,
+        chart_points=chart_points,
+        benchmark=benchmark.upper() if benchmark else None,
+        provider=provider,
+        as_of=as_of,
     )
 
 
@@ -77,6 +104,18 @@ def stock_capital_flow(
 ) -> dict:
     return service.capital_flow(
         ts_code.upper(), lookback_days=lookback_days, as_of=as_of,
+    )
+
+
+@router.get("/stocks/{ts_code}/repurchase-progress")
+def stock_repurchase_progress(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    benchmark: str = Query(default="399006.SZ", pattern=r"^[0-9A-Za-z.]{4,16}$"),
+    as_of: date | None = None,
+) -> dict:
+    return service.repurchase_progress(
+        ts_code.upper(), benchmark=benchmark.upper(), as_of=as_of
     )
 
 

@@ -567,6 +567,50 @@ def test_version_three_full_initialization_includes_research_history():
     assert len(research["repurchase"]) == 1
 
 
+def test_version_four_full_initialization_includes_cross_asset_market_history():
+    repository = PlanningRepository(
+        trade_dates=(date(2026, 9, 17), date(2026, 9, 18))
+    )
+    jobs = PlanningJobs()
+    service = InitializationService(
+        repository=repository, job_service=jobs, coverage_service=PlanningCoverage()
+    )
+
+    assert service._plan_catalog_history(
+        campaign(
+            profile="full",
+            history_start=date(2026, 9, 17),
+            history_end=date(2026, 9, 18),
+            current_phase=3,
+            phase_name="catalog_history",
+            options={"plan_version": 4},
+        ),
+        set(),
+    ) is True
+
+    cross_asset = [
+        (parameters, options)
+        for _task_name, parameters, options in jobs.calls
+        if parameters["api_name"] in {"fund_daily", "sge_daily", "ths_daily"}
+    ]
+    assert len(cross_asset) == 6
+    assert {
+        (item["api_name"], item["parameters"]["trade_date"])
+        for item, _options in cross_asset
+    } == {
+        (api_name, compact)
+        for api_name in ("fund_daily", "sge_daily", "ths_daily")
+        for compact in ("20260917", "20260918")
+    }
+    assert all(options["resource_class"] == "initialization" for _, options in cross_asset)
+    cross_asset_steps = [
+        item for item in repository.collection_step_options
+        if item["step_key"].startswith("research-market-history:")
+    ]
+    assert len(cross_asset_steps) == 6
+    assert all(item["require_verified"] is True for item in cross_asset_steps)
+
+
 def test_version_three_full_initialization_declares_research_fanout_history():
     service = InitializationService(
         repository=PlanningRepository(),

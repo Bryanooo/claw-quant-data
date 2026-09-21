@@ -214,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_technicals.add_argument("ts_code", type=_ts_code)
     research_technicals.add_argument(
-        "--lookback-days", type=_bounded_integer(60, 1000), default=400
+        "--lookback-days", type=_bounded_integer(60, 5000), default=3000
     )
     research_technicals.add_argument(
         "--chart-points", type=_bounded_integer(30, 250), default=120
@@ -222,6 +222,24 @@ def build_parser() -> argparse.ArgumentParser:
     research_technicals.add_argument("--benchmark", type=_ts_code, default="399006.SZ")
     research_technicals.add_argument("--as-of")
     research_technicals.set_defaults(handler=_research_technicals)
+    research_instrument = research_commands.add_parser(
+        "instrument-technicals",
+        help="derive multi-timeframe technicals for stock/index/ETF/sector/SGE spot",
+    )
+    research_instrument.add_argument(
+        "asset_type", choices=("stock", "index", "fund", "etf", "sector", "spot")
+    )
+    research_instrument.add_argument("code", type=_instrument_code)
+    research_instrument.add_argument(
+        "--lookback-days", type=_bounded_integer(60, 5000), default=3000
+    )
+    research_instrument.add_argument(
+        "--chart-points", type=_bounded_integer(30, 250), default=120
+    )
+    research_instrument.add_argument("--benchmark", type=_ts_code)
+    research_instrument.add_argument("--provider")
+    research_instrument.add_argument("--as-of")
+    research_instrument.set_defaults(handler=_research_instrument_technicals)
     research_flow = research_commands.add_parser(
         "capital-flow", help="summarize money flow, margin, northbound and chips"
     )
@@ -231,6 +249,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_flow.add_argument("--as-of")
     research_flow.set_defaults(handler=_research_capital_flow)
+    research_repurchase = research_commands.add_parser(
+        "repurchase-progress",
+        help="reconcile buyback disclosures, execution progress and market response",
+    )
+    research_repurchase.add_argument("ts_code", type=_ts_code)
+    research_repurchase.add_argument("--benchmark", type=_ts_code, default="399006.SZ")
+    research_repurchase.add_argument("--as-of")
+    research_repurchase.set_defaults(handler=_research_repurchase_progress)
     research_event = research_commands.add_parser(
         "event-study", help="calculate market-adjusted event returns"
     )
@@ -646,6 +672,27 @@ def _research_technicals(client: ApiClient, args: argparse.Namespace) -> Any:
     )
 
 
+def _research_instrument_technicals(
+    client: ApiClient, args: argparse.Namespace
+) -> Any:
+    params = {
+        "lookback_days": args.lookback_days,
+        "chart_points": args.chart_points,
+    }
+    if args.benchmark:
+        params["benchmark"] = args.benchmark
+    if args.provider:
+        params["provider"] = args.provider
+    if args.as_of:
+        params["as_of"] = args.as_of
+    code = args.code if args.asset_type == "spot" else args.code.upper()
+    return _research_get(
+        client,
+        f"/v1/research/instruments/{args.asset_type}/{code}/technicals",
+        params=params,
+    )
+
+
 def _research_capital_flow(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"lookback_days": args.lookback_days}
     if args.as_of:
@@ -653,6 +700,19 @@ def _research_capital_flow(client: ApiClient, args: argparse.Namespace) -> Any:
     return _research_get(
         client,
         f"/v1/research/stocks/{args.ts_code.upper()}/capital-flow",
+        params=params,
+    )
+
+
+def _research_repurchase_progress(
+    client: ApiClient, args: argparse.Namespace
+) -> Any:
+    params = {"benchmark": args.benchmark}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client,
+        f"/v1/research/stocks/{args.ts_code}/repurchase-progress",
         params=params,
     )
 
@@ -819,6 +879,12 @@ def _ts_code(value: str) -> str:
     if not _TS_CODE_PATTERN.fullmatch(value):
         raise argparse.ArgumentTypeError("contains unsupported characters")
     return value.upper()
+
+
+def _instrument_code(value: str) -> str:
+    if not _TS_CODE_PATTERN.fullmatch(value):
+        raise argparse.ArgumentTypeError("contains unsupported characters")
+    return value
 
 
 if __name__ == "__main__":

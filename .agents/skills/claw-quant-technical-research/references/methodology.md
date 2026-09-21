@@ -8,6 +8,22 @@
   the latest close. Rank nearby zones by repeated touches.
 - `classic_pivots`: next-session levels from the prior session: `P=(H+L+C)/3`,
   `S1=2P-H`, `R1=2P-L`, `S2=P-(H-L)`, `R2=P+(H-L)`.
+- `fibonacci`: classic pivot plus/minus 0.382, 0.618, and 1.0 times the prior range.
+- `woodie`: `P=(H+L+2C)/4`, then symmetric support/resistance from the prior range.
+- `camarilla`: prior close plus/minus 1.1 times the prior range at 1/12, 1/6, 1/4, and 1/2.
+- `demark`: conditional `X` from prior open versus close; one projected support/resistance pair.
+- `cpr`: central pivot range from `P`, `(H+L)/2`, and `2P-BC`.
+
+Every family uses the prior completed bar of the requested timeframe. Do not mix a daily pivot
+with a weekly claim or present six nearby formulas as six independent confirmations.
+
+## Timeframes
+
+- `1d`, `1w`, and `1mo` are calculated from the same governed daily OHLCV source. Weekly bars
+  end on the last observed session in the ISO week; monthly bars end on the last observed session.
+- Read higher timeframe first for regime, daily second for execution detail.
+- `long_horizon` uses daily observations for calendar-year returns, CAGR, 52-week range, and
+  max drawdown. It intentionally omits annual oscillators when too few annual bars exist.
 
 ## Trend lines
 

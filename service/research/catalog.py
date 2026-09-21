@@ -50,6 +50,20 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     },
     {
         "method": "GET",
+        "path": "/api/v1/research/stocks/{ts_code}/repurchase-progress",
+        "name": "回购进展",
+        "domain": "股东回报",
+        "description": "对齐回购方案、最新累计实施进度、执行均价与公告后市场表现。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/instruments/{asset_type}/{code}/technicals",
+        "name": "多资产技术面",
+        "domain": "跨资产研究",
+        "description": "股票、指数、ETF、同花顺板块与上金所现货的日/周/月技术面及长期趋势。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/stocks/{ts_code}/event-study",
         "name": "事件研究",
         "domain": "事件研究",
@@ -106,6 +120,8 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "relative-strength", "name": "相对强弱", "domain": "技术面", "endpoint": "technicals"},
     {"id": "adjusted-return", "name": "复权收益", "domain": "技术面", "endpoint": "technicals"},
     {"id": "drawdown-risk", "name": "回撤风险", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "multi-timeframe", "name": "日周月多周期与年度长期趋势", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "pivot-systems", "name": "Classic/Fibonacci/Woodie/Camarilla/DeMark/CPR枢轴", "domain": "技术面", "endpoint": "technicals"},
     # Capital, event and market (8)
     {"id": "main-money-flow", "name": "主力资金流", "domain": "资金", "endpoint": "capital-flow"},
     {"id": "margin-financing", "name": "两融行为", "domain": "资金", "endpoint": "capital-flow"},
@@ -115,6 +131,7 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "event-study", "name": "事件窗口异常收益", "domain": "事件", "endpoint": "event-study"},
     {"id": "market-breadth", "name": "市场宽度", "domain": "市场", "endpoint": "market-breadth"},
     {"id": "sector-rotation", "name": "板块轮动", "domain": "板块", "endpoint": "sector-rotation"},
+    {"id": "repurchase-progress", "name": "回购累计进展与市场反应", "domain": "股东回报", "endpoint": "repurchase-progress"},
 )
 
 

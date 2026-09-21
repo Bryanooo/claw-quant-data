@@ -25,6 +25,7 @@ class FakeRepository:
         self.jobs = {}
         self.next_job_id = 1
         self.rechecks = []
+        self.late_rechecks = []
 
     def create(self, task_name, parameters, **options):
         if options.get("reuse_verified_scope"):
@@ -62,6 +63,16 @@ class FakeRepository:
         recheck = {"job_id": self.next_job_id, "root_job_id": root_job_id, **policy}
         self.next_job_id += 1
         self.rechecks.append(recheck)
+        return recheck
+
+    def create_late_arrival_recheck(self, root_job_id, **policy):
+        job = next(item for item in self.jobs.values() if item["job_id"] == root_job_id)
+        if job.get("completion_status") != "complete" or job.get("late_rechecked"):
+            return None
+        job["late_rechecked"] = True
+        recheck = {"job_id": self.next_job_id, "root_job_id": root_job_id, **policy}
+        self.next_job_id += 1
+        self.late_rechecks.append(recheck)
         return recheck
 
 
@@ -168,9 +179,10 @@ def test_policy_submission_reuses_verified_scope_after_handler_upgrade(monkeypat
         ),
     )
 
-    assert scheduling.submit_policy_batch(
+    refreshed = scheduling.submit_policy_batch(
         "daily", today=date(2026, 8, 28), repository=repository
-    ) == 0
+    )
+    assert refreshed == 5
     assert len(repository.jobs) == first
 
 
@@ -193,6 +205,7 @@ def test_policy_submission_creates_one_separate_recheck_for_empty_result(monkeyp
     assert second == first
     assert len(repository.rechecks) == first
     assert third == 0
+    assert repository.late_rechecks == []
     api_by_job_id = {
         job["job_id"]: job["api_name"] for job in repository.jobs.values()
     }
@@ -202,6 +215,44 @@ def test_policy_submission_creates_one_separate_recheck_for_empty_result(monkeyp
         and item["max_generations"]
         == (5 if api_by_job_id[item["root_job_id"]] == "ths_hot" else 3)
         for item in repository.rechecks
+    )
+
+
+def test_publication_streams_refresh_non_empty_successes(monkeypatch):
+    monkeypatch.setattr(scheduling, "_latest_trade_date", lambda _today: "20260918")
+    repository = FakeRepository()
+
+    scheduling.submit_policy_batch(
+        "daily", today=date(2026, 9, 18), repository=repository
+    )
+    for job in repository.jobs.values():
+        job.update(status="success", completion_status="complete")
+
+    submitted = scheduling.submit_policy_batch(
+        "daily", today=date(2026, 9, 18), repository=repository
+    )
+
+    refreshed = {
+        next(job["api_name"] for job in repository.jobs.values()
+             if job["job_id"] == item["root_job_id"])
+        for item in repository.late_rechecks
+    }
+    policies = TusharePolicyRegistry()
+    contracts = TushareInterfaceCatalog()
+    expected = {
+        api_name for api_name in scheduling._LATE_ARRIVAL_RECHECK_APIS
+        if policies.get(api_name).cadence == "daily"
+        and contracts.get(api_name).collectable
+        and policies.get(api_name).automatic_safe
+        and api_name not in scheduling.DEDICATED_SCHEDULED_APIS
+    }
+    assert refreshed == expected
+    assert submitted == len(expected)
+    assert all(
+        item["min_interval_seconds"] == 3 * 3600
+        and item["max_generations"] == 3
+        and item["window_days"] == 4
+        for item in repository.late_rechecks
     )
 
 

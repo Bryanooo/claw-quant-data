@@ -220,7 +220,7 @@ Agent 只能按研究层契约访问：
 1. `clawq research readiness` 检查研究数据是否可用；
 2. `clawq research capabilities` 确认能力与已声明缺口；
 3. `clawq stock ...` 或 `clawq sector ...` 获取研究资料包；
-4. `clawq research fundamentals|valuation|technicals|capital-flow|event-study`；
+4. `clawq research fundamentals|valuation|technicals|instrument-technicals|capital-flow|repurchase-progress|event-study`；
 5. `clawq research market-breadth|sector-rotation`；
 6. `clawq research calendar|calendar-day` 查询投资事件；
 7. 在结论中标明历史时点、研究方法、来源和质量限制。
@@ -228,9 +228,10 @@ Agent 只能按研究层契约访问：
 Agent 不使用 `health`、`status`、`datasets`、`query`、`freshness`、`interfaces` 或
 `coverage` 命令；需要的底层事实与质量证据必须由研究层契约显式返回。
 
-`research technicals` 支持 `--chart-points 30..250`，返回可直接绘制K线、均线、
+`research technicals` 和 `research instrument-technicals` 支持 `--chart-points 30..250`，返回可直接绘制K线、均线、
 布林带和成交量的时间序列，并同时给出K线形态、KDJ/CCI/Williams %R/MFI、ADX/DMI、
-OBV、可解释支撑压力、MA250牛熊边界和波动率调整的波浪候选。波浪结果是候选场景，
+OBV、六类枢轴、可解释支撑压力、MA250牛熊边界和波动率调整的波浪候选；同时提供
+日、周、月三个周期与长期年度摘要。波浪结果是候选场景，
 不是确定的艾略特浪标注。
 
 第一版 CLI 只有 GET 请求，没有任务提交、重试、初始化、删除或任意 SQL 能力。

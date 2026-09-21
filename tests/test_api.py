@@ -207,9 +207,17 @@ class FakeResearchService:
         self.query_args = {"ts_code": ts_code, **kwargs}
         return {"data": {"trend": {}}, "meta": self.query_args}
 
+    def instrument_technicals(self, asset_type, code, **kwargs):
+        self.query_args = {"asset_type": asset_type, "code": code, **kwargs}
+        return {"data": {"timeframes": {}}, "meta": self.query_args}
+
     def capital_flow(self, ts_code, **kwargs):
         self.query_args = {"ts_code": ts_code, **kwargs}
         return {"data": {"moneyflow": {}}, "meta": self.query_args}
+
+    def repurchase_progress(self, ts_code, **kwargs):
+        self.query_args = {"ts_code": ts_code, **kwargs}
+        return {"data": {"status": "in_progress"}, "meta": self.query_args}
 
     def event_study(self, ts_code, **kwargs):
         self.query_args = {"ts_code": ts_code, **kwargs}
@@ -249,6 +257,18 @@ def test_research_endpoints_use_separate_namespace():
         assert technicals.status_code == 200
         assert technicals.json()["meta"]["benchmark"] == "399006.SZ"
         assert technicals.json()["meta"]["chart_points"] == 90
+        instrument = client.get(
+            "/api/v1/research/instruments/spot/Au99.99/technicals",
+            params={"chart_points": 60},
+        )
+        assert instrument.status_code == 200
+        assert instrument.json()["meta"]["asset_type"] == "spot"
+        assert instrument.json()["meta"]["code"] == "Au99.99"
+        repurchase = client.get(
+            "/api/v1/research/stocks/300750.sz/repurchase-progress"
+        )
+        assert repurchase.status_code == 200
+        assert repurchase.json()["meta"]["ts_code"] == "300750.SZ"
         assert client.get("/api/v1/research/market/breadth").status_code == 200
         assert client.get("/api/v1/research/sectors/ths/rotation").status_code == 200
 
@@ -670,7 +690,7 @@ def test_data_service_catalog_exposes_three_layers_and_real_coverage():
         "layers": 3,
         "raw_interfaces": 2,
         "standard_datasets": 1,
-        "research_endpoints": 19,
+            "research_endpoints": 21,
     }
     assert payload["recommended_entrypoint"] == "/api/v1/research/capabilities"
     assert [item["id"] for item in payload["audiences"]] == [

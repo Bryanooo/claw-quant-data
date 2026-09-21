@@ -44,5 +44,5 @@ def test_catalog_distinguishes_registration_from_observed_raw_coverage():
         "mapped_interfaces": 2,
         "direct_interface_queries": 1,
     }
-    assert research["metrics"]["endpoints"] == 19
+    assert research["metrics"]["endpoints"] == 21
     assert all(item["status"] == "available" for item in research["items"])

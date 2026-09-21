@@ -606,8 +606,8 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 | `GET /api/v1/research/readiness` | Agent 使用的研究数据质量、覆盖、失败和初始化摘要 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 多期基本面派生指标及证据 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | 历史估值分位、同行对比和模型输入 |
-| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线、常用指标、趋势强度、量价、支撑压力、波浪候选、牛熊线和图表序列 |
-| `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月与长期技术面 |
+| `GET /api/v1/research/stocks/{ts_code}/technicals` | K线、趋势/动量/量价体系、六类枢轴、确认波段斐波那契回撤、缠论候选结构和图表序列 |
+| `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月技术体系与长期趋势 |
 | `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 资金、两融、北向、大宗与筹码 |
 | `GET /api/v1/research/stocks/{ts_code}/repurchase-progress` | 回购方案、累计实施进度、执行均价和公告后市场表现 |
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 市场调整事件收益和 CAR |
@@ -674,7 +674,7 @@ curl 'http://127.0.0.1:8000/api/v1/research/sectors/ths/885728.TI/research-pack?
 
 这里的 9 个聚合分析入口是研究资源，不是 9 种分析能力；此外还有能力目录和研究
 就绪检查。当前机器可读 v1 基线为
-44 项：36 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
+52 项：44 项已服务、3 项可由既有数据补采后增加、5 项仍需新数据源或解除额度约束。
 完整逐项矩阵见 [Agent 研究能力与数据动作](docs/RESEARCH_CAPABILITIES.md)。
 
 Swagger UI：<http://127.0.0.1:8000/api/docs>

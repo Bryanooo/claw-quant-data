@@ -7,7 +7,9 @@ description: Produce chart-led daily, weekly, monthly, and long-horizon technica
 
 Use the stock `/technicals` endpoint. Analyze monthly, weekly, then daily trend; use long-horizon
 calendar returns and drawdown separately. Cover price structure, MA/MACD/ADX, RSI/KDJ/CCI/
-Williams/MFI, volume/OBV, ATR/Bollinger, swing zones, and relative strength. Compare Classic,
-Fibonacci, Woodie, Camarilla, DeMark, and CPR pivots without counting formula overlap as
-independent confirmation. ZigZag pivots are reproducible candidates; Elliott labels are scenarios.
-Oversold is a condition, not a reversal signal.
+Williams/MFI/StochRSI, volume/OBV/CMF, ATR/Bollinger, Ichimoku, Donchian, Supertrend, swing zones,
+and relative strength. Compare Classic, Fibonacci, Woodie, Camarilla, DeMark, and CPR pivots
+without counting formula overlap as independent confirmation. Keep Fibonacci swing retracement
+separate from Fibonacci pivots and exclude its disclosed live anchor. Read the returned Chan
+variant before interpreting fractals, strokes, centers, divergence, or buy/sell candidates.
+ZigZag, Elliott, and Chan labels are scenarios; oversold is a condition, not a reversal signal.

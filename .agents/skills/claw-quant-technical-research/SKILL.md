@@ -29,9 +29,11 @@ Analyze in this order:
 4. Volume confirmation: volume ratios and OBV.
 5. Volatility and risk: ATR, Bollinger, drawdown.
 6. Levels: repeated swing zones first; then compare Classic, Fibonacci, Woodie, Camarilla,
-   DeMark, and CPR next-period pivots. Use rolling extremes as descriptive context only.
+   DeMark, and CPR next-period pivots. Treat `fibonacci_retracement` separately: it is anchored
+   to the last completed swing, while Fibonacci pivots are based on the prior period range.
 7. Relative strength and capital flow.
-8. Wave candidates: describe alternate scenarios and invalidation, not a single certain count.
+8. Wave and Chan candidates: describe alternate scenarios and invalidation, not a single certain
+   count. Read the returned Chan variant and never turn a candidate buy/sell point into advice.
 
 Treat a candlestick pattern as a candidate until the next bar, trend, and volume confirm it.
 Treat oversold as a condition, not a reversal signal. State the exact formula or method behind
@@ -40,3 +42,5 @@ every important level.
 Always compare `data.timeframes.1d`, `1w`, and `1mo`. A daily reversal candidate that conflicts
 with weekly/monthly trend is lower confidence. Use `data.long_horizon` for calendar-year returns,
 CAGR, 52-week position, and drawdown; do not invent annual RSI/MACD when annual history is short.
+Use Ichimoku, Donchian, and Supertrend as overlapping trend evidence, not three independent votes.
+Use StochRSI and CMF only with their price regime and volume context.

@@ -105,7 +105,7 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "valuation-history", "name": "历史估值分位", "domain": "估值", "endpoint": "valuation"},
     {"id": "peer-valuation", "name": "同行估值对比", "domain": "估值", "endpoint": "valuation"},
     {"id": "valuation-inputs", "name": "DCF/DDM 输入事实", "domain": "估值", "endpoint": "valuation"},
-    # Technical and risk (14)
+    # Technical and risk (24)
     {"id": "candlestick-chart", "name": "K线与图表序列", "domain": "技术面", "endpoint": "technicals"},
     {"id": "candlestick-patterns", "name": "K线形态识别", "domain": "技术面", "endpoint": "technicals"},
     {"id": "trend", "name": "趋势与均线", "domain": "技术面", "endpoint": "technicals"},
@@ -122,6 +122,14 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "drawdown-risk", "name": "回撤风险", "domain": "技术面", "endpoint": "technicals"},
     {"id": "multi-timeframe", "name": "日周月多周期与年度长期趋势", "domain": "技术面", "endpoint": "technicals"},
     {"id": "pivot-systems", "name": "Classic/Fibonacci/Woodie/Camarilla/DeMark/CPR枢轴", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "fibonacci-retracement", "name": "确认波段斐波那契回撤与扩展", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "chan-structure", "name": "缠论分型、笔、线段候选与中枢", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "chan-divergence", "name": "缠论背驰与一二三类买卖点候选", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "ichimoku", "name": "一目均衡表", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "donchian", "name": "唐奇安通道与突破", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "supertrend", "name": "Supertrend趋势系统", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "stochastic-rsi", "name": "StochRSI动量", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "chaikin-money-flow", "name": "Chaikin资金流", "domain": "技术面", "endpoint": "technicals"},
     # Capital, event and market (8)
     {"id": "main-money-flow", "name": "主力资金流", "domain": "资金", "endpoint": "capital-flow"},
     {"id": "margin-financing", "name": "两融行为", "domain": "资金", "endpoint": "capital-flow"},

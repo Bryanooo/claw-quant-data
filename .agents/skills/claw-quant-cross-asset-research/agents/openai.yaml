@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 跨资产研究"
+  short_description: "指数、ETF、板块与黄金的多周期可追溯分析"
+  default_prompt: "Use $claw-quant-cross-asset-research to compare these indices, ETFs, sectors, or SGE spot instruments with explicit data-quality limits."

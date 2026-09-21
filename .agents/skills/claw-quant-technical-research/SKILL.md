@@ -11,6 +11,7 @@ Run the governed endpoint and keep the requested observation date explicit:
 ./clawq research readiness
 ./clawq research technicals TS_CODE --lookback-days 400 --chart-points 120
 ./clawq research capital-flow TS_CODE --lookback-days 60
+./clawq research repurchase-progress TS_CODE
 ```
 
 Read [references/methodology.md](references/methodology.md) before explaining support,
@@ -27,11 +28,15 @@ Analyze in this order:
 3. Momentum and exhaustion: RSI, KDJ, CCI, Williams %R, MFI, ROC.
 4. Volume confirmation: volume ratios and OBV.
 5. Volatility and risk: ATR, Bollinger, drawdown.
-6. Levels: repeated swing zones first, classic next-session pivots second, rolling extremes as
-   descriptive context only.
+6. Levels: repeated swing zones first; then compare Classic, Fibonacci, Woodie, Camarilla,
+   DeMark, and CPR next-period pivots. Use rolling extremes as descriptive context only.
 7. Relative strength and capital flow.
 8. Wave candidates: describe alternate scenarios and invalidation, not a single certain count.
 
 Treat a candlestick pattern as a candidate until the next bar, trend, and volume confirm it.
 Treat oversold as a condition, not a reversal signal. State the exact formula or method behind
 every important level.
+
+Always compare `data.timeframes.1d`, `1w`, and `1mo`. A daily reversal candidate that conflicts
+with weekly/monthly trend is lower confidence. Use `data.long_horizon` for calendar-year returns,
+CAGR, 52-week position, and drawdown; do not invent annual RSI/MACD when annual history is short.

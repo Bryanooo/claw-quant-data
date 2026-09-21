@@ -18,10 +18,10 @@
 
 ## 已实现的派生服务
 
-9 个派生 REST 入口中有 1 个能力目录、1 个研究就绪检查、7 个聚合研究服务。
-它们不是“9 种分析”，
+11 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、9 个聚合研究服务。
+它们不是“11 种分析”，
 也不表示已经覆盖所有可能的投研方法；投研方法本身没有封闭全集。项目定义了一份
-可验收的 v1 基线：41 项核心能力中，当前 33 项已由研究接口直接服务，3 项可由
+可验收的 v1 基线：44 项核心能力中，当前 36 项已由研究接口直接服务，3 项可由
 已有 Tushare 数据补采后增加服务，另 5 项仍受外部数据源或额度约束。能力目录会
 返回逐项 `techniques.served` 和 `techniques.gaps`，不再只给一个容易误解的总数。
 
@@ -32,13 +32,15 @@
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 财务趋势、盈利、成长、现金质量、偿债、效率、杜邦与主营构成 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | PE/PB/PS/股息率历史分位、同行中位数、DCF/DDM 输入 |
 | `GET /api/v1/research/stocks/{ts_code}/technicals` | K线与形态、MA/MACD/ADX、RSI/KDJ/CCI/Williams/MFI、ATR/布林、OBV、可解释支撑压力、牛熊线、波浪候选、相对强弱和绘图序列 |
+| `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月同口径指标、六类枢轴和长期趋势 |
 | `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 个股资金流、两融、北向、大宗和筹码状态 |
+| `GET /api/v1/research/stocks/{ts_code}/repurchase-progress` | 结构化回购方案、最新累计实施进度、执行均价与公告后相对收益 |
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 事件窗口收益、基准收益、异常收益和 CAR |
 | `GET /api/v1/research/market/breadth` | 涨跌分布、均线扩散、成交和涨跌停情绪 |
 | `GET /api/v1/research/sectors/{provider}/rotation` | THS/DC/TDX 当前有效板块内按日收益复利的强弱排序，并披露实际数据日与滞后 |
 
-当前 33 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 14 项、
-资金与筹码 5 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项。仍有 8 项缺口：
+当前 36 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 16 项、
+资金与筹码 5 项、回购进展 1 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项。仍有 8 项缺口：
 一致预期修正、股东与机构行为、总股东回报可以用现有接口补齐；公告证据、治理风险、
 新闻事件、新闻情绪和微观结构需要派生能力或新数据源。逐项机器可读状态以能力目录为准。
 
@@ -63,8 +65,9 @@
 6. `stk_mins`：分钟行情。当前 Token 限制为每天 2 次，只能做小范围证券池，不能
    声称完成全市场历史。
 
-`full` 初始化计划 v3 已内置前五组历史采集，不再依赖安装后人工运行一次性的修复
-脚本。分钟行情仍作为明确的受限项留在预检提醒中，系统不会虚假承诺全市场完成。
+`full` 初始化计划 v4 已内置前五组研究历史，以及 `fund_daily`、`sge_daily`、
+`ths_daily` 的逐交易日完整分区，不再依赖安装后人工运行一次性的修复脚本。分钟行情
+仍作为明确的受限项留在预检提醒中，系统不会虚假承诺全市场完成。
 
 补采成功不能只看任务 `success`。每个分区必须有请求范围、分页耗尽或安全扇出证据，
 并在标准表中核对起止日期、实体覆盖和行数变化。
@@ -111,6 +114,11 @@ CLI 与 REST 对应，例如：
 ./clawq research capabilities
 ./clawq research fundamentals 000001.SZ --periods 8 --as-of 2026-09-18
 ./clawq research technicals 000001.SZ --benchmark 399006.SZ --chart-points 120
+./clawq research instrument-technicals index 000688.SH --benchmark 000300.SH
+./clawq research instrument-technicals etf 512480.SH --benchmark 000300.SH
+./clawq research instrument-technicals sector 884229.TI --provider ths
+./clawq research instrument-technicals spot Au99.99
+./clawq research repurchase-progress 300750.SZ
 ./clawq research market-breadth
 ./clawq research sector-rotation ths --lookback-days 60
 ./clawq research calendar --start-date 2026-09-01 --end-date 2026-09-30

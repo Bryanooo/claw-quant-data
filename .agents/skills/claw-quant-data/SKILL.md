@@ -17,7 +17,8 @@ undocumented response fields.
    and to identify declared data or source gaps.
 3. Use the narrowest research command: a stock or sector research pack for context,
    then a deterministic fundamental, valuation, technical, capital-flow, event-study,
-   market-breadth, sector-rotation, or investment-calendar command as needed.
+   repurchase-progress, instrument-technicals, market-breadth, sector-rotation, or
+   investment-calendar command as needed.
 4. Pass `--as-of` for historical research whenever the command supports it. Inspect
    `meta.quality`, `meta.provenance`, `meta.gaps`, and `external_data_needed` instead of
    inferring completeness from a non-empty response.

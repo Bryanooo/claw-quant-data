@@ -55,7 +55,7 @@ PROFILE_DAYS = {
     "full": None,
 }
 PLANNING_BATCH_SIZE = 500
-INITIALIZATION_PLAN_VERSION = 3
+INITIALIZATION_PLAN_VERSION = 4
 CORE_TASKS = ("stock_daily", "stock_daily_basic", "moneyflow", "stock_limit")
 TRANSIENT_AUTO_RECOVERY_CATEGORIES = frozenset({"network", "timeout", "quota"})
 FULL_HISTORY_DATASET_STARTS = {
@@ -74,6 +74,15 @@ FULL_HISTORY_DATASET_STARTS = {
 }
 CORE_INTERFACE_HISTORY = ("index_daily", "kpl_concept_cons")
 CORE_INTERFACE_PAGE_SIZES = {"index_daily": 5000, "kpl_concept_cons": 3000}
+# Full initialization must populate the market series used by cross-asset
+# research, not merely their reference tables and latest daily partition.
+# Exact trading-day scopes stay below upstream caps and have auditable
+# completion semantics; the worker remains resumable across thousands of jobs.
+RESEARCH_MARKET_HISTORY_STARTS = {
+    "fund_daily": date(2010, 1, 1),
+    "sge_daily": date(2002, 10, 30),
+    "ths_daily": date(2020, 1, 1),
+}
 # KPL occasionally has no published concept constituents on an otherwise open
 # SSE date.  An exhausted offset request is authoritative for that empty scope;
 # other core datasets must still fail closed when an expected date is empty.
@@ -124,6 +133,7 @@ FULL_INITIALIZATION_BASELINES = (
     "fund_portfolio",
 )
 FULL_RESEARCH_HISTORY_INTERFACES = (
+    "fund_daily",
     "major_news",
     "report_rc",
     "stk_holdertrade",
@@ -131,6 +141,8 @@ FULL_RESEARCH_HISTORY_INTERFACES = (
     "hk_hold",
     "repurchase",
     "share_float",
+    "sge_daily",
+    "ths_daily",
     "fund_portfolio",
 )
 FULL_RESEARCH_HISTORY_FANOUTS = (
@@ -1224,6 +1236,37 @@ class InitializationService:
                     existing_steps=existing_steps,
                 )
                 created += 1
+
+            if self._plan_version(campaign) >= 4:
+                for trade_date in self._repository.trade_dates(
+                    history_start, history_end
+                ):
+                    for api_name, reliable_start in RESEARCH_MARKET_HISTORY_STARTS.items():
+                        if trade_date < max(history_start, reliable_start):
+                            continue
+                        compact = trade_date.strftime("%Y%m%d")
+                        step_key = f"research-market-history:{api_name}:{compact}"
+                        if step_key in existing_steps:
+                            continue
+                        if created >= PLANNING_BATCH_SIZE:
+                            return False
+                        self._submit_collection(
+                            campaign,
+                            step_key,
+                            "tushare_interface",
+                            {
+                                "api_name": api_name,
+                                "parameters": {"trade_date": compact},
+                                "complete": True,
+                                "resume": True,
+                            },
+                            allow_empty=True,
+                            require_verified=True,
+                            period_key=f"{api_name}:{compact}",
+                            expected_for=trade_date,
+                            existing_steps=existing_steps,
+                        )
+                        created += 1
 
             for period in _published_quarter_ends(history_start, history_end):
                 compact = period.strftime("%Y%m%d")

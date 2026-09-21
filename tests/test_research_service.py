@@ -1,7 +1,9 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from service.research.service import ResearchService, _zigzag
+import pytest
+
+from service.research.service import ResearchService, _pivot_systems, _zigzag
 
 
 class FakeDataService:
@@ -151,9 +153,80 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     assert result["data"]["trend"]["bull_bear_boundary"]["value"] is not None
     assert result["data"]["trend"]["weighted_trend"]["bull_line"] is not None
     assert result["data"]["levels"]["classic_pivots"]["pivot"] is not None
+    assert set(result["data"]["levels"]["pivot_systems"]) == {
+        "classic", "fibonacci", "woodie", "camarilla", "demark", "cpr"
+    }
+    assert result["data"]["timeframes"]["1w"]["observations"] > 40
+    assert result["data"]["timeframes"]["1mo"]["observations"] >= 10
+    assert result["data"]["long_horizon"]["calendar_year_returns"]
     assert result["data"]["wave_analysis"]["status"] == "candidate_only"
     assert len(result["data"]["chart"]["points"]) == 120
     assert result["data"]["relative_strength"]["excess_return_60d_pct"] == 0.0
+
+
+def test_common_pivot_families_have_auditable_prior_bar_basis():
+    systems = _pivot_systems({
+        "trade_date": date(2026, 9, 18),
+        "open": 100, "high": 110, "low": 90, "close": 105,
+    })
+
+    assert systems["classic"]["pivot"] == pytest.approx(101.6667)
+    assert systems["fibonacci"]["resistance_2"] == pytest.approx(114.0267)
+    assert systems["cpr"]["basis_date"] == date(2026, 9, 18)
+    assert systems["demark"]["method"].startswith("DeMark")
+
+
+@pytest.mark.parametrize(
+    ("asset_type", "code", "dataset", "basic_dataset"),
+    [
+        ("index", "000688.SH", "index_daily", "index_basic"),
+        ("etf", "512480.SH", "fund_daily", "fund_basic"),
+        ("spot", "Au99.99", "sge_daily", "sge_basic"),
+        ("sector", "884229.TI", "industry_daily", None),
+    ],
+)
+def test_instrument_technicals_supports_non_stock_assets(
+    asset_type, code, dataset, basic_dataset
+):
+    datasets = {dataset: _daily_rows(code, count=300)}
+    if basic_dataset:
+        datasets[basic_dataset] = [{"ts_code": code, "name": code}]
+
+    result = ResearchService(
+        FakeDataService(datasets), FakeRepository()
+    ).instrument_technicals(
+        asset_type, code, provider="ths" if asset_type == "sector" else None
+    )
+
+    assert result["data"]["instrument"]["code"] == code
+    assert result["data"]["timeframes"]["1d"]["status"] == "ready"
+    assert result["data"]["timeframes"]["1w"]["levels"]["pivot_systems"]["classic"]
+    assert result["meta"]["provenance"][0] == {
+        "dataset": dataset, "returned": 300
+    }
+
+
+def test_repurchase_progress_uses_latest_cumulative_execution_not_sum():
+    datasets = {
+        "stock_basic": [{"ts_code": "300750.SZ"}],
+        "repurchase": [
+            {"ts_code": "300750.SZ", "ann_date": date(2026, 8, 12), "proc": "股东大会通过", "amount": 40_000_000_000, "high_limit": 573},
+            {"ts_code": "300750.SZ", "ann_date": date(2026, 9, 11), "proc": "实施", "vol": 604_293, "amount": 199_978_827.46},
+            {"ts_code": "300750.SZ", "ann_date": date(2026, 9, 18), "proc": "实施", "vol": 5_215_160, "amount": 1_603_313_093.92},
+        ],
+        "stock_daily": _daily_rows("300750.SZ", count=20, start=date(2026, 9, 1), base=300),
+        "index_daily": _daily_rows("399006.SZ", count=20, start=date(2026, 9, 1), base=2000),
+    }
+
+    result = ResearchService(
+        FakeDataService(datasets), FakeRepository()
+    ).repurchase_progress("300750.SZ", as_of=date(2026, 9, 20))
+
+    progress = result["data"]["progress"]
+    assert progress["executed_amount"] == 1_603_313_093.92
+    assert progress["amount_progress_pct"] == pytest.approx(4.0083)
+    assert progress["average_execution_price"] == pytest.approx(307.4332)
+    assert result["data"]["status"] == "in_progress"
 
 
 def test_zigzag_confirms_cumulative_move_without_requiring_one_day_jump():
@@ -187,15 +260,15 @@ def test_market_and_sector_derivations_are_evidence_carrying():
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 9
-    assert catalog["summary"]["derived_endpoints"] == 7
+    assert catalog["summary"]["agent_endpoints"] == 11
+    assert catalog["summary"]["derived_endpoints"] == 9
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["summary"]["baseline_techniques"] == 41
-    assert catalog["summary"]["currently_served"] == 33
+    assert catalog["summary"]["baseline_techniques"] == 44
+    assert catalog["summary"]["currently_served"] == 36
     assert catalog["summary"]["planned_from_existing_sources"] == 3
     assert catalog["summary"]["external_or_constrained"] == 5
-    assert len(catalog["techniques"]["served"]) == 33
+    assert len(catalog["techniques"]["served"]) == 36
     assert len(catalog["techniques"]["gaps"]) == 8
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"

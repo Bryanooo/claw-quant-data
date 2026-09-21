@@ -294,6 +294,24 @@ def test_technical_research_cli_forwards_chart_scope(capsys):
     )]
 
 
+def test_instrument_technical_cli_preserves_sge_code_case(capsys):
+    path = "/v1/research/instruments/spot/Au99.99/technicals"
+    client = FakeClient({path: {"data": {"timeframes": {}}, "meta": {}}})
+
+    assert run_cli(
+        [
+            "research", "instrument-technicals", "spot", "Au99.99",
+            "--lookback-days", "800", "--chart-points", "90",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert client.calls == [(
+        path,
+        {"lookback_days": 800, "chart_points": 90},
+    )]
+
+
 def test_agent_preflight_and_calendar_cli_stay_in_research_namespace(capsys):
     readiness = "/v1/research/readiness"
     calendar = "/v1/research/investment-calendar"

@@ -533,6 +533,105 @@ class JobRepository:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def create_late_arrival_recheck(
+        self,
+        root_job_id: int,
+        *,
+        min_interval_seconds: int,
+        max_generations: int,
+        window_days: int,
+        handler: HandlerMetadata,
+    ) -> dict | None:
+        """Refresh a successful publication partition after upstream may change.
+
+        Event-style endpoints can publish another row after the first successful
+        same-day request.  A non-empty result therefore proves request
+        completeness at that instant, but not publication finality.  This
+        bounded, linked job makes those later refreshes visible and auditable
+        without weakening normal result verification.
+        """
+        if min_interval_seconds < 1 or window_days < 1:
+            raise ValueError("late-arrival recheck interval and window must be positive")
+        if not 1 <= max_generations <= 20:
+            raise ValueError("late-arrival generations must be between 1 and 20")
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT *
+                FROM sys_collection_job
+                WHERE job_id = %s OR recheck_root_job_id = %s
+                ORDER BY recheck_generation DESC, job_id DESC
+                LIMIT 1
+                FOR UPDATE
+                """,
+                (root_job_id, root_job_id),
+            )
+            latest = cursor.fetchone()
+            if not latest:
+                return None
+            generation = int(latest["recheck_generation"])
+            if (
+                latest["status"] != "success"
+                or latest["completion_status"] != "complete"
+                or generation >= max_generations
+            ):
+                return None
+            next_generation = generation + 1
+            evidence = {
+                "recheck": {
+                    "reason": "late_arriving_publication",
+                    "root_job_id": root_job_id,
+                    "previous_job_id": int(latest["job_id"]),
+                    "generation": next_generation,
+                }
+            }
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_job (
+                    task_name, parameters, max_attempts, idempotency_key,
+                    parent_job_id, api_name, cadence, period_key, expected_for,
+                    handler_type, handler_key, handler_version, code_revision,
+                    priority, resource_class, job_kind, completion_evidence,
+                    recheck_of_job_id, recheck_root_job_id, recheck_generation
+                )
+                SELECT
+                    source.task_name, source.parameters, source.max_attempts, %s,
+                    source.parent_job_id, source.api_name, source.cadence,
+                    source.period_key, source.expected_for,
+                    %s, %s, %s, %s,
+                    source.priority, source.resource_class, source.job_kind,
+                    %s::jsonb, source.job_id, %s, %s
+                FROM sys_collection_job AS source
+                JOIN sys_collection_job AS root ON root.job_id = %s
+                WHERE source.job_id = %s
+                  AND source.status = 'success'
+                  AND source.completion_status = 'complete'
+                  AND source.finished_at <= NOW() - (%s * INTERVAL '1 second')
+                  AND root.created_at >= NOW() - (%s * INTERVAL '1 day')
+                ON CONFLICT DO NOTHING
+                RETURNING *
+                """,
+                (
+                    f"late-arrival-recheck-{root_job_id}-{next_generation}",
+                    handler.handler_type,
+                    handler.handler_key,
+                    handler.handler_version,
+                    handler.code_revision,
+                    json.dumps(evidence, ensure_ascii=False),
+                    root_job_id,
+                    next_generation,
+                    root_job_id,
+                    latest["job_id"],
+                    min_interval_seconds,
+                    window_days,
+                ),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     def list_fanout_values(
         self, source: str, *, as_of: date | None = None
     ) -> list[str]:

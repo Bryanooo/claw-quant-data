@@ -367,6 +367,314 @@ def _swing_zones(
     }
 
 
+def _resample_ohlcv(rows: list[dict], timeframe: str) -> list[dict]:
+    """Aggregate governed daily bars into reproducible weekly/monthly bars."""
+
+    if timeframe not in {"1w", "1mo"}:
+        raise ValueError(f"unsupported resample timeframe: {timeframe}")
+    ordered = sorted(rows, key=lambda row: _day(row.get("trade_date")) or date.min)
+    grouped: dict[tuple[int, int], list[dict]] = {}
+    for row in ordered:
+        observed = _day(row.get("trade_date"))
+        if observed is None:
+            continue
+        if timeframe == "1w":
+            iso = observed.isocalendar()
+            key = (iso.year, iso.week)
+        else:
+            key = (observed.year, observed.month)
+        grouped.setdefault(key, []).append(row)
+    bars: list[dict] = []
+    for group in grouped.values():
+        opens = [_number(row.get("open")) for row in group]
+        highs = [_number(row.get("high")) for row in group]
+        lows = [_number(row.get("low")) for row in group]
+        closes = [_number(row.get("close")) for row in group]
+        if any(value is None for value in (opens[0], closes[-1])):
+            continue
+        clean_highs = [value for value in highs if value is not None]
+        clean_lows = [value for value in lows if value is not None]
+        if not clean_highs or not clean_lows:
+            continue
+        bars.append({
+            "trade_date": group[-1].get("trade_date"),
+            "open": opens[0],
+            "high": max(clean_highs),
+            "low": min(clean_lows),
+            "close": closes[-1],
+            "vol": sum(_number(row.get("vol")) or 0 for row in group),
+            "amount": sum(_number(row.get("amount")) or 0 for row in group),
+            "source_observations": len(group),
+        })
+    return bars
+
+
+def _pivot_systems(previous: dict) -> dict[str, Any]:
+    """Return the commonly used deterministic next-period pivot families."""
+
+    high = _number(previous.get("high"))
+    low = _number(previous.get("low"))
+    close = _number(previous.get("close"))
+    open_price = _number(previous.get("open"))
+    basis = previous.get("trade_date")
+    if None in (high, low, close):
+        return {}
+    assert high is not None and low is not None and close is not None
+    span = high - low
+    classic = (high + low + close) / 3
+    woodie = (high + low + 2 * close) / 4
+    demark_x = (
+        high + 2 * low + close
+        if open_price is not None and close < open_price
+        else 2 * high + low + close
+        if open_price is not None and close > open_price
+        else high + low + 2 * close
+    )
+    cpr_bc = (high + low) / 2
+    cpr_tc = 2 * classic - cpr_bc
+
+    def levels(**values: float | None) -> dict[str, Any]:
+        return {key: _round(value) for key, value in values.items()} | {
+            "basis_date": basis,
+        }
+
+    return {
+        "classic": levels(
+            pivot=classic,
+            support_1=2 * classic - high,
+            support_2=classic - span,
+            support_3=low - 2 * (high - classic),
+            resistance_1=2 * classic - low,
+            resistance_2=classic + span,
+            resistance_3=high + 2 * (classic - low),
+        ) | {"method": "P=(H+L+C)/3"},
+        "fibonacci": levels(
+            pivot=classic,
+            support_1=classic - 0.382 * span,
+            support_2=classic - 0.618 * span,
+            support_3=classic - span,
+            resistance_1=classic + 0.382 * span,
+            resistance_2=classic + 0.618 * span,
+            resistance_3=classic + span,
+        ) | {"method": "classic pivot ± Fibonacci fractions of prior range"},
+        "woodie": levels(
+            pivot=woodie,
+            support_1=2 * woodie - high,
+            support_2=woodie - span,
+            resistance_1=2 * woodie - low,
+            resistance_2=woodie + span,
+        ) | {"method": "P=(H+L+2C)/4"},
+        "camarilla": levels(
+            support_1=close - span * 1.1 / 12,
+            support_2=close - span * 1.1 / 6,
+            support_3=close - span * 1.1 / 4,
+            support_4=close - span * 1.1 / 2,
+            resistance_1=close + span * 1.1 / 12,
+            resistance_2=close + span * 1.1 / 6,
+            resistance_3=close + span * 1.1 / 4,
+            resistance_4=close + span * 1.1 / 2,
+        ) | {"method": "C ± prior range × Camarilla multipliers"},
+        "demark": levels(
+            pivot=demark_x / 4,
+            support_1=demark_x / 2 - high,
+            resistance_1=demark_x / 2 - low,
+        ) | {"method": "DeMark conditional X from prior O/H/L/C"},
+        "cpr": levels(
+            pivot=classic,
+            lower_central=min(cpr_bc, cpr_tc),
+            upper_central=max(cpr_bc, cpr_tc),
+            width=abs(cpr_tc - cpr_bc),
+        ) | {"method": "Central Pivot Range (P, BC, TC)"},
+    }
+
+
+def _timeframe_analysis(
+    rows: list[dict],
+    *,
+    timeframe: str,
+    chart_points: int,
+) -> dict[str, Any]:
+    """Calculate one consistent technical contract for any OHLCV instrument."""
+
+    prices = sorted(rows, key=lambda row: _day(row.get("trade_date")) or date.min)
+    prices = [
+        row for row in prices
+        if all(_number(row.get(field)) is not None for field in ("open", "high", "low", "close"))
+    ]
+    if not prices:
+        return {"status": "missing", "timeframe": timeframe, "observations": 0}
+    closes = [float(_number(row.get("close"))) for row in prices]
+    opens = [float(_number(row.get("open"))) for row in prices]
+    highs = [float(_number(row.get("high"))) for row in prices]
+    lows = [float(_number(row.get("low"))) for row in prices]
+    volumes = [_number(row.get("vol")) or 0 for row in prices]
+    ema12 = _ema_series(closes, 12)
+    ema26 = _ema_series(closes, 26)
+    macd_line = [left - right for left, right in zip(ema12, ema26)]
+    signal_line = _ema_series(macd_line, 9)
+    true_ranges = [
+        max(
+            highs[index] - lows[index],
+            abs(highs[index] - closes[index - 1]) if index else 0,
+            abs(lows[index] - closes[index - 1]) if index else 0,
+        )
+        for index in range(len(prices))
+    ]
+    returns = [current / previous - 1 for previous, current in pairwise(closes) if previous]
+    latest_close = closes[-1]
+    ma = {str(window): _round(_moving_average(closes, window)) for window in (5, 10, 20, 60, 120, 250)}
+    ma_series = {window: _sma_series(closes, window) for window in (5, 10, 20, 60)}
+    trend_score = sum(latest_close > value for value in (ma["20"], ma["60"], ma["120"]) if value is not None)
+    atr14 = mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None
+    kdj_k, kdj_d, kdj_j = _stochastic(highs, lows, closes)
+    adx14, plus_di14, minus_di14 = _adx(highs, lows, closes)
+    obv_series = _obv(closes, volumes)
+    typical = [(3 * close + low + opened + high) / 6 for opened, high, low, close in zip(opens, highs, lows, closes)]
+    bull_series = _weighted_series(typical, 20)
+    valid_bull = [value for value in bull_series if value is not None]
+    bull_line = valid_bull[-1] if valid_bull else None
+    bear_line = mean(valid_bull[-6:]) if len(valid_bull) >= 6 else None
+    threshold_pct = max(5.0, min(15.0, 2 * atr14 / latest_close * 100 if atr14 else 5.0))
+    zigzag = _zigzag(prices, threshold_pct)
+    legs = [
+        {
+            "start_date": left["trade_date"],
+            "end_date": right["trade_date"],
+            "direction": "up" if (change := _pct_change(right["price"], left["price"])) is not None and change >= 0 else "down",
+            "change_pct": _round(change),
+            "confirmed": bool(left["confirmed"] and right["confirmed"]),
+        }
+        for left, right in pairwise(zigzag)
+    ]
+    window20 = closes[-20:]
+    boll_mid = mean(window20) if window20 else None
+    boll_std = pstdev(window20) if len(window20) > 1 else None
+    periods_per_year = {"1d": 252, "1w": 52, "1mo": 12}[timeframe]
+    pivot_systems = _pivot_systems(prices[-2] if len(prices) >= 2 else prices[-1])
+    chart_start = max(0, len(prices) - chart_points)
+    chart = []
+    for index in range(chart_start, len(prices)):
+        window = closes[max(0, index - 19):index + 1]
+        average = mean(window) if len(window) == 20 else None
+        deviation = pstdev(window) if len(window) == 20 else None
+        chart.append({
+            "trade_date": prices[index].get("trade_date"),
+            "open": _round(opens[index]), "high": _round(highs[index]),
+            "low": _round(lows[index]), "close": _round(closes[index]),
+            "volume": _round(volumes[index]),
+            "ma_5": _round(ma_series[5][index]), "ma_10": _round(ma_series[10][index]),
+            "ma_20": _round(ma_series[20][index]), "ma_60": _round(ma_series[60][index]),
+            "bollinger_upper": _round(average + 2 * deviation) if average is not None and deviation is not None else None,
+            "bollinger_lower": _round(average - 2 * deviation) if average is not None and deviation is not None else None,
+        })
+    minimum_history = {"1d": 60, "1w": 52, "1mo": 24}[timeframe]
+    return {
+        "status": "ready" if len(prices) >= minimum_history else "limited_history",
+        "timeframe": timeframe,
+        "observations": len(prices),
+        "observation": {"trade_date": prices[-1].get("trade_date"), "close": latest_close},
+        "trend": {
+            "moving_averages": ma,
+            "ema_12": _round(ema12[-1]), "ema_26": _round(ema26[-1]),
+            "macd": _round(macd_line[-1]), "macd_signal": _round(signal_line[-1]),
+            "regime": "bullish" if trend_score == 3 else "bearish" if trend_score == 0 else "mixed",
+            "bull_bear_boundary": {
+                "value": ma["250"],
+                "alias": f"MA250 ({timeframe})",
+                "state": "above" if ma["250"] is not None and latest_close > ma["250"] else "below" if ma["250"] is not None else "unavailable",
+            },
+            "weighted_trend": {
+                "bull_line": _round(bull_line), "bear_line": _round(bear_line),
+                "state": "bullish" if bull_line is not None and bear_line is not None and bull_line >= bear_line else "bearish" if bull_line is not None and bear_line is not None else "unavailable",
+                "formula": "bull=20-period LWMA((3C+L+O+H)/6); bear=SMA6(bull)",
+            },
+        },
+        "momentum": {
+            **{
+                f"return_{window}_period_pct": _round(_pct_change(latest_close, closes[-window - 1]) if len(closes) > window else None)
+                for window in (4, 12, 20, 60)
+            },
+            "rsi_14": _round(_rsi(closes)),
+            "roc_12_pct": _round(_pct_change(latest_close, closes[-13]) if len(closes) >= 13 else None),
+            "kdj": {"k": _round(kdj_k), "d": _round(kdj_d), "j": _round(kdj_j)},
+            "williams_r_14": _round(_williams_r(highs, lows, closes)),
+            "cci_20": _round(_cci(highs, lows, closes)),
+            "mfi_14": _round(_mfi(highs, lows, closes, volumes)),
+        },
+        "volatility": {
+            "atr_14": _round(atr14),
+            "annualized_volatility_20_period_pct": _round(pstdev(returns[-20:]) * sqrt(periods_per_year) * 100 if len(returns) >= 20 else None),
+            "bollinger_20": {
+                "lower": _round(boll_mid - 2 * boll_std if boll_mid is not None and boll_std is not None else None),
+                "middle": _round(boll_mid),
+                "upper": _round(boll_mid + 2 * boll_std if boll_mid is not None and boll_std is not None else None),
+            },
+            "max_drawdown_pct": _round(_max_drawdown(closes)),
+        },
+        "volume_price": {
+            "volume_5_average": _round(mean(volumes[-5:]) if len(volumes) >= 5 else None),
+            "volume_20_average": _round(mean(volumes[-20:]) if len(volumes) >= 20 else None),
+            "obv": _round(obv_series[-1]),
+        },
+        "levels": {
+            "swing_zones": _swing_zones(prices[-250:], latest_close, atr14),
+            "pivot_systems": pivot_systems,
+            "classic_pivots": pivot_systems.get("classic", {}),
+        },
+        "trend_strength": {"adx_14": _round(adx14), "plus_di_14": _round(plus_di14), "minus_di_14": _round(minus_di14)},
+        "candlesticks": {"patterns": _candlestick_patterns(prices)},
+        "wave_analysis": {
+            "status": "candidate_only", "method": "volatility-adjusted ZigZag",
+            "threshold_pct": _round(threshold_pct), "pivots": zigzag, "legs": legs,
+            "current_leg": legs[-1]["direction"] if legs else "unavailable",
+        },
+        "chart": {"price_basis": "source OHLCV", "points": chart},
+    }
+
+
+def _long_horizon_summary(rows: list[dict]) -> dict[str, Any]:
+    ordered = sorted(rows, key=lambda row: _day(row.get("trade_date")) or date.min)
+    valid = [(row, _number(row.get("close"))) for row in ordered]
+    valid = [(row, close) for row, close in valid if close is not None and _day(row.get("trade_date"))]
+    if not valid:
+        return {"status": "missing"}
+    by_year: dict[int, list[tuple[dict, float]]] = {}
+    for row, close in valid:
+        observed = _day(row.get("trade_date"))
+        assert observed is not None
+        by_year.setdefault(observed.year, []).append((row, float(close)))
+    annual_returns = [
+        {
+            "year": year,
+            "start_close": _round(points[0][1]),
+            "end_close": _round(points[-1][1]),
+            "return_pct": _round(_pct_change(points[-1][1], points[0][1])),
+            "observations": len(points),
+        }
+        for year, points in sorted(by_year.items())
+    ]
+    first_day = _day(valid[0][0].get("trade_date"))
+    last_day = _day(valid[-1][0].get("trade_date"))
+    years = (last_day - first_day).days / 365.2425 if first_day and last_day else 0
+    cagr = ((valid[-1][1] / valid[0][1]) ** (1 / years) - 1) * 100 if years > 0 and valid[0][1] else None
+    trailing = valid[-252:]
+    trailing_values = [point[1] for point in trailing]
+    latest = valid[-1][1]
+    return {
+        "status": "ready",
+        "first_date": first_day, "last_date": last_day,
+        "calendar_year_returns": annual_returns,
+        "cagr_pct": _round(cagr),
+        "max_drawdown_pct": _round(_max_drawdown([point[1] for point in valid])),
+        "trailing_52_week": {
+            "high": _round(max(trailing_values)), "low": _round(min(trailing_values)),
+            "from_high_pct": _round(_pct_change(latest, max(trailing_values))),
+            "from_low_pct": _round(_pct_change(latest, min(trailing_values))),
+        },
+        "methodology": "yearly trend is summarized from daily observations; indicators that require 14+ annual bars are intentionally not fabricated",
+    }
+
+
 def _prior_year(value: date) -> date:
     """Return the same reporting date a year earlier, including leap days."""
     try:
@@ -406,6 +714,39 @@ class ResearchService:
             offset=0,
             include_total=False,
         )["data"]
+
+    def _load_many(
+        self,
+        name: str,
+        *,
+        filters: dict[str, str] | None = None,
+        start: date | None = None,
+        end: date | None = None,
+        as_of: date | None = None,
+        max_records: int = 5000,
+    ) -> list[dict]:
+        """Page through a governed dataset without bypassing its public rules."""
+
+        rows: list[dict] = []
+        offset = 0
+        while len(rows) < max_records:
+            limit = min(1000, max_records - len(rows))
+            page = self._data.query_dataset(
+                name,
+                exact_filters=filters or {},
+                date_value=None,
+                start_date=start.isoformat() if start else None,
+                end_date=end.isoformat() if end else None,
+                as_of=as_of.isoformat() if as_of else None,
+                limit=limit,
+                offset=offset,
+                include_total=False,
+            )["data"]
+            rows.extend(page)
+            if len(page) < limit:
+                break
+            offset += len(page)
+        return rows
 
     def _ensure_stock(self, ts_code: str) -> dict:
         rows = self._load("stock_basic", filters={"ts_code": ts_code}, limit=1)
@@ -715,7 +1056,7 @@ class ResearchService:
         self,
         ts_code: str,
         *,
-        lookback_days: int = 400,
+        lookback_days: int = 3000,
         chart_points: int = 120,
         benchmark: str = "399006.SZ",
         as_of: date | None = None,
@@ -723,17 +1064,17 @@ class ResearchService:
         effective_as_of = as_of or business_now().date()
         self._ensure_stock(ts_code)
         start = effective_as_of - timedelta(days=max(lookback_days * 2, 500))
-        prices = self._load(
+        prices = self._load_many(
             "stock_daily", filters={"ts_code": ts_code}, start=start,
-            end=effective_as_of, as_of=effective_as_of, limit=min(lookback_days, 1000),
+            end=effective_as_of, as_of=effective_as_of, max_records=min(lookback_days, 5000),
         )
-        benchmark_rows = self._load(
+        benchmark_rows = self._load_many(
             "index_daily", filters={"ts_code": benchmark}, start=start,
-            end=effective_as_of, as_of=effective_as_of, limit=min(lookback_days, 1000),
+            end=effective_as_of, as_of=effective_as_of, max_records=min(lookback_days, 5000),
         )
-        adjustments = self._load(
+        adjustments = self._load_many(
             "adj_factor", filters={"ts_code": ts_code}, start=start,
-            end=effective_as_of, limit=min(lookback_days, 1000),
+            end=effective_as_of, max_records=min(lookback_days, 5000),
         )
         prices.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
         prices = [
@@ -844,22 +1185,10 @@ class ResearchService:
             })
         swing_zones = _swing_zones(prices[-250:], latest_close, atr14)
         previous = prices[-2] if len(prices) >= 2 else prices[-1]
-        previous_high = _number(previous.get("high"))
-        previous_low = _number(previous.get("low"))
-        previous_close = _number(previous.get("close"))
-        classic_pivot = (
-            (previous_high + previous_low + previous_close) / 3
-            if None not in (previous_high, previous_low, previous_close) else None
-        )
-        classic_levels = {
-            "pivot": _round(classic_pivot),
-            "support_1": _round(2 * classic_pivot - previous_high) if classic_pivot is not None and previous_high is not None else None,
-            "support_2": _round(classic_pivot - (previous_high - previous_low)) if classic_pivot is not None and previous_high is not None and previous_low is not None else None,
-            "resistance_1": _round(2 * classic_pivot - previous_low) if classic_pivot is not None and previous_low is not None else None,
-            "resistance_2": _round(classic_pivot + (previous_high - previous_low)) if classic_pivot is not None and previous_high is not None and previous_low is not None else None,
-            "basis_date": previous.get("trade_date"),
-            "method": "classic next-session pivot levels from prior high, low and close",
-        }
+        pivot_systems = _pivot_systems(previous)
+        classic_levels = pivot_systems.get("classic", {})
+        weekly_prices = _resample_ohlcv(prices, "1w")
+        monthly_prices = _resample_ohlcv(prices, "1mo")
         chart_start = max(0, len(prices) - chart_points)
         chart_rows = []
         for index in range(chart_start, len(prices)):
@@ -938,6 +1267,7 @@ class ResearchService:
                 } | {
                     "swing_zones": swing_zones,
                     "classic_pivots": classic_levels,
+                    "pivot_systems": pivot_systems,
                     "methodology": "rolling extrema are descriptive ranges; actionable zones require repeated swing touches or next-session pivot formulas",
                 },
                 "trend_strength": {
@@ -968,6 +1298,18 @@ class ResearchService:
                     "price_basis": "unadjusted daily OHLC; adjustment coverage is reported separately",
                     "points": chart_rows,
                 },
+                "timeframes": {
+                    "1d": _timeframe_analysis(
+                        prices, timeframe="1d", chart_points=chart_points
+                    ),
+                    "1w": _timeframe_analysis(
+                        weekly_prices, timeframe="1w", chart_points=chart_points
+                    ),
+                    "1mo": _timeframe_analysis(
+                        monthly_prices, timeframe="1mo", chart_points=chart_points
+                    ),
+                },
+                "long_horizon": _long_horizon_summary(prices),
             },
             "meta": {
                 "ts_code": ts_code,
@@ -983,6 +1325,233 @@ class ResearchService:
                 "quality": {
                     "status": "ready" if len(prices) >= 250 else "warning",
                     "warnings": [] if len(prices) >= 250 else ["fewer than 250 daily observations"],
+                },
+            },
+        }
+
+    def instrument_technicals(
+        self,
+        asset_type: str,
+        code: str,
+        *,
+        lookback_days: int = 3000,
+        chart_points: int = 120,
+        benchmark: str | None = None,
+        provider: str | None = None,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Analyze any governed OHLCV asset through one stable contract."""
+
+        normalized_type = asset_type.lower()
+        configurations = {
+            "stock": ("stock_daily", "stock_basic", "stock"),
+            "index": ("index_daily", "index_basic", "index"),
+            "fund": ("fund_daily", "fund_basic", "fund"),
+            "etf": ("fund_daily", "fund_basic", "fund"),
+            "spot": ("sge_daily", "sge_basic", "commodity"),
+            "sector": ("industry_daily", None, "sector"),
+        }
+        if normalized_type not in configurations:
+            raise InvalidQueryError(
+                "asset_type must be one of stock, index, fund, etf, spot, sector"
+            )
+        if normalized_type == "sector" and (provider or "ths").lower() != "ths":
+            raise InvalidQueryError("sector technicals currently support provider=ths")
+        dataset, basic_dataset, category = configurations[normalized_type]
+        effective_as_of = as_of or business_now().date()
+        start = effective_as_of - timedelta(days=max(lookback_days * 2, 1500))
+        prices = self._load_many(
+            dataset,
+            filters={"ts_code": code},
+            start=start,
+            end=effective_as_of,
+            max_records=min(lookback_days, 5000),
+        )
+        if not prices:
+            raise RecordNotFoundError(
+                f"no governed {normalized_type} prices found for {code}"
+            )
+        identity = None
+        if basic_dataset:
+            basic_rows = self._load(basic_dataset, filters={"ts_code": code}, limit=1)
+            identity = basic_rows[0] if basic_rows else None
+        weekly = _resample_ohlcv(prices, "1w")
+        monthly = _resample_ohlcv(prices, "1mo")
+        timeframes = {
+            "1d": _timeframe_analysis(prices, timeframe="1d", chart_points=chart_points),
+            "1w": _timeframe_analysis(weekly, timeframe="1w", chart_points=chart_points),
+            "1mo": _timeframe_analysis(monthly, timeframe="1mo", chart_points=chart_points),
+        }
+        benchmark_rows: list[dict] = []
+        relative: dict[str, Any] = {"benchmark": benchmark, "status": "not_requested"}
+        if benchmark:
+            benchmark_rows = self._load_many(
+                "index_daily", filters={"ts_code": benchmark}, start=start,
+                end=effective_as_of,
+                max_records=min(lookback_days, 5000),
+            )
+            asset_by_day = {
+                _day(row.get("trade_date")): _number(row.get("close")) for row in prices
+                if _day(row.get("trade_date")) and _number(row.get("close")) is not None
+            }
+            benchmark_by_day = {
+                _day(row.get("trade_date")): _number(row.get("close")) for row in benchmark_rows
+                if _day(row.get("trade_date")) and _number(row.get("close")) is not None
+            }
+            common = sorted(set(asset_by_day) & set(benchmark_by_day))
+            relative = {"benchmark": benchmark, "status": "ready" if common else "missing"}
+            for window in (20, 60, 120, 250):
+                value = None
+                if len(common) > window:
+                    first, last = common[-window - 1], common[-1]
+                    asset_return = _pct_change(asset_by_day[last], asset_by_day[first])
+                    benchmark_return = _pct_change(benchmark_by_day[last], benchmark_by_day[first])
+                    if asset_return is not None and benchmark_return is not None:
+                        value = asset_return - benchmark_return
+                relative[f"excess_return_{window}d_pct"] = _round(value)
+        warnings = []
+        if len(prices) < 250:
+            warnings.append(f"only {len(prices)} daily observations; long-cycle signals are limited")
+        if timeframes["1mo"]["observations"] < 24:
+            warnings.append("fewer than 24 monthly bars")
+        return {
+            "data": {
+                "instrument": {
+                    "asset_type": normalized_type,
+                    "category": category,
+                    "code": code,
+                    "provider": provider.lower() if provider else None,
+                    "identity": identity,
+                },
+                "timeframes": timeframes,
+                "long_horizon": _long_horizon_summary(prices),
+                "relative_strength": relative,
+            },
+            "meta": {
+                "asset_type": normalized_type,
+                "code": code,
+                "as_of": effective_as_of,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": [
+                    {"dataset": dataset, "returned": len(prices)},
+                    {"dataset": "index_daily", "returned": len(benchmark_rows)},
+                ],
+                "quality": {
+                    "status": "ready" if not warnings else "warning",
+                    "warnings": warnings,
+                },
+            },
+        }
+
+    def repurchase_progress(
+        self,
+        ts_code: str,
+        *,
+        as_of: date | None = None,
+        benchmark: str = "399006.SZ",
+    ) -> dict[str, Any]:
+        """Reconcile structured buyback disclosures with subsequent prices."""
+
+        effective_as_of = as_of or business_now().date()
+        self._ensure_stock(ts_code)
+        rows = self._load(
+            "repurchase",
+            filters={"ts_code": ts_code},
+            end=effective_as_of,
+            limit=1000,
+        )
+        rows.sort(key=lambda row: _day(row.get("ann_date")) or date.min)
+        plan_markers = ("预案", "股东大会通过", "董事会通过")
+        execution_markers = ("实施", "完成")
+        plans = [row for row in rows if any(marker in str(row.get("proc") or "") for marker in plan_markers)]
+        executions = [row for row in rows if any(marker in str(row.get("proc") or "") for marker in execution_markers)]
+        latest_plan = plans[-1] if plans else None
+        latest_execution = executions[-1] if executions else None
+        target_plan = next(
+            (row for row in reversed(plans) if _number(row.get("amount")) is not None),
+            latest_plan,
+        )
+        planned_amount = _number(target_plan.get("amount")) if target_plan else None
+        executed_amount = _number(latest_execution.get("amount")) if latest_execution else None
+        executed_volume = _number(latest_execution.get("vol")) if latest_execution else None
+        latest_ann_date = _day(latest_execution.get("ann_date")) if latest_execution else None
+        price_start = latest_ann_date - timedelta(days=10) if latest_ann_date else effective_as_of - timedelta(days=30)
+        prices = self._load(
+            "stock_daily", filters={"ts_code": ts_code}, start=price_start,
+            end=effective_as_of, as_of=effective_as_of, limit=60,
+        )
+        benchmark_rows = self._load(
+            "index_daily", filters={"ts_code": benchmark}, start=price_start,
+            end=effective_as_of, as_of=effective_as_of, limit=60,
+        )
+        prices.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+        benchmark_rows.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+
+        def return_since(rows_: list[dict], observed: date | None) -> float | None:
+            eligible = [row for row in rows_ if _day(row.get("trade_date")) and (observed is None or _day(row.get("trade_date")) >= observed)]
+            if len(eligible) < 2:
+                return None
+            return _pct_change(eligible[-1].get("close"), eligible[0].get("close"))
+
+        stock_return = return_since(prices, latest_ann_date)
+        benchmark_return = return_since(benchmark_rows, latest_ann_date)
+        current_close = _number(prices[-1].get("close")) if prices else None
+        average_price = _safe_div(executed_amount, executed_volume)
+        progress = (
+            executed_amount / planned_amount * 100
+            if executed_amount is not None and planned_amount not in (None, 0)
+            else None
+        )
+        status = "no_disclosure"
+        if latest_execution:
+            status = "completed" if "完成" in str(latest_execution.get("proc") or "") else "in_progress"
+        elif latest_plan:
+            status = "approved_not_reported_executing"
+        return {
+            "data": {
+                "status": status,
+                "plan": latest_plan,
+                "target_plan": target_plan,
+                "latest_execution": latest_execution,
+                "progress": {
+                    "planned_amount": planned_amount,
+                    "executed_amount": executed_amount,
+                    "executed_volume": executed_volume,
+                    "amount_progress_pct": _round(progress),
+                    "average_execution_price": _round(average_price),
+                    "current_close": _round(current_close),
+                    "current_vs_average_execution_pct": _round(
+                        _pct_change(current_close, average_price)
+                    ),
+                    "denominator_note": "uses the latest structured approved/proposal amount; a disclosed min-max range requires announcement text for both bounds",
+                },
+                "market_since_latest_execution_disclosure": {
+                    "announcement_date": latest_ann_date,
+                    "stock_return_pct": _round(stock_return),
+                    "benchmark": benchmark,
+                    "benchmark_return_pct": _round(benchmark_return),
+                    "abnormal_return_pct": _round(
+                        stock_return - benchmark_return
+                        if stock_return is not None and benchmark_return is not None
+                        else None
+                    ),
+                    "interpretation": "market response is evidence, not proof that the buyback caused the move",
+                },
+                "timeline": list(reversed(rows[-20:])),
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": [
+                    {"dataset": "repurchase", "returned": len(rows)},
+                    {"dataset": "stock_daily", "returned": len(prices)},
+                    {"dataset": "index_daily", "returned": len(benchmark_rows)},
+                ],
+                "quality": {
+                    "status": "ready" if rows else "warning",
+                    "warnings": [] if rows else ["no local repurchase disclosures"],
+                    "publication_finality": "late-arrival refresh enabled for the announcement date partition",
                 },
             },
         }

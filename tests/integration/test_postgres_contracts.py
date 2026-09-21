@@ -2448,6 +2448,77 @@ def test_empty_results_create_bounded_separately_auditable_rechecks():
         connection.close()
 
 
+def test_non_empty_publication_results_create_bounded_late_arrival_rechecks():
+    key = f"integration-late-arrival-recheck-{uuid4().hex}"
+    repository = JobRepository()
+    connection = psycopg2.connect(**DB_CONFIG)
+    root_job_id = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO sys_collection_job (
+                    task_name, parameters, status, attempt, max_attempts,
+                    completion_status, idempotency_key, api_name, cadence,
+                    period_key, expected_for, handler_type, handler_key,
+                    handler_version, code_revision, started_at, finished_at
+                ) VALUES (
+                    'tushare_interface',
+                    '{"api_name":"repurchase","parameters":{"ann_date":"20260918"}}'::jsonb,
+                    'success', 1, 3, 'complete', %s, 'repurchase', 'daily',
+                    '2026-09-18', DATE '2026-09-18', 'specialized',
+                    'specialized:RepurchaseCollector', '5', 'test',
+                    NOW() - INTERVAL '10 seconds', NOW() - INTERVAL '5 seconds'
+                )
+                RETURNING job_id
+                """,
+                (key,),
+            )
+            root_job_id = cursor.fetchone()[0]
+        connection.commit()
+
+        handler = TASKS.handler_metadata(
+            "tushare_interface",
+            {
+                "api_name": "repurchase",
+                "parameters": {"ann_date": "20260918"},
+            },
+        )
+        refresh = repository.create_late_arrival_recheck(
+            root_job_id,
+            min_interval_seconds=1,
+            max_generations=1,
+            window_days=4,
+            handler=handler,
+        )
+
+        assert refresh["recheck_of_job_id"] == root_job_id
+        assert refresh["recheck_root_job_id"] == root_job_id
+        assert refresh["recheck_generation"] == 1
+        assert refresh["completion_evidence"]["recheck"]["reason"] == (
+            "late_arriving_publication"
+        )
+        assert repository.create_late_arrival_recheck(
+            root_job_id,
+            min_interval_seconds=1,
+            max_generations=1,
+            window_days=4,
+            handler=handler,
+        ) is None
+    finally:
+        if root_job_id is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM sys_collection_job
+                    WHERE recheck_root_job_id=%s OR job_id=%s
+                    """,
+                    (root_job_id, root_job_id),
+                )
+            connection.commit()
+        connection.close()
+
+
 def test_delivery_plan_upsert_reconciles_cadence_and_removes_stale_plans():
     suffix = uuid4().hex[:12]
     business_date = date(2099, 1, 5)

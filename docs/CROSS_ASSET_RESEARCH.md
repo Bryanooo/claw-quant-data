@@ -15,12 +15,17 @@
 所有类型返回同一组 `1d`、`1w`、`1mo` 技术契约和 `long_horizon` 摘要。周/月线由
 标准日线确定性聚合，避免独立周期表缺历史造成口径漂移；年度只计算日线可支持的
 日历收益、CAGR、52 周位置和最大回撤，不伪造样本不足的年线振荡指标。
+股票和 ETF 会先使用 `adj_factor` / `fund_adj` 统一到最新复权因子基准。因子历史不全
+时只分析同时具备价格和因子的覆盖范围，并返回 `meta.price_adjustment` 警告；绝不把
+复权与未复权价格拼接后计算收益、缺口、均线或 Beta。
 
 枢轴包括 Classic、Fibonacci、Woodie、Camarilla、DeMark 与 CPR，并为每组保留前一
 完成周期的 `basis_date`。重复摆动形成的支撑/压力与公式枢轴分开表达。
 每个周期还独立返回确认波段斐波那契回撤/扩展、缠论分型/笔/中枢候选，以及
 Ichimoku、Donchian、Supertrend、StochRSI 和 CMF。最后一个实时 ZigZag 拐点不会
 被用作斐波那契锚点；缠论候选会披露固定算法口径，不把流派判断包装成事实。
+传入基准指数后还会基于共同交易日计算 Beta、相关性、Alpha、跟踪误差和信息比率；
+各周期同时返回 Aroon/PSAR、完整价格缺口及历史下行风险。
 
 ## 真实数据库验收（2026-09-21）
 
@@ -32,7 +37,7 @@ Ichimoku、Donchian、Supertrend、StochRSI 和 CMF。最后一个实时 ZigZag 
 | 黄金9999 `Au99.99` | 2016-01-04 至 2026-09-18 | 2,604 | 年度分片补采后日/周/月可用 |
 
 26 个补采分片全部 `success/complete`，没有通过关闭完整性保护绕过。`full` 初始化计划
-v4 已将 `fund_daily`、`sge_daily`、`ths_daily` 纳入逐交易日历史计划，后续重装不会
+v5 已将 `fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` 纳入逐交易日历史计划，后续重装不会
 再次只留下最近几个月。
 
 ## 能力边界

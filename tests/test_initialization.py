@@ -567,7 +567,7 @@ def test_version_three_full_initialization_includes_research_history():
     assert len(research["repurchase"]) == 1
 
 
-def test_version_four_full_initialization_includes_cross_asset_market_history():
+def test_version_five_full_initialization_includes_cross_asset_market_history():
     repository = PlanningRepository(
         trade_dates=(date(2026, 9, 17), date(2026, 9, 18))
     )
@@ -583,7 +583,7 @@ def test_version_four_full_initialization_includes_cross_asset_market_history():
             history_end=date(2026, 9, 18),
             current_phase=3,
             phase_name="catalog_history",
-            options={"plan_version": 4},
+            options={"plan_version": 5},
         ),
         set(),
     ) is True
@@ -591,15 +591,15 @@ def test_version_four_full_initialization_includes_cross_asset_market_history():
     cross_asset = [
         (parameters, options)
         for _task_name, parameters, options in jobs.calls
-        if parameters["api_name"] in {"fund_daily", "sge_daily", "ths_daily"}
+        if parameters["api_name"] in {"fund_daily", "fund_adj", "sge_daily", "ths_daily"}
     ]
-    assert len(cross_asset) == 6
+    assert len(cross_asset) == 8
     assert {
         (item["api_name"], item["parameters"]["trade_date"])
         for item, _options in cross_asset
     } == {
         (api_name, compact)
-        for api_name in ("fund_daily", "sge_daily", "ths_daily")
+        for api_name in ("fund_daily", "fund_adj", "sge_daily", "ths_daily")
         for compact in ("20260917", "20260918")
     }
     assert all(options["resource_class"] == "initialization" for _, options in cross_asset)
@@ -607,7 +607,7 @@ def test_version_four_full_initialization_includes_cross_asset_market_history():
         item for item in repository.collection_step_options
         if item["step_key"].startswith("research-market-history:")
     ]
-    assert len(cross_asset_steps) == 6
+    assert len(cross_asset_steps) == 8
     assert all(item["require_verified"] is True for item in cross_asset_steps)
 
 

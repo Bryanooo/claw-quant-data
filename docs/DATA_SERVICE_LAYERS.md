@@ -11,8 +11,25 @@
 标准化后成为研究对象；运营接口是独立控制面，不参与这条加工链路。
 
 统一服务目录由 `GET /api/v1/catalog` 提供。它返回四类使用入口、三层加工关系、
-运营控制面、覆盖指标和 REST 契约；控制台“数据服务”页面也以该目录为唯一事实
+运营控制面、覆盖指标和 REST 契约；控制台“服务目录”页面也以该目录为唯一事实
 来源。旧路径不提供兼容别名，调用方应以目录和 OpenAPI 中的规范路径为准。
+
+目录中的每个数据服务均公开以下血缘字段，文档不再是数据来源的唯一载体：
+
+- `data_origin`：原始审计、规范数据、Claw 派生或系统元数据；
+- `local_datasets`：该服务实际读取的本地数据集；
+- `upstream_sources`：这些数据集的上游来源（如 Tushare、ChinaMoney），以及规范层
+  已启用的 Financial Data 回退；
+- `read_strategy` 与 `dependency_scope`：本地优先/派生方式，以及依赖是固定还是随
+  请求选择；
+- `fallback_routes` 与 `runtime_external_query`：只有通过契约测试的规范接口才能按
+  缺失切片受控回退。研究接口始终为 `runtime_external_query=false`，不会隐式消耗
+  Financial Data 额度；
+- `derivation` 与 `lineage_status`：派生说明和血缘是否完整。
+
+`GET /api/v1/research/capabilities` 的 `data_lineage.dependencies` 同时公开每个核心研究
+契约的数据集、来源、回退适配状态和历史范围；Agent 可先发现能力，再用
+`GET /api/v1/research/readiness` 判断这些依赖当前是否严格就绪。
 
 ## 1. 原始审计层
 

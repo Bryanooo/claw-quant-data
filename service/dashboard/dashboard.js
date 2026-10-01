@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { execution: { page: 1, before: null, history: [], next: null }, initId: null };
+const state = { execution: { page: 1, before: null, history: [], next: null }, services: { page: 1, size: 20, items: null }, initId: null };
 const labels = {queued:"排队",running:"运行",retrying:"重试",validating:"校验",publishing:"发布",success:"成功",attention:"需处理",not_dispatched:"未派发",not_due:"尚未到发布时间",complete:"完整",empty_verified:"已验证为空",gaps:"缺失",partial:"不完整",indeterminate:"待确认"};
 const fmt = (v) => Number(v || 0).toLocaleString();
 const esc = (v) => String(v ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -20,9 +20,9 @@ function notice(message) { $("notice").textContent=message; $("notice").classLis
 function activate(name) {
   document.querySelectorAll("[data-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.panel!==name));
   document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x.dataset.view===name));
-  const names={overview:"V2 数据总览",today:"今日交付",executions:"执行实例",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据源",investment:"投资日历"};
+  const names={overview:"V2 数据总览",today:"今日交付",executions:"执行实例",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据源",services:"服务目录",investment:"投资日历"};
   $("pageTitle").textContent=names[name];
-  ({today:loadToday,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,investment:loadInvestment}[name]||(()=>{}))();
+  ({today:loadToday,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,services:loadServices,investment:loadInvestment}[name]||(()=>{}))();
 }
 
 async function loadOverview() {
@@ -69,13 +69,24 @@ async function startInitialization(){if(!confirm("确认使用 V2 对全部业�
 
 async function loadSources(){const view=await api("/api/v1/data/sources");$("sourceCards").innerHTML=view.items.map(x=>`<article class="source"><h3>${esc(x.display_name)}</h3><p>${esc(x.source_id)} · ${x.acquisition_modes.map(esc).join(" / ")}</p><dl><dt>端点</dt><dd>${fmt(x.endpoint_count)}</dd><dt>凭据</dt><dd>${x.credential_required?"环境变量":"无需"}</dd><dt>地址</dt><dd>${esc(x.base_url)}</dd><dt>类型</dt><dd>${esc(x.source_kind)}</dd></dl></article>`).join("");}
 
+async function loadServices(reset=false){
+  if(reset){state.services.page=1;state.services.items=null;}
+  if(!state.services.items){const view=await api("/api/v1/catalog");state.services.items=view.layers.flatMap(layer=>layer.endpoints.map(endpoint=>({...endpoint,layer_id:layer.id,layer_title:layer.title})));}
+  const layer=$("serviceLayer").value,query=$("serviceSearch").value.trim().toLowerCase();let items=state.services.items.filter(x=>(!layer||x.layer_id===layer)&&(!query||[x.name,x.path,...x.local_datasets,...x.upstream_sources].join(" ").toLowerCase().includes(query)));
+  const pages=Math.max(1,Math.ceil(items.length/state.services.size));state.services.page=Math.min(state.services.page,pages);const start=(state.services.page-1)*state.services.size,rows=items.slice(start,start+state.services.size);
+  $("serviceSummary").textContent=`共 ${items.length} 个匹配入口；研究服务只读取本地规范数据，Financial Data 仅在规范层适配器通过后按缺失切片受控回退。`;
+  $("serviceRows").innerHTML=rows.map(x=>{const datasets=x.local_datasets.length?`${x.local_datasets.slice(0,5).map(esc).join("、")}${x.local_datasets.length>5?` 等 ${x.local_datasets.length} 个`:""}`:`动态：${esc(x.dependency_scope)}`;const fallback=x.fallback_routes.length?`${x.fallback_routes.slice(0,2).map(esc).join("、")}${x.fallback_routes.length>2?` 等 ${x.fallback_routes.length} 个`:""}`:"不查询";return `<tr><td>${pill(x.layer_id)}<strong>${esc(x.name)}</strong><small>${esc(x.data_origin)}${x.derivation?` · ${esc(x.derivation)}`:""}</small></td><td><code>${esc(x.method)} ${esc(x.path)}</code></td><td>${datasets}</td><td>${x.upstream_sources.map(esc).join(" / ")||"系统元数据"}</td><td>${esc(x.read_strategy)}</td><td>${fallback}</td></tr>`}).join("")||'<tr><td colspan="6">没有匹配服务</td></tr>';
+  $("servicePage").textContent=`第 ${state.services.page} / ${pages} 页`;$('servicePrev').disabled=state.services.page===1;$('serviceNext').disabled=state.services.page===pages;
+}
+
 async function loadInvestment(){const month=$("investmentMonth").value||monthValue(),[y,m]=month.split("-").map(Number),start=`${month}-01`,end=isoDate(new Date(y,m,0));const view=await api(`/api/v1/research/investment-calendar?start_date=${start}&end_date=${end}&importance=important`);const events=view.events||view.items||[];const groups={};events.forEach(x=>(groups[String(x.event_date||x.date).slice(0,10)]??=[]).push(x));const rows=Object.entries(groups).map(([event_date,items])=>({event_date,items}));renderMonth("investmentGrid",month,rows,x=>x?`${x.items.length} 个事件`:"无重要事件");$("investmentGrid").onclick=e=>{const b=e.target.closest("[data-date]");if(!b)return;const items=groups[b.dataset.date]||[];$("investmentEvents").innerHTML=items.map(x=>`<div class="issue"><div><strong>${esc(x.event_name||x.name||x.title)}</strong><small>${esc(x.country)} · ${esc(x.event_time||x.time)} · 实际 ${esc(x.actual)}</small></div></div>`).join("")||"<p>当日无重要事件</p>";};}
 
-async function refresh(){notice("");try{await loadOverview();const active=document.querySelector(".nav.active")?.dataset.view;if(active&&active!=="overview")await ({today:loadToday,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,investment:loadInvestment}[active]||(()=>{}))();}catch(e){notice(`加载失败：${e.message}`);}}
+async function refresh(){notice("");try{await loadOverview();const active=document.querySelector(".nav.active")?.dataset.view;if(active&&active!=="overview")await ({today:loadToday,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,services:loadServices,investment:loadInvestment}[active]||(()=>{}))();}catch(e){notice(`加载失败：${e.message}`);}}
 
 document.querySelector("nav").onclick=e=>{const b=e.target.closest("[data-view]");if(b)activate(b.dataset.view)};
 document.body.onclick=e=>{const b=e.target.closest("[data-execution]");if(b)showExecution(b.dataset.execution)};
 $("sidebarToggle").onclick=()=>$("sidebar").classList.toggle("collapsed"); $("themeToggle").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("cq-theme",document.body.classList.contains("dark")?"dark":"light")};
-$("refreshButton").onclick=refresh; $("todayDate").onchange=loadToday; $("executionQuery").onclick=()=>loadExecutions(true); $("calendarMonth").onchange=loadCalendar; $("auditAll").onclick=auditAll; $("initStartButton").onclick=startInitialization; $("investmentMonth").onchange=loadInvestment; $("detailClose").onclick=()=>$("detailDialog").close();
+$("refreshButton").onclick=refresh; $("todayDate").onchange=loadToday; $("executionQuery").onclick=()=>loadExecutions(true); $("calendarMonth").onchange=loadCalendar; $("auditAll").onclick=auditAll; $("initStartButton").onclick=startInitialization; $("serviceQuery").onclick=()=>loadServices(true); $("investmentMonth").onchange=loadInvestment; $("detailClose").onclick=()=>$("detailDialog").close();
 $("executionPrev").onclick=()=>{if(state.execution.page===1)return;state.execution.before=state.execution.history.pop()||null;state.execution.page--;loadExecutions()};$("executionNext").onclick=()=>{if(!state.execution.next)return;state.execution.history.push(state.execution.before);state.execution.before=state.execution.next;state.execution.page++;loadExecutions()};
+$("servicePrev").onclick=()=>{if(state.services.page>1){state.services.page--;loadServices();}};$("serviceNext").onclick=()=>{state.services.page++;loadServices();};
 $("todayDate").value=isoDate(new Date());$("calendarMonth").value=monthValue();$("investmentMonth").value=monthValue();$("initEnd").value=isoDate(new Date(Date.now()-86400000));if(localStorage.getItem("cq-theme")==="dark")document.body.classList.add("dark");refresh();setInterval(refresh,30000);

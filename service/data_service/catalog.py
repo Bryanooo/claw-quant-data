@@ -5,6 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from service.data_service.lineage import (
+    CANONICAL_ENDPOINT_LINEAGE,
+    endpoint_with_sources,
+    research_endpoint_lineage,
+)
 from service.research.catalog import DERIVED_ENDPOINTS
 
 
@@ -398,6 +403,59 @@ def build_data_service_catalog(
 ) -> dict[str, Any]:
     """Build one truthful view without coupling the dashboard to registries."""
 
+    dataset_sources = {
+        item["name"]: list(item.get("source_ids") or ["tushare"])
+        for item in datasets
+    }
+
+    raw_endpoints = [
+        {
+            **item,
+            "data_origin": "tushare_raw",
+            "local_datasets": [],
+            "upstream_sources": ["tushare"],
+            "fallback_routes": [],
+            "derivation": None,
+            "read_strategy": "audit_only",
+            "dependency_scope": "request_selected_interface",
+            "runtime_external_query": False,
+            "lineage_status": "complete",
+        }
+        for item in RAW_ENDPOINTS
+    ]
+    standard_endpoints: list[dict[str, Any]] = []
+    for item in STANDARD_ENDPOINTS:
+        lineage = CANONICAL_ENDPOINT_LINEAGE.get(item["path"])
+        if lineage is not None:
+            standard_endpoints.append(
+                endpoint_with_sources(item, lineage, dataset_sources)
+            )
+            continue
+        if item["path"] == "/api/v1/data/interfaces":
+            scope = "all_registered_upstream_interfaces"
+        elif "{api_name}" in item["path"]:
+            scope = "request_selected_interface"
+        elif item["path"] == "/api/v1/data/freshness":
+            scope = "all_or_request_selected_dataset"
+        else:
+            scope = "request_selected_dataset"
+        standard_endpoints.append(
+            {
+                **item,
+                "data_origin": "canonical_db",
+                "local_datasets": [],
+                "upstream_sources": sorted(
+                    {source for values in dataset_sources.values() for source in values}
+                ),
+                "fallback_routes": [],
+                "derivation": None,
+                "read_strategy": "local_db_first",
+                "dependency_scope": scope,
+                "runtime_external_query": False,
+                "lineage_status": "complete",
+            }
+        )
+
     observed = sum(bool(item.get("request_count")) for item in raw_interfaces)
     with_records = sum(bool(item.get("has_records")) for item in raw_interfaces)
     with_failures = sum(bool(item.get("failed_requests")) for item in raw_interfaces)
@@ -406,7 +464,11 @@ def build_data_service_catalog(
     directly_queryable = sum(bool(item.get("records_url")) for item in interfaces)
 
     research_items = [
-        {**item, "status": "available"}
+        endpoint_with_sources(
+            {**item, "status": "available"},
+            research_endpoint_lineage(item["path"]),
+            dataset_sources,
+        )
         for item in RESEARCH_ENDPOINTS
     ]
     layers = [
@@ -425,7 +487,7 @@ def build_data_service_catalog(
                 "interfaces_with_records": with_records,
                 "interfaces_with_failed_requests": with_failures,
             },
-            "endpoints": list(RAW_ENDPOINTS),
+            "endpoints": raw_endpoints,
             "items": raw_interfaces,
         },
         {
@@ -444,7 +506,7 @@ def build_data_service_catalog(
                 "direct_interface_queries": directly_queryable,
                 "canonical_endpoints": len(CANONICAL_ENDPOINTS),
             },
-            "endpoints": list(STANDARD_ENDPOINTS),
+            "endpoints": standard_endpoints,
             "items": datasets,
         },
         {

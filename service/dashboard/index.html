@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Claw Quant · V2 数据控制台</title>
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20260929-v2-only" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261001-service-lineage" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -19,6 +19,7 @@
       <button class="nav" data-view="coverage">覆盖审计</button>
       <button class="nav" data-view="initialization">数据初始化</button>
       <button class="nav" data-view="sources">数据源</button>
+      <button class="nav" data-view="services">服务目录</button>
       <button class="nav" data-view="investment">投资日历</button>
     </nav>
     <div class="sidebar-foot"><span class="dot"></span><span id="engineLabel">orchestration_v2</span></div>
@@ -66,12 +67,16 @@
       <section class="card"><div class="card-head"><div><p class="eyebrow">MULTI SOURCE</p><h2>数据源与连接器</h2><p>密钥只从环境变量读取，不进入代码、任务参数或响应。</p></div></div><div id="sourceCards" class="source-grid"></div></section>
     </section>
 
+    <section class="view hidden" data-panel="services">
+      <section class="card"><div class="card-head"><div><p class="eyebrow">SERVICE LINEAGE</p><h2>服务能力与数据来源</h2><p id="serviceSummary">每个入口都展示本地数据集、上游来源、派生方式和受控回退。</p></div><div class="filters"><select id="serviceLayer"><option value="">全部层级</option><option value="research">研究层</option><option value="standard">标准层</option><option value="raw">审计层</option></select><input id="serviceSearch" placeholder="搜索服务、路径或数据集"/><button id="serviceQuery">查询</button></div></div><div class="table-wrap"><table><thead><tr><th>层级 / 服务</th><th>接口</th><th>本地数据集</th><th>来源</th><th>读取策略</th><th>Financial Data 回退</th></tr></thead><tbody id="serviceRows"></tbody></table></div><footer><button id="servicePrev">上一页</button><span id="servicePage">第 1 页</span><button id="serviceNext">下一页</button></footer></section>
+    </section>
+
     <section class="view hidden" data-panel="investment">
       <section class="card"><div class="card-head"><div><p class="eyebrow">MARKET EVENTS</p><h2>投资日历</h2></div><input id="investmentMonth" type="month" /></div><div class="weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div id="investmentGrid" class="calendar"></div><div id="investmentEvents" class="issue-list"></div></section>
     </section>
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">实例详情</h2><button id="detailClose">关闭</button></div><pre id="detailBody"></pre></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20260929-v2-only" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261001-service-lineage" defer></script>
 </body>
 </html>

@@ -453,10 +453,32 @@ def evaluate_research_readiness(
 def lineage_catalog() -> list[dict[str, Any]]:
     """Return a JSON-safe research-to-dataset relationship table."""
 
+    from service.data_service.source_policy import (
+        dataset_fallback_routes,
+        dataset_fallback_status,
+    )
+
+    def public_dependency(item: dict[str, Any]) -> dict[str, Any]:
+        dataset = item["dataset"]
+        return {
+            **item,
+            "source_ids": (
+                ["chinamoney", "tushare"]
+                if dataset == "shibor_lpr"
+                else ["tushare"]
+            ),
+            "read_strategy": "local_db_first",
+            "fallback_routes": list(dataset_fallback_routes(dataset)),
+            "fallback_status": dataset_fallback_status(dataset),
+            "runtime_external_query": False,
+        }
+
     return [
         {
             **{key: value for key, value in contract.items() if key != "dependencies"},
-            "dependencies": [dict(item) for item in contract["dependencies"]],
+            "dependencies": [
+                public_dependency(item) for item in contract["dependencies"]
+            ],
         }
         for contract in RESEARCH_DATA_CONTRACTS
     ]

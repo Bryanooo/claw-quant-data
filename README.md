@@ -131,6 +131,7 @@ GET  /api/v1/ops/initialization/{id}/steps
 
 | 路径 | 说明 |
 |---|---|
+| `/api/v1/catalog` | 全部公开服务及其本地数据集、上游来源、派生方式和受控回退血缘 |
 | `/api/v1/research/*` | 面向 Agent 的基本面、技术面、行业、宏观和跨资产研究数据 |
 | `/api/v1/data/*` | 原始/标准化数据查询与数据源入口 |
 | `/api/v1/ops/orchestration-v2/*` | V2 定义、执行实例、事件、数据状态和日历 |
@@ -138,6 +139,10 @@ GET  /api/v1/ops/initialization/{id}/steps
 | `/api/v1/ops/initialization/*` | V2 初始化与恢复进度 |
 | `/api/v1/investment-calendar/*` | 宏观发布、交割日、公告等投资事件 |
 | `/api/docs` | OpenAPI 文档 |
+
+Dashboard 的“服务目录”直接读取 `/api/v1/catalog`，可按原始审计层、标准层和研究层
+筛选并分页查看来源。研究层只基于本地规范数据集计算；Financial Data 仅由已经完成
+字段、代码、日期和单位契约测试的规范接口，在本地目标切片缺失时受控回退。
 
 研究 Agent 的外部供给统一放在 `/api/v1/research/*`。通用数据查询不会伪装成研究结论。
 

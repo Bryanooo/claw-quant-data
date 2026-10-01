@@ -18,3 +18,13 @@ def test_dashboard_distinguishes_task_and_data_state():
     html = (ROOT / "service/dashboard/index.html").read_text()
     assert "任务状态和数据状态分别核验" in html
     assert "日期是数据日期" in html
+
+
+def test_dashboard_exposes_paginated_service_lineage():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    assert "服务能力与数据来源" in html
+    assert "servicePrev" in html and "serviceNext" in html
+    assert 'api("/api/v1/catalog")' in script
+    assert "local_datasets" in script
+    assert "fallback_routes" in script

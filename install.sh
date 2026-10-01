@@ -8,6 +8,7 @@ ENV_FILE="${PROJECT_DIR}/.env"
 NON_INTERACTIVE=0
 SKIP_TOKEN_CHECK=0
 ENV_TUSHARE_TOKEN="${TUSHARE_TOKEN:-}"
+ENV_FINANCIAL_DATA_API_KEY="${FINANCIAL_DATA_API_KEY:-}"
 ENV_APP_REVISION="${APP_REVISION:-}"
 
 info() {
@@ -48,6 +49,7 @@ usage() {
 
 也可以通过环境变量传入配置：
   TUSHARE_TOKEN=... ./install.sh
+  FINANCIAL_DATA_API_KEY=... ./install.sh
   COMPOSE_PROJECT_NAME=... ./install.sh
 
 脚本不会删除容器数据卷，可以安全地重复运行。
@@ -190,20 +192,25 @@ wait_for_api() {
 
 wait_for_component() {
     local component="$1"
-    local container_id state attempt
-    container_id="$(compose ps -q "${component}")"
-    [[ -n "${container_id}" ]] || die "没有找到 ${component} 容器"
+    local container_ids container_id state attempt healthy
+    container_ids="$(compose ps -q "${component}")"
+    [[ -n "${container_ids}" ]] || die "没有找到 ${component} 容器"
     for attempt in $(seq 1 60); do
-        state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container_id}")"
-        [[ "${state}" == "healthy" ]] && return 0
-        if [[ "${state}" == "unhealthy" || "${state}" == "exited" || "${state}" == "dead" ]]; then
-            compose logs --tail=200 "${component}"
-            die "${component} 未能通过进程心跳健康检查"
-        fi
+        healthy=1
+        while IFS= read -r container_id; do
+            [[ -n "${container_id}" ]] || continue
+            state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container_id}")"
+            if [[ "${state}" == "unhealthy" || "${state}" == "exited" || "${state}" == "dead" ]]; then
+                compose logs --tail=200 "${component}"
+                die "${component} 未能通过进程心跳健康检查"
+            fi
+            [[ "${state}" == "healthy" ]] || healthy=0
+        done <<< "${container_ids}"
+        [[ "${healthy}" -eq 1 ]] && return 0
         sleep 1
     done
     compose logs --tail=200 "${component}"
-    die "等待 ${component} 健康状态超时"
+    die "等待 ${component} 全部副本健康状态超时"
 }
 
 verify_application_images() {
@@ -215,7 +222,7 @@ verify_application_images() {
 
     expected_image="$(docker inspect --format '{{.Image}}' "$(compose ps -q api)")"
     [[ -n "${expected_image}" ]] || die "无法读取 API 镜像标识"
-    for service in api worker worker-fanout worker-backfill worker-news auditor scheduler; do
+    for service in api worker-v2-routine worker-v2-backfill auditor scheduler; do
         container_ids="$(compose ps -q "${service}")"
         [[ -n "${container_ids}" ]] || die "应用服务没有运行容器：${service}"
         while IFS= read -r container_id; do
@@ -260,6 +267,9 @@ main() {
             printf 'DB_USER=tushare\n'
             printf 'DB_PASSWORD=%s\n' "$(generate_password)"
             printf 'TUSHARE_TOKEN=\n'
+            printf 'FINANCIAL_DATA_API_KEY=\n'
+            printf 'FINANCIAL_DATA_BASE_URL=https://dfdatamcpnexus-prod.antgroup-inc.cn/api/v1/common_query\n'
+            printf 'FINANCIAL_DATA_API_VERSION=1.6.0\n'
             printf 'API_BIND_HOST=127.0.0.1\n'
             printf 'API_PORT=8000\n'
             printf 'API_DB_POOL_MIN=1\n'
@@ -271,9 +281,6 @@ main() {
             printf 'JOB_EXECUTION_TIMEOUT_SECONDS=1800\n'
             printf 'JOB_LEASE_SECONDS=120\n'
             printf 'JOB_RECLAIM_INTERVAL_SECONDS=60\n'
-            printf 'ROUTINE_WORKER_RESOURCE_CLASSES=scheduled,generic,reference,market,moneyflow,finance,catalog,default\n'
-            printf 'FANOUT_WORKER_RESOURCE_CLASSES=fanout\n'
-            printf 'BACKFILL_WORKER_RESOURCE_CLASSES=initialization,backfill\n'
             printf 'COVERAGE_POLL_INTERVAL_SECONDS=5\n'
             printf 'COVERAGE_STALE_AFTER_SECONDS=3600\n'
             printf 'COVERAGE_AUTO_REPAIR_ENABLED=true\n'
@@ -293,6 +300,9 @@ main() {
     ensure_env_value "DB_NAME" "tushare_db"
     ensure_env_value "DB_USER" "tushare"
     ensure_env_value "DB_PASSWORD" "$(generate_password)"
+    ensure_env_value "FINANCIAL_DATA_API_KEY" ""
+    ensure_env_value "FINANCIAL_DATA_BASE_URL" "https://dfdatamcpnexus-prod.antgroup-inc.cn/api/v1/common_query"
+    ensure_env_value "FINANCIAL_DATA_API_VERSION" "1.6.0"
     ensure_env_value "API_BIND_HOST" "127.0.0.1"
     ensure_env_value "API_PORT" "8000"
     ensure_env_value "API_DB_POOL_MIN" "1"
@@ -304,9 +314,6 @@ main() {
     ensure_env_value "JOB_EXECUTION_TIMEOUT_SECONDS" "1800"
     ensure_env_value "JOB_LEASE_SECONDS" "120"
     ensure_env_value "JOB_RECLAIM_INTERVAL_SECONDS" "60"
-    ensure_env_value "ROUTINE_WORKER_RESOURCE_CLASSES" "scheduled,generic,reference,market,moneyflow,finance,catalog,default"
-    ensure_env_value "FANOUT_WORKER_RESOURCE_CLASSES" "fanout"
-    ensure_env_value "BACKFILL_WORKER_RESOURCE_CLASSES" "initialization,backfill"
     ensure_env_value "COVERAGE_POLL_INTERVAL_SECONDS" "5"
     ensure_env_value "COVERAGE_STALE_AFTER_SECONDS" "3600"
     ensure_env_value "COVERAGE_AUTO_REPAIR_ENABLED" "true"
@@ -338,6 +345,11 @@ main() {
             set_env_value "TUSHARE_TOKEN" "${token}"
             success "Tushare Token 已写入 .env"
         fi
+    fi
+
+    if [[ -n "${ENV_FINANCIAL_DATA_API_KEY}" ]]; then
+        set_env_value "FINANCIAL_DATA_API_KEY" "${ENV_FINANCIAL_DATA_API_KEY}"
+        success "已从环境变量写入 Financial Data API Key"
     fi
 
     compose config --quiet
@@ -381,9 +393,9 @@ main() {
     [[ "${table_count}" -ge 113 ]] || die "数据库表数量异常：${table_count}"
     success "数据库迁移完成，共 ${table_count} 张表"
 
-    info "启动 REST API、四个隔离采集 Worker、覆盖 Auditor 与调度器..."
+    info "启动 REST API、V2 日常/历史 Worker、覆盖 Auditor 与调度器..."
     compose up -d --force-recreate \
-        api worker worker-fanout worker-backfill worker-news auditor scheduler
+        api worker-v2-routine worker-v2-backfill auditor scheduler
 
     info "验证调度器到 PostgreSQL 的连接..."
     compose exec -T scheduler python - <<'PY'
@@ -400,10 +412,10 @@ PY
 
     wait_for_api
     success "REST API 已进入 healthy 状态"
-    for component in scheduler worker worker-fanout worker-backfill worker-news auditor; do
+    for component in scheduler worker-v2-routine worker-v2-backfill auditor; do
         wait_for_component "${component}"
     done
-    success "Scheduler、四个 Worker 资源池、Auditor 进程心跳正常"
+    success "Scheduler、V2 Worker 资源池、Auditor 进程心跳正常"
     verify_application_images
     success "所有应用容器均使用同一镜像"
 
@@ -435,6 +447,16 @@ if not collection_tasks:
     raise SystemExit("REST API 没有返回可用采集任务")
 
 request = urllib.request.Request(
+    "http://127.0.0.1:8000/api/v1/ops/orchestration-v2/summary",
+)
+with urllib.request.urlopen(request, timeout=10) as response:
+    orchestration = json.load(response)
+if orchestration.get("control_plane", {}).get("engine") != "orchestration_v2":
+    raise SystemExit("V2 编排控制面未安装")
+if orchestration.get("baseline", {}).get("total", 0) < 200:
+    raise SystemExit("V2 任务定义不完整")
+
+request = urllib.request.Request(
     "http://127.0.0.1:8000/api/v1/ops/collection-overview",
 )
 with urllib.request.urlopen(request, timeout=10) as response:
@@ -455,10 +477,10 @@ request = urllib.request.Request(
 )
 with urllib.request.urlopen(request, timeout=5) as response:
     initialization = json.load(response)
-if initialization.get("runtime", {}).get("mode") not in {
-    "awaiting_initialization", "initializing", "daily"
-}:
-    raise SystemExit("初始化运行模式异常")
+if initialization.get("engine") != "orchestration_v2":
+    raise SystemExit("初始化没有复用 V2 编排")
+if initialization.get("v1_required") is not False:
+    raise SystemExit("初始化仍错误依赖 V1")
 
 with urllib.request.urlopen("http://127.0.0.1:8000/dashboard", timeout=5) as response:
     dashboard = response.read()
@@ -486,7 +508,7 @@ PY
         die "调度器未正常运行"
     }
 
-    for worker_component in worker worker-fanout worker-backfill worker-news; do
+    for worker_component in worker-v2-routine worker-v2-backfill; do
         worker_id="$(compose ps -q "${worker_component}")"
         [[ -n "${worker_id}" ]] || die "没有找到 ${worker_component} 容器"
         worker_state="$(docker inspect --format '{{.State.Status}}' "${worker_id}")"
@@ -514,8 +536,7 @@ PY
     printf '  采集控制台：  http://localhost:%s/dashboard\n' "$(read_env_value "API_PORT")"
     printf '  初始采集：    请在采集控制台选择范围后单独启动\n'
     printf '  日常 Worker： running\n'
-    printf '  扇出 Worker： running\n'
-    printf '  回填 Worker： running\n'
+    printf '  V2 历史 Worker：running\n'
     printf '  覆盖 Auditor：running\n'
     printf '  数据表：      %s\n' "${table_count}"
     printf '  查看状态：    docker compose -p %s ps\n' "${PROJECT_NAME}"

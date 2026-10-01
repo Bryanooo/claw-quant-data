@@ -1,4 +1,5 @@
 import pandas as pd
+from types import SimpleNamespace
 import pytest
 
 from collectors.index.basic import IndexBasicCollector
@@ -39,6 +40,7 @@ def test_full_snapshot_partitions_csi_and_replaces_atomically(monkeypatch):
         return pd.DataFrame()
 
     monkeypatch.setattr(collector, "fetch", fetch)
+    collector.pro = SimpleNamespace(index_basic=lambda **params: fetch(**params))
     monkeypatch.setattr(collector, "transform", lambda frame: frame)
     monkeypatch.setattr(
         collector,
@@ -68,6 +70,26 @@ def test_partition_at_provider_limit_fails_before_storage(monkeypatch):
 
     with pytest.raises(IncompleteCollectionError, match="8000-row limit"):
         collector._checked_fetch(market="CSI", category="主题指数")
+
+
+def test_complete_snapshot_protocol_returns_verified_evidence(monkeypatch):
+    collector = _collector_without_init()
+    collector._request_count = 7
+    monkeypatch.setattr(collector, "collect_full_snapshot", lambda: 123)
+    monkeypatch.setattr(collector, "_raw_archive_evidence", lambda: {"requests": 7})
+    monkeypatch.setattr(
+        collector,
+        "_sanitization_evidence",
+        lambda: {"nul_characters_removed": 0, "affected_fields": []},
+    )
+
+    result = collector.run_complete_snapshot()
+
+    assert result.fetched_rows == result.stored_rows == 123
+    assert result.evidence["verified"] is True
+    assert result.evidence["verification_type"] == (
+        "market_and_csi_category_partitions"
+    )
 
 
 def test_base_run_rejects_capped_specialized_response_before_storage(monkeypatch):

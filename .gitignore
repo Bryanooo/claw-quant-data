@@ -43,3 +43,8 @@ Thumbs.db
 *.sublime-*
 .coverage
 backups/
+
+# 可按需重建的接口普查中间产物；当前目录与权限证据分别维护在 docs/tushare 和
+# reports/tushare_permission_recheck.*。
+reports/tushare_interface_matrix.csv
+reports/tushare_interface_matrix.md

@@ -44,6 +44,7 @@ def _market_dataset(
     source: str = "Tushare Pro",
     freshness_sla_hours: int = 72,
     freshness_table: str | None = None,
+    advanced_filters: tuple[str, ...] = (),
 ) -> DatasetSpec:
     return DatasetSpec(
         name=name,
@@ -51,7 +52,11 @@ def _market_dataset(
         description=description,
         category=category,
         primary_keys=("ts_code", "trade_date"),
-        exact_filters={"ts_code": "ts_code"},
+        exact_filters={
+            "ts_code": "ts_code",
+            **{name: name for name in advanced_filters},
+        },
+        standard_filters=("ts_code",) if advanced_filters else (),
         date_column="trade_date",
         date_storage=date_storage,
         availability_column="trade_date",
@@ -101,6 +106,74 @@ _COMPACT_DATE_TABLES = {
     "ths_hot",
     "top_inst",
     "top_list",
+}
+
+_PERIOD_DATE_OVERRIDES = {
+    "cn_gdp": ("quarter", DateStorage.QUARTER),
+    "cn_cpi": ("month", DateStorage.MONTH),
+    "cn_m": ("month", DateStorage.MONTH),
+    "cn_pmi": ("month", DateStorage.MONTH),
+    "cn_ppi": ("month", DateStorage.MONTH),
+    "sf_month": ("month", DateStorage.MONTH),
+    # Historical fund NAV collection and completeness verification are both
+    # partitioned by the effective NAV date.  ann_date is merely publication
+    # metadata and can legitimately point at a later day, so auditing it would
+    # report false gaps even after every requested NAV partition was verified.
+    "fund_nav": ("nav_date", DateStorage.DATE),
+    # ths_hot uses a content-derived source key because non-A-share ranks may
+    # not have ts_code; trade_date remains its business partition.
+    "ths_hot": ("trade_date", DateStorage.COMPACT),
+    # Source identity is not the business-effective date. Keep range queries
+    # on the nullable effective date after the physical primary-key migration.
+    "stk_holdernumber": ("end_date", DateStorage.DATE),
+}
+
+_TABLE_PERIOD_DATE_OVERRIDES = {
+    # This is a derived collector sharing the ggt_daily upstream API. The
+    # override must be table-specific or the canonical daily dataset would be
+    # incorrectly reclassified as monthly too.
+    "ggt_monthly": ("month", DateStorage.MONTH),
+}
+
+
+_EXACT_FILTER_OVERRIDES = {
+    "stk_holdernumber": {
+        "source_key": "source_key",
+        "ts_code": "ts_code",
+        "ann_date": "ann_date",
+        "end_date": "end_date",
+    },
+    "ths_hot": {
+        "source_key": "source_key",
+        "ts_code": "ts_code",
+        "data_type": "data_type",
+    },
+}
+
+
+_DEFAULT_ORDER_OVERRIDES = {
+    "stk_holdernumber": ("end_date", "ann_date", "ts_code"),
+}
+
+
+_NORMALIZED_READ_VIEW_OVERRIDES = {
+    # Keep the provider-owned normalized table as the storage relation while
+    # exposing a provider-neutral current view to readers and coverage audits.
+    # This preserves the typed ingestion contract and makes merge semantics
+    # explicit instead of pretending the canonical view is a storage table.
+    "shibor_lpr": "canonical_shibor_lpr",
+}
+
+_NORMALIZED_SOURCE_OVERRIDES = {
+    "shibor_lpr": "中国货币网 + Tushare Pro",
+}
+
+_NORMALIZED_SOURCE_ID_OVERRIDES = {
+    "shibor_lpr": ("chinamoney", "tushare"),
+}
+
+_NORMALIZED_MERGE_POLICY_OVERRIDES = {
+    "shibor_lpr": "official_source_precedence_by_publication_date",
 }
 
 
@@ -159,6 +232,24 @@ def _curated_datasets() -> list[DatasetSpec]:
             "A股每日基本面",
             table="tushare_current_daily_basic",
             freshness_table="tushare_norm_daily_basic",
+            advanced_filters=(
+                "close",
+                "turnover_rate",
+                "turnover_rate_f",
+                "volume_ratio",
+                "pe",
+                "pe_ttm",
+                "pb",
+                "ps",
+                "ps_ttm",
+                "dv_ratio",
+                "dv_ttm",
+                "total_share",
+                "float_share",
+                "free_share",
+                "total_mv",
+                "circ_mv",
+            ),
         ),
         _market_dataset("stock_limit", "A股每日涨跌停价格", table="stk_limit"),
         DatasetSpec(
@@ -279,7 +370,11 @@ def _generated_dataset(
     title: str,
     description: str,
 ) -> DatasetSpec:
-    date_column = _inferred_date_column(contract)
+    override = (
+        _TABLE_PERIOD_DATE_OVERRIDES.get(contract.table_name)
+        or _PERIOD_DATE_OVERRIDES.get(contract.api_name)
+    )
+    date_column = override[0] if override else _inferred_date_column(contract)
     details = description.strip() or f"Tushare {contract.api_name} 接口数据"
     if contract.table_name != contract.api_name:
         details = f"{details}（规范化表：{contract.table_name}）"
@@ -293,15 +388,23 @@ def _generated_dataset(
         description=title.strip() or details,
         category=contract.resource_class.value,
         primary_keys=contract.primary_keys,
-        exact_filters={name: name for name in contract.primary_keys},
+        exact_filters=_EXACT_FILTER_OVERRIDES.get(
+            contract.api_name,
+            {name: name for name in contract.primary_keys},
+        ),
         date_column=date_column,
         date_storage=(
-            DateStorage.COMPACT
+            override[1]
+            if override
+            else DateStorage.COMPACT
             if contract.table_name in _COMPACT_DATE_TABLES
             else DateStorage.DATE
         ),
         availability_column=_AVAILABILITY_COLUMNS.get(contract.table_name),
-        default_order=contract.primary_keys,
+        default_order=_DEFAULT_ORDER_OVERRIDES.get(
+            contract.api_name,
+            contract.primary_keys,
+        ),
         freshness_sla_hours=freshness_hours,
         freshness_policy=freshness_policy,
     )
@@ -337,6 +440,16 @@ def _inferred_freshness(
     # staleness; recurring empty checks remain visible in job evidence.
     if api_name in {"slb_len", "slb_len_mm", "slb_sec", "slb_sec_detail"}:
         return None, "event_driven"
+    macro_hours = {
+        "cn_gdp": 24 * 150,
+        "cn_cpi": 24 * 50,
+        "cn_m": 24 * 55,
+        "cn_pmi": 24 * 40,
+        "cn_ppi": 24 * 50,
+        "sf_month": 24 * 55,
+    }
+    if api_name in macro_hours:
+        return macro_hours[api_name], "max_age"
     if date_column != "trade_date":
         return None, "event_driven"
     policy = TusharePolicyRegistry().get(api_name)
@@ -371,21 +484,24 @@ def build_dataset_registry() -> DatasetRegistry:
         registered_tables.add(contract.table_name)
 
     for contract in NORMALIZATION_CONTRACTS.list():
-        if contract.table_name in registered_tables:
+        table_name = contract.table_name
+        if table_name in registered_tables:
             continue
+        override = _PERIOD_DATE_OVERRIDES.get(contract.api_name)
+        date_column = override[0] if override else contract.date_column
         order = (
-            (contract.date_column, "_record_hash")
-            if contract.date_column
+            (date_column, "_record_hash")
+            if date_column
             else ("_source_collected_at", "_record_hash")
         )
         freshness_hours, freshness_policy = _inferred_freshness(
             contract.api_name,
-            contract.date_column,
+            date_column,
         )
         datasets.append(
             DatasetSpec(
                 name=contract.api_name,
-                table=contract.table_name,
+                table=table_name,
                 description=f"{contract.title}（契约驱动标准化数据）",
                 category=contract.category,
                 primary_keys=("_record_hash",),
@@ -393,22 +509,50 @@ def build_dataset_registry() -> DatasetRegistry:
                     "_record_hash": "_record_hash",
                     **{field.name: field.name for field in contract.fields},
                 },
-                date_column=contract.date_column,
-                date_storage=DateStorage.DATE,
+                standard_filters=tuple(
+                    dict.fromkeys(
+                        (
+                            "_record_hash",
+                            *(
+                                contract.business_identity_fields
+                                if contract.identity_confidence == "contract_reviewed"
+                                else contract.identity_fields
+                            ),
+                        )
+                    )
+                ),
+                date_column=date_column,
+                date_storage=override[1] if override else DateStorage.DATE,
+                availability_column=contract.availability_column,
                 default_order=order,
                 freshness_sla_hours=freshness_hours,
                 freshness_policy=freshness_policy,
+                source=_NORMALIZED_SOURCE_OVERRIDES.get(
+                    contract.api_name,
+                    "Tushare Pro",
+                ),
+                source_ids=_NORMALIZED_SOURCE_ID_OVERRIDES.get(
+                    contract.api_name,
+                    ("tushare",),
+                ),
+                merge_policy=_NORMALIZED_MERGE_POLICY_OVERRIDES.get(
+                    contract.api_name,
+                    "single_source",
+                ),
                 storage_semantics="versioned_payload",
                 business_identity_fields=contract.business_identity_fields,
                 identity_confidence=contract.identity_confidence,
                 current_view=(
-                    f"tushare_current_{contract.api_name}"
-                    if contract.identity_confidence == "contract_reviewed"
-                    else None
+                    _NORMALIZED_READ_VIEW_OVERRIDES.get(contract.api_name)
+                    or (
+                        f"tushare_current_{contract.api_name}"
+                        if contract.identity_confidence == "contract_reviewed"
+                        else None
+                    )
                 ),
             )
         )
-        registered_tables.add(contract.table_name)
+        registered_tables.add(table_name)
 
     return DatasetRegistry(datasets)
 

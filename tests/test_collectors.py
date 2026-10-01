@@ -85,6 +85,29 @@ def test_run_returns_structured_collection_evidence(monkeypatch):
     assert result.empty_reason is None
 
 
+def test_successful_store_clears_resolved_anomaly_quarantine(monkeypatch):
+    collector = _collector_without_init()
+    collector._raw_archive = type(
+        "Archive",
+        (),
+        {"resolve_records": staticmethod(lambda **_kwargs: 2)},
+    )()
+    monkeypatch.setattr(
+        collector,
+        "fetch",
+        lambda **_params: pd.DataFrame([{"id": 1}]),
+    )
+    monkeypatch.setattr(collector, "store", lambda frame: len(frame))
+    monkeypatch.setattr(
+        "collectors.base.TUSHARE_RAW_RECORD_CAPTURE_MODE",
+        "anomalies_only",
+    )
+
+    result = collector.run(trade_date="20260928")
+
+    assert result.evidence["raw_archive"]["resolved_anomaly_records"] == 2
+
+
 def test_run_records_empty_response_without_claiming_completeness(monkeypatch):
     collector = _collector_without_init()
     monkeypatch.setattr(collector, "fetch", lambda **params: pd.DataFrame())
@@ -116,6 +139,13 @@ def test_transport_retry_is_visible_and_counted_by_collector_runtime(monkeypatch
     monkeypatch.setattr(
         "service.tushare_rate_limit.reserve_tushare_request",
         lambda *_args, **_kwargs: 0,
+    )
+    monkeypatch.setattr(
+        "service.tushare_raw_archive.TushareRawArchive.archive_response",
+        lambda *_args, **_kwargs: {
+            "request_id": 1,
+            "logical_request_hash": "test-logical-request",
+        },
     )
 
     collector = ExampleCollector()
@@ -315,6 +345,21 @@ def test_dividend_forwards_the_scheduler_partition_to_upstream():
     assert len(calls) == 2
     assert all(item["ann_date"] == "20260828" for item in calls)
     assert {item["div_proc"] for item in calls} == {"实施", "预案"}
+
+
+def test_dividend_stock_fanout_is_a_bounded_complete_scope():
+    from collectors.tushare_raw import verify_complete_response
+    from service.tushare_policy import TusharePolicyRegistry
+
+    evidence = verify_complete_response(
+        "dividend",
+        TusharePolicyRegistry().get("dividend"),
+        {"ts_code": "300750.SZ"},
+        12,
+    )
+
+    assert evidence["verified"] is True
+    assert evidence["bounded_partition"] is True
 
 
 def test_partitioned_history_fails_closed_when_any_partition_fails(monkeypatch):

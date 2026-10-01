@@ -13,8 +13,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from service.api.routers import (
     catalog,
-    collection_jobs,
-    collection_monitor,
     coverage,
     data_health,
     datasets,
@@ -23,13 +21,15 @@ from service.api.routers import (
     investment_calendar,
     interfaces,
     normalization,
+    orchestration_v2,
     raw_archive,
     research,
     sectors,
+    sources,
     stocks,
 )
 from service.api.schemas import ErrorResponse
-from service.collection_jobs.models import (
+from service.acquisition_runtime.models import (
     InvalidTaskParametersError,
     JobConflictError,
     JobNotFoundError,
@@ -42,12 +42,17 @@ from service.data_service.models import (
     InterfaceDataNotFoundError,
     InvalidQueryError,
     RecordNotFoundError,
+    UpstreamFallbackError,
 )
 from service.data_coverage.models import (
     CoverageRuleNotFoundError,
     InvalidCoverageRequestError,
 )
 from service.investment_calendar import InvalidInvestmentCalendarRequest
+from service.source_connectors.registry import (
+    SourceEndpointNotFoundError,
+    SourceNotFoundError,
+)
 
 logger = logging.getLogger("api")
 
@@ -110,6 +115,10 @@ def create_app(
     async def invalid_query(request: Request, exc: InvalidQueryError):
         return error_response(request, 422, "invalid_query", str(exc))
 
+    @application.exception_handler(UpstreamFallbackError)
+    async def upstream_fallback_error(request: Request, exc: UpstreamFallbackError):
+        return error_response(request, 502, "upstream_fallback_error", str(exc))
+
     @application.exception_handler(TaskNotFoundError)
     async def task_not_found(request: Request, exc: TaskNotFoundError):
         return error_response(request, 404, "task_not_found", str(exc))
@@ -155,6 +164,17 @@ def create_app(
             str(exc),
         )
 
+    @application.exception_handler(SourceNotFoundError)
+    async def source_not_found(request: Request, exc: SourceNotFoundError):
+        return error_response(request, 404, "source_not_found", str(exc))
+
+    @application.exception_handler(SourceEndpointNotFoundError)
+    async def source_endpoint_not_found(
+        request: Request,
+        exc: SourceEndpointNotFoundError,
+    ):
+        return error_response(request, 404, "source_endpoint_not_found", str(exc))
+
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
         return error_response(request, 422, "validation_error", str(exc))
@@ -177,18 +197,18 @@ def create_app(
     application.include_router(health.router, prefix="/api")
     application.include_router(datasets.router, prefix="/api")
     application.include_router(interfaces.router, prefix="/api")
+    application.include_router(sources.router, prefix="/api")
     application.include_router(normalization.router, prefix="/api")
     application.include_router(raw_archive.router, prefix="/api")
     application.include_router(research.router, prefix="/api")
     application.include_router(stocks.router, prefix="/api")
     application.include_router(sectors.router, prefix="/api")
-    application.include_router(collection_jobs.router, prefix="/api")
-    application.include_router(collection_monitor.router, prefix="/api")
     application.include_router(coverage.router, prefix="/api")
     application.include_router(data_health.router, prefix="/api")
     application.include_router(catalog.router, prefix="/api")
     application.include_router(initialization.router, prefix="/api")
     application.include_router(investment_calendar.router, prefix="/api")
+    application.include_router(orchestration_v2.router, prefix="/api")
 
     dashboard_directory = PROJECT_ROOT / "service" / "dashboard"
     application.mount(

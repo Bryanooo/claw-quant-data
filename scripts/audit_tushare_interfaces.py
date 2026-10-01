@@ -801,10 +801,8 @@ def _write_contract_markdown(contract: dict[str, Any], target: Path) -> None:
 def write_contract_docs(
     entries: list[DocumentEntry], rows: list[dict[str, Any]], docs_dir: Path
 ) -> tuple[Path, Path]:
-    """Write the human and machine-readable interface contract catalog."""
+    """Write one human catalog and one complete machine-readable contract."""
     docs_dir.mkdir(parents=True, exist_ok=True)
-    interfaces_dir = docs_dir / "interfaces"
-    interfaces_dir.mkdir(parents=True, exist_ok=True)
 
     entries_by_doc = {entry.doc_id: entry for entry in entries}
     rows_by_api: dict[str, list[dict[str, Any]]] = {}
@@ -868,10 +866,6 @@ def write_contract_docs(
         contracts.append(contract)
 
     contracts = _merge_reviewed_contract_supplements(contracts, docs_dir)
-    for contract in contracts:
-        _write_contract_markdown(
-            contract, interfaces_dir / f"{contract['api_name']}.md"
-        )
 
     contracts_path = docs_dir / "contracts.json"
     contracts_path.write_text(
@@ -912,14 +906,14 @@ def write_contract_docs(
         "- HTTP 协议：[官方调用说明](https://tushare.pro/document/1?doc_id=40)",
         "- 权限规则：[官方权限说明](https://tushare.pro/document/1?doc_id=108)",
         "- 机器可读契约：[contracts.json](contracts.json)",
-        "- 原始审计证据：[CSV](../../reports/tushare_interface_matrix.csv) / [Markdown](../../reports/tushare_interface_matrix.md)",
+        "- 当前权限复核：[Markdown](../../reports/tushare_permission_recheck.md) / [JSON](../../reports/tushare_permission_recheck.json)",
         "",
         "权限来自真实 Token 的安全探测。保存、删除类接口只探测空参数，不会更改用户数据；"
         "它们仅做安全封装，不进入采集调度。`pro_bar` 是 SDK 组合接口，不支持 HTTP。",
         "",
         "## 完整接口列表",
         "",
-        "| HTTP | 接口名 | 功能 | Token权限 | claw-quant实现 | 官方详情 | 契约 | 实现代码 |",
+        "| HTTP | 接口名 | 功能 | Token权限 | claw-quant实现 | 官方详情 | 机器契约 | 实现代码 |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for contract in contracts:
@@ -937,11 +931,11 @@ def write_contract_docs(
             else "SDK only"
         )
         lines.append(
-            f"| {_markdown_cell(http_label)} | [`{contract['api_name']}`](interfaces/{contract['api_name']}.md) | "
+            f"| {_markdown_cell(http_label)} | `{contract['api_name']}` | "
             f"{_markdown_cell(contract['description'] or contract['title'])} | "
             f"{_markdown_cell(contract['permission']['status'])} | "
             f"{_markdown_cell(contract['implementation']['status'])} | {official} | "
-            f"[输入/输出/示例](interfaces/{contract['api_name']}.md) | {code} |"
+            f"[JSON](contracts.json) | {code} |"
         )
     index_path = docs_dir / "README.md"
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

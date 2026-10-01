@@ -35,10 +35,37 @@ class FakeDataService:
             ]
         }
 
+    def sector_members(self, provider, sector_code, **_kwargs):
+        return {
+            "data": [
+                {"ts_code": "000001.SZ", "name": "平安银行"},
+                {"ts_code": "600000.SH", "name": "浦发银行"},
+            ],
+            "meta": {
+                "provider": provider,
+                "sector_code": sector_code,
+                "sector_name": "银行",
+                "membership_effective_date": date(2026, 9, 18),
+                "has_more": False,
+            },
+        }
+
 
 class FakeRepository:
     def backfill_statuses(self):
         return {"analyst": {"status": "running", "active": 2}}
+
+    def latest_stock_valuations(self, ts_codes, **_kwargs):
+        return {
+            ts_code: {
+                "ts_code": ts_code,
+                "trade_date": date(2026, 9, 18),
+                "pe_ttm": Decimal("10"),
+                "pb": Decimal("1"),
+                "ps_ttm": Decimal("2"),
+            }
+            for ts_code in ts_codes
+        }
 
     def market_breadth(self, _as_of):
         return {
@@ -55,6 +82,88 @@ class FakeRepository:
             "limit_down": 2,
         }
 
+    def macro_series(self, **_kwargs):
+        return {
+            "gdp": [
+                {"period": "2026Q2", "observation_date": date(2026, 6, 30), "gdp_yoy": Decimal("5.2")},
+                {"period": "2026Q1", "observation_date": date(2026, 3, 31), "gdp_yoy": Decimal("5.0")},
+            ],
+            "pmi": [
+                {"period": "202608", "observation_date": date(2026, 8, 31), "manufacturing": Decimal("50.4")},
+                {"period": "202607", "observation_date": date(2026, 7, 31), "manufacturing": Decimal("49.9")},
+            ],
+            "cpi": [
+                {"period": "202608", "observation_date": date(2026, 8, 31), "yoy": Decimal("1.1")},
+                {"period": "202607", "observation_date": date(2026, 7, 31), "yoy": Decimal("0.8")},
+            ],
+            "ppi": [
+                {"period": "202608", "observation_date": date(2026, 8, 31), "yoy": Decimal("0.2")},
+                {"period": "202607", "observation_date": date(2026, 7, 31), "yoy": Decimal("-0.2")},
+            ],
+            "money_supply": [
+                {"period": "202608", "observation_date": date(2026, 8, 31), "m1_yoy": Decimal("6.0"), "m2_yoy": Decimal("8.5")},
+                {"period": "202607", "observation_date": date(2026, 7, 31), "m1_yoy": Decimal("5.5"), "m2_yoy": Decimal("8.2")},
+            ],
+            "social_financing": [
+                {"period": "202608", "observation_date": date(2026, 8, 31), "stk_endval": Decimal("500")},
+                {"period": "202607", "observation_date": date(2026, 7, 31), "stk_endval": Decimal("490")},
+            ],
+            "shibor": [
+                {"observation_date": date(2026, 9, 18), "three_month": Decimal("1.5")},
+                {"observation_date": date(2026, 9, 17), "three_month": Decimal("1.6")},
+            ],
+            "lpr": [
+                {"observation_date": date(2026, 8, 20), "one_year": Decimal("3.0"), "five_year": Decimal("3.5")},
+                {"observation_date": date(2026, 7, 20), "one_year": Decimal("3.0"), "five_year": Decimal("3.5")},
+            ],
+        }
+
+    def industry_fundamentals(self, _member_codes, **_kwargs):
+        return {
+            "report_period": date(2026, 6, 30),
+            "member_count": 2,
+            "financial_covered": 2,
+            "prior_financial_covered": 2,
+            "revenue": Decimal("220"),
+            "prior_revenue": Decimal("200"),
+            "net_income": Decimal("33"),
+            "prior_net_income": Decimal("30"),
+            "operating_cashflow": Decimal("40"),
+            "free_cashflow": Decimal("35"),
+            "median_gross_margin": Decimal("42"),
+            "median_net_margin": Decimal("15"),
+            "median_roe": Decimal("10"),
+            "median_roic": Decimal("8"),
+            "median_debt_to_assets": Decimal("60"),
+            "valuation_covered": 2,
+            "valuation_date": date(2026, 9, 18),
+            "total_market_value": Decimal("1000"),
+            "median_pe_ttm": Decimal("12"),
+            "median_pb": Decimal("1.2"),
+            "median_ps_ttm": Decimal("2"),
+            "median_dv_ttm": Decimal("3"),
+        }
+
+    def industry_contributors(self, *_args, **_kwargs):
+        return [{
+            "ts_code": "000001.SZ", "name": "平安银行",
+            "revenue": Decimal("120"), "revenue_share_pct": Decimal("54.5"),
+        }]
+
+    def industry_breadth(self, _member_codes, **_kwargs):
+        return {
+            "trade_date": date(2026, 9, 18),
+            "observed_members": 2,
+            "advancing": 1,
+            "declining": 1,
+            "unchanged": 0,
+            "average_return_pct": Decimal("0.5"),
+            "median_return_pct": Decimal("0.5"),
+            "above_ma20": 2,
+            "above_ma60": 1,
+            "amount": Decimal("1000"),
+        }
+
     def sector_rotation(self, *_args, **_kwargs):
         return [
             {
@@ -68,6 +177,44 @@ class FakeRepository:
                 "period_return_pct": Decimal("-3.1"),
             },
         ]
+
+    def etf_share_flows(self, *_args, **_kwargs):
+        return [
+            {
+                "ts_code": "510500.SH", "etf_name": "中证500ETF",
+                "index_code": "000905.SH", "index_name": "中证500",
+                "mgr_name": "南方基金", "etf_type": "纯境内",
+                "fund_type": "股票型", "invest_type": "被动指数型",
+                "baseline_date": date(2026, 9, 11),
+                "latest_date": date(2026, 9, 18), "observations": 6,
+                "baseline_share": Decimal("500000"),
+                "latest_share": Decimal("550000"),
+                "latest_size": Decimal("4400000"), "unit_nav": Decimal("8"),
+                "estimated_flow_yi": Decimal("40"),
+            },
+            {
+                "ts_code": "588000.SH", "etf_name": "科创50ETF",
+                "index_code": "000688.SH", "index_name": "科创50",
+                "mgr_name": "华夏基金", "etf_type": "纯境内",
+                "fund_type": "股票型", "invest_type": "被动指数型",
+                "baseline_date": date(2026, 9, 11),
+                "latest_date": date(2026, 9, 18), "observations": 6,
+                "baseline_share": Decimal("5600000"),
+                "latest_share": Decimal("5500000"),
+                "latest_size": Decimal("9600000"), "unit_nav": Decimal("1.75"),
+                "estimated_flow_yi": Decimal("-17.5"),
+            },
+        ]
+
+    def index_period_returns(self, *_args, **_kwargs):
+        return {
+            "000905.SH": {
+                "baseline_close": Decimal("7580"), "latest_close": Decimal("7800")
+            },
+            "000688.SH": {
+                "baseline_close": Decimal("1553"), "latest_close": Decimal("1653")
+            },
+        }
 
 
 def _daily_rows(ts_code, count=300, start=date(2025, 7, 1), base=10):
@@ -418,19 +565,126 @@ def test_market_and_sector_derivations_are_evidence_carrying():
     assert rotation["meta"]["quality"]["status"] == "ready"
 
 
+def test_macro_regime_and_theme_preserve_observation_vintage_warning():
+    service = ResearchService(FakeDataService({}), FakeRepository())
+
+    regime = service.macro_regime(as_of=date(2026, 9, 18))
+    growth = service.macro_theme(
+        "growth", periods=12, as_of=date(2026, 9, 18)
+    )
+
+    assert regime["data"]["quadrant"] == "reflation"
+    assert regime["data"]["growth"]["direction"] == "improving"
+    assert regime["data"]["liquidity"]["direction"] == "easing"
+    assert regime["meta"]["quality"]["status"] == "ready"
+    assert set(growth["data"]) == {"gdp", "pmi"}
+    assert "vintage" in growth["meta"]["quality"]["warnings"][1]
+
+
+def test_industry_fundamentals_and_breadth_use_member_coverage():
+    service = ResearchService(FakeDataService({}), FakeRepository())
+
+    fundamentals = service.industry_fundamentals(
+        "ths", "884229.TI", as_of=date(2026, 9, 18)
+    )
+    breadth = service.industry_breadth(
+        "ths", "884229.TI", as_of=date(2026, 9, 18)
+    )
+
+    assert fundamentals["data"]["profile"]["sector_name"] == "银行"
+    assert fundamentals["data"]["financials"]["revenue_yoy_pct"] == 10.0
+    assert fundamentals["data"]["coverage"]["financial_coverage_pct"] == 100.0
+    assert fundamentals["meta"]["quality"]["status"] == "ready"
+    assert breadth["data"]["advance_decline_ratio"] == 1.0
+    assert breadth["data"]["above_ma20_share_pct"] == 100.0
+
+
+def test_etf_flow_and_state_team_views_keep_identity_evidence_explicit():
+    service = ResearchService(FakeDataService({}), FakeRepository())
+
+    flows = service.etf_flows(
+        lookback_observations=5, as_of=date(2026, 9, 18)
+    )
+    signals = service.state_team_etf_signals(
+        lookback_observations=5,
+        minimum_flow_yi=10,
+        as_of=date(2026, 9, 18),
+    )
+
+    assert flows["data"]["exposures"][0]["index_name"] == "中证500"
+    assert flows["data"]["exposures"][0]["estimated_flow_yi"] == 40.0
+    assert flows["data"]["rotation_pairs"][0] == {
+        "rank": 1,
+        "source_exposure": "科创50",
+        "source_outflow_yi": 17.5,
+        "destination_exposure": "中证500",
+        "destination_inflow_yi": 40.0,
+        "matched_amount_yi": 17.5,
+        "interpretation": "cross-sectional coincidence; not a traced transfer",
+    }
+    assert signals["data"]["confirmed"] == []
+    assert all(
+        item["evidence_level"] == "market_flow_only"
+        and item["state_team_confirmed"] is False
+        for item in signals["data"]["signals"]
+    )
+    assert signals["meta"]["attribution_status"] == (
+        "unverified_without_holder_disclosures"
+    )
+
+
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 11
-    assert catalog["summary"]["derived_endpoints"] == 9
-    assert catalog["summary"]["backfill_workstreams"] == 6
-    assert catalog["summary"]["new_source_todos"] == 3
-    assert catalog["summary"]["baseline_techniques"] == 59
-    assert catalog["summary"]["currently_served"] == 51
+    assert catalog["summary"]["agent_endpoints"] == 18
+    assert catalog["summary"]["derived_endpoints"] == 15
+    assert catalog["summary"]["backfill_workstreams"] == 7
+    assert catalog["summary"]["new_source_todos"] == 6
+    assert catalog["summary"]["baseline_techniques"] == 72
+    assert catalog["summary"]["currently_served"] == 61
     assert catalog["summary"]["planned_from_existing_sources"] == 3
-    assert catalog["summary"]["external_or_constrained"] == 5
-    assert len(catalog["techniques"]["served"]) == 51
-    assert len(catalog["techniques"]["gaps"]) == 8
+    assert catalog["summary"]["external_or_constrained"] == 8
+    assert len(catalog["techniques"]["served"]) == 61
+    assert len(catalog["techniques"]["gaps"]) == 11
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"
     assert analyst["active"] == 2
+
+
+def test_valuation_batches_peer_market_rows_through_repository():
+    datasets = {
+        "stock_basic": [{"ts_code": "000001.SZ", "name": "平安银行"}],
+        "stock_daily_basic": [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": date(2026, 9, 18),
+                "pe_ttm": Decimal("6"),
+                "pb": Decimal("0.7"),
+                "ps_ttm": Decimal("1.1"),
+                "dv_ttm": Decimal("4"),
+            }
+        ],
+        "financial_indicator": [
+            {
+                "ts_code": "000001.SZ",
+                "end_date": date(2026, 6, 30),
+                "fcff": Decimal("100"),
+                "fcfe": Decimal("120"),
+                "roe": Decimal("10"),
+                "roic": Decimal("8"),
+            }
+        ],
+    }
+
+    result = ResearchService(FakeDataService(datasets), FakeRepository()).valuation(
+        "000001.SZ", peer_limit=1, as_of=date(2026, 9, 18)
+    )
+
+    assert result["data"]["peers"]["items"] == [{
+        "ts_code": "000002.SZ",
+        "shared_sector_count": 2,
+        "trade_date": date(2026, 9, 18),
+        "pe_ttm": 10.0,
+        "pb": 1.0,
+        "ps_ttm": 2.0,
+    }]

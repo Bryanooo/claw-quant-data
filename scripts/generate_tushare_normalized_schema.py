@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the immutable SQL migration and per-table normalization docs."""
+"""Generate the immutable SQL migration and consolidated normalization contract."""
 
 from __future__ import annotations
 
@@ -124,17 +124,19 @@ def render_index() -> str:
     lines = [
         "# Tushare 通用接口标准化表",
         "",
-        "本目录由接口契约生成。每个表均保留原始记录哈希、采集时间、契约版本和契约外字段。",
+        "本目录由接口契约生成。完整字段、身份和类型契约统一保存在",
+        "[contracts.json](contracts.json)，不再为每张表复制一份 Markdown。每个表均保留原始记录哈希、",
+        "采集时间、契约版本和契约外字段。",
         "原始 JSON 仍保存在 `tushare_raw_record`，标准化失败记录进入",
         "`sys_tushare_normalization_error`，字段漂移进入 `sys_tushare_schema_drift`。",
         "",
-        "| 接口 | PostgreSQL 表 | 字段数 | 主日期字段 | 文档 |",
-        "|---|---|---:|---|---|",
+        "| 接口 | PostgreSQL 表 | 字段数 | 主日期字段 |",
+        "|---|---|---:|---|",
     ]
     for contract in NORMALIZATION_CONTRACTS.list():
         lines.append(
             f"| `{contract.api_name}` | `{contract.table_name}` | {len(contract.fields)} | "
-            f"`{contract.date_column or '-'}` | [{contract.api_name}.md]({contract.api_name}.md) |"
+            f"`{contract.date_column or '-'}` |"
         )
     return "\n".join(lines) + "\n"
 
@@ -148,6 +150,7 @@ def render_doc(contract) -> str:
         f"- 契约版本：`{contract.schema_version}`",
         f"- 技术主键：`_record_hash`（原始 payload SHA-256）",
         f"- 主日期字段：`{contract.date_column or '无'}`",
+        f"- 可用日期字段：`{contract.availability_column or '无'}`",
         f"- 必填身份字段：`{', '.join(contract.identity_fields) or '无'}`",
         f"- 业务身份字段：`{', '.join(contract.business_identity_fields) or '未配置'}`",
         f"- 业务身份可信度：`{contract.identity_confidence}`",
@@ -212,7 +215,7 @@ def update_interface_doc(contract) -> None:
 
 该接口采用两阶段持久化：上游响应先无损写入 `tushare_raw_record`，随后按契约转换到
 强类型标准表 `{contract.table_name}`。标准表字段、类型、日期列、系统血缘字段和
-稳定性规则见[标准化表契约](../tables/{contract.api_name}.md)。转换失败记录进入
+稳定性规则见[统一标准化表契约](../tables/contracts.json)。转换失败记录进入
 `sys_tushare_normalization_error`，契约外字段保存在 `_extra_payload` 并登记到
 `sys_tushare_schema_drift`；原始响应始终可用于修复后重放。
 """
@@ -236,16 +239,13 @@ def main() -> None:
     (docs_dir / "README.md").write_text(render_index(), encoding="utf-8")
     contracts_payload = []
     for contract in NORMALIZATION_CONTRACTS.list():
-        (docs_dir / f"{contract.api_name}.md").write_text(
-            render_doc(contract), encoding="utf-8"
-        )
-        update_interface_doc(contract)
         contracts_payload.append(
             {
                 "api_name": contract.api_name,
                 "table_name": contract.table_name,
                 "schema_version": contract.schema_version,
                 "date_column": contract.date_column,
+                "availability_column": contract.availability_column,
                 "identity_fields": list(contract.identity_fields),
                 "business_identity_fields": list(contract.business_identity_fields),
                 "identity_confidence": contract.identity_confidence,
@@ -274,7 +274,7 @@ def main() -> None:
         + "\n",
         encoding="utf-8",
     )
-    print(f"generated {len(contracts_payload)} tables and docs")
+    print(f"generated consolidated contracts for {len(contracts_payload)} tables")
 
 
 if __name__ == "__main__":

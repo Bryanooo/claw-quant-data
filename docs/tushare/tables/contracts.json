@@ -6,6 +6,7 @@
       "table_name": "tushare_norm_adj_factor",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -42,6 +43,7 @@
       "table_name": "tushare_norm_bak_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -246,6 +248,7 @@
       "table_name": "tushare_norm_bc_bestotcqt",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -330,6 +333,7 @@
       "table_name": "tushare_norm_bc_otcqt",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -428,6 +432,7 @@
       "table_name": "tushare_norm_bond_blk",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -482,6 +487,7 @@
       "table_name": "tushare_norm_bond_blk_detail",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -548,6 +554,7 @@
       "table_name": "tushare_norm_cb_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -792,6 +799,7 @@
       "table_name": "tushare_norm_cb_call",
       "schema_version": 1,
       "date_column": "ann_date",
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -874,6 +882,7 @@
       "table_name": "tushare_norm_cb_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -982,6 +991,7 @@
       "table_name": "tushare_norm_cb_factor_pro",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -1534,6 +1544,7 @@
       "table_name": "tushare_norm_cb_issue",
       "schema_version": 1,
       "date_column": "ann_date",
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -1760,6 +1771,7 @@
       "table_name": "tushare_norm_cb_rate",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -1808,6 +1820,7 @@
       "table_name": "tushare_norm_cb_rating",
       "schema_version": 1,
       "date_column": "ann_date",
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -1875,6 +1888,7 @@
       "table_name": "tushare_norm_cb_share",
       "schema_version": 1,
       "date_column": "end_date",
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -1981,6 +1995,7 @@
       "table_name": "tushare_norm_ci_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -2065,6 +2080,7 @@
       "table_name": "tushare_norm_ci_index_member",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -2147,6 +2163,7 @@
       "table_name": "tushare_norm_cn_cpi",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "month"
       ],
@@ -2241,6 +2258,7 @@
       "table_name": "tushare_norm_cn_gdp",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "quarter"
       ],
@@ -2311,6 +2329,7 @@
       "table_name": "tushare_norm_cn_m",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "month"
       ],
@@ -2387,6 +2406,7 @@
       "table_name": "tushare_norm_cn_pmi",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "month"
       ],
@@ -2763,6 +2783,7 @@
       "table_name": "tushare_norm_cn_ppi",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "month"
       ],
@@ -2965,6 +2986,7 @@
       "table_name": "tushare_norm_cn_schedule",
       "schema_version": 1,
       "date_column": "publish_date",
+      "availability_column": null,
       "identity_fields": [
         "month"
       ],
@@ -3013,6 +3035,7 @@
       "table_name": "tushare_norm_daily_basic",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3145,6 +3168,7 @@
       "table_name": "tushare_norm_daily_info",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3247,14 +3271,22 @@
       "table_name": "tushare_norm_eco_cal",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
-        "date"
+        "date",
+        "currency",
+        "country",
+        "event"
       ],
       "business_identity_fields": [
-        "date"
+        "date",
+        "time",
+        "currency",
+        "country",
+        "event"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_eco_cal",
       "fields": [
         {
           "name": "date",
@@ -3311,6 +3343,7 @@
       "table_name": "tushare_norm_etf_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -3411,6 +3444,7 @@
       "table_name": "tushare_norm_etf_index",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -3475,6 +3509,7 @@
       "table_name": "tushare_norm_etf_sh_cons",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3554,6 +3589,7 @@
       "table_name": "tushare_norm_etf_share_size",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3620,6 +3656,7 @@
       "table_name": "tushare_norm_etf_sz_cons",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3705,16 +3742,19 @@
       "table_name": "tushare_norm_factor_value",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
-        "ts_code"
+        "ts_code",
+        "factor_name"
       ],
       "business_identity_fields": [
         "trade_date",
-        "ts_code"
+        "ts_code",
+        "factor_name"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_factor_value",
       "fields": [
         {
           "name": "factor_name",
@@ -3746,15 +3786,18 @@
       "api_name": "fina_audit",
       "table_name": "tushare_norm_fina_audit",
       "schema_version": 1,
-      "date_column": "ann_date",
+      "date_column": "end_date",
+      "availability_column": "ann_date",
       "identity_fields": [
-        "ts_code"
+        "ts_code",
+        "end_date"
       ],
       "business_identity_fields": [
-        "ts_code"
+        "ts_code",
+        "end_date"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_fina_audit",
       "fields": [
         {
           "name": "ts_code",
@@ -3805,6 +3848,7 @@
       "table_name": "tushare_norm_ft_limit",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3871,6 +3915,7 @@
       "table_name": "tushare_norm_fund_adj",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -3907,6 +3952,7 @@
       "table_name": "tushare_norm_fund_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -4073,6 +4119,7 @@
       "table_name": "tushare_norm_fund_company",
       "schema_version": 1,
       "date_column": "end_date",
+      "availability_column": null,
       "identity_fields": [
         "name"
       ],
@@ -4197,6 +4244,7 @@
       "table_name": "tushare_norm_fund_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -4281,6 +4329,7 @@
       "table_name": "tushare_norm_fund_div",
       "schema_version": 1,
       "date_column": "ann_date",
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -4393,6 +4442,7 @@
       "table_name": "tushare_norm_fund_factor_pro",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -4950,7 +5000,8 @@
       "api_name": "fund_manager",
       "table_name": "tushare_norm_fund_manager",
       "schema_version": 1,
-      "date_column": "ann_date",
+      "date_column": "begin_date",
+      "availability_column": "ann_date",
       "identity_fields": [
         "ts_code"
       ],
@@ -5028,7 +5079,8 @@
       "api_name": "fund_nav",
       "table_name": "tushare_norm_fund_nav",
       "schema_version": 1,
-      "date_column": "ann_date",
+      "date_column": "nav_date",
+      "availability_column": "ann_date",
       "identity_fields": [
         "nav_date",
         "ts_code"
@@ -5037,8 +5089,8 @@
         "nav_date",
         "ts_code"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_fund_nav",
       "fields": [
         {
           "name": "ts_code",
@@ -5100,15 +5152,20 @@
       "api_name": "fund_portfolio",
       "table_name": "tushare_norm_fund_portfolio",
       "schema_version": 1,
-      "date_column": "ann_date",
+      "date_column": "end_date",
+      "availability_column": "ann_date",
       "identity_fields": [
-        "ts_code"
+        "ts_code",
+        "end_date",
+        "symbol"
       ],
       "business_identity_fields": [
-        "ts_code"
+        "ts_code",
+        "end_date",
+        "symbol"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_fund_portfolio",
       "fields": [
         {
           "name": "ts_code",
@@ -5165,6 +5222,7 @@
       "table_name": "tushare_norm_fund_share",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -5201,6 +5259,7 @@
       "table_name": "tushare_norm_fut_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -5313,6 +5372,7 @@
       "table_name": "tushare_norm_fut_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -5427,6 +5487,7 @@
       "table_name": "tushare_norm_fut_holding",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "symbol"
@@ -5506,6 +5567,7 @@
       "table_name": "tushare_norm_fut_index_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -5590,6 +5652,7 @@
       "table_name": "tushare_norm_fut_mapping",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -5626,6 +5689,7 @@
       "table_name": "tushare_norm_fut_settle",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -5716,6 +5780,7 @@
       "table_name": "tushare_norm_fut_trade_cal",
       "schema_version": 1,
       "date_column": "cal_date",
+      "availability_column": null,
       "identity_fields": [
         "cal_date"
       ],
@@ -5756,6 +5821,7 @@
       "table_name": "tushare_norm_fut_weekly_detail",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "week"
       ],
@@ -5876,6 +5942,7 @@
       "table_name": "tushare_norm_fut_weekly_monthly",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -6002,6 +6069,7 @@
       "table_name": "tushare_norm_fut_wsr",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "symbol"
@@ -6127,6 +6195,7 @@
       "table_name": "tushare_norm_gz_index",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -6185,6 +6254,7 @@
       "table_name": "tushare_norm_hibor",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -6255,6 +6325,7 @@
       "table_name": "tushare_norm_hk_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -6343,6 +6414,7 @@
       "table_name": "tushare_norm_hk_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -6427,6 +6499,7 @@
       "table_name": "tushare_norm_hk_tradecal",
       "schema_version": 1,
       "date_column": "cal_date",
+      "availability_column": null,
       "identity_fields": [
         "cal_date"
       ],
@@ -6461,6 +6534,7 @@
       "table_name": "tushare_norm_idx_anns",
       "schema_version": 1,
       "date_column": "ann_date",
+      "availability_column": null,
       "identity_fields": [
         "title"
       ],
@@ -6507,6 +6581,7 @@
       "table_name": "tushare_norm_idx_factor_pro",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -7059,6 +7134,7 @@
       "table_name": "tushare_norm_index_classify",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "index_code"
       ],
@@ -7117,6 +7193,7 @@
       "table_name": "tushare_norm_index_member_all",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -7199,16 +7276,19 @@
       "table_name": "tushare_norm_index_weight",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
-        "index_code"
+        "index_code",
+        "con_code"
       ],
       "business_identity_fields": [
         "trade_date",
-        "index_code"
+        "index_code",
+        "con_code"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_index_weight",
       "fields": [
         {
           "name": "index_code",
@@ -7241,6 +7321,7 @@
       "table_name": "tushare_norm_libor",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -7311,6 +7392,7 @@
       "table_name": "tushare_norm_limit_list_ths",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -7473,14 +7555,19 @@
       "table_name": "tushare_norm_major_news",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
+        "src",
+        "pub_time",
         "title"
       ],
       "business_identity_fields": [
+        "src",
+        "pub_time",
         "title"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_major_news",
       "fields": [
         {
           "name": "title",
@@ -7513,6 +7600,7 @@
       "table_name": "tushare_norm_mkt_idx_bmk",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -7577,6 +7665,7 @@
       "table_name": "tushare_norm_opt_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -7713,6 +7802,7 @@
       "table_name": "tushare_norm_opt_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -7809,6 +7899,7 @@
       "table_name": "tushare_norm_p_get",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -7873,6 +7964,7 @@
       "table_name": "tushare_norm_p_list",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "id"
       ],
@@ -7919,6 +8011,7 @@
       "table_name": "tushare_norm_repo_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -8009,6 +8102,7 @@
       "table_name": "tushare_norm_rt_hk_k",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -8073,6 +8167,7 @@
       "table_name": "tushare_norm_sf_month",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "month"
       ],
@@ -8113,6 +8208,7 @@
       "table_name": "tushare_norm_shibor",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -8183,6 +8279,7 @@
       "table_name": "tushare_norm_shibor_lpr",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -8217,6 +8314,7 @@
       "table_name": "tushare_norm_shibor_quote",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -8342,6 +8440,7 @@
       "table_name": "tushare_norm_slb_len_mm",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -8402,6 +8501,7 @@
       "table_name": "tushare_norm_slb_sec",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -8462,16 +8562,19 @@
       "table_name": "tushare_norm_slb_sec_detail",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
-        "ts_code"
+        "ts_code",
+        "tenor"
       ],
       "business_identity_fields": [
         "trade_date",
-        "ts_code"
+        "ts_code",
+        "tenor"
       ],
-      "identity_confidence": "heuristic",
-      "current_view": null,
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_slb_sec_detail",
       "fields": [
         {
           "name": "trade_date",
@@ -8516,6 +8619,7 @@
       "table_name": "tushare_norm_stk_account",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -8562,6 +8666,7 @@
       "table_name": "tushare_norm_stk_factor",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -8790,6 +8895,7 @@
       "table_name": "tushare_norm_stk_mins",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -8854,6 +8960,7 @@
       "table_name": "tushare_norm_stk_week_month_adj",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -8998,6 +9105,7 @@
       "table_name": "tushare_norm_sw_daily",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -9106,6 +9214,7 @@
       "table_name": "tushare_norm_sz_daily_info",
       "schema_version": 1,
       "date_column": "trade_date",
+      "availability_column": null,
       "identity_fields": [
         "trade_date",
         "ts_code"
@@ -9178,6 +9287,7 @@
       "table_name": "tushare_norm_top10_cb_holders",
       "schema_version": 1,
       "date_column": "end_date",
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -9230,6 +9340,7 @@
       "table_name": "tushare_norm_us_basic",
       "schema_version": 1,
       "date_column": null,
+      "availability_column": null,
       "identity_fields": [
         "ts_code"
       ],
@@ -9282,6 +9393,7 @@
       "table_name": "tushare_norm_us_tbr",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -9376,6 +9488,7 @@
       "table_name": "tushare_norm_us_tltr",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -9416,6 +9529,7 @@
       "table_name": "tushare_norm_us_tradecal",
       "schema_version": 1,
       "date_column": "cal_date",
+      "availability_column": null,
       "identity_fields": [
         "cal_date"
       ],
@@ -9450,6 +9564,7 @@
       "table_name": "tushare_norm_us_trltr",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -9478,6 +9593,7 @@
       "table_name": "tushare_norm_us_trycr",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -9530,6 +9646,7 @@
       "table_name": "tushare_norm_us_tycr",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],
@@ -9630,6 +9747,7 @@
       "table_name": "tushare_norm_wz_index",
       "schema_version": 1,
       "date_column": "date",
+      "availability_column": null,
       "identity_fields": [
         "date"
       ],

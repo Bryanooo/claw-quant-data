@@ -41,7 +41,7 @@ def discover_collector_classes() -> tuple[type[BaseCollector], ...]:
     module_names = sorted(
         ".".join((collectors.__name__, *path.relative_to(package_root).with_suffix("").parts))
         for path in package_root.rglob("*.py")
-        if path.name != "__init__.py"
+        if path.name not in {"__init__.py", "scheduler.py"}
     )
     for module_name in module_names:
         module = importlib.import_module(module_name)

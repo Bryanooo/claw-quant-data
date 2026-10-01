@@ -64,6 +64,7 @@ def submit_coverage_audits(
         start_date=request.start_date,
         end_date=request.end_date,
         idempotency_key=idempotency_key,
+        include_unscheduled=request.all_datasets,
     )
     if result["created"] == 0:
         response.status_code = status.HTTP_200_OK

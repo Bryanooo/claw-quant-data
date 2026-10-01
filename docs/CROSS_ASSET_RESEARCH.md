@@ -37,8 +37,9 @@ Ichimoku、Donchian、Supertrend、StochRSI 和 CMF。最后一个实时 ZigZag 
 | 黄金9999 `Au99.99` | 2016-01-04 至 2026-09-18 | 2,604 | 年度分片补采后日/周/月可用 |
 
 26 个补采分片全部 `success/complete`，没有通过关闭完整性保护绕过。`full` 初始化计划
-v6 已将 `adj_factor`、`fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` 纳入逐交易日历史
-计划，后续重装不会再次只留下最近几个月或缺失股票全历史复权因子。
+v7 已将 `adj_factor`、`fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` 和
+`etf_share_size` 纳入逐交易日历史计划，后续重装不会再次只留下最近几个月、缺失
+股票全历史复权因子或 ETF 份额历史。
 
 ## 能力边界
 
@@ -50,4 +51,4 @@ v6 已将 `adj_factor`、`fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` �
   USD/CNH 历史；当前接口只对国内现货本身给出技术结论。
 
 Hibro Node 部署包见 `deploy/hibro/agents/claw-quant-research`。该包以不可变 Revision
-承载研究 Agent 与五个只读 Skill，不包含 Token、数据库凭据或管理接口。
+承载研究 Agent 与八个只读 Skill，不包含 Token、数据库凭据或管理接口。

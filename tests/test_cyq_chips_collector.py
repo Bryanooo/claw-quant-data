@@ -84,6 +84,25 @@ def test_cyq_chips_keeps_single_verified_window():
     assert collector.partition_completion_evidence()["leaf_scopes"] == 1
 
 
+def test_cyq_chips_bounded_provider_absence_is_verified_empty():
+    class FakePro:
+        def cyq_chips(self, **_params):
+            raise RuntimeError("指定数据不存在，请确认参数！")
+
+    collector = object.__new__(CyqChipsCollector)
+    collector.pro = FakePro()
+    frame = collector.fetch(
+        ts_code="000005.SZ",
+        start_date="20180101",
+        end_date="20180131",
+    )
+
+    assert frame.empty
+    proof = collector.partition_completion_evidence()
+    assert proof["verified"] is True
+    assert proof["scopes"][0]["provider_verified_empty"] is True
+
+
 def test_cyq_chips_rejects_a_capped_single_day():
     class FakePro:
         def cyq_chips(self, **_params):

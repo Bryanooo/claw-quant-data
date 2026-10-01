@@ -16,6 +16,12 @@ x-app-service: &app-service
     TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS: ${TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS:-0.5}
     TUSHARE_CONNECT_TIMEOUT_SECONDS: ${TUSHARE_CONNECT_TIMEOUT_SECONDS:-5}
     TUSHARE_READ_TIMEOUT_SECONDS: ${TUSHARE_READ_TIMEOUT_SECONDS:-60}
+    TUSHARE_RAW_RECORD_CAPTURE_MODE: ${TUSHARE_RAW_RECORD_CAPTURE_MODE:-anomalies_only}
+    FINANCIAL_DATA_API_KEY: ${FINANCIAL_DATA_API_KEY:-}
+    FINANCIAL_DATA_BASE_URL: ${FINANCIAL_DATA_BASE_URL:-https://dfdatamcpnexus-prod.antgroup-inc.cn/api/v1/common_query}
+    FINANCIAL_DATA_API_VERSION: ${FINANCIAL_DATA_API_VERSION:-1.6.0}
+    FINANCIAL_DATA_CONNECT_TIMEOUT_SECONDS: ${FINANCIAL_DATA_CONNECT_TIMEOUT_SECONDS:-20}
+    FINANCIAL_DATA_READ_TIMEOUT_SECONDS: ${FINANCIAL_DATA_READ_TIMEOUT_SECONDS:-300}
     APP_REVISION: ${APP_REVISION:-0.1.0}
     NOTIFIER_TYPE: ${NOTIFIER_TYPE:-log}
     DINGTALK_USER_ID: ${DINGTALK_USER_ID:-}
@@ -30,6 +36,8 @@ x-app-service: &app-service
     JOB_RECLAIM_INTERVAL_SECONDS: ${JOB_RECLAIM_INTERVAL_SECONDS:-60}
     JOB_NETWORK_RETRY_BASE_SECONDS: ${JOB_NETWORK_RETRY_BASE_SECONDS:-60}
     JOB_NETWORK_RETRY_MAX_SECONDS: ${JOB_NETWORK_RETRY_MAX_SECONDS:-900}
+    HISTORY_COLLECTION_PAUSE_START_TIME: ${HISTORY_COLLECTION_PAUSE_START_TIME:-08:30}
+    HISTORY_COLLECTION_RESUME_TIME: ${HISTORY_COLLECTION_RESUME_TIME:-16:00}
     INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS: ${INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS:-300}
     INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS: ${INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS:-3}
     SCHEDULE_RECONCILE_LOOKBACK_DAYS: ${SCHEDULE_RECONCILE_LOOKBACK_DAYS:-8}
@@ -74,6 +82,9 @@ services:
       BACKUP_DIR: /backups
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-3}
+      BACKUP_EXCLUDE_TABLE_DATA: ${BACKUP_EXCLUDE_TABLE_DATA:-tushare_raw_record}
+      BACKUP_COMPRESSION: ${BACKUP_COMPRESSION:-zstd:1}
     volumes:
       - ./backups:/backups
       - ./scripts/backup_loop.sh:/scripts/backup_loop.sh:ro
@@ -82,7 +93,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "test -s /backups/.last-success && test $$(( $$(date +%s) - $$(cat /backups/.last-success) )) -lt $$(( $${BACKUP_INTERVAL_SECONDS} + 3600 ))"]
+      test: ["CMD-SHELL", "(test -s /backups/.last-success && test $$(( $$(date +%s) - $$(cat /backups/.last-success) )) -lt $$(( $${BACKUP_INTERVAL_SECONDS} + 3600 ))) || find /backups -maxdepth 1 -type f -name '*.partial' -mmin -10 -print -quit | grep -q ."]
       interval: 5m
       timeout: 10s
       retries: 3
@@ -92,7 +103,12 @@ services:
     image: claw-quant-data:app
     build: *app-build
     environment: *app-environment
-    command: ["python", "scripts/migrate.py"]
+    command:
+      - sh
+      - -c
+      - >-
+        python scripts/migrate.py &&
+        python scripts/bootstrap_orchestration_v2.py --apply-drafts --publish-ready
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +116,7 @@ services:
 
   scheduler:
     <<: *app-service
+    command: ["python", "-m", "collectors.scheduler"]
     healthcheck:
       test: ["CMD", "python", "scripts/check_service_health.py", "--component", "scheduler"]
       interval: 30s
@@ -107,63 +124,35 @@ services:
       retries: 3
       start_period: 20s
 
-  worker:
+  worker-v2-backfill:
     <<: *app-service
+    deploy:
+      replicas: ${V2_BACKFILL_WORKER_REPLICAS:-1}
     environment:
       <<: *app-environment
-      WORKER_COMPONENT: worker
-      WORKER_RESOURCE_CLASSES: ${ROUTINE_WORKER_RESOURCE_CLASSES:-scheduled,generic,reference,market,moneyflow,finance,catalog,default}
-    command:
-      - python
-      - -m
-      - service.collection_jobs.worker
+      V2_JOB_POLL_INTERVAL_SECONDS: ${V2_JOB_POLL_INTERVAL_SECONDS:-2}
+      V2_JOB_LEASE_SECONDS: ${V2_JOB_LEASE_SECONDS:-180}
+    command: ["python", "-m", "service.orchestration_v2.worker"]
     healthcheck:
-      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker"]
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-backfill", "--resource-class", "v2-backfill"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
 
-  worker-fanout:
+  worker-v2-routine:
     <<: *app-service
+    deploy:
+      replicas: ${V2_ROUTINE_WORKER_REPLICAS:-3}
     environment:
       <<: *app-environment
-      WORKER_COMPONENT: worker-fanout
-      WORKER_RESOURCE_CLASSES: ${FANOUT_WORKER_RESOURCE_CLASSES:-fanout}
-    command: ["python", "-m", "service.collection_jobs.worker"]
+      V2_JOB_POLL_INTERVAL_SECONDS: ${V2_JOB_POLL_INTERVAL_SECONDS:-2}
+      V2_JOB_LEASE_SECONDS: ${V2_JOB_LEASE_SECONDS:-180}
+      V2_JOB_RESOURCE_CLASSES: ${V2_ROUTINE_RESOURCE_CLASSES:-generic,reference,market,moneyflow,finance,catalog,default}
+      V2_WORKER_COMPONENT: worker-v2-routine
+    command: ["python", "-m", "service.orchestration_v2.worker"]
     healthcheck:
-      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-fanout"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-
-  worker-backfill:
-    <<: *app-service
-    environment:
-      <<: *app-environment
-      WORKER_COMPONENT: worker-backfill
-      WORKER_RESOURCE_CLASSES: ${BACKFILL_WORKER_RESOURCE_CLASSES:-initialization,backfill}
-    command: ["python", "-m", "service.collection_jobs.worker"]
-    healthcheck:
-      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-backfill"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-
-  worker-news:
-    <<: *app-service
-    environment:
-      <<: *app-environment
-      # Persist under the existing worker-backfill heartbeat enum. The monitor
-      # exposes this resource-isolated instance as the logical worker-news
-      # component, so deployments do not need a blocking ALTER TABLE.
-      WORKER_COMPONENT: worker-backfill
-      WORKER_RESOURCE_CLASSES: ${NEWS_WORKER_RESOURCE_CLASSES:-news-backfill}
-    command: ["python", "-m", "service.collection_jobs.worker"]
-    healthcheck:
-      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-backfill", "--resource-class", "news-backfill"]
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-routine", "--resource-class", "generic"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -208,7 +197,11 @@ services:
     build:
       context: .
       target: test
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      # Match the production-safe default. Individual archive tests explicitly
+      # opt into full row capture when that behavior is under test.
+      TUSHARE_RAW_RECORD_CAPTURE_MODE: anomalies_only
     command: ["python", "-m", "pytest", "-q"]
     depends_on:
       migrate:

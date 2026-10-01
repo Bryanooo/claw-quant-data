@@ -20,7 +20,7 @@ CollectorSpec + CollectorRequest
              ↓
        CollectorResult
              ↓
-   collection job + coverage audit
+   V2 task execution + coverage audit
 ```
 
 - `CollectorSpec` 静态声明 API、表、主键、分页、写入、空数据和资源类别。
@@ -51,7 +51,8 @@ PostgreSQL 集成测试会同时检查表注册、字段类型、主键、过滤
 
 字段转换失败不会污染标准表：失败行进入 `sys_tushare_normalization_error`；字段
 新增或缺失进入 `sys_tushare_schema_drift`；契约外字段仍保存在 `_extra_payload`。
-修复契约后可使用 `scripts/normalize_tushare_raw.py` 从原始层幂等重放。
+生产默认直接从内存响应规范化，异常时才归档逐行原文；修复契约后可使用
+`scripts/normalize_tushare_raw.py` 对异常归档或存量原始数据幂等重放。
 
 ## 性能与隔离
 
@@ -60,17 +61,22 @@ PostgreSQL 集成测试会同时检查表注册、字段类型、主键、过滤
 - HTTP transport 不做隐藏 POST 重试；每次重试都重新通过 Token 全局限流。
 - HTTP 使用独立的建连/读取超时（默认 5/60 秒），网络不可达会快速交回持久化
   队列；`index_daily` 与 `stk_limit` 使用实测可完整返回的 5000 行大页，减少分页请求。
-- 原始 JSONB 保留完整响应用于审计和重放，但不建立业务未使用的 payload GIN 索引；
-  对外查询走规范化表，避免原始层每次 UPSERT 承担无意义的索引写放大。
-- 任务保存 `priority` 与 `resource_class`。`priority` 只负责资源池内部排序，
+- 请求参数、状态、返回行数和响应哈希永久保留；生产默认仅在规范化、校验或业务落库
+  异常时保存逐行 JSONB。`TUSHARE_RAW_RECORD_CAPTURE_MODE=all` 仅用于短期排障，
+  `none` 则完全关闭逐行原文；三种模式都保留请求级证据。
+- 原始表不建立业务未使用的 payload GIN 或 collected_at 重复索引；对外查询走规范化
+  业务表，避免原始层每次 UPSERT 承担无意义的索引与热存储写放大。
+- V2 执行实例保存 `priority` 与 `resource_class`。`priority` 只负责资源池内部排序，
   `resource_class` 则由 PostgreSQL 领取事务强制过滤。
-- Docker 默认运行日常、周期扇出、初始化/回填三个互斥 Worker 池；已经开始的
-  长回填不会占用日常执行槽。需要扩容时可独立 `--scale` 某个无端口 Worker 服务。
+- Docker 默认只运行两个 V2 Worker 池：`worker-v2-routine` 领取日常及参考类实例，
+  `worker-v2-backfill` 领取初始化、历史补采和修复实例。已经开始的长回填不会占用
+  日常执行槽；需要扩容时可独立 `--scale` 历史 Worker。
 - 所有 Worker 仍共享数据库 Token 全局/接口级时间槽，并发执行不会绕过 Tushare
-  限流；任务租约、超时、完成证据和失败重试逻辑在三个池中完全一致。
+  限流；V2 租约、超时、完成证据和失败重试逻辑在各资源池中完全一致。
 - 数据库事务只包围队列状态、检查点或批量写入，不在远程 API 等待期间持有事务。
-- 历史扇出宇宙按活动的 `expected_for` 边界过滤股票、基金和可转债的上市/终止
-  日期，避免向当时尚未上市或已经终止的实体发起空请求；冻结后的宇宙和摘要仍持久化。
+- 上游必须按证券或市场拆分时，拆分只属于一个 V2 实例的 acquire 节点内部请求计划，
+  不再生成“扇出任务”或“叶任务”。请求宇宙按观察期过滤上市/终止日期，并随实例
+  冻结；分页、批次和断点都由节点内检查点恢复。
 - `fund_nav` 按最近一年自然日、`fund_portfolio` 按最新已披露报告期执行全市场
   offset 穷尽采集并持久化分页检查点；实测确认分页互不重复，避免按三万余只基金扇出；
   `stk_rewards` 按官方支持的多代码契约每 20 只一组。
@@ -92,6 +98,6 @@ PostgreSQL 集成测试会同时检查表注册、字段类型、主键、过滤
 docker compose exec api python scripts/report_tushare_data_presence.py
 ```
 
-输出位于 `reports/tushare_data_presence.json` 和
-`reports/tushare_data_presence.md`。报告只陈述正行数证据；合法空分区仍需结合任务
-的 `completion_status` 和覆盖审计判断，不能简单当成失败。
+输出位于 `reports/tushare_data_presence_latest.json` 和
+`reports/tushare_data_presence_latest.md`。报告只陈述正行数证据；合法空分区仍需结合任务
+的 V2 节点证据和覆盖审计判断，不能简单当成失败。

@@ -34,15 +34,12 @@ class InvestmentCalendarRepository:
     def economic_events(self, start_date: date, end_date: date) -> list[dict]:
         return self.database.fetch_all(
             """
-            SELECT DISTINCT ON (date, time, currency, country, event)
-                   date, time, currency, country, event,
+            SELECT date, time, currency, country, event,
                    value, pre_value, fore_value, _source_collected_at
-            FROM tushare_norm_eco_cal
+            FROM tushare_current_eco_cal
             WHERE date BETWEEN %s AND %s
               AND NULLIF(BTRIM(event), '') IS NOT NULL
-            ORDER BY date, time, currency, country, event,
-                     _source_collected_at DESC, _last_seen_at DESC,
-                     _record_hash DESC
+            ORDER BY date, time, currency, country, event
             """,
             (start_date, end_date),
         )
@@ -70,7 +67,7 @@ class InvestmentCalendarRepository:
             SELECT min(date) AS min_date, max(date) AS max_date,
                    max(_source_collected_at) AS last_collected_at,
                    count(*) AS physical_rows
-            FROM tushare_norm_eco_cal
+            FROM tushare_current_eco_cal
             """
         ) or {}
         futures = self.database.fetch_one(

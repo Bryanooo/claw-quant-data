@@ -1,7 +1,10 @@
 """Use cases shared by REST and the future MCP adapter."""
 
+import base64
+import binascii
 from datetime import date, datetime, timedelta, timezone
 from html import unescape
+import json
 from math import ceil
 import re
 from typing import Any
@@ -14,6 +17,10 @@ from service.data_service.models import (
     RecordNotFoundError,
 )
 from service.data_service.registry import DatasetRegistry
+from service.data_service.source_policy import (
+    dataset_fallback_routes,
+    dataset_fallback_status,
+)
 
 
 _SECTOR_PROVIDERS = {
@@ -64,6 +71,7 @@ class DataService:
 
     def describe_dataset(self, name: str) -> dict:
         dataset = self._registry.get(name)
+        fallback_routes = dataset_fallback_routes(dataset.name)
         return {
             **self._dataset_summary(dataset),
             "table": dataset.table,
@@ -74,9 +82,15 @@ class DataService:
             "business_identity_fields": list(dataset.business_identity_fields),
             "identity_confidence": dataset.identity_confidence,
             "allowed_filters": sorted(dataset.exact_filters),
+            "standard_filters": sorted(dataset.standard_filter_names),
+            "advanced_filters": sorted(
+                set(dataset.exact_filters) - set(dataset.standard_filter_names)
+            ),
             "date_column": dataset.date_column,
             "availability_column": dataset.availability_column,
             "max_page_size": dataset.max_page_size,
+            "max_offset": dataset.max_offset,
+            "fallback_endpoints": list(fallback_routes),
             "columns": self._repository.columns(dataset),
         }
 
@@ -92,15 +106,32 @@ class DataService:
         offset: int,
         include_total: bool,
         as_of: str | None = None,
+        filter_mode: str = "standard",
+        cursor: str | None = None,
     ) -> dict:
         dataset = self._registry.get(name)
-        self._validate_filters(dataset, exact_filters)
+        self._validate_filters(
+            dataset,
+            exact_filters,
+            filter_mode=filter_mode,
+            bounded=bool(date_value or start_date or end_date),
+        )
         if limit < 1 or limit > dataset.max_page_size:
             raise InvalidQueryError(
                 f"limit must be between 1 and {dataset.max_page_size}"
             )
-        if offset < 0:
-            raise InvalidQueryError("offset must be zero or greater")
+        if offset < 0 or offset > dataset.max_offset:
+            raise InvalidQueryError(
+                f"offset must be between 0 and {dataset.max_offset}; "
+                "use cursor pagination for deeper pages"
+            )
+        if cursor and offset:
+            raise InvalidQueryError("cursor and non-zero offset cannot be combined")
+        if cursor and include_total:
+            raise InvalidQueryError(
+                "cursor pagination does not support include_total; "
+                "request the total separately if needed"
+            )
         if not dataset.date_column and any((date_value, start_date, end_date)):
             raise InvalidQueryError(f"dataset {name} does not support date filters")
         if as_of and not dataset.availability_column:
@@ -112,6 +143,17 @@ class DataService:
         normalized_as_of = self._normalize_availability_date(dataset, as_of)
         if normalized_start and normalized_end and normalized_start > normalized_end:
             raise InvalidQueryError("start_date must not be later than end_date")
+        if (
+            cursor
+            and normalized_as_of is not None
+            and dataset.storage_semantics == "versioned_payload"
+            and dataset.identity_confidence == "contract_reviewed"
+        ):
+            raise InvalidQueryError(
+                "cursor pagination for point-in-time version projection is not "
+                "supported yet; use a bounded offset page"
+            )
+        cursor_values = self._decode_cursor(dataset, cursor) if cursor else None
 
         query = DatasetQuery(
             exact_filters=exact_filters,
@@ -119,27 +161,42 @@ class DataService:
             start_date=normalized_start,
             end_date=normalized_end,
             as_of=normalized_as_of,
-            limit=limit,
+            # Fetch one look-ahead row so has_more and next_cursor are exact
+            # without an expensive count query.
+            limit=limit + 1,
             offset=offset,
             include_total=include_total,
+            cursor_values=cursor_values,
         )
         rows = self._repository.records(dataset, query)
         total = self._repository.count(dataset, query) if include_total else None
+        has_lookahead = len(rows) > limit
+        rows = rows[:limit]
+        next_cursor = (
+            self._encode_cursor(dataset, rows[-1])
+            if has_lookahead and rows
+            else None
+        )
         return {
             "data": rows,
             "meta": {
                 "dataset": dataset.name,
                 "source": dataset.source,
+                "source_ids": list(dataset.source_ids),
+                "served_from": "local_db",
+                "read_strategy": "local_db_first",
+                "fallback_used": False,
                 "returned": len(rows),
             },
             "page": {
                 "limit": limit,
                 "offset": offset,
                 "total": total,
+                "next_cursor": next_cursor,
                 "has_more": (
                     offset + len(rows) < total
                     if total is not None
-                    else len(rows) == limit
+                    else has_lookahead
                 ),
             },
         }
@@ -1108,7 +1165,7 @@ class DataService:
         elif dataset.freshness_policy == "event_driven":
             # Event/disclosure tables do not promise one row per wall-clock
             # interval.  Their latest business date remains observable, while
-            # collection-job evidence determines whether polling is healthy.
+            # V2 execution evidence determines whether polling is healthy.
             status = "event_driven"
         elif dataset.freshness_policy == "quarterly_disclosure":
             latest_date = self._parse_stored_date(dataset, latest)
@@ -1154,11 +1211,17 @@ class DataService:
 
     @staticmethod
     def _dataset_summary(dataset: DatasetSpec) -> dict:
+        fallback_routes = dataset_fallback_routes(dataset.name)
         return {
             "name": dataset.name,
             "description": dataset.description,
             "category": dataset.category,
             "source": dataset.source,
+            "source_ids": list(dataset.source_ids),
+            "merge_policy": dataset.merge_policy,
+            "read_strategy": "local_db_first",
+            "fallback_source_ids": ["financial_data"] if fallback_routes else [],
+            "fallback_status": dataset_fallback_status(dataset.name),
             "date_column": dataset.date_column,
         }
 
@@ -1166,12 +1229,79 @@ class DataService:
     def _validate_filters(
         dataset: DatasetSpec,
         exact_filters: dict[str, str],
+        *,
+        filter_mode: str,
+        bounded: bool,
     ) -> None:
         unknown = sorted(set(exact_filters) - set(dataset.exact_filters))
         if unknown:
             raise InvalidQueryError(
                 f"unsupported filters for {dataset.name}: {', '.join(unknown)}"
             )
+        if filter_mode not in {"standard", "advanced"}:
+            raise InvalidQueryError("filter_mode must be standard or advanced")
+        advanced = sorted(
+            set(exact_filters) - set(dataset.standard_filter_names)
+        )
+        if advanced and filter_mode != "advanced":
+            raise InvalidQueryError(
+                f"advanced filters for {dataset.name} require "
+                f"filter_mode=advanced: {', '.join(advanced)}"
+            )
+        standard_is_present = bool(
+            set(exact_filters) & set(dataset.standard_filter_names)
+        )
+        if advanced and not (bounded or standard_is_present):
+            raise InvalidQueryError(
+                "advanced filters require a date bound or a standard business-key "
+                "filter to avoid an unbounded scan"
+            )
+
+    @staticmethod
+    def _encode_cursor(dataset: DatasetSpec, row: dict[str, Any]) -> str | None:
+        values = [row.get(column) for column in dataset.stable_order]
+        # SQL row comparison with NULL is not a stable continuation boundary.
+        # Keep OFFSET available for these uncommon contracts until they define
+        # a non-null cursor key.
+        if any(value is None for value in values):
+            return None
+        payload = {
+            "dataset": dataset.name,
+            "order": list(dataset.stable_order),
+            "values": values,
+        }
+        encoded = json.dumps(
+            payload,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+        return base64.urlsafe_b64encode(encoded).decode("ascii").rstrip("=")
+
+    @staticmethod
+    def _decode_cursor(dataset: DatasetSpec, cursor: str) -> tuple[Any, ...]:
+        try:
+            padding = "=" * (-len(cursor) % 4)
+            payload = json.loads(
+                base64.urlsafe_b64decode(cursor + padding).decode("utf-8")
+            )
+            values = payload["values"]
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            UnicodeDecodeError,
+            binascii.Error,
+        ) as exc:
+            raise InvalidQueryError("invalid pagination cursor") from exc
+        if (
+            payload.get("dataset") != dataset.name
+            or payload.get("order") != list(dataset.stable_order)
+            or not isinstance(values, list)
+            or len(values) != len(dataset.stable_order)
+            or any(value is None for value in values)
+        ):
+            raise InvalidQueryError("pagination cursor does not match this dataset")
+        return tuple(values)
 
     @staticmethod
     def _normalize_date(dataset: DatasetSpec, value: str | None) -> Any:
@@ -1189,6 +1319,10 @@ class DataService:
             ) from exc
         if dataset.date_storage == DateStorage.COMPACT:
             return parsed.strftime("%Y%m%d")
+        if dataset.date_storage == DateStorage.MONTH:
+            return parsed.strftime("%Y%m")
+        if dataset.date_storage == DateStorage.QUARTER:
+            return f"{parsed.year}Q{(parsed.month - 1) // 3 + 1}"
         return parsed
 
     @staticmethod
@@ -1207,6 +1341,10 @@ class DataService:
             ) from exc
         if dataset.availability_storage == DateStorage.COMPACT:
             return parsed.strftime("%Y%m%d")
+        if dataset.availability_storage == DateStorage.MONTH:
+            return parsed.strftime("%Y%m")
+        if dataset.availability_storage == DateStorage.QUARTER:
+            return f"{parsed.year}Q{(parsed.month - 1) // 3 + 1}"
         return parsed
 
     @staticmethod
@@ -1218,6 +1356,23 @@ class DataService:
         text = str(value)
         if dataset.date_storage == DateStorage.COMPACT:
             return date(int(text[:4]), int(text[4:6]), int(text[6:8]))
+        if dataset.date_storage == DateStorage.MONTH:
+            year, month = int(text[:4]), int(text[4:6])
+            next_month = (
+                date(year + 1, 1, 1)
+                if month == 12
+                else date(year, month + 1, 1)
+            )
+            return next_month - timedelta(days=1)
+        if dataset.date_storage == DateStorage.QUARTER:
+            year, quarter = int(text[:4]), int(text[-1])
+            month = quarter * 3
+            next_month = (
+                date(year + 1, 1, 1)
+                if month == 12
+                else date(year, month + 1, 1)
+            )
+            return next_month - timedelta(days=1)
         return date.fromisoformat(text)
 
     @staticmethod

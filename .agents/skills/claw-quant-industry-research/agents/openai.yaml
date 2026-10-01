@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 行业研究"
+  short_description: "行业财务估值内部宽度与公司贡献的证据化研究流程"
+  default_prompt: "Use $claw-quant-industry-research to analyze an industry through point-in-time members, aggregated fundamentals, valuation, breadth, and operating evidence."

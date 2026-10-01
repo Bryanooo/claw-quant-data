@@ -40,11 +40,14 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements-dev.txt
+      - name: Validate documentation
+        run: python scripts/check_documentation.py
       - name: Initialize schema
         run: |
           for file in sql/init_*.sql; do
             psql -v ON_ERROR_STOP=1 -f "$file"
           done
           python scripts/migrate.py
+          python scripts/bootstrap_orchestration_v2.py --apply-drafts --publish-ready
       - run: PYTHONPYCACHEPREFIX=/tmp/claw-quant-pycache python -m compileall -q collectors service scripts tests
       - run: pytest -q

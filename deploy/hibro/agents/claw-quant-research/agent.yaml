@@ -3,7 +3,7 @@ kind: Agent
 metadata:
   name: Claw Quant Research Agent
   slug: claw-quant-research
-  description: Read-only fundamental, technical, event, sector, ETF and commodity research over governed Claw Quant APIs
+  description: Read-only macro, industry, company, technical, event, ETF and cross-asset research over governed Claw Quant APIs
 spec:
   engine: codex
   instructions: instructions.md
@@ -18,6 +18,12 @@ spec:
       path: skills/event-research
     - name: cross-asset-research
       path: skills/cross-asset-research
+    - name: etf-flow-research
+      path: skills/etf-flow-research
+    - name: macro-research
+      path: skills/macro-research
+    - name: industry-research
+      path: skills/industry-research
   workspace:
     strategy: persistent
     access: read-only

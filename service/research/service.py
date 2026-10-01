@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta, timezone
 from itertools import pairwise
@@ -46,6 +47,20 @@ def _pct_change(current: Any, previous: Any) -> float | None:
 
 def _round(value: float | None, digits: int = 4) -> float | None:
     return None if value is None else round(value, digits)
+
+
+def _numeric_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize database numerics while preserving dates and identifiers."""
+
+    normalized: dict[str, Any] = {}
+    for key, value in row.items():
+        if value is None or isinstance(value, (date, datetime, str, bool)):
+            normalized[key] = value
+        elif isinstance(value, int):
+            normalized[key] = value
+        else:
+            normalized[key] = _round(_number(value), 6)
+    return normalized
 
 
 def _day(value: Any) -> date | None:
@@ -1321,8 +1336,12 @@ class ResearchService:
         self._data = data_service
         self._repository = repository
 
-    def capabilities(self) -> dict[str, Any]:
-        return capability_catalog(self._repository.backfill_statuses())
+    def capabilities(
+        self, readiness: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return capability_catalog(
+            self._repository.backfill_statuses(), readiness=readiness
+        )
 
     def _load(
         self,
@@ -1626,23 +1645,28 @@ class ResearchService:
             if peer_limit
             else []
         )
+        peer_codes = [
+            peer["ts_code"]
+            for peer in peers[:peer_limit]
+            if peer.get("ts_code") and peer["ts_code"] != ts_code
+        ]
+        latest_peer_rows = self._repository.latest_stock_valuations(
+            peer_codes, as_of=effective_as_of,
+        )
         peer_rows: list[dict[str, Any]] = []
         for peer in peers[:peer_limit]:
             peer_code = peer.get("ts_code")
             if not peer_code or peer_code == ts_code:
                 continue
-            rows = self._load(
-                "stock_daily_basic", filters={"ts_code": peer_code},
-                end=effective_as_of, as_of=effective_as_of, limit=1,
-            )
-            if rows:
+            latest_peer = latest_peer_rows.get(peer_code)
+            if latest_peer:
                 peer_rows.append({
                     "ts_code": peer_code,
                     "shared_sector_count": peer.get("shared_sector_count"),
-                    "trade_date": rows[0].get("trade_date"),
-                    "pe_ttm": _number(rows[0].get("pe_ttm")),
-                    "pb": _number(rows[0].get("pb")),
-                    "ps_ttm": _number(rows[0].get("ps_ttm")),
+                    "trade_date": latest_peer.get("trade_date"),
+                    "pe_ttm": _number(latest_peer.get("pe_ttm")),
+                    "pb": _number(latest_peer.get("pb")),
+                    "ps_ttm": _number(latest_peer.get("ps_ttm")),
                 })
         latest_indicator = indicators[0] if indicators else {}
         peer_medians = {
@@ -2398,6 +2422,360 @@ class ResearchService:
             },
         }
 
+    def macro_theme(
+        self,
+        theme: str,
+        *,
+        periods: int = 24,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Return one governed macro theme without hiding release-lag limits."""
+
+        normalized = theme.lower()
+        themes = {
+            "growth": ("gdp", "pmi"),
+            "inflation": ("cpi", "ppi"),
+            "liquidity": ("money_supply", "social_financing", "shibor", "lpr"),
+        }
+        if normalized not in themes:
+            raise InvalidQueryError(
+                "macro theme must be growth, inflation, or liquidity"
+            )
+        effective_as_of = as_of or business_now().date()
+        series = self._repository.macro_series(
+            as_of=effective_as_of,
+            limit=periods,
+        )
+        selected = {
+            name: [_numeric_row(row) for row in series[name]]
+            for name in themes[normalized]
+        }
+        missing = [name for name, rows in selected.items() if not rows]
+        return {
+            "data": selected,
+            "meta": {
+                "theme": normalized,
+                "as_of": effective_as_of,
+                "periods": periods,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": list(selected),
+                "quality": {
+                    "status": "warning" if missing else "ready",
+                    "missing_series": missing,
+                    "warnings": [
+                        "historical cutoff uses the economic observation period; current normalized sources do not preserve every official publication timestamp",
+                        "macro releases are revised; the latest stored value is not a vintage snapshot",
+                    ],
+                },
+            },
+        }
+
+    def macro_regime(
+        self,
+        *,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Classify growth/inflation/liquidity from transparent component rules."""
+
+        effective_as_of = as_of or business_now().date()
+        series = self._repository.macro_series(as_of=effective_as_of, limit=3)
+
+        def latest(name: str) -> dict[str, Any]:
+            return _numeric_row(series[name][0]) if series[name] else {}
+
+        def previous(name: str) -> dict[str, Any]:
+            return _numeric_row(series[name][1]) if len(series[name]) > 1 else {}
+
+        def delta(name: str, field: str) -> float | None:
+            return _round(
+                (_number(latest(name).get(field)) or 0)
+                - (_number(previous(name).get(field)) or 0)
+            ) if _number(latest(name).get(field)) is not None and _number(
+                previous(name).get(field)
+            ) is not None else None
+
+        gdp_delta = delta("gdp", "gdp_yoy")
+        pmi_delta = delta("pmi", "manufacturing")
+        growth_votes = [value for value in (gdp_delta, pmi_delta) if value is not None]
+        growth_direction = (
+            "improving"
+            if growth_votes and sum(value > 0 for value in growth_votes) > len(growth_votes) / 2
+            else "weakening"
+            if growth_votes and sum(value < 0 for value in growth_votes) > len(growth_votes) / 2
+            else "mixed"
+        )
+
+        cpi_delta = delta("cpi", "yoy")
+        ppi_delta = delta("ppi", "yoy")
+        inflation_votes = [value for value in (cpi_delta, ppi_delta) if value is not None]
+        inflation_direction = (
+            "rising"
+            if inflation_votes and sum(value > 0 for value in inflation_votes) > len(inflation_votes) / 2
+            else "falling"
+            if inflation_votes and sum(value < 0 for value in inflation_votes) > len(inflation_votes) / 2
+            else "mixed"
+        )
+
+        m1_delta = delta("money_supply", "m1_yoy")
+        m2_delta = delta("money_supply", "m2_yoy")
+        shibor_delta = delta("shibor", "three_month")
+        liquidity_votes = [
+            value for value in (m1_delta, m2_delta) if value is not None
+        ] + ([-shibor_delta] if shibor_delta is not None else [])
+        liquidity_direction = (
+            "easing"
+            if liquidity_votes and sum(value > 0 for value in liquidity_votes) > len(liquidity_votes) / 2
+            else "tightening"
+            if liquidity_votes and sum(value < 0 for value in liquidity_votes) > len(liquidity_votes) / 2
+            else "mixed"
+        )
+
+        quadrant = {
+            ("improving", "rising"): "reflation",
+            ("improving", "falling"): "recovery_disinflation",
+            ("weakening", "rising"): "stagflation_pressure",
+            ("weakening", "falling"): "slowdown_disinflation",
+        }.get((growth_direction, inflation_direction), "mixed")
+        missing = [name for name, rows in series.items() if not rows]
+        return {
+            "data": {
+                "quadrant": quadrant,
+                "growth": {
+                    "direction": growth_direction,
+                    "gdp": latest("gdp"),
+                    "gdp_yoy_change": gdp_delta,
+                    "pmi": latest("pmi"),
+                    "manufacturing_pmi_change": pmi_delta,
+                },
+                "inflation": {
+                    "direction": inflation_direction,
+                    "cpi": latest("cpi"),
+                    "cpi_yoy_change": cpi_delta,
+                    "ppi": latest("ppi"),
+                    "ppi_yoy_change": ppi_delta,
+                },
+                "liquidity": {
+                    "direction": liquidity_direction,
+                    "money_supply": latest("money_supply"),
+                    "m1_yoy_change": m1_delta,
+                    "m2_yoy_change": m2_delta,
+                    "social_financing": latest("social_financing"),
+                    "shibor": latest("shibor"),
+                    "shibor_3m_change": shibor_delta,
+                    "lpr": latest("lpr"),
+                },
+            },
+            "meta": {
+                "as_of": effective_as_of,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": "direction is majority vote of explicit component changes; quadrant combines growth and inflation directions without forecasting",
+                "provenance": list(series),
+                "quality": {
+                    "status": "warning" if missing else "ready",
+                    "missing_series": missing,
+                    "warnings": [
+                        "classification is descriptive and rule-based, not a forecast or investment recommendation",
+                        "historical results are observation-period views rather than publication-vintage snapshots",
+                        "external balance, fiscal impulse, commodity inventory, and overseas policy are not yet included",
+                    ],
+                },
+            },
+        }
+
+    def industry_fundamentals(
+        self,
+        provider: str,
+        sector_code: str,
+        *,
+        as_of: date | None = None,
+        contributor_limit: int = 10,
+    ) -> dict[str, Any]:
+        effective_as_of = as_of or business_now().date()
+        membership = self._data.sector_members(
+            provider, sector_code, as_of=effective_as_of, limit=5000
+        )
+        member_codes = sorted({
+            str(row.get("ts_code")) for row in membership["data"]
+            if row.get("ts_code")
+        })
+        summary = self._repository.industry_fundamentals(
+            member_codes, as_of=effective_as_of
+        )
+        if not summary or not summary.get("report_period"):
+            raise RecordNotFoundError(
+                "no point-in-time industry financial period found"
+            )
+        normalized = _numeric_row(summary)
+        report_period = _day(summary.get("report_period"))
+        contributors = self._repository.industry_contributors(
+            member_codes,
+            as_of=effective_as_of,
+            report_period=report_period,
+            limit=contributor_limit,
+        ) if report_period else []
+        member_count = int(summary.get("member_count") or len(member_codes))
+        financial_covered = int(summary.get("financial_covered") or 0)
+        valuation_covered = int(summary.get("valuation_covered") or 0)
+        warnings = []
+        if membership["meta"].get("has_more"):
+            warnings.append("sector membership was truncated")
+        if financial_covered < max(1, member_count * 0.8):
+            warnings.append("financial coverage is below 80% of current members")
+        if valuation_covered < max(1, member_count * 0.8):
+            warnings.append("valuation coverage is below 80% of current members")
+        return {
+            "data": {
+                "profile": {
+                    "provider": provider,
+                    "sector_code": sector_code,
+                    "sector_name": membership["meta"].get("sector_name"),
+                    "membership_effective_date": membership["meta"].get(
+                        "membership_effective_date"
+                    ),
+                    "members": member_count,
+                },
+                "coverage": {
+                    "financial_covered": financial_covered,
+                    "financial_coverage_pct": _round(
+                        financial_covered / member_count * 100
+                        if member_count else None
+                    ),
+                    "prior_financial_covered": int(
+                        summary.get("prior_financial_covered") or 0
+                    ),
+                    "valuation_covered": valuation_covered,
+                    "valuation_coverage_pct": _round(
+                        valuation_covered / member_count * 100
+                        if member_count else None
+                    ),
+                },
+                "financials": {
+                    "report_period": report_period,
+                    "revenue": _round(_number(summary.get("revenue")), 2),
+                    "revenue_yoy_pct": _round(_pct_change(
+                        summary.get("revenue"), summary.get("prior_revenue")
+                    )),
+                    "net_income": _round(_number(summary.get("net_income")), 2),
+                    "net_income_yoy_pct": _round(_pct_change(
+                        summary.get("net_income"), summary.get("prior_net_income")
+                    )),
+                    "operating_cashflow": _round(
+                        _number(summary.get("operating_cashflow")), 2
+                    ),
+                    "free_cashflow": _round(
+                        _number(summary.get("free_cashflow")), 2
+                    ),
+                    "operating_cash_conversion": _round(_safe_div(
+                        summary.get("operating_cashflow"),
+                        summary.get("net_income"),
+                    )),
+                    "median_gross_margin": normalized.get("median_gross_margin"),
+                    "median_net_margin": normalized.get("median_net_margin"),
+                    "median_roe": normalized.get("median_roe"),
+                    "median_roic": normalized.get("median_roic"),
+                    "median_debt_to_assets": normalized.get(
+                        "median_debt_to_assets"
+                    ),
+                },
+                "valuation": {
+                    "trade_date": summary.get("valuation_date"),
+                    "total_market_value": _round(
+                        _number(summary.get("total_market_value")), 2
+                    ),
+                    "median_pe_ttm": normalized.get("median_pe_ttm"),
+                    "median_pb": normalized.get("median_pb"),
+                    "median_ps_ttm": normalized.get("median_ps_ttm"),
+                    "median_dividend_yield_ttm": normalized.get("median_dv_ttm"),
+                },
+                "contributors": [_numeric_row(row) for row in contributors],
+            },
+            "meta": {
+                "as_of": effective_as_of,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": "uses point-in-time membership and disclosures available by as_of; selects the latest report period with at least 50% member coverage; aggregate growth compares the same fiscal period one year earlier",
+                "provenance": [
+                    membership["meta"].get("provider", provider) + "_member",
+                    "income", "cashflow", "financial_indicator", "stock_daily_basic",
+                ],
+                "quality": {
+                    "status": "warning" if warnings else "ready",
+                    "warnings": warnings,
+                    "limitations": [
+                        "aggregates mix companies with different fiscal structures and do not replace industry operating data",
+                        "current member history quality depends on the provider's in/out dates",
+                        "financial tables preserve the latest stored statement version rather than every historical revision vintage",
+                    ],
+                },
+            },
+        }
+
+    def industry_breadth(
+        self,
+        provider: str,
+        sector_code: str,
+        *,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        effective_as_of = as_of or business_now().date()
+        membership = self._data.sector_members(
+            provider, sector_code, as_of=effective_as_of, limit=5000
+        )
+        member_codes = sorted({
+            str(row.get("ts_code")) for row in membership["data"]
+            if row.get("ts_code")
+        })
+        row = self._repository.industry_breadth(
+            member_codes, as_of=effective_as_of
+        )
+        if not row or not row.get("trade_date"):
+            raise RecordNotFoundError("no industry breadth observation found")
+        observed = int(row.get("observed_members") or 0)
+        total = len(member_codes)
+        normalized = _numeric_row(row)
+        return {
+            "data": {
+                **normalized,
+                "member_count": total,
+                "coverage_pct": _round(observed / total * 100 if total else None),
+                "advance_decline_ratio": _round(_safe_div(
+                    row.get("advancing"), row.get("declining")
+                )),
+                "advance_share_pct": _round(
+                    (row.get("advancing") or 0) / observed * 100
+                    if observed else None
+                ),
+                "above_ma20_share_pct": _round(
+                    (row.get("above_ma20") or 0) / observed * 100
+                    if observed else None
+                ),
+                "above_ma60_share_pct": _round(
+                    (row.get("above_ma60") or 0) / observed * 100
+                    if observed else None
+                ),
+            },
+            "meta": {
+                "provider": provider,
+                "sector_code": sector_code,
+                "sector_name": membership["meta"].get("sector_name"),
+                "as_of": effective_as_of,
+                "membership_effective_date": membership["meta"].get(
+                    "membership_effective_date"
+                ),
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": "latest member market date not later than as_of; moving averages use each member's latest 20/60 observations",
+                "provenance": [
+                    membership["meta"].get("provider", provider) + "_member",
+                    "stock_daily",
+                ],
+                "quality": {
+                    "status": "ready" if observed == total else "warning",
+                    "warnings": [] if observed == total else [
+                        "not every current member has a market observation on the selected date"
+                    ],
+                },
+            },
+        }
+
     def market_breadth(self, *, as_of: date | None = None) -> dict[str, Any]:
         effective_as_of = as_of or business_now().date()
         row = self._repository.market_breadth(effective_as_of)
@@ -2436,6 +2814,220 @@ class ResearchService:
                 "provenance": ["stock_daily", "limit_list_d"],
             },
         }
+
+    def etf_flows(
+        self,
+        *,
+        lookback_observations: int = 5,
+        limit: int = 30,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate ETF share creations/redemptions by tracked exposure."""
+
+        effective_as_of = as_of or business_now().date()
+        rows = self._repository.etf_share_flows(
+            as_of=effective_as_of,
+            lookback_observations=lookback_observations,
+        )
+        funds: list[dict[str, Any]] = []
+        grouped: dict[tuple[str, str], dict[str, Any]] = defaultdict(
+            lambda: {
+                "estimated_flow_yi": 0.0,
+                "latest_size_wan": 0.0,
+                "etf_count": 0,
+                "members": [],
+                "asset_classes": set(),
+                "latest_date": None,
+                "baseline_date": None,
+            }
+        )
+        for row in rows:
+            flow = _number(row.get("estimated_flow_yi"))
+            latest_share = _number(row.get("latest_share"))
+            baseline_share = _number(row.get("baseline_share"))
+            latest_size = _number(row.get("latest_size")) or 0.0
+            if flow is None or latest_share is None or baseline_share is None:
+                continue
+            item = {
+                "ts_code": row.get("ts_code"),
+                "name": row.get("etf_name"),
+                "index_code": row.get("index_code"),
+                "index_name": row.get("index_name"),
+                "manager": row.get("mgr_name"),
+                "etf_type": row.get("etf_type"),
+                "fund_type": row.get("fund_type"),
+                "invest_type": row.get("invest_type"),
+                "baseline_date": row.get("baseline_date"),
+                "latest_date": row.get("latest_date"),
+                "observations": int(row.get("observations") or 0),
+                "latest_share_wan": _round(latest_share),
+                "share_change_wan": _round(latest_share - baseline_share),
+                "share_change_pct": _round(_pct_change(latest_share, baseline_share)),
+                "latest_size_wan": _round(latest_size),
+                "unit_nav": _round(_number(row.get("unit_nav")), 6),
+                "estimated_flow_yi": _round(flow),
+                "direction": "creation" if flow > 0 else "redemption" if flow < 0 else "flat",
+            }
+            funds.append(item)
+            index_code = str(row.get("index_code") or "UNCLASSIFIED")
+            index_name = str(row.get("index_name") or "未分类")
+            group = grouped[(index_code, index_name)]
+            group["estimated_flow_yi"] += flow
+            group["latest_size_wan"] += latest_size
+            group["etf_count"] += 1
+            group["members"].append(row.get("ts_code"))
+            if row.get("fund_type"):
+                group["asset_classes"].add(row.get("fund_type"))
+            latest_date = _day(row.get("latest_date"))
+            baseline_date = _day(row.get("baseline_date"))
+            if latest_date and (group["latest_date"] is None or latest_date > group["latest_date"]):
+                group["latest_date"] = latest_date
+            if baseline_date and (
+                group["baseline_date"] is None or baseline_date < group["baseline_date"]
+            ):
+                group["baseline_date"] = baseline_date
+
+        baseline_dates = [
+            group["baseline_date"] for group in grouped.values()
+            if group["baseline_date"] is not None
+        ]
+        latest_dates = [
+            group["latest_date"] for group in grouped.values()
+            if group["latest_date"] is not None
+        ]
+        index_periods = {
+            code: (group["baseline_date"], group["latest_date"])
+            for (code, _name), group in grouped.items()
+            if code != "UNCLASSIFIED"
+            and group["baseline_date"] is not None
+            and group["latest_date"] is not None
+        }
+        market_returns = self._repository.index_period_returns(
+            index_periods,
+        )
+        exposures: list[dict[str, Any]] = []
+        for (index_code, index_name), group in grouped.items():
+            market = market_returns.get(index_code, {})
+            baseline_close = _number(market.get("baseline_close"))
+            latest_close = _number(market.get("latest_close"))
+            flow = group["estimated_flow_yi"]
+            exposures.append({
+                "index_code": None if index_code == "UNCLASSIFIED" else index_code,
+                "index_name": index_name,
+                "baseline_date": group["baseline_date"],
+                "latest_date": group["latest_date"],
+                "etf_count": group["etf_count"],
+                "estimated_flow_yi": _round(flow),
+                "latest_size_yi": _round(group["latest_size_wan"] / 10000),
+                "index_return_pct": _round(_pct_change(latest_close, baseline_close)),
+                "direction": "inflow" if flow > 0 else "outflow" if flow < 0 else "flat",
+                "members": sorted(code for code in group["members"] if code),
+                "asset_classes": sorted(group["asset_classes"]),
+            })
+        exposures.sort(
+            key=lambda item: abs(item.get("estimated_flow_yi") or 0), reverse=True
+        )
+        funds.sort(key=lambda item: abs(item.get("estimated_flow_yi") or 0), reverse=True)
+        inflows = [item for item in exposures if (item["estimated_flow_yi"] or 0) > 0]
+        outflows = [item for item in exposures if (item["estimated_flow_yi"] or 0) < 0]
+        rotation_pairs = [
+            {
+                "rank": rank,
+                "source_exposure": source["index_name"],
+                "source_outflow_yi": _round(abs(source["estimated_flow_yi"])),
+                "destination_exposure": destination["index_name"],
+                "destination_inflow_yi": destination["estimated_flow_yi"],
+                "matched_amount_yi": _round(min(
+                    abs(source["estimated_flow_yi"]), destination["estimated_flow_yi"]
+                )),
+                "interpretation": "cross-sectional coincidence; not a traced transfer",
+            }
+            for rank, (source, destination) in enumerate(
+                zip(outflows[:5], inflows[:5]), start=1
+            )
+        ]
+        warnings = [
+            "estimated_flow_yi is a creation/redemption proxy, not an exchange cash-flow ledger",
+            "rotation pairs do not prove that the same investor moved between the two exposures",
+            "investor identity requires official announcements or periodic holder disclosures",
+            "QDII and some cross-border ETF observations may be published later than domestic ETFs",
+        ]
+        if not funds:
+            warnings.insert(0, "no ETF has enough observations for the requested window")
+        return {
+            "data": {
+                "exposures": exposures[:limit],
+                "funds": funds[:limit],
+                "rotation_pairs": rotation_pairs,
+            },
+            "meta": {
+                "as_of": effective_as_of,
+                "lookback_observations": lookback_observations,
+                "latest_data_date": max(latest_dates, default=None),
+                "baseline_data_date": min(baseline_dates, default=None),
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": "delta total_share (10k shares) multiplied by latest NAV and divided by 10k gives RMB 100m; grouped by tracked index",
+                "provenance": ["etf_share_size", "etf_basic", "index_daily"],
+                "quality": {
+                    "status": "ready" if funds else "warning",
+                    "funds_analyzed": len(funds),
+                    "exposures_analyzed": len(exposures),
+                    "warnings": warnings,
+                },
+            },
+        }
+
+    def state_team_etf_signals(
+        self,
+        *,
+        lookback_observations: int = 5,
+        minimum_flow_yi: float = 5.0,
+        limit: int = 30,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Expose evidence-tiered candidates without fabricating ownership."""
+
+        flow_view = self.etf_flows(
+            lookback_observations=lookback_observations,
+            limit=max(limit, 100),
+            as_of=as_of,
+        )
+        candidates = []
+        for exposure in flow_view["data"]["exposures"]:
+            flow = float(exposure.get("estimated_flow_yi") or 0)
+            if (
+                "股票型" not in exposure.get("asset_classes", [])
+                or abs(flow) < minimum_flow_yi
+            ):
+                continue
+            market_return = _number(exposure.get("index_return_pct"))
+            stabilization_pattern = flow > 0 and market_return is not None and market_return < 0
+            candidates.append({
+                **exposure,
+                "evidence_level": "market_flow_only",
+                "state_team_confirmed": False,
+                "stabilization_pattern": stabilization_pattern,
+                "identity_evidence": [],
+                "required_confirmation": [
+                    "official announcement naming the operation",
+                    "periodic fund-holder disclosure showing a canonical state-team entity",
+                ],
+            })
+        flow_view["data"] = {
+            "signals": candidates[:limit],
+            "confirmed": [],
+            "evidence_levels": {
+                "market_flow_only": "share change identifies market-wide ETF creations/redemptions only",
+                "suspected": "requires known-held ETF overlap plus synchronized counter-cyclical activity",
+                "confirmed": "requires official announcement or holder-disclosure evidence",
+            },
+        }
+        flow_view["meta"]["minimum_flow_yi"] = minimum_flow_yi
+        flow_view["meta"]["attribution_status"] = "unverified_without_holder_disclosures"
+        flow_view["meta"]["quality"]["warnings"].append(
+            "the current dataset does not contain ETF investor identities; no signal is labelled as state-team confirmed"
+        )
+        return flow_view
 
     def sector_rotation(
         self,

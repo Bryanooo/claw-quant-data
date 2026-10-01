@@ -117,6 +117,9 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     "dividend": "trade_date",
     "fund_div": "trade_date",
     "fut_weekly_detail": "week",
+    "cn_gdp": "report_period",
+    "ggt_daily": "trade_date",
+    "ggt_top10": "trade_date",
     # A market-wide request cannot be proven complete for these interfaces.
     "factor_value": "dependency_fanout",
     "fund_basic": "manual",
@@ -130,7 +133,9 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     # A market-wide ccass_hold_detail date contains more than one million
     # institution-seat rows. It must remain an explicitly scoped query rather
     # than silently creating an unbounded daily workload.
-    "ccass_hold_detail": "manual",
+    "ccass_hold_detail": "ts_code_fanout",
+    "stk_weekly_monthly": "dependency_fanout",
+    "stock_hsgt": "dependency_fanout",
     # Live collection proved that one market-wide partition reaches an upstream
     # cap. Keep these interfaces implemented, but do not automate them until
     # their dependency fan-out has an authoritative universe.
@@ -144,7 +149,7 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     "index_daily": "trade_date",
     # Live collection reached the upstream hard cap for unpartitioned calls.
     # These contracts are complete only through the allow-listed fan-out
-    # universes in service.collection_jobs.fanout.
+    # universes in service.acquisition_runtime.fanout.
     "ci_index_member": "dependency_fanout",
     "index_member_all": "dependency_fanout",
     "pledge_stat": "ts_code_fanout",
@@ -152,8 +157,8 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     "etf_sz_cons": "ts_code_fanout",
     "etf_sh_cons": "ts_code_fanout",
     "dc_concept_cons": "dependency_fanout",
+    "ths_member": "dependency_fanout",
     "bc_otcqt": "ts_code_fanout",
-    "fut_weekly_detail": "manual",
 }
 
 _CADENCE_OVERRIDES: dict[str, Cadence] = {
@@ -161,6 +166,16 @@ _CADENCE_OVERRIDES: dict[str, Cadence] = {
     "fund_div": "daily",
     "index_weekly": "weekly",
     "index_monthly": "monthly",
+    # Both provider aliases feed the same point-in-time ST membership table.
+    # The dedicated collector has always refreshed it every trading day; the
+    # generic description heuristic incorrectly classified the V2 task as
+    # weekly and left Monday's state stale until Friday.
+    "st": "daily",
+    "stock_st": "daily",
+    "cn_gdp": "quarterly",
+    "ggt_daily": "daily",
+    "ggt_top10": "daily",
+    "ths_member": "weekly",
 }
 
 _NO_LOOP_APIS = {
@@ -175,6 +190,19 @@ _NO_LOOP_APIS = {
 # rows, so treating that response as a complete non-paginated partition would
 # either fail forever or silently truncate a future 1000+ constituent basket.
 _OFFSET_PAGINATION_OVERRIDES = {
+    # Live verification on 2026-09-28 proved that legitimate historical
+    # cross-sections can land exactly on 1,000/3,000 rows and that the next
+    # matching offset returns an empty page. Exhaustion is therefore the
+    # completeness proof; rejecting a round first page creates false gaps.
+    "adj_factor",
+    # The 2022-08-16 market-wide partition contains exactly 5,000 rows and
+    # offset=5,000 returns empty. Use the same explicit exhaustion contract.
+    "stk_factor",
+    # Live verification on 2026-09-28 covered historical cross-sections that
+    # legitimately contain exactly 2,000, 3,000 and 4,000 rows.  In every
+    # case the matching next offset returned an empty page, so exhaustion is
+    # the only reliable proof that these round-sized partitions are complete.
+    "stk_factor_pro",
     # Live verification on 2026-09-20 returned distinct report rows at
     # offsets 0 and 10 for the capped 2018-08-15 partition. Daily report
     # volumes can land exactly on 1,000/3,000/5,000, so explicit exhaustion
@@ -205,6 +233,12 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # Live verification on 2026-08-30 returned 2000 rows at offsets 0 and
     # 2000 for one trade_date. The gateway supports standard limit/offset.
     "fund_share",
+    # Live verification on 2026-09-21 proved that 2024-10-25 contains exactly
+    # 1,000 distinct ETF rows and offset=1,000 returns an empty page, while
+    # later dates legitimately exceed 1,000 when no limit is supplied. Offset
+    # exhaustion distinguishes a round, complete day from truncation without
+    # weakening the global completeness guard.
+    "etf_share_size",
     # Whole-market fund scopes are large but the gateway honors standard
     # limit/offset. Durable page checkpoints make the quarterly portfolio job
     # resumable without falling back to tens of thousands of symbol calls.
@@ -219,6 +253,12 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # Live probes returned a distinct empty page at offset 2,000, proving that
     # the round first page is legitimate and that standard offset is honored.
     "stk_limit",
+    # Live verification on 2026-09-29 found a legitimate DCE daily exchange
+    # partition with exactly 3,000 rows. Standard pages at offsets
+    # 0/1,000/2,000 were distinct and offset=3,000 returned empty, so the
+    # static exchange fan-out must exhaust offset pages rather than reject the
+    # round response or silently accept a cap.
+    "fut_holding",
     # A full financing/margin detail partition is normally about 4,400 rows.
     # Live probes prove that limit/offset is honored; page exhaustion and the
     # coverage layer's market-universe threshold are both required because

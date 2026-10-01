@@ -41,6 +41,154 @@ RAW_ENDPOINTS = (
     },
 )
 
+CANONICAL_ENDPOINTS = (
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/market-bars",
+        "name": "规范 A 股日线",
+        "description": "本地优先并按缺失开市日有限回退的统一日线模型。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/trading-sessions",
+        "name": "规范 A 股交易日历",
+        "description": "统一 A 股开市日模型，本地日历为空时才允许回退。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-profiles",
+        "name": "规范 A 股身份",
+        "description": "统一证券身份并保留行业分类来源。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-valuations",
+        "name": "规范 A 股估值",
+        "description": "统一估值指标、股息率、股本和市值单位。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-financial-periods",
+        "name": "规范 A 股财务期间",
+        "description": "按明确季度末组合三张累计报表并记录分段来源和披露日。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-performance-updates",
+        "name": "规范 A 股业绩预告与快报",
+        "description": "按明确报告期统一业绩预告和累计业绩快报。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-financial-metrics",
+        "name": "规范 A 股财务指标",
+        "description": "按明确报告期统一盈利、成长、偿债和营运核心指标。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-ttm-financials",
+        "name": "规范 A 股滚动财务",
+        "description": "优先由本地累计报表派生滚动十二月核心财务事实。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-dividends",
+        "name": "规范 A 股分红",
+        "description": "按明确报告期统一分红方案、关键日期和每股金额。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-repurchases",
+        "name": "规范 A 股回购",
+        "description": "统一回购计划、执行进展、金额、数量和价格范围。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-holder-counts",
+        "name": "规范 A 股股东户数",
+        "description": "统一股东户数观察日期、披露日期和变化指标。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-business-segments",
+        "name": "规范 A 股主营构成",
+        "description": "按明确报告期统一业务、行业、产品和地区主营构成。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-shareholders",
+        "name": "规范 A 股主要股东",
+        "description": "按季度末统一前十大股东、流通股东及持股变化。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-restricted-releases",
+        "name": "规范 A 股限售解禁",
+        "description": "统一解禁日期、数量、占比与股东信息。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-pledges",
+        "name": "规范 A 股股权质押",
+        "description": "统一股权质押冻结事件、规模、比例和解除状态。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-risk-alerts",
+        "name": "规范 A 股风险警示",
+        "description": "统一 ST、退市等风险警示状态、原因及生效撤销日期。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/equity-suspensions",
+        "name": "规范 A 股停复牌",
+        "description": "统一停牌日期、时段、原因与复牌信息。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/fund-profiles",
+        "name": "规范基金档案",
+        "description": "统一基金身份、费用率和最低申购金额单位。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/fund-nav",
+        "name": "规范基金净值",
+        "description": "统一基金净值与收益率口径，不套用股票交易日历。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/fund-stock-holdings",
+        "name": "规范基金股票持仓",
+        "description": "按基金和季度末提供带范围声明的统一持仓模型。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/fund-dividends",
+        "name": "规范基金分红",
+        "description": "统一基金除息、登记、派息日期和每份现金分红。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/fund-managers",
+        "name": "规范基金经理",
+        "description": "统一基金经理任职区间、任期回报与履历。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/index-profiles",
+        "name": "规范指数档案",
+        "description": "统一指数名称、发布机构、基日、基点和币种。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/data/canonical/index-constituents",
+        "name": "规范指数成分权重",
+        "description": "按明确更新日期统一指数成分证券和权重。",
+    },
+)
+
+
 STANDARD_ENDPOINTS = (
     {
         "method": "GET",
@@ -78,6 +226,7 @@ STANDARD_ENDPOINTS = (
         "name": "时效状态",
         "description": "查看数据集最新日期与时效判定。",
     },
+    *CANONICAL_ENDPOINTS,
 )
 
 RESEARCH_ENDPOINTS = (
@@ -157,19 +306,19 @@ RESEARCH_ENDPOINTS = (
 OPERATIONS_ENDPOINTS = (
     {
         "method": "GET",
-        "path": "/api/v1/ops/collection-overview",
-        "name": "采集运营总览",
-        "description": "查看活动任务、真实未恢复异常和当前采集吞吐。",
+        "path": "/api/v1/ops/orchestration-v2/summary",
+        "name": "V2 编排总览",
+        "description": "查看 V2 任务定义、执行实例与数据状态。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/ops/collection-jobs",
+        "path": "/api/v1/ops/orchestration-v2/executions",
         "name": "执行实例",
-        "description": "分页筛选持久化任务实例及其尝试、重试和恢复关系。",
+        "description": "分页筛选 V2 执行实例、节点、重试和失败原因。",
     },
     {
         "method": "GET",
-        "path": "/api/v1/ops/delivery/data-calendar",
+        "path": "/api/v1/ops/orchestration-v2/data-calendar",
         "name": "数据日历",
         "description": "按数据日期查看预期数据集的业务完整性，而不是任务创建日期。",
     },
@@ -225,7 +374,7 @@ def _audiences() -> list[dict[str, Any]]:
             "title": "运营接口",
             "audience": "控制台与管理员",
             "description": "任务编排、执行实例、异常、数据日历、覆盖审计和初始化。",
-            "entrypoint": "/api/v1/ops/collection-overview",
+            "entrypoint": "/api/v1/ops/orchestration-v2/summary",
             "path_prefixes": ["/api/v1/ops"],
             "priority": 3,
         },
@@ -293,6 +442,7 @@ def build_data_service_catalog(
                 "dated_datasets": dated,
                 "mapped_interfaces": mapped,
                 "direct_interface_queries": directly_queryable,
+                "canonical_endpoints": len(CANONICAL_ENDPOINTS),
             },
             "endpoints": list(STANDARD_ENDPOINTS),
             "items": datasets,

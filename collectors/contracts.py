@@ -55,6 +55,8 @@ class CollectorSpec:
     pagination_mode: PaginationMode
     empty_policy: EmptyPolicy
     resource_class: ResourceClass
+    source_id: str = "tushare"
+    acquisition_mode: str = "scheduled_pull"
     version: str = "1"
     required_parameters: tuple[str, ...] = ()
 
@@ -82,6 +84,8 @@ class CollectorResult:
     table_name: str
     fetched_rows: int
     stored_rows: int
+    source_id: str = "tushare"
+    acquisition_mode: str = "scheduled_pull"
     request_count: int = 1
     partitions: tuple[str, ...] = ()
     empty_reason: str | None = None

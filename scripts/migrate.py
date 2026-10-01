@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import re
 import sys
 
 SCRIPT_PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -13,11 +14,18 @@ sys.path.insert(0, str(SCRIPT_PROJECT_ROOT))
 import psycopg2
 
 from service.config import DB_CONFIG, PROJECT_ROOT
+from service.source_connectors.persistence import sync_source_registry
 
 
 MIGRATIONS_DIR = PROJECT_ROOT / "sql" / "migrations"
 CHECKSUM_MANIFEST = MIGRATIONS_DIR / "checksums.sha256"
 LOCK_ID = 1_924_202_608
+NON_TRANSACTIONAL_DIRECTIVE = "-- migrate: no-transaction"
+_CONCURRENT_INDEX_NAME = re.compile(
+    r"^CREATE\s+INDEX\s+CONCURRENTLY\s+IF\s+NOT\s+EXISTS\s+"
+    r'(?P<name>"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)\s+',
+    re.IGNORECASE,
+)
 
 # Release f149831 normalized trailing whitespace in five already-applied
 # migrations.  The SQL statements did not change, but byte-level checksums did.
@@ -106,6 +114,48 @@ def _validate_migration_files(paths: list[Path]) -> None:
         )
 
 
+def _is_non_transactional_migration(text: str) -> bool:
+    """Return whether a migration explicitly requires autocommit.
+
+    PostgreSQL does not allow operations such as ``CREATE INDEX CONCURRENTLY``
+    inside a transaction block.  These migrations are deliberately opt-in;
+    normal migrations retain the existing all-or-nothing transaction.
+    """
+    return text.lstrip().startswith(NON_TRANSACTIONAL_DIRECTIVE)
+
+
+def _non_transactional_statements(text: str) -> list[str]:
+    """Parse the deliberately narrow concurrent-index migration format.
+
+    Supporting arbitrary SQL splitting here would be unsafe (function bodies
+    can contain semicolons).  Non-transactional migrations therefore accept
+    only top-level ``CREATE INDEX CONCURRENTLY IF NOT EXISTS`` statements.
+    Every statement is idempotent so a crash before the migration-ledger write
+    can be retried safely.
+    """
+    lines = [
+        line
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("--")
+    ]
+    statements = [item.strip() for item in "\n".join(lines).split(";") if item.strip()]
+    prefix = "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+    invalid = any(not item.upper().startswith(prefix) for item in statements)
+    if not statements or invalid:
+        raise RuntimeError(
+            "non-transactional migrations may contain only "
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS statements"
+        )
+    return statements
+
+
+def _concurrent_index_name(statement: str) -> str:
+    match = _CONCURRENT_INDEX_NAME.match(statement.strip())
+    if not match:
+        raise RuntimeError("cannot determine concurrent index name")
+    return match.group("name").strip('"')
+
+
 def migrate() -> list[str]:
     paths = sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9]_*.sql"))
     if not paths:
@@ -131,6 +181,7 @@ def migrate() -> list[str]:
         for path in paths:
             version = path.stem
             checksum = _checksum(path)
+            migration_text = path.read_text(encoding="utf-8")
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT checksum FROM sys_schema_migration WHERE version = %s",
@@ -151,10 +202,43 @@ def migrate() -> list[str]:
                     )
                 continue
 
+            if _is_non_transactional_migration(migration_text):
+                for statement in _non_transactional_statements(migration_text):
+                    with connection.cursor() as cursor:
+                        cursor.execute(statement)
+                        index_name = _concurrent_index_name(statement)
+                        cursor.execute(
+                            """
+                            SELECT index.indisvalid
+                            FROM pg_index AS index
+                            JOIN pg_class AS relation
+                              ON relation.oid = index.indexrelid
+                            JOIN pg_namespace AS namespace
+                              ON namespace.oid = relation.relnamespace
+                            WHERE namespace.nspname = 'public'
+                              AND relation.relname = %s
+                            """,
+                            (index_name,),
+                        )
+                        index_state = cursor.fetchone()
+                        if not index_state or not index_state[0]:
+                            raise RuntimeError(
+                                f"concurrent index {index_name} is invalid; "
+                                "drop the invalid index concurrently and rerun"
+                            )
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "INSERT INTO sys_schema_migration(version, checksum) "
+                        "VALUES (%s, %s)",
+                        (version, checksum),
+                    )
+                applied_now.append(version)
+                continue
+
             connection.autocommit = False
             try:
                 with connection.cursor() as cursor:
-                    cursor.execute(path.read_text(encoding="utf-8"))
+                    cursor.execute(migration_text)
                     cursor.execute(
                         "INSERT INTO sys_schema_migration(version, checksum) VALUES (%s, %s)",
                         (version, checksum),
@@ -166,6 +250,7 @@ def migrate() -> list[str]:
                 raise
             finally:
                 connection.autocommit = True
+        sync_source_registry(connection)
     finally:
         try:
             with connection.cursor() as cursor:

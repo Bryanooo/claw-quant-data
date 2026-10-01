@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS suspend_d (
     ts_code         VARCHAR(16)  NOT NULL,   -- TS代码
     trade_date      DATE         NOT NULL,   -- 日期
-    suspend_timing  VARCHAR(32),             -- 日内停牌时间段
+    suspend_timing  TEXT,                    -- 日内停牌时间段/说明
     suspend_type    VARCHAR(4)   NOT NULL,   -- S-停牌 R-复牌
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
     PRIMARY KEY (ts_code, trade_date, suspend_type)

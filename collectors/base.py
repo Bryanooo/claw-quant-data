@@ -37,10 +37,11 @@ import psycopg2.extras
 from service.config import (
     DB_CONFIG,
     TUSHARE_CONNECT_TIMEOUT_SECONDS,
+    TUSHARE_RAW_RECORD_CAPTURE_MODE,
     TUSHARE_READ_TIMEOUT_SECONDS,
     get_env_tushare_token,
 )
-from service.collection_jobs.context import is_durable_job_active
+from service.acquisition_runtime.context import is_durable_job_active
 from service.clock import business_now
 from service.tushare_rate_limit import install_distributed_rate_limit
 from service.tushare_raw_archive import TushareRawArchive
@@ -415,14 +416,20 @@ class BaseCollector(ABC):
                 except Exception:
                     # Audit-path availability must never hide the provider's
                     # original exception and its retry classification.
-                    self.logger.exception("failed to archive Tushare request error")
+                    log_exception = getattr(
+                        self.logger, "exception", self.logger.error
+                    )
+                    log_exception("failed to archive Tushare request error")
                 raise
             archive_evidence = self._raw_archive.archive_response(
                 api_name=api_name,
                 parameters=archive_parameters,
                 frame=frame,
                 collector_name=self.spec().qualified_name,
-                persist_records=self.raw_capture_mode == "records",
+                persist_records=(
+                    self.raw_capture_mode == "records"
+                    and TUSHARE_RAW_RECORD_CAPTURE_MODE == "all"
+                ),
                 requested_at=requested_at,
             )
             self._raw_archive_requests.append(archive_evidence)
@@ -729,9 +736,12 @@ class BaseCollector(ABC):
         last_error = None
         self._request_count = 0
         self._raw_archive_requests = []
+        self._raw_resolved_records = 0
         self._sanitization_nul_characters = 0
         self._sanitization_fields = set()
         for attempt in range(1, self.retry_max + 1):
+            df = None
+            self._raw_anomaly_archived = False
             try:
                 self.logger.info(f"📡 正在获取 {self.table_name} 数据... (第{attempt}次)")
                 df = self.fetch(**dict(effective.parameters))
@@ -782,6 +792,24 @@ class BaseCollector(ABC):
                 else:
                     rows = self.store(df)
                     self.logger.info(f"✅ {self.table_name}: 入库 {rows} 行")
+                    if TUSHARE_RAW_RECORD_CAPTURE_MODE == "anomalies_only":
+                        try:
+                            resolved = self._raw_archive.resolve_records(
+                                api_name=self.API_NAME,
+                                parameters=dict(effective.parameters),
+                            )
+                            self._raw_resolved_records += resolved
+                        except Exception:
+                            # Quarantine cleanup must not turn an otherwise
+                            # verified business write into a collection
+                            # failure. The next successful scope retry will
+                            # make the same idempotent cleanup attempt.
+                            log_exception = getattr(
+                                self.logger, "exception", self.logger.error
+                            )
+                            log_exception(
+                                "failed to clear resolved raw anomaly payloads"
+                            )
 
                 return CollectorResult(
                     collector_name=spec.qualified_name,
@@ -805,6 +833,27 @@ class BaseCollector(ABC):
                 )
 
             except Exception as e:
+                if (
+                    df is not None
+                    and not df.empty
+                    and not effective.skip_store
+                    and TUSHARE_RAW_RECORD_CAPTURE_MODE == "anomalies_only"
+                    and not self._raw_anomaly_archived
+                ):
+                    try:
+                        self._raw_archive.archive_records(
+                            endpoint_key=self.API_NAME,
+                            parameters=dict(effective.parameters),
+                            frame=df,
+                        )
+                        self._raw_anomaly_archived = True
+                    except Exception:
+                        log_exception = getattr(
+                            self.logger, "exception", self.logger.error
+                        )
+                        log_exception(
+                            "failed to retain anomalous Tushare response payload"
+                        )
                 last_error = e
                 self.logger.error(f"❌ 第{attempt}次失败: {e}")
                 # The distributed limiter has not called the upstream yet.
@@ -941,7 +990,10 @@ class BaseCollector(ABC):
                         "raw_archive": {
                             "request_ids": raw_request_ids,
                             "logical_request_hashes": sorted(logical_request_hashes),
-                            "records_persisted": self.raw_capture_mode == "records",
+                            "records_persisted": any(
+                                bool(item.get("records_persisted"))
+                                for item in self._raw_archive_requests
+                            ),
                         },
                         "sanitization": {
                             "nul_characters_removed": nul_characters_removed,
@@ -982,7 +1034,13 @@ class BaseCollector(ABC):
                     for item in self._raw_archive_requests
                 }
             ),
-            "records_persisted": self.raw_capture_mode == "records",
+            "records_persisted": any(
+                bool(item.get("records_persisted"))
+                for item in self._raw_archive_requests
+            ),
+            "resolved_anomaly_records": int(
+                getattr(self, "_raw_resolved_records", 0)
+            ),
         }
 
     # ─────────────── collect：兼容旧调用方的整数返回值 ───────────────

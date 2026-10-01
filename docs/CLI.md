@@ -221,9 +221,10 @@ Agent 只能按研究层契约访问：
 2. `clawq research capabilities` 确认能力与已声明缺口；
 3. `clawq stock ...` 或 `clawq sector ...` 获取研究资料包；
 4. `clawq research fundamentals|valuation|technicals|instrument-technicals|capital-flow|repurchase-progress|event-study`；
-5. `clawq research market-breadth|sector-rotation`；
-6. `clawq research calendar|calendar-day` 查询投资事件；
-7. 在结论中标明历史时点、研究方法、来源和质量限制。
+5. `clawq research macro-regime|macro-theme|industry-fundamentals|industry-breadth`；
+6. `clawq research market-breadth|sector-rotation|etf-flows|state-team-signals`；
+7. `clawq research calendar|calendar-day` 查询投资事件；
+8. 在结论中标明历史时点、研究方法、来源和质量限制。
 
 Agent 不使用 `health`、`status`、`datasets`、`query`、`freshness`、`interfaces` 或
 `coverage` 命令；需要的底层事实与质量证据必须由研究层契约显式返回。

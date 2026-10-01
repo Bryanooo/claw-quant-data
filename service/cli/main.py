@@ -271,6 +271,60 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_breadth.add_argument("--as-of")
     research_breadth.set_defaults(handler=_research_market_breadth)
+    research_macro_regime = research_commands.add_parser(
+        "macro-regime", help="show growth, inflation and liquidity regime evidence"
+    )
+    research_macro_regime.add_argument("--as-of")
+    research_macro_regime.set_defaults(handler=_research_macro_regime)
+    research_macro_theme = research_commands.add_parser(
+        "macro-theme", help="show bounded growth, inflation or liquidity series"
+    )
+    research_macro_theme.add_argument(
+        "theme", choices=("growth", "inflation", "liquidity")
+    )
+    research_macro_theme.add_argument(
+        "--periods", type=_bounded_integer(2, 120), default=24
+    )
+    research_macro_theme.add_argument("--as-of")
+    research_macro_theme.set_defaults(handler=_research_macro_theme)
+    research_industry_fundamentals = research_commands.add_parser(
+        "industry-fundamentals",
+        help="aggregate point-in-time sector member financials and valuation",
+    )
+    _add_sector_identity_arguments(research_industry_fundamentals)
+    research_industry_fundamentals.add_argument(
+        "--contributor-limit", type=_bounded_integer(1, 50), default=10
+    )
+    research_industry_fundamentals.add_argument("--as-of")
+    research_industry_fundamentals.set_defaults(
+        handler=_research_industry_fundamentals
+    )
+    research_industry_breadth = research_commands.add_parser(
+        "industry-breadth", help="show point-in-time sector member participation"
+    )
+    _add_sector_identity_arguments(research_industry_breadth)
+    research_industry_breadth.add_argument("--as-of")
+    research_industry_breadth.set_defaults(handler=_research_industry_breadth)
+    research_etf_flows = research_commands.add_parser(
+        "etf-flows", help="show ETF creation/redemption proxies by exposure"
+    )
+    research_etf_flows.add_argument(
+        "--lookback-observations", type=_bounded_integer(1, 250), default=5
+    )
+    research_etf_flows.add_argument("--limit", type=_bounded_integer(1, 100), default=30)
+    research_etf_flows.add_argument("--as-of")
+    research_etf_flows.set_defaults(handler=_research_etf_flows)
+    research_state_team = research_commands.add_parser(
+        "state-team-signals",
+        help="show evidence-tiered ETF state-team candidates without identity overclaiming",
+    )
+    research_state_team.add_argument(
+        "--lookback-observations", type=_bounded_integer(1, 250), default=5
+    )
+    research_state_team.add_argument("--minimum-flow-yi", type=float, default=5.0)
+    research_state_team.add_argument("--limit", type=_bounded_integer(1, 100), default=30)
+    research_state_team.add_argument("--as-of")
+    research_state_team.set_defaults(handler=_research_state_team_signals)
     research_rotation = research_commands.add_parser(
         "sector-rotation", help="rank provider sectors by period return"
     )
@@ -735,6 +789,69 @@ def _research_market_breadth(client: ApiClient, args: argparse.Namespace) -> Any
         client,
         "/v1/research/market/breadth",
         params={"as_of": args.as_of} if args.as_of else None,
+    )
+
+
+def _research_macro_regime(client: ApiClient, args: argparse.Namespace) -> Any:
+    return _research_get(
+        client,
+        "/v1/research/macro/regime",
+        params={"as_of": args.as_of} if args.as_of else None,
+    )
+
+
+def _research_macro_theme(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"periods": args.periods}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client, f"/v1/research/macro/{args.theme}", params=params
+    )
+
+
+def _research_industry_fundamentals(
+    client: ApiClient, args: argparse.Namespace
+) -> Any:
+    params = {"contributor_limit": args.contributor_limit}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client,
+        f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/fundamentals",
+        params=params,
+    )
+
+
+def _research_industry_breadth(
+    client: ApiClient, args: argparse.Namespace
+) -> Any:
+    return _research_get(
+        client,
+        f"/v1/research/sectors/{args.provider}/{args.sector_code.upper()}/breadth",
+        params={"as_of": args.as_of} if args.as_of else None,
+    )
+
+
+def _research_etf_flows(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "lookback_observations": args.lookback_observations,
+        "limit": args.limit,
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(client, "/v1/research/etfs/flows", params=params)
+
+
+def _research_state_team_signals(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "lookback_observations": args.lookback_observations,
+        "minimum_flow_yi": args.minimum_flow_yi,
+        "limit": args.limit,
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client, "/v1/research/etfs/state-team-signals", params=params
     )
 
 

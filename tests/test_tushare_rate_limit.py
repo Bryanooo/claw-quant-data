@@ -11,11 +11,13 @@ from service.tushare_rate_limit import (
 )
 
 
-def test_reservation_locks_global_and_interface_slots_before_sleep():
+def test_reservation_locks_global_and_interface_slots_before_short_durable_sleep(
+    monkeypatch,
+):
     now = datetime(2026, 8, 29, tzinfo=timezone.utc)
     next_slots = {
-        GLOBAL_RATE_KEY: now + timedelta(seconds=0.2),
-        "daily": now + timedelta(seconds=0.1),
+        GLOBAL_RATE_KEY: now + timedelta(seconds=6),
+        "daily": now + timedelta(seconds=5),
     }
     updates = []
 
@@ -54,6 +56,9 @@ def test_reservation_locks_global_and_interface_slots_before_sleep():
 
     connection = Connection()
     sleeps = []
+    monkeypatch.setattr(
+        "service.tushare_rate_limit.is_durable_job_active", lambda: True
+    )
 
     waited = reserve_tushare_request(
         "daily",
@@ -63,8 +68,8 @@ def test_reservation_locks_global_and_interface_slots_before_sleep():
         sleep=sleeps.append,
     )
 
-    assert waited == 0.2
-    assert sleeps == [0.2]
+    assert waited == 6
+    assert sleeps == [6]
     assert connection.committed is True
     assert {item[2] for item in updates} == {GLOBAL_RATE_KEY, "daily"}
 
@@ -221,7 +226,10 @@ def test_base_collector_routes_dedicated_sdk_calls_through_shared_limiter(monkey
     assert upstream_calls == [("daily", (), {"trade_date": "20260828"})]
     assert archived[0]["api_name"] == "daily"
     assert archived[0]["parameters"] == {"trade_date": "20260828"}
-    assert archived[0]["persist_records"] is True
+    # Successful provider calls always retain request-level evidence. Their
+    # payload rows are only persisted when downstream processing fails under
+    # the default anomalies-only quarantine policy.
+    assert archived[0]["persist_records"] is False
     assert fake_pro._DataApi__timeout == (4.0, 45.0)
 
 

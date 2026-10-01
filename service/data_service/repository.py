@@ -30,7 +30,7 @@ class DatasetRepository:
     def records(self, dataset: DatasetSpec, query: DatasetQuery) -> list[dict]:
         where_sql, params = self._where_clause(dataset, query)
         direction = sql.SQL("DESC" if dataset.default_descending else "ASC")
-        order_columns = dataset.default_order or dataset.primary_keys
+        order_columns = dataset.stable_order
         # PostgreSQL applies a trailing direction only to the immediately
         # preceding expression.  Build every term explicitly so a contract
         # such as (trade_date, ts_code) really returns the newest partition
@@ -40,14 +40,23 @@ class DatasetRepository:
             for column in order_columns
         )
 
-        statement = sql.SQL(
-            "SELECT * FROM {table}{where} ORDER BY {order} "
-            "LIMIT %s OFFSET %s"
-        ).format(
-            table=sql.Identifier(dataset.read_table),
-            where=where_sql,
-            order=order_sql,
-        )
+        if self._requires_point_in_time_projection(dataset, query):
+            statement = sql.SQL(
+                "SELECT * FROM ({projection}) AS point_in_time "
+                "ORDER BY {order} LIMIT %s OFFSET %s"
+            ).format(
+                projection=self._point_in_time_projection(dataset, where_sql),
+                order=order_sql,
+            )
+        else:
+            statement = sql.SQL(
+                "SELECT * FROM {table}{where} ORDER BY {order} "
+                "LIMIT %s OFFSET %s"
+            ).format(
+                table=sql.Identifier(dataset.read_table),
+                where=where_sql,
+                order=order_sql,
+            )
         return self._database.fetch_all(
             statement,
             (*params, query.limit, query.offset),
@@ -55,12 +64,59 @@ class DatasetRepository:
 
     def count(self, dataset: DatasetSpec, query: DatasetQuery) -> int:
         where_sql, params = self._where_clause(dataset, query)
-        statement = sql.SQL("SELECT count(*) AS total FROM {table}{where}").format(
-            table=sql.Identifier(dataset.read_table),
-            where=where_sql,
-        )
+        if self._requires_point_in_time_projection(dataset, query):
+            statement = sql.SQL(
+                "SELECT count(*) AS total FROM ({projection}) AS point_in_time"
+            ).format(projection=self._point_in_time_projection(dataset, where_sql))
+        else:
+            statement = sql.SQL(
+                "SELECT count(*) AS total FROM {table}{where}"
+            ).format(
+                table=sql.Identifier(dataset.read_table),
+                where=where_sql,
+            )
         row = self._database.fetch_one(statement, params)
         return int(row["total"]) if row else 0
+
+    @staticmethod
+    def _requires_point_in_time_projection(
+        dataset: DatasetSpec,
+        query: DatasetQuery,
+    ) -> bool:
+        """Choose the latest version that was available at the requested time.
+
+        Filtering a present-day ``current`` view by announcement date is not
+        point-in-time safe: a later revision can hide the earlier version and
+        then be filtered out.  Reviewed versioned datasets therefore select
+        from their lossless base relation *after* applying the availability
+        cutoff and only then reduce each logical identity to one row.
+        """
+        return bool(
+            query.as_of is not None
+            and dataset.availability_column
+            and dataset.storage_semantics == "versioned_payload"
+            and dataset.identity_confidence == "contract_reviewed"
+            and dataset.business_identity_fields
+        )
+
+    @staticmethod
+    def _point_in_time_projection(
+        dataset: DatasetSpec,
+        where_sql: sql.Composed,
+    ) -> sql.Composed:
+        identity = sql.SQL(", ").join(
+            sql.Identifier(column) for column in dataset.business_identity_fields
+        )
+        return sql.SQL(
+            "SELECT DISTINCT ON ({identity}) * FROM {table}{where} "
+            "ORDER BY {identity}, {availability} DESC NULLS LAST, "
+            "_source_collected_at DESC, _last_seen_at DESC, _record_hash DESC"
+        ).format(
+            identity=identity,
+            table=sql.Identifier(dataset.table),
+            where=where_sql,
+            availability=sql.Identifier(dataset.availability_column),
+        )
 
     def latest_value(self, dataset: DatasetSpec) -> Any:
         if not dataset.date_column:
@@ -109,7 +165,21 @@ class DatasetRepository:
             """,
             (dataset.freshness_read_table,),
         )
-        return int(row["estimated_rows"]) if row else 0
+        estimated = int(row["estimated_rows"]) if row else 0
+        if estimated > 0:
+            return estimated
+
+        # PostgreSQL statistics are deliberately approximate and can remain
+        # zero immediately after a successful bulk insert.  Treating that
+        # lag as proof of an empty dataset creates a false missing-data alert.
+        # An indexed-free LIMIT 1 probe is bounded and establishes the only
+        # fact freshness/readiness needs here: whether at least one row exists.
+        present = self._database.fetch_one(
+            sql.SQL("SELECT 1 AS present FROM {table} LIMIT 1").format(
+                table=sql.Identifier(dataset.freshness_read_table),
+            )
+        )
+        return 1 if present else 0
 
     def search_news(
         self,
@@ -186,6 +256,24 @@ class DatasetRepository:
                 )
             )
             params.append(query.as_of)
+
+        if query.cursor_values is not None:
+            order_columns = dataset.stable_order
+            cursor_columns = sql.SQL(", ").join(
+                sql.Identifier(column) for column in order_columns
+            )
+            cursor_values = sql.SQL(", ").join(
+                sql.Placeholder() for _column in order_columns
+            )
+            operator = "<" if dataset.default_descending else ">"
+            conditions.append(
+                sql.SQL("({columns}) {operator} ({values})").format(
+                    columns=cursor_columns,
+                    operator=sql.SQL(operator),
+                    values=cursor_values,
+                )
+            )
+            params.extend(query.cursor_values)
 
         if not conditions:
             return sql.SQL(""), tuple(params)

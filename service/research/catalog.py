@@ -22,6 +22,13 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     },
     {
         "method": "GET",
+        "path": "/api/v1/research/validation-set",
+        "name": "研究端到端验证集",
+        "domain": "质量与可用性",
+        "description": "列出个股、行业、指数、ETF、黄金和宏观研究的代表性验收案例。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/stocks/{ts_code}/fundamentals",
         "name": "基本面分析",
         "domain": "个股研究",
@@ -78,10 +85,52 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     },
     {
         "method": "GET",
+        "path": "/api/v1/research/macro/regime",
+        "name": "宏观状态",
+        "domain": "宏观研究",
+        "description": "基于增长、通胀和流动性分项给出透明规则的当前状态，不输出预测。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/macro/{theme}",
+        "name": "宏观主题序列",
+        "domain": "宏观研究",
+        "description": "提供增长、通胀或流动性的有界原始序列及历史口径限制。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/etfs/flows",
+        "name": "ETF份额资金流",
+        "domain": "ETF研究",
+        "description": "按ETF及跟踪指数汇总份额净申购赎回、估算资金流和市场表现。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/etfs/state-team-signals",
+        "name": "国家队ETF证据信号",
+        "domain": "ETF研究",
+        "description": "按市场流量、疑似和已确认三档输出候选，缺少持有人证据时禁止确认归因。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/sectors/{provider}/rotation",
         "name": "板块轮动",
         "domain": "板块研究",
         "description": "按多窗口收益和成交活跃度识别板块强弱。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/fundamentals",
+        "name": "行业基本面",
+        "domain": "行业研究",
+        "description": "按时点成员聚合财务、估值覆盖、同比变化和主要贡献公司。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/breadth",
+        "name": "行业内部宽度",
+        "domain": "行业研究",
+        "description": "按时点成分计算涨跌分布、均线扩散和行情覆盖。",
     },
 )
 
@@ -146,7 +195,18 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "event-study", "name": "事件窗口异常收益", "domain": "事件", "endpoint": "event-study"},
     {"id": "market-breadth", "name": "市场宽度", "domain": "市场", "endpoint": "market-breadth"},
     {"id": "sector-rotation", "name": "板块轮动", "domain": "板块", "endpoint": "sector-rotation"},
+    {"id": "etf-share-flow", "name": "ETF份额资金流", "domain": "ETF", "endpoint": "etf-flows"},
+    {"id": "etf-state-team-signals", "name": "国家队ETF证据信号", "domain": "ETF", "endpoint": "state-team-signals"},
     {"id": "repurchase-progress", "name": "回购累计进展与市场反应", "domain": "股东回报", "endpoint": "repurchase-progress"},
+    # Macro and industry (8)
+    {"id": "macro-growth", "name": "GDP与PMI增长状态", "domain": "宏观", "endpoint": "macro-regime"},
+    {"id": "macro-inflation", "name": "CPI与PPI通胀状态", "domain": "宏观", "endpoint": "macro-regime"},
+    {"id": "macro-liquidity", "name": "货币、社融与利率环境", "domain": "宏观", "endpoint": "macro-regime"},
+    {"id": "macro-regime", "name": "增长通胀流动性状态组合", "domain": "宏观", "endpoint": "macro-regime"},
+    {"id": "industry-financials", "name": "行业财务聚合与同比", "domain": "行业", "endpoint": "industry-fundamentals"},
+    {"id": "industry-valuation", "name": "行业估值中位数与覆盖", "domain": "行业", "endpoint": "industry-fundamentals"},
+    {"id": "industry-contributors", "name": "行业收入与利润贡献公司", "domain": "行业", "endpoint": "industry-fundamentals"},
+    {"id": "industry-breadth", "name": "行业成分涨跌与均线扩散", "domain": "行业", "endpoint": "industry-breadth"},
 )
 
 
@@ -158,11 +218,22 @@ GAP_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "governance-risk", "name": "治理、诉讼与监管风险", "domain": "基本面", "status": "missing", "action": "new_source", "source_todo": "official-announcements"},
     {"id": "news-events", "name": "新闻事件检测", "domain": "事件", "status": "partial", "action": "derive_and_source", "source_todo": "news-and-sentiment"},
     {"id": "news-sentiment", "name": "情绪与新闻冲击", "domain": "事件", "status": "partial", "action": "derive_and_source", "source_todo": "news-and-sentiment"},
+    {"id": "etf-holder-attribution", "name": "ETF持有人身份归因", "domain": "ETF", "status": "missing", "action": "new_source", "source_todo": "official-etf-holder-reports"},
     {"id": "market-microstructure", "name": "订单失衡与冲击成本", "domain": "微观结构", "status": "constrained", "action": "new_source", "source_todo": "level2-microstructure"},
+    {"id": "macro-external-fiscal", "name": "海外政策、外部平衡与财政脉冲", "domain": "宏观", "status": "partial", "action": "new_source", "source_todo": "macro-external-fiscal"},
+    {"id": "industry-operating-drivers", "name": "行业产能、库存、价格与供需", "domain": "行业", "status": "missing", "action": "new_source", "source_todo": "industry-operating-data"},
 )
 
 
 BACKFILL_WORKSTREAMS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "etf-share-flow-history",
+        "group": "etf-flow",
+        "name": "ETF份额与规模历史",
+        "interfaces": ["etf_share_size"],
+        "status": "planned",
+        "reason": "当前只覆盖2026年5月以后，无法校准长期异常分位或回测历次官方增持事件。",
+    },
     {
         "id": "news-history",
         "group": "news",
@@ -219,6 +290,13 @@ BACKFILL_WORKSTREAMS: tuple[dict[str, Any], ...] = (
 
 NEW_SOURCE_TODOS: tuple[dict[str, Any], ...] = (
     {
+        "id": "official-etf-holder-reports",
+        "name": "ETF定期报告持有人明细",
+        "status": "todo",
+        "required_for": ["国家队身份确认", "跨ETF持仓变化", "疑似信号事后验证"],
+        "acceptance": "只接入交易所或基金管理人正式报告，保存报告期、持有人原名、标准实体、份额、比例、来源URL与文件哈希。",
+    },
+    {
         "id": "official-announcements",
         "name": "交易所与公司公告全文",
         "status": "todo",
@@ -239,12 +317,29 @@ NEW_SOURCE_TODOS: tuple[dict[str, Any], ...] = (
         "required_for": ["微观结构", "订单失衡", "冲击成本"],
         "acceptance": "明确授权、交易时序、盘口档位、逐笔身份和可恢复的高频存储。",
     },
+    {
+        "id": "macro-external-fiscal",
+        "name": "宏观外部与财政数据",
+        "status": "partial",
+        "required_for": ["海外政策联动", "外部平衡", "财政脉冲", "宏观事件影响"],
+        "acceptance": "保存官方发布期、首次发布时间、修订版本、单位和来源；不能用最终修订值伪造历史实时判断。",
+    },
+    {
+        "id": "industry-operating-data",
+        "name": "行业供需与经营高频数据",
+        "status": "todo",
+        "required_for": ["产能周期", "库存周期", "价格传导", "供需缺口"],
+        "acceptance": "按行业定义指标实体、频率、单位、修订策略和合法来源，并与行业分类版本建立可追溯映射。",
+    },
 )
 
 
 def capability_catalog(
     backfill_statuses: dict[str, dict[str, Any]] | None = None,
+    readiness: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from service.research.readiness import lineage_catalog
+
     backfills = []
     for configured in BACKFILL_WORKSTREAMS:
         item = dict(configured)
@@ -252,7 +347,7 @@ def capability_catalog(
         if runtime:
             item.update(runtime)
         backfills.append(item)
-    return {
+    result = {
         "summary": {
             "baseline_techniques": len(SERVED_TECHNIQUES) + len(GAP_TECHNIQUES),
             "currently_served": len(SERVED_TECHNIQUES),
@@ -274,6 +369,7 @@ def capability_catalog(
                 not in {
                     "/api/v1/research/capabilities",
                     "/api/v1/research/readiness",
+                    "/api/v1/research/validation-set",
                 }
                 for item in DERIVED_ENDPOINTS
             ),
@@ -293,4 +389,8 @@ def capability_catalog(
         },
         "backfills": backfills,
         "new_source_todos": list(NEW_SOURCE_TODOS),
+        "data_lineage": lineage_catalog(),
     }
+    if readiness is not None:
+        result["readiness"] = readiness
+    return result

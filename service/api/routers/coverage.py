@@ -20,6 +20,24 @@ def coverage_overview(service: CoverageServiceDependency) -> dict:
     return service.overview()
 
 
+@router.get("/calendar")
+def coverage_calendar(
+    start_date: date,
+    end_date: date,
+    service: CoverageServiceDependency,
+) -> dict:
+    """Calendar of audited business data, independent of task engine version."""
+    return service.data_calendar(start_date, end_date)
+
+
+@router.get("/calendar/{data_date}")
+def coverage_calendar_day(
+    data_date: date,
+    service: CoverageServiceDependency,
+) -> dict:
+    return service.calendar_day(data_date)
+
+
 @router.get("/datasets/{dataset_name}/partitions")
 def coverage_partitions(
     dataset_name: str,

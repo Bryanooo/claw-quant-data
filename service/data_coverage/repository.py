@@ -1119,6 +1119,65 @@ class CoverageRepository:
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def data_calendar(self, start_date: date, end_date: date) -> list[dict]:
+        """Aggregate the durable audit ledger by *data* date.
+
+        The calendar deliberately reads ``sys_data_coverage_partition`` rather
+        than an orchestration-engine table.  This keeps historical evidence
+        visible across scheduler/runtime migrations and prevents a UI from
+        exposing internal generation labels such as V1/V2.
+        """
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT partition_date AS data_date,
+                       count(*)::integer AS dataset_states,
+                       count(*) FILTER (
+                           WHERE expected AND status='present'
+                       )::integer AS ready,
+                       count(*) FILTER (
+                           WHERE NOT expected AND status='observed_only'
+                       )::integer AS observed,
+                       count(*) FILTER (
+                           WHERE status IN ('missing','partial')
+                       )::integer AS problems,
+                       count(*) FILTER (WHERE status='pending')::integer AS active,
+                       COALESCE(sum(row_count), 0)::bigint AS rows
+                FROM sys_data_coverage_partition
+                WHERE partition_date BETWEEN %s AND %s
+                GROUP BY partition_date
+                ORDER BY partition_date
+                """,
+                (start_date, end_date),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def calendar_day(self, data_date: date) -> list[dict]:
+        """Return every audited dataset state for one logical data date."""
+        with (
+            self._connection() as connection,
+            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT dataset_name, partition_date, status, row_count,
+                       entity_count, expected_entity_count,
+                       entity_coverage_ratio, expected, checked_at
+                FROM sys_data_coverage_partition
+                WHERE partition_date=%s
+                ORDER BY CASE status
+                           WHEN 'missing' THEN 0 WHEN 'partial' THEN 1
+                           WHEN 'pending' THEN 2 WHEN 'present' THEN 3 ELSE 4
+                         END,
+                         dataset_name
+                """,
+                (data_date,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def covering_audit(
         self,
         dataset_name: str,

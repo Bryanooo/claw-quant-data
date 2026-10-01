@@ -69,6 +69,19 @@ class FakeOrchestrationV2Repository:
             for value in (19, 18, 17)
         ]
 
+    def get_definition(self, definition_id):
+        self.calls.append(("definition", {"definition_id": definition_id}))
+        if definition_id == 404:
+            return None
+        return {
+            "task_definition_id": definition_id,
+            "task_key": "stock_daily",
+            "version": 3,
+            "lifecycle_status": "active",
+            "workflow_kind": "acquisition",
+            "definition": {"nodes": [{"key": "acquire", "kind": "acquire"}]},
+        }
+
     def get_execution(self, execution_id):
         self.calls.append(("execution", {"execution_id": execution_id}))
         if execution_id == 404:
@@ -95,6 +108,10 @@ class FakeOrchestrationV2Repository:
             }
             for value in (29, 28, 27)
         ]
+
+    def retry_attention_executions(self, execution_ids, *, reason):
+        self.calls.append(("retry", {"ids": execution_ids, "reason": reason}))
+        return [{"task_execution_id": execution_ids[0], "status": "retrying"}]
 
 
 def make_client():
@@ -255,3 +272,61 @@ def test_execution_detail_returns_404_for_unknown_instance():
         response = client.get("/api/v1/ops/orchestration-v2/executions/404")
     assert response.status_code == 404
     assert repository.calls == [("execution", {"execution_id": 404})]
+
+
+def test_stable_operator_api_separates_tasks_from_executions():
+    client, repository = make_client()
+    with client:
+        tasks = client.get("/api/v1/ops/tasks", params={"limit": 2})
+        detail = client.get("/api/v1/ops/tasks/9")
+        executions = client.get("/api/v1/ops/executions", params={"limit": 2})
+
+    assert tasks.status_code == 200
+    assert detail.status_code == 200
+    assert detail.json()["task"]["definition"]["nodes"][0]["key"] == "acquire"
+    assert executions.status_code == 200
+    assert executions.json()["items"][0]["resolution"]["retryable"] is True
+    assert [call[0] for call in repository.calls] == [
+        "definitions", "definition", "executions"
+    ]
+
+
+def test_attention_execution_retry_requires_confirmation_request():
+    client, repository = make_client()
+    repository.get_execution = lambda execution_id: {
+        "task_execution_id": execution_id,
+        "task_key": "stock_daily",
+        "status": "attention",
+        "final_error_category": "provider_transient",
+    }
+    with client:
+        response = client.post(
+            "/api/v1/ops/executions/19/retry",
+            json={"reason": "confirmed after provider recovery"},
+        )
+    assert response.status_code == 202
+    assert response.json()["execution"]["status"] == "retrying"
+    assert repository.calls[-1] == (
+        "retry",
+        {"ids": (19,), "reason": "confirmed after provider recovery"},
+    )
+
+
+def test_historical_attention_attempt_cannot_be_retried_twice():
+    client, repository = make_client()
+    repository.get_execution = lambda execution_id: {
+        "task_execution_id": execution_id,
+        "task_key": "stock_daily",
+        "status": "attention",
+        "final_error_category": "data_incomplete",
+        "is_current_scope_execution": False,
+        "latest_scope_execution_id": 23,
+    }
+    with client:
+        response = client.post(
+            "/api/v1/ops/executions/19/retry",
+            json={"reason": "retry old attempt"},
+        )
+    assert response.status_code == 409
+    assert "最新实例 #23" in response.json()["error"]["message"]
+    assert all(call[0] != "retry" for call in repository.calls)

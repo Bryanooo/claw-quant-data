@@ -1,5 +1,11 @@
 from service.api.app import create_app
-from service.data_service.catalog import CANONICAL_ENDPOINTS, build_data_service_catalog
+from service.data_service.catalog import (
+    CANONICAL_ENDPOINTS,
+    RAW_ENDPOINTS,
+    RESEARCH_ENDPOINTS,
+    STANDARD_ENDPOINTS,
+    build_data_service_catalog,
+)
 
 
 class FakeDatabase:
@@ -55,9 +61,21 @@ def test_catalog_distinguishes_registration_from_observed_raw_coverage():
     assert all(item["status"] == "available" for item in research["items"])
 
 
-def test_every_advertised_canonical_endpoint_exists_in_openapi():
+def test_every_advertised_data_service_endpoint_exists_in_openapi():
     paths = create_app(database_factory=FakeDatabase).openapi()["paths"]
 
-    for endpoint in CANONICAL_ENDPOINTS:
+    endpoints = (*RAW_ENDPOINTS, *STANDARD_ENDPOINTS, *RESEARCH_ENDPOINTS)
+    identities = [
+        (endpoint["method"], endpoint["path"])
+        for endpoint in endpoints
+    ]
+    assert len(endpoints) == 63
+    assert len(identities) == len(set(identities))
+    for endpoint in endpoints:
         assert endpoint["path"] in paths, endpoint["path"]
         assert endpoint["method"].lower() in paths[endpoint["path"]]
+
+
+def test_canonical_and_research_catalog_counts_are_stable():
+    assert len(CANONICAL_ENDPOINTS) == 24
+    assert len(RESEARCH_ENDPOINTS) == 28

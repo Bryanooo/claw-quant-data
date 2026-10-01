@@ -25,6 +25,10 @@ from service.orchestration_v2.gap_repair import (
     plan_current_repairs,
 )
 from service.orchestration_v2.repository import OrchestrationV2Repository
+from service.orchestration_v2.late_repair import (
+    LATE_REPAIR_HOURS,
+    LATE_REPAIR_MINUTE,
+)
 from service.orchestration_v2.scheduling import dispatch_due_acquisitions
 
 
@@ -101,7 +105,10 @@ def run_v2_late_repair_dispatch() -> int:
         limit=500,
         actor_revision=APP_REVISION,
         trigger_source="schedule",
-        idempotency_prefix=f"v2:scheduled-late-repair:{now.date().isoformat()}",
+        idempotency_prefix=(
+            "v2:scheduled-late-repair:"
+            f"{now.strftime('%Y-%m-%dT%H:%M')}"
+        ),
         frozen_scope_extra={"dispatch": "v2_scheduled_late_repair"},
     )
     logger.info(
@@ -153,7 +160,10 @@ def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundSchedu
         replace_existing=True, coalesce=True, max_instances=1,
     )
     scheduler.add_job(
-        run_v2_late_repair_dispatch, "cron", hour=23, minute=58,
+        run_v2_late_repair_dispatch,
+        "cron",
+        hour=",".join(str(hour) for hour in LATE_REPAIR_HOURS),
+        minute=LATE_REPAIR_MINUTE,
         id="v2_late_repair_dispatch", name="V2 晚发布数据自动补采",
         replace_existing=True, coalesce=True, max_instances=1,
         misfire_grace_time=3600,

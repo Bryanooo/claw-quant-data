@@ -57,4 +57,15 @@ def test_late_repair_dispatch_creates_fresh_bounded_v2_instances(monkeypatch):
     assert captured["create"]["proposals"] == (proposal,)
     assert captured["create"]["limit"] == 500
     assert captured["create"]["trigger_source"] == "schedule"
-    assert captured["create"]["idempotency_prefix"].endswith("2026-09-30")
+    assert captured["create"]["idempotency_prefix"].endswith(
+        "2026-09-30T23:58"
+    )
+
+
+def test_late_repairs_run_at_multiple_post_close_windows():
+    scheduler = create_scheduler(set_active=False)
+    job = scheduler.get_job("v2_late_repair_dispatch")
+
+    assert str(job.trigger) == (
+        "cron[hour='15,18,21,23', minute='58']"
+    )

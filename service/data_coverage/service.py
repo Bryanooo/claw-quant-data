@@ -251,6 +251,40 @@ class CoverageService:
             "partitions": rows,
         }
 
+    def data_calendar(self, start_date: date, end_date: date) -> dict:
+        if start_date > end_date:
+            raise InvalidCoverageRequestError(
+                "start_date must not be later than end_date"
+            )
+        if (end_date - start_date).days > 370:
+            raise InvalidCoverageRequestError(
+                "one calendar request may cover at most 370 days"
+            )
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "semantics": "audited_data_partitions",
+            "days": self._repository.data_calendar(start_date, end_date),
+        }
+
+    def calendar_day(self, data_date: date) -> dict:
+        rows = self._repository.calendar_day(data_date)
+        return {
+            "data_date": data_date,
+            "summary": {
+                "datasets": len(rows),
+                "ready": sum(
+                    row["status"] in {"present", "observed_only"}
+                    for row in rows
+                ),
+                "problems": sum(
+                    row["status"] in {"missing", "partial"} for row in rows
+                ),
+                "active": sum(row["status"] == "pending" for row in rows),
+            },
+            "datasets": rows,
+        }
+
     def submit_repairs(
         self,
         dataset_name: str,

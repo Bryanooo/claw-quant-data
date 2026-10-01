@@ -137,7 +137,9 @@ def test_today_delivery_is_definition_driven_before_dispatch():
     view = OrchestrationV2Repository().today_delivery(date(2099, 1, 2))
 
     assert view["engine"] == "orchestration_v2"
-    assert view["summary"]["planned"] > 0
+    assert view["summary"]["configured_daily_tasks"] > 0
+    assert view["summary"]["planned"] == 0
     assert view["summary"]["expected"] == 0
     assert view["summary"]["not_dispatched"] == 0
-    assert view["summary"]["not_due"] == view["summary"]["planned"]
+    assert view["summary"]["not_due"] == 0
+    assert view["items"] == []

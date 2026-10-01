@@ -21,6 +21,7 @@ from service.api.routers import (
     investment_calendar,
     interfaces,
     normalization,
+    operations,
     orchestration_v2,
     raw_archive,
     research,
@@ -208,6 +209,7 @@ def create_app(
     application.include_router(catalog.router, prefix="/api")
     application.include_router(initialization.router, prefix="/api")
     application.include_router(investment_calendar.router, prefix="/api")
+    application.include_router(operations.router, prefix="/api")
     application.include_router(orchestration_v2.router, prefix="/api")
 
     dashboard_directory = PROJECT_ROOT / "service" / "dashboard"

@@ -917,3 +917,46 @@ def test_quarter_periods_only_become_expected_after_disclosure_deadline():
         date(2026, 9, 30),
         date(2026, 9, 1),
     ) == [date(2025, 12, 31), date(2026, 3, 31), date(2026, 6, 30)]
+
+
+def test_data_calendar_uses_audit_partition_semantics():
+    class Repository:
+        def data_calendar(self, start_date, end_date):
+            assert start_date == date(2026, 9, 1)
+            assert end_date == date(2026, 9, 30)
+            return [{
+                "data_date": start_date,
+                "dataset_states": 3,
+                "ready": 2,
+                "observed": 0,
+                "problems": 1,
+                "active": 0,
+            }]
+
+    service = coverage_service.CoverageService(repository=Repository())
+    result = service.data_calendar(date(2026, 9, 1), date(2026, 9, 30))
+
+    assert result["semantics"] == "audited_data_partitions"
+    assert result["days"][0]["problems"] == 1
+
+
+def test_data_calendar_day_counts_strict_and_observed_states():
+    class Repository:
+        def calendar_day(self, data_date):
+            assert data_date == date(2026, 9, 30)
+            return [
+                {"dataset_name": "a", "status": "present"},
+                {"dataset_name": "b", "status": "observed_only"},
+                {"dataset_name": "c", "status": "partial"},
+                {"dataset_name": "d", "status": "pending"},
+            ]
+
+    service = coverage_service.CoverageService(repository=Repository())
+    result = service.calendar_day(date(2026, 9, 30))
+
+    assert result["summary"] == {
+        "datasets": 4,
+        "ready": 2,
+        "problems": 1,
+        "active": 1,
+    }

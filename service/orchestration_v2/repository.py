@@ -241,6 +241,9 @@ class OrchestrationV2Repository:
                        workflow_kind, definition_digest, app_revision, image_digest,
                        definition->'input_datasets' AS input_datasets,
                        definition->'output_datasets' AS output_datasets,
+                       definition->'scope_contract'->>'cadence' AS cadence,
+                       definition->'schedule'->>'mode' AS schedule_mode,
+                       definition->'schedule'->>'expression' AS schedule_expression,
                        jsonb_array_length(definition->'nodes') AS node_count,
                        created_by, activated_by, created_at, activated_at, retired_at
                 FROM orchestration_v2.task_definition
@@ -275,15 +278,43 @@ class OrchestrationV2Repository:
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute(
                 """
-                SELECT task_execution_id, task_definition_id, task_key,
+                SELECT execution.task_execution_id, execution.task_definition_id,
+                       execution.task_key,
                        definition_version, purpose, trigger_source, status,
                        observation_key, observation_start, observation_end,
                        publication_date, data_available_at, collected_at,
                        current_node_key, node_status, priority, resource_class,
                        attempt_count, max_attempts, eligible_at, lease_owner,
                        lease_expires_at, final_error_category, final_error_message,
-                       created_at, started_at, finished_at, updated_at
-                FROM orchestration_v2.task_execution
+                       created_at, started_at, finished_at, updated_at,
+                       COALESCE(acquire.rows_fetched, 0) AS rows_fetched,
+                       COALESCE(acquire.rows_written, 0) AS rows_written,
+                       NOT EXISTS (
+                           SELECT 1
+                           FROM orchestration_v2.task_execution AS newer
+                           WHERE newer.task_key=execution.task_key
+                             AND newer.observation_key=execution.observation_key
+                             AND newer.task_execution_id>
+                                 execution.task_execution_id
+                       ) AS is_current_scope_execution,
+                       (
+                           SELECT max(newer.task_execution_id)
+                           FROM orchestration_v2.task_execution AS newer
+                           WHERE newer.task_key=execution.task_key
+                             AND newer.observation_key=execution.observation_key
+                       ) AS latest_scope_execution_id
+                FROM orchestration_v2.task_execution AS execution
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE((payload->>'rows_fetched')::bigint, 0)
+                               AS rows_fetched,
+                           COALESCE((payload->>'rows_inserted')::bigint, 0)
+                               AS rows_written
+                    FROM orchestration_v2.task_execution_event
+                    WHERE task_execution_id=execution.task_execution_id
+                      AND event_type='node.acquire.completed'
+                    ORDER BY sequence_number DESC
+                    LIMIT 1
+                ) AS acquire ON true
                 """ + where + " ORDER BY task_execution_id DESC LIMIT %s",
                 tuple(params),
             )
@@ -572,11 +603,22 @@ class OrchestrationV2Repository:
             item["delivery_status"] in {"ready", "ready_after_repair"}
             for item in items
         )
+        configured_daily_tasks = len(items)
+        if not trade_day:
+            # Task definitions describe what *could* run on a trading day;
+            # they are not execution instances.  Returning one synthetic row
+            # per definition on a closed market day made the console look as
+            # if hundreds of jobs had been created.  Keep the capacity count
+            # in summary metadata and expose no due/instance rows.
+            items = []
+            not_due = 0
+            strictly_ready = 0
         return {
             "engine": "orchestration_v2",
             "data_date": observation_date,
             "trade_day": trade_day,
             "summary": {
+                "configured_daily_tasks": configured_daily_tasks,
                 "planned": len(items),
                 "expected": len(items) - not_due,
                 "success": sum(item["status"] == "success" for item in items),
@@ -1768,8 +1810,25 @@ class OrchestrationV2Repository:
     def get_execution(self, execution_id: int) -> dict | None:
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute(
-                "SELECT * FROM orchestration_v2.task_execution "
-                "WHERE task_execution_id=%s",
+                """
+                SELECT execution.*,
+                       NOT EXISTS (
+                           SELECT 1
+                           FROM orchestration_v2.task_execution AS newer
+                           WHERE newer.task_key=execution.task_key
+                             AND newer.observation_key=execution.observation_key
+                             AND newer.task_execution_id>
+                                 execution.task_execution_id
+                       ) AS is_current_scope_execution,
+                       (
+                           SELECT max(newer.task_execution_id)
+                           FROM orchestration_v2.task_execution AS newer
+                           WHERE newer.task_key=execution.task_key
+                             AND newer.observation_key=execution.observation_key
+                       ) AS latest_scope_execution_id
+                FROM orchestration_v2.task_execution AS execution
+                WHERE execution.task_execution_id=%s
+                """,
                 (execution_id,),
             )
             row = cursor.fetchone()

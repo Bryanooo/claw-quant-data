@@ -33,7 +33,9 @@ def test_dashboard_exposes_paginated_service_lineage():
 def test_dashboard_exposes_financial_data_dependency_matrix():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
-    assert "Financial Data 依赖矩阵" in html
-    assert "无本地规范等价" in html
+    assert "Financial Data ↔ Tushare 全量映射" in html
+    assert "Tushare 公告解析" in html
+    assert "Financial Data 必需" in html
     assert 'api("/api/v1/data/source-priorities")' in script
-    assert "financial_data_required_now" in script
+    assert "provider_equivalence_summary" in script
+    assert "equivalence_class" in script

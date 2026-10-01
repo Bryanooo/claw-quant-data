@@ -12,6 +12,12 @@ from service.data_service.source_policy import (
     source_policy_catalog,
     source_policy_summary,
 )
+from service.data_service.provider_equivalence import (
+    financial_tushare_catalog,
+    financial_tushare_summary,
+    tushare_financial_reverse_catalog,
+    tushare_financial_reverse_summary,
+)
 
 
 def main() -> None:
@@ -23,10 +29,16 @@ def main() -> None:
     policies = source_policy_catalog()
     generated_at = datetime.now(timezone.utc).isoformat()
     summary = source_policy_summary(policies)
+    equivalence_summary = financial_tushare_summary(financial_tushare_catalog())
+    reverse_items = tushare_financial_reverse_catalog()
+    reverse_summary = tushare_financial_reverse_summary(reverse_items)
     payload = {
         "generated_at": generated_at,
         "policy": "local canonical DB first; quota source only by explicit policy",
         "summary": summary,
+        "provider_equivalence_summary": equivalence_summary,
+        "tushare_reverse_summary": reverse_summary,
+        "tushare_endpoints": list(reverse_items),
         "items": [item.as_dict() for item in policies],
     }
 
@@ -67,11 +79,77 @@ def main() -> None:
         "> “无本地规范等价”描述的是当前系统状态，不等同于已经证明 Tushare 完全没有"
         "语义相近接口；其中也可能有尚未完成映射和标准化的缺口。",
         "",
+        "## 供应商语义能力四分类",
+        "",
+        "这组数字回答供应商能否提供同一业务事实，与本地是否已经落表、当前 Token "
+        "是否有权限相互独立。只有覆盖完整 Financial Data 合同才算等价；局部市场或字段"
+        "重叠仍归入 `financial_data_only`。",
+        "",
+        "| Financial Data 路由 | Tushare 直接等价 | Tushare 确定性派生 | Tushare 公告解析 | Financial Data 必需 | 当前 Token 可完整执行 | 部分 Tushare 重叠 |",
+        "|---:|---:|---:|---:|---:|---:|---:|",
+        f"| {equivalence_summary['financial_data_routes']} | "
+        f"{equivalence_summary['tushare_direct']} | "
+        f"{equivalence_summary['tushare_derived']} | "
+        f"{equivalence_summary['tushare_announcement_parse']} | "
+        f"{equivalence_summary['financial_data_only']} | "
+        f"{equivalence_summary['current_token_ready_routes']} | "
+        f"{equivalence_summary['partial_tushare_overlap_routes']} |",
+        "",
+        "## Financial Data ↔ Tushare 逐条映射",
+        "",
+        "| Financial Data 路由 | 四类归属 | 完整等价所需 Tushare 接口 | 仅局部重叠接口 | 当前 Token 完整可用 | 判定依据 |",
+        "|---|---|---|---|---|---|",
+    ]
+    for item in policies:
+        provider = item.as_dict()["provider_equivalence"]
+        interfaces = ", ".join(
+            f"`{entry['api_name']}`({entry['permission']})"
+            for entry in provider["tushare_interfaces"]
+        ) or "—"
+        related = ", ".join(
+            f"`{entry['api_name']}`({entry['permission']})"
+            for entry in provider["related_tushare_interfaces"]
+        ) or "—"
+        rationale = provider["rationale"].replace("|", "\\|")
+        lines.append(
+            f"| `{item.route}` | `{provider['equivalence_class']}` | "
+            f"{interfaces} | {related} | "
+            f"{'是' if provider['current_token_ready'] else '否'} | {rationale} |"
+        )
+    lines.extend([
+        "",
+        "## Tushare 244 条契约反向映射",
+        "",
+        "| Tushare 契约 | 作为完整等价输入 | 仅局部重叠 | 无 Financial Data 对应 |",
+        "|---:|---:|---:|---:|",
+        f"| {reverse_summary['tushare_contracts']} | "
+        f"{reverse_summary['full_equivalence_input']} | "
+        f"{reverse_summary['partial_overlap_only']} | "
+        f"{reverse_summary['no_financial_data_counterpart']} |",
+        "",
+        "| Tushare 接口 | 标题 | Token 权限 | 可安全采集 | 映射状态 | 完整等价 Financial 路由 | 局部重叠 Financial 路由 |",
+        "|---|---|---|---|---|---|---|",
+    ])
+    for item in reverse_items:
+        full_routes = ", ".join(
+            f"`{route}`" for route in item["full_equivalence_routes"]
+        ) or "—"
+        partial_routes = ", ".join(
+            f"`{route}`" for route in item["partial_overlap_routes"]
+        ) or "—"
+        lines.append(
+            f"| `{item['api_name']}` | {item['title']} | "
+            f"{item['permission']} | {'是' if item['collectable'] else '否'} | "
+            f"`{item['mapping_status']}` | "
+            f"{full_routes} | {partial_routes} |"
+        )
+    lines.extend([
+        "",
         "## 完整路由清单",
         "",
         "| 路由 | 依赖分类 | 当前必须依赖 FD | 对外访问 | 本地规范数据集 | 规范化状态 |",
         "|---|---|---|---|---|---|",
-    ]
+    ])
     for item in policies:
         datasets = ", ".join(f"`{name}`" for name in item.local_datasets) or "—"
         lines.append(

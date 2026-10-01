@@ -47,6 +47,12 @@ from service.data_service.source_policy import (
     source_policy_catalog,
     source_policy_summary,
 )
+from service.data_service.provider_equivalence import (
+    financial_tushare_catalog,
+    financial_tushare_summary,
+    tushare_financial_reverse_catalog,
+    tushare_financial_reverse_summary,
+)
 
 router = APIRouter(prefix="/v1/data", tags=["data"])
 
@@ -81,7 +87,9 @@ def get_freshness(
 @router.get("/source-priorities")
 def get_source_priorities(
     dependency_class: str | None = None,
+    equivalence_class: str | None = None,
     requires_financial_data: bool | None = None,
+    current_token_ready: bool | None = None,
     namespace: str | None = None,
     limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -98,6 +106,18 @@ def get_source_priorities(
         filtered = [
             item for item in filtered
             if item.requires_financial_data is requires_financial_data
+        ]
+    if equivalence_class:
+        filtered = [
+            item for item in filtered
+            if item.as_dict()["provider_equivalence"]["equivalence_class"]
+            == equivalence_class
+        ]
+    if current_token_ready is not None:
+        filtered = [
+            item for item in filtered
+            if item.as_dict()["provider_equivalence"]["current_token_ready"]
+            is current_token_ready
         ]
     if namespace:
         normalized_namespace = namespace.strip("/")
@@ -118,8 +138,15 @@ def get_source_priorities(
                 "no local canonical equivalent does not prove that Tushare has no "
                 "semantically related endpoint; it may also indicate an unmapped gap"
             ),
+            "provider_equivalence": (
+                "vendor capability is classified independently from current token "
+                "permission and local canonical implementation"
+            ),
         },
         "summary": source_policy_summary(policies),
+        "provider_equivalence_summary": financial_tushare_summary(
+            financial_tushare_catalog()
+        ),
         "page": {
             "limit": limit,
             "offset": offset,
@@ -127,6 +154,54 @@ def get_source_priorities(
             "has_more": offset + limit < total,
         },
         "items": [item.as_dict() for item in filtered[offset:offset + limit]],
+    }
+
+
+@router.get("/source-priorities/tushare-endpoints")
+def get_tushare_financial_mapping(
+    mapping_status: str | None = None,
+    permission: str | None = None,
+    collectable: bool | None = None,
+    query: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Expose the reverse mapping for every audited Tushare contract."""
+    all_items = tushare_financial_reverse_catalog()
+    items = list(all_items)
+    if mapping_status:
+        items = [
+            item for item in items
+            if item["mapping_status"] == mapping_status
+        ]
+    if permission:
+        items = [item for item in items if item["permission"] == permission]
+    if collectable is not None:
+        items = [
+            item for item in items
+            if item["collectable"] is collectable
+        ]
+    if query:
+        normalized = query.strip().lower()
+        items = [
+            item for item in items
+            if normalized in " ".join((
+                item["api_name"],
+                item["title"],
+                *item["full_equivalence_routes"],
+                *item["partial_overlap_routes"],
+            )).lower()
+        ]
+    total = len(items)
+    return {
+        "summary": tushare_financial_reverse_summary(all_items),
+        "page": {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": offset + limit < total,
+        },
+        "items": items[offset:offset + limit],
     }
 
 

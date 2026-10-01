@@ -44,6 +44,17 @@ def test_today_delivery_has_client_side_filter_and_pagination():
     assert "getFullYear" in script
 
 
+def test_data_calendar_detail_is_actionable_and_paginated():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    assert 'id="calendarDetailStatus"' in html
+    assert 'id="calendarDetailPrev"' in html
+    assert 'id="calendarDetailNext"' in html
+    assert "renderCalendarDetail" in script
+    assert "查看采集证据" in script
+    assert "状态来自数据证据而不是任务结果" in script
+
+
 def test_dashboard_separates_public_services_from_internal_dependencies():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()

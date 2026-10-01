@@ -7,6 +7,12 @@ from datetime import datetime, time, timedelta
 
 LATE_REPAIR_HOURS = (15, 18, 21, 23)
 LATE_REPAIR_MINUTE = 58
+LATE_PUBLISHED_DATASETS = frozenset({
+    "ccass_hold",
+    "etf_share_size",
+    "margin",
+    "margin_detail",
+})
 
 
 def next_late_repair_at(now: datetime) -> datetime:

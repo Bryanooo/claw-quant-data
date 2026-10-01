@@ -69,7 +69,7 @@
 
     <section class="view hidden" data-panel="calendar">
       <section class="card"><div class="card-head"><div><p class="eyebrow">DATA CALENDAR</p><h2>数据日历</h2><p>颜色来自严格数据审计，日期是业务数据日期，与任务创建或执行日期无关。</p></div><input id="calendarMonth" type="month" /></div><div class="calendar-legend"><span class="complete">审计通过</span><span class="active">采集 / 核验中</span><span class="problem">缺失 / 不完整</span><span class="none">暂无审计记录</span></div><div class="weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div id="calendarGrid" class="calendar"></div></section>
-      <section id="calendarDetail" class="card hidden"><div class="card-head"><div><p class="eyebrow">DAY DETAIL</p><h2 id="calendarDetailTitle">当日数据明细</h2><p id="calendarDetailSummary"></p></div></div><div class="table-wrap"><table><thead><tr><th>数据集</th><th>审计状态</th><th>行数</th><th>实体数</th><th>期望实体</th><th>覆盖率</th><th>核验时间</th></tr></thead><tbody id="calendarDetailRows"></tbody></table></div></section>
+      <section id="calendarDetail" class="card hidden"><div class="card-head"><div><p class="eyebrow">DAY DETAIL</p><h2 id="calendarDetailTitle">当日数据明细</h2><p id="calendarDetailSummary"></p></div><div class="filters"><select id="calendarDetailStatus"><option value="">全部审计状态</option><option value="problem">只看问题</option><option value="present">审计通过</option><option value="observed_only">已有数据</option><option value="pending">待核验</option></select><input id="calendarDetailSearch" placeholder="搜索数据集"/><button id="calendarDetailQuery">筛选</button></div></div><div class="table-wrap"><table><thead><tr><th>数据集</th><th>审计状态</th><th>数据量 / 完整度</th><th>处理说明</th><th>核验时间</th><th></th></tr></thead><tbody id="calendarDetailRows"></tbody></table></div><footer><button id="calendarDetailPrev">上一页</button><span id="calendarDetailPage">第 1 页</span><button id="calendarDetailNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="coverage">
@@ -95,6 +95,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261002-ops-model" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261002-ops-model-2" defer></script>
 </body>
 </html>

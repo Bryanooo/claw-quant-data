@@ -330,3 +330,30 @@ def test_historical_attention_attempt_cannot_be_retried_twice():
     assert response.status_code == 409
     assert "最新实例 #23" in response.json()["error"]["message"]
     assert all(call[0] != "retry" for call in repository.calls)
+
+
+def test_scheduled_late_publication_is_waiting_not_manual_retry():
+    client, repository = make_client()
+    repository.get_execution = lambda execution_id: {
+        "task_execution_id": execution_id,
+        "task_key": "margin_detail",
+        "trigger_source": "schedule",
+        "status": "attention",
+        "final_error_category": "data_incomplete",
+        "is_current_scope_execution": True,
+    }
+    with client:
+        detail = client.get("/api/v1/ops/executions/19")
+        retry = client.post(
+            "/api/v1/ops/executions/19/retry",
+            json={"reason": "manual duplicate retry"},
+        )
+
+    resolution = detail.json()["execution"]["resolution"]
+    assert resolution["action"] == "wait_upstream"
+    assert resolution["resolution_state"] == "waiting_upstream"
+    assert resolution["retryable"] is False
+    assert resolution["next_automatic_repair_at"]
+    assert retry.status_code == 409
+    assert "无需人工重复提交" in retry.json()["error"]["message"]
+    assert all(call[0] != "retry" for call in repository.calls)

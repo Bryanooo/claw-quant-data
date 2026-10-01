@@ -156,6 +156,8 @@ dialog::backdrop { background: rgba(3,8,13,.62); }
 .node-flow article { display: flex; gap: 12px; align-items: flex-start; padding: 13px 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-soft); }
 .node-flow article > span { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-weight: 800; }
 .node-flow small, .node-flow p { display: block; margin: 2px 0 0; color: var(--muted); }
+.compact-flow { grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); margin-bottom: 20px; }
+.compact-flow article { min-height: 68px; }
 
 @media (max-width: 1050px) {
   .metrics { grid-template-columns: repeat(2,1fr); }

@@ -12,8 +12,12 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from service.api.dependencies import OrchestrationV2RepositoryDependency
-from service.clock import business_today
+from service.clock import business_now, business_today
 from service.orchestration_v2.contracts import TASK_KEY_PATTERN
+from service.orchestration_v2.late_repair import (
+    LATE_PUBLISHED_DATASETS,
+    next_late_repair_at,
+)
 
 
 router = APIRouter(prefix="/v1/ops", tags=["operations"])
@@ -52,6 +56,23 @@ def _resolution(execution: dict) -> dict:
             "guidance": f"历史失败记录；请查看同一数据周期的最新实例 #{latest_id}",
         }
     category = execution.get("final_error_category") or "unknown"
+    if (
+        category in {"data_incomplete", "completeness_guard"}
+        and execution.get("task_key") in LATE_PUBLISHED_DATASETS
+        and execution.get("trigger_source") == "schedule"
+    ):
+        next_repair = next_late_repair_at(business_now())
+        return {
+            "action": "wait_upstream",
+            "resolution_state": "waiting_upstream",
+            "retryable": False,
+            "next_automatic_repair_at": next_repair.isoformat(),
+            "guidance": (
+                "采集与分页已完成，但上游尚未发布完整截面；系统会在"
+                f" {next_repair.strftime('%m-%d %H:%M')} 自动做限定范围复查，"
+                "无需人工重复提交"
+            ),
+        }
     if category in {"provider_transient", "rate_limited", "network", "database_transient", "lease_expired"}:
         return {
             "action": "retry",

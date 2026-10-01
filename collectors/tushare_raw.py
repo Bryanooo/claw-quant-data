@@ -13,6 +13,7 @@ from decimal import Decimal
 import hashlib
 import json
 import math
+import re
 from typing import Any
 
 import pandas as pd
@@ -26,6 +27,7 @@ from collectors.contracts import (
     WriteMode,
 )
 from service.tushare_catalog import TushareInterfaceCatalog
+from service.config import TUSHARE_RAW_RECORD_CAPTURE_MODE
 from service.tushare_policy import TusharePolicyRegistry
 from service.tushare_rate_limit import reserve_tushare_request
 from service.tushare_normalization import (
@@ -65,9 +67,40 @@ _SUSPICIOUS_RESPONSE_CAPS = {
     15_000,
 }
 
+_PROVIDER_VERIFIED_EMPTY_ERRORS = {
+    # cyq_chips returns this provider error for valid frozen-universe stocks
+    # that have no chip distribution in the requested bounded date window.
+    # It is not a transport failure and retrying cannot create the data.
+    "cyq_chips": "指定数据不存在，请确认参数",
+}
+
+
+def is_provider_verified_empty(
+    api_name: str, params: dict[str, Any], error: Exception
+) -> bool:
+    marker = _PROVIDER_VERIFIED_EMPTY_ERRORS.get(api_name)
+    if not marker or marker not in str(error):
+        return False
+    ts_code = str(params.get("ts_code") or "")
+    start_date = str(params.get("start_date") or "")
+    end_date = str(params.get("end_date") or "")
+    return bool(
+        re.fullmatch(r"\d{6}\.(?:SZ|SH|BJ)", ts_code)
+        and re.fullmatch(r"\d{8}", start_date)
+        and re.fullmatch(r"\d{8}", end_date)
+        and start_date <= end_date
+    )
+
 
 def collection_partition_supplied(strategy: str, params: dict[str, Any]) -> bool:
     """Return whether one request is bounded for its policy strategy."""
+    # ``dividend`` is deliberately collected through a frozen stock-universe
+    # fan-out. One ts_code returns that company's complete, naturally bounded
+    # distribution history; forcing an announcement date here made every
+    # historical fan-out leaf fail even though the scope was safer than a
+    # market-wide date request.
+    if params.get("ts_code") and params.get("_api_name") == "dividend":
+        return True
     candidates = {
         "trade_date": {
             "trade_date",
@@ -81,7 +114,14 @@ def collection_partition_supplied(strategy: str, params: dict[str, Any]) -> bool
         },
         "date_window": {"trade_date", "date", "start_date", "end_date"},
         "month": {"month", "m", "start_m", "end_m", "start_month", "end_month"},
-        "report_period": {"period", "report_date", "end_date"},
+        "report_period": {
+            "period",
+            "report_date",
+            "end_date",
+            "q",
+            "start_q",
+            "end_q",
+        },
         "week": {"week", "start_week", "end_week"},
         "ts_code_fanout": {"ts_code", "symbol", "code"},
         "dependency_fanout": {
@@ -93,6 +133,13 @@ def collection_partition_supplied(strategy: str, params: dict[str, Any]) -> bool
             "l1_code",
             "l2_code",
             "l3_code",
+            # Static dependency partitions are exhausted inside one V2
+            # acquire node. These keys prove that the provider request is
+            # bounded; they are not separate workflow instances.
+            "type",
+            "exchange",
+            "freq",
+            "idx_type",
         },
     }
     required = candidates.get(strategy, set())
@@ -116,7 +163,8 @@ def verify_complete_response(
             f"{api_name} declares offset pagination; a single specialized "
             "request cannot prove completeness"
         )
-    bounded = collection_partition_supplied(policy.parameter_strategy, params)
+    scope_params = {**params, "_api_name": api_name}
+    bounded = collection_partition_supplied(policy.parameter_strategy, scope_params)
     if not bounded:
         raise IncompleteCollectionError(
             f"{api_name} requires a {policy.parameter_strategy} partition "
@@ -195,6 +243,7 @@ class CatalogRawCollector(BaseCollector):
         self._request_parameters: dict[str, Any] = {}
         self._last_fetch_count = 0
         self._last_page_hash = ""
+        self._provider_empty_evidence: dict[str, Any] = {}
         self.completion_evidence: dict[str, Any] = {}
         self.normalization_evidence: dict[str, Any] = {
             "raw_rows": 0,
@@ -235,7 +284,17 @@ class CatalogRawCollector(BaseCollector):
             {key: value for key, value in params.items() if key not in {"limit", "offset"}}
         )
         # query() is the stable SDK transport for dynamically selected api_name.
-        frame = self.pro.query(self.API_NAME, **params)
+        self._provider_empty_evidence = {}
+        try:
+            frame = self.pro.query(self.API_NAME, **params)
+        except Exception as exc:
+            if not is_provider_verified_empty(self.API_NAME, params, exc):
+                raise
+            frame = pd.DataFrame()
+            self._provider_empty_evidence = {
+                "provider_verified_empty": True,
+                "provider_empty_reason": str(exc),
+            }
         self._last_fetch_count = 0 if frame is None else len(frame)
         records = [] if frame is None else frame.to_dict(orient="records")
         self._last_page_hash = _sha256(records) if records else ""
@@ -304,6 +363,7 @@ class CatalogRawCollector(BaseCollector):
         )
         self.completion_evidence = self._completion_evidence(
             **scope_evidence,
+            **self._provider_empty_evidence,
             request_hash=_sha256(_json_value(params)),
             rows_stored=rows,
         )
@@ -587,6 +647,27 @@ class CatalogRawCollector(BaseCollector):
         if not unique_rows:
             return 0
 
+        records = list(unique_rows.items())
+        try:
+            self._normalize_stored_rows(request_hash, records)
+        except Exception:
+            if TUSHARE_RAW_RECORD_CAPTURE_MODE == "anomalies_only":
+                self._raw_archive.archive_records(
+                    endpoint_key=self.API_NAME,
+                    parameters=self._request_parameters,
+                    records=(payload for _record_hash, payload in records),
+                )
+                self._raw_anomaly_archived = True
+            raise
+
+        must_persist_raw = (
+            TUSHARE_RAW_RECORD_CAPTURE_MODE == "all"
+            or self.contract.implementation.get("mode") != "generic_raw"
+        )
+        if not must_persist_raw:
+            self.normalization_evidence["raw_records_persisted"] = False
+            return len(unique_rows)
+
         values = [
             (
                 self.API_NAME,
@@ -629,10 +710,7 @@ class CatalogRawCollector(BaseCollector):
         finally:
             connection.close()
 
-        self._normalize_stored_rows(
-            request_hash,
-            list(unique_rows.items()),
-        )
+        self.normalization_evidence["raw_records_persisted"] = True
         return len(values)
 
     def _normalize_stored_rows(

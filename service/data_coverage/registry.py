@@ -1,7 +1,7 @@
 """Coverage classification and audit rules for every public dataset."""
 
 from collections.abc import Iterable
-from datetime import time
+from datetime import date, time
 
 from service.data_coverage.models import (
     CoverageRule,
@@ -10,7 +10,12 @@ from service.data_coverage.models import (
 )
 from service.data_service.models import DateStorage
 from service.data_service.registry import DATASETS
-from service.history_baselines import FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS
+from service.history_baselines import (
+    CATALOG_WINDOW_HISTORY,
+    ETF_SHARE_SIZE_HISTORY_START,
+    FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS,
+    UPSTREAM_HISTORY_STARTS,
+)
 
 
 class CoverageRuleRegistry:
@@ -20,7 +25,10 @@ class CoverageRuleRegistry:
             if rule.dataset_name in by_name:
                 raise ValueError(f"duplicate coverage rule: {rule.dataset_name}")
             dataset = DATASETS.get(rule.dataset_name)
-            if dataset.table != rule.table or dataset.date_column != rule.date_column:
+            if (
+                dataset.read_table != rule.table
+                or dataset.date_column != rule.date_column
+            ):
                 raise ValueError(f"coverage rule disagrees with dataset: {rule.dataset_name}")
             by_name[rule.dataset_name] = rule
         self._rules = by_name
@@ -49,11 +57,13 @@ def _rule(
     grace_days: int = 1,
     release_after: time | None = None,
     default_lookback_days: int = 120,
+    availability_start: date | None = None,
     description: str,
     entity_reference: str | None = None,
     min_entity_ratio: float | None = None,
     scheduled: bool = True,
     accept_verified_empty: bool = False,
+    require_transport_proof: bool = False,
     verified_empty_min_age_days: int | None = None,
     revision: int = 1,
     entity_reference_max_age_days: int | None = None,
@@ -63,7 +73,7 @@ def _rule(
         raise ValueError(f"coverage dataset has no date column: {dataset_name}")
     return CoverageRule(
         dataset_name=dataset_name,
-        table=dataset.table,
+        table=dataset.read_table,
         date_column=dataset.date_column,
         date_storage=dataset.date_storage,
         strategy=strategy,
@@ -72,11 +82,13 @@ def _rule(
         grace_days=grace_days,
         release_after=release_after,
         default_lookback_days=default_lookback_days,
+        availability_start=availability_start,
         description=description,
         entity_reference=entity_reference,
         min_entity_ratio=min_entity_ratio,
         scheduled=scheduled,
         accept_verified_empty=accept_verified_empty,
+        require_transport_proof=require_transport_proof,
         verified_empty_min_age_days=verified_empty_min_age_days,
         revision=revision,
         entity_reference_max_age_days=entity_reference_max_age_days,
@@ -95,10 +107,11 @@ def _classified_rule(dataset_name: str) -> CoverageRule:
         description = "数据没有日期分区，日期覆盖审计不适用"
     return CoverageRule(
         dataset_name=dataset.name,
-        table=dataset.table,
+        table=dataset.read_table,
         date_column=dataset.date_column,
         date_storage=dataset.date_storage,
         strategy=strategy,
+        collection_api_name=dataset_name,
         entity_column=(
             "ts_code"
             if "ts_code" in dataset.primary_keys or "ts_code" in dataset.exact_filters
@@ -106,6 +119,11 @@ def _classified_rule(dataset_name: str) -> CoverageRule:
         ),
         description=description,
         scheduled=False,
+        # Sparse/event datasets are certified at their declared collection
+        # scope. A single exhaustive range job can cover thousands of stored
+        # event dates, so demanding one exact-date job per row date is a false
+        # completeness failure.
+        require_transport_proof=False,
     )
 
 
@@ -119,7 +137,6 @@ SSE_TRADING_DAILY_DATASETS = (
     "etf_share_size",
     "fund_adj",
     "fund_daily",
-    "fund_share",
     "idx_factor_pro",
     "index_dailybasic",
     "kpl_concept_cons",
@@ -156,10 +173,66 @@ SAME_DAY_RELEASE_DATASETS = {
 
 
 _EXPLICIT_RULES = [
-        _rule("stock_daily", CoverageStrategy.TRADING_DAILY, collection_api_name="daily", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
-        _rule("stock_daily_basic", CoverageStrategy.TRADING_DAILY, collection_api_name="daily_basic", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
-        _rule("stock_limit", CoverageStrategy.TRADING_DAILY, collection_api_name="stk_limit", entity_reference="stock_basic", min_entity_ratio=0.90, description="按交易日及当期上市股票截面检查完整性"),
-        _rule("moneyflow", CoverageStrategy.TRADING_DAILY, entity_reference="stock_basic", min_entity_ratio=0.85, description="按交易日及当期上市股票截面检查完整性"),
+        _rule(
+            "fund_share",
+            CoverageStrategy.OBSERVED_ONLY,
+            collection_api_name="fund_share",
+            scheduled=False,
+            require_transport_proof=False,
+            revision=2,
+            description=(
+                "基金份额按不规则披露日发布；只审计已观察分区与有界请求的"
+                "传输穷尽证据，不按每个 SSE 交易日虚构预期分区"
+            ),
+        ),
+        _rule(
+            "stock_daily",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name="daily",
+            entity_reference="stock_basic",
+            min_entity_ratio=0.90,
+            entity_reference_max_age_days=1825,
+            revision=2,
+            description=(
+                "近五年按交易日及当期上市股票截面检查；更早历史无法从"
+                "现存基础表还原停牌/分市场交易状态，按精确日期传输穷尽验证"
+            ),
+        ),
+        _rule(
+            "stock_daily_basic",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name="daily_basic",
+            entity_reference="stock_basic",
+            min_entity_ratio=0.90,
+            entity_reference_max_age_days=1825,
+            revision=2,
+            description=(
+                "近五年按交易日及当期上市股票截面检查；更早历史无法从"
+                "现存基础表还原停牌/分市场交易状态，按精确日期传输穷尽验证"
+            ),
+        ),
+        _rule(
+            "stock_limit",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name="stk_limit",
+            entity_reference="stock_basic",
+            min_entity_ratio=0.90,
+            availability_start=date(2007, 1, 4),
+            description="按交易日及当期上市股票截面检查完整性；上游可靠历史始于 2007-01-04",
+            revision=2,
+        ),
+        _rule(
+            "moneyflow",
+            CoverageStrategy.TRADING_DAILY,
+            entity_reference="stock_basic",
+            min_entity_ratio=0.85,
+            entity_reference_max_age_days=1825,
+            revision=2,
+            description=(
+                "近五年按交易日及当期上市股票截面检查；更早历史使用"
+                "精确日期传输穷尽证据，避免用当前股票全集制造假缺口"
+            ),
+        ),
         _rule(
             "index_daily",
             CoverageStrategy.TRADING_DAILY,
@@ -181,10 +254,12 @@ _EXPLICIT_RULES = [
             "industry_daily",
             CoverageStrategy.TRADING_DAILY,
             entity_column=None,
+            availability_start=date(2020, 1, 1),
             description=(
                 "按交易日检查分区；ths_index 没有退市/失效字段，不能把全部历史指数"
                 "误作当日活跃截面"
             ),
+            revision=2,
         ),
         _rule(
             "margin",
@@ -192,8 +267,10 @@ _EXPLICIT_RULES = [
             entity_column="exchange_id",
             entity_reference="margin_exchanges",
             min_entity_ratio=1.0,
+            grace_days=1,
             release_after=NEXT_MORNING_RELEASE_DATASETS["margin"],
             description="按交易日检查沪深北三所汇总是否全部发布",
+            revision=2,
         ),
         _rule(
             "margin_detail",
@@ -201,11 +278,71 @@ _EXPLICIT_RULES = [
             entity_column="ts_code",
             entity_reference="margin_secs",
             min_entity_ratio=0.98,
+            grace_days=1,
             release_after=NEXT_MORNING_RELEASE_DATASETS["margin_detail"],
             description="按交易日及当日两融标的池识别交易所分批发布或截断",
+            revision=2,
         ),
         _rule("index_weekly", CoverageStrategy.TRADING_WEEKLY, grace_days=2, description="检查每个完整交易周；指数研究池尚未配置"),
         _rule("index_monthly", CoverageStrategy.TRADING_MONTHLY, grace_days=2, default_lookback_days=730, description="检查每个完整月份；指数研究池尚未配置"),
+        _rule(
+            "ggt_monthly",
+            CoverageStrategy.CALENDAR_MONTHLY,
+            collection_api_name="ggt_monthly",
+            entity_column=None,
+            grace_days=2,
+            default_lookback_days=5000,
+            availability_start=date(2014, 11, 1),
+            description="港股通开通后按自然月从 ggt_daily 有界派生",
+            revision=2,
+        ),
+        _rule(
+            "cn_gdp",
+            CoverageStrategy.REPORT_QUARTERLY,
+            entity_column=None,
+            grace_days=0,
+            default_lookback_days=3650,
+            availability_start=date(1992, 3, 31),
+            description=(
+                "1992Q1 起按季度检查 GDP；更早上游仅提供年度 Q4 值，"
+                "保留为观测数据而不制造季度缺口"
+            ),
+            revision=2,
+        ),
+        _rule(
+            "cn_pmi",
+            CoverageStrategy.CALENDAR_MONTHLY,
+            entity_column=None,
+            grace_days=3,
+            default_lookback_days=3650,
+            availability_start=date(2005, 1, 1),
+            description="按自然月检查 PMI 历史；上游月度序列始于 2005-01",
+            revision=2,
+        ),
+        *[
+            _rule(
+                dataset_name,
+                CoverageStrategy.CALENDAR_MONTHLY,
+                entity_column=None,
+                grace_days=20,
+                default_lookback_days=3650,
+                availability_start=(
+                    date(1993, 1, 1)
+                    if dataset_name == "cn_ppi"
+                    else date(2002, 1, 1)
+                    if dataset_name == "sf_month"
+                    else None
+                ),
+                description=(
+                    "按自然月检查宏观历史；PPI 在 1993 年前仅有年度值，"
+                    "社融月度序列始于 2002 年"
+                    if dataset_name in {"cn_ppi", "sf_month"}
+                    else "按自然月检查宏观历史，保留官方发布缓冲"
+                ),
+                revision=(2 if dataset_name in {"cn_ppi", "sf_month"} else 1),
+            )
+            for dataset_name in ("cn_cpi", "cn_m", "cn_ppi", "sf_month")
+        ],
         *[
             _rule(
                 dataset_name,
@@ -232,7 +369,7 @@ _EXPLICIT_RULES = [
                 verified_empty_min_age_days=(
                     FINANCIAL_ENTITY_REFERENCE_MAX_AGE_DAYS
                 ),
-                revision=3,
+                revision=4,
                 description=(
                     "近五年按披露截止日和上市公司截面检查；更早历史按"
                     "分页穷尽和报告期分区存在性检查"
@@ -245,16 +382,82 @@ _EXPLICIT_RULES = [
                 "financial_indicator",
             )
         ],
-        _rule("forex_daily", CoverageStrategy.OBSERVED_ONLY, description="无可靠外汇日历，仅列出实际存在日期"),
+        _rule(
+            "forex_daily",
+            CoverageStrategy.OBSERVED_ONLY,
+            collection_api_name="fx_daily",
+            description="无可靠外汇日历，仅列出实际存在日期",
+        ),
         _rule("ccass_hold", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", description="中央结算持股按香港交易日发布；当前仅审计已观测日期，避免用 SSE 日历制造假缺口"),
         _rule("ccass_hold_detail", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", scheduled=False, description="单日超过百万行且需要显式范围；仅审计人工采集到的日期"),
         _rule("fut_index_daily", CoverageStrategy.OBSERVED_ONLY, description="南华商品指数缺少独立且完整的本地发布日历，仅审计静态指数全集的已观测日期"),
         _rule("hk_daily", CoverageStrategy.OBSERVED_ONLY, description="港股日线使用独立港股交易日历且接口限频一小时；仅审计已观测日期"),
         _rule("hk_hold", CoverageStrategy.OBSERVED_ONLY, description="沪深港股通持股披露制度曾调整，不能用 SSE 日历反推历史日频缺口"),
         _rule("moneyflow_hsgt", CoverageStrategy.OBSERVED_ONLY, entity_column=None, description="沪深港通资金流混合多个市场日历，仅审计已观测日期"),
-        _rule("sge_daily", CoverageStrategy.OBSERVED_ONLY, description="无独立 SGE 日历，仅列出实际存在日期"),
-        _rule("stock_suspend", CoverageStrategy.OBSERVED_ONLY, description="事件型数据，仅列出实际发生日期"),
-        _rule("trade_calendar", CoverageStrategy.OBSERVED_ONLY, entity_column="exchange", description="日历本身只展示已保存日期，不反向推断缺口"),
+        _rule(
+            "sge_daily",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column=None,
+            default_lookback_days=1825,
+            description=(
+                "SGE 现货日行情以 SSE 开市日作为可验证的最小发布日历；"
+                "额外发布日保留为观察分区"
+            ),
+            revision=2,
+        ),
+        _rule(
+            "shibor",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column=None,
+            default_lookback_days=1095,
+            description="按 SSE 开市日检查 SHIBOR 日度利率分区",
+            revision=2,
+        ),
+        _rule(
+            "shibor_lpr",
+            CoverageStrategy.CALENDAR_MONTHLY,
+            entity_column=None,
+            grace_days=25,
+            default_lookback_days=3650,
+            availability_start=CATALOG_WINDOW_HISTORY["shibor_lpr"],
+            description=(
+                "按自然月检查 LPR 发布，物理发布日归一为月末分区；"
+                "不对上游可靠历史起点之前制造缺口"
+            ),
+            revision=3,
+        ),
+        _rule(
+            "repurchase",
+            CoverageStrategy.CALENDAR_MONTHLY,
+            entity_column=None,
+            grace_days=0,
+            default_lookback_days=5000,
+            # Tushare's reliable repurchase history starts in 2015.  Asking
+            # the monthly auditor to prove earlier partitions creates false
+            # gaps even though the collector has exhausted the supported
+            # upstream range.
+            availability_start=date(2015, 1, 1),
+            accept_verified_empty=True,
+            require_transport_proof=True,
+            description=(
+                "稀疏回购事件按自然月审计；有数据不等于完整，"
+                "必须同时存在覆盖整月且分页穷尽的传输证书"
+            ),
+            revision=3,
+        ),
+        _rule(
+            "stock_suspend",
+            CoverageStrategy.OBSERVED_ONLY,
+            collection_api_name="suspend_d",
+            description="事件型数据，仅列出实际发生日期",
+        ),
+        _rule(
+            "trade_calendar",
+            CoverageStrategy.OBSERVED_ONLY,
+            collection_api_name="trade_cal",
+            entity_column="exchange",
+            description="日历本身只展示已保存日期，不反向推断缺口",
+        ),
         *[
             _rule(
                 dataset_name,
@@ -268,7 +471,45 @@ _EXPLICIT_RULES = [
                     or NEXT_MORNING_RELEASE_DATASETS.get(dataset_name)
                 ),
                 description="按 SSE 交易日检查每日稳定发布的数据分区",
-                accept_verified_empty=(dataset_name == "kpl_concept_cons"),
+                # These interfaces have rare, provider-authoritative empty open
+                # dates. They count only when an exact-date V2 execution
+                # exhausted the upstream request and persisted a verified
+                # empty completion certificate.
+                accept_verified_empty=(
+                    dataset_name in {
+                        "bak_daily",
+                        "cb_daily",
+                        "etf_share_size",
+                        "kpl_concept_cons",
+                        "moneyflow_cnt_ths",
+                        "moneyflow_ind_dc",
+                        "moneyflow_ind_ths",
+                        "moneyflow_ths",
+                        "sz_daily_info",
+                        "ths_hot",
+                    }
+                ),
+                availability_start=(
+                    ETF_SHARE_SIZE_HISTORY_START
+                    if dataset_name == "etf_share_size"
+                    else UPSTREAM_HISTORY_STARTS.get(dataset_name)
+                ),
+                revision=(
+                    3
+                    if dataset_name in {"bak_daily", "cb_daily", "etf_share_size"}
+                    else 3
+                    if dataset_name in {
+                        "moneyflow_cnt_ths",
+                        "moneyflow_ind_dc",
+                        "moneyflow_ind_ths",
+                        "moneyflow_ths",
+                        "sz_daily_info",
+                        "ths_hot",
+                    }
+                    else 2
+                    if dataset_name in UPSTREAM_HISTORY_STARTS
+                    else 1
+                ),
             )
             for dataset_name in SSE_TRADING_DAILY_DATASETS
         ],

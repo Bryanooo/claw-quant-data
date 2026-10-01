@@ -66,3 +66,11 @@ def test_share_float_identity_preserves_distinct_announcements():
         "holder_name",
         "share_type",
     )
+
+
+def test_ths_hot_identity_accepts_ranked_instruments_without_ts_code():
+    contract = next(
+        item for item in discover_collectors() if item.api_name == "ths_hot"
+    )
+
+    assert contract.primary_keys == ("source_key",)

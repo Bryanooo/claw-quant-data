@@ -51,6 +51,10 @@ class NormalizationContract:
     source_doc_id: int | None
     fields: tuple[NormalizedField, ...]
     date_column: str | None
+    # The observation date answers "what period does this row describe?";
+    # availability answers "when could a researcher have known it?".  They
+    # must stay separate for point-in-time-safe research.
+    availability_column: str | None
     # Required fields used to reject structurally unusable records.
     identity_fields: tuple[str, ...]
     # Logical grouping fields for payload versions. These are metadata, not a
@@ -184,11 +188,14 @@ _REVIEWED_BUSINESS_IDENTITIES: dict[str, tuple[str, ...]] = {
     "cb_rating": ("ts_code", "rating_date", "rating_com_name", "rating_type"),
     "cn_schedule": ("month", "publish_date", "title"),
     "daily_basic": ("trade_date", "ts_code"),
+    "eco_cal": ("date", "time", "currency", "country", "event"),
     "etf_sh_cons": ("trade_date", "ts_code", "con_code"),
     "etf_share_size": ("trade_date", "ts_code"),
     "etf_sz_cons": ("trade_date", "ts_code", "con_code"),
     "fund_company": ("name",),
     "fund_manager": ("ts_code", "name", "begin_date"),
+    "fund_nav": ("nav_date", "ts_code"),
+    "fund_portfolio": ("ts_code", "end_date", "symbol"),
     "fund_share": ("trade_date", "ts_code"),
     "fut_basic": ("ts_code",),
     "fut_daily": ("trade_date", "ts_code"),
@@ -198,10 +205,64 @@ _REVIEWED_BUSINESS_IDENTITIES: dict[str, tuple[str, ...]] = {
     "fut_wsr": (
         "trade_date", "symbol", "warehouse", "wh_id", "grade", "brand", "place"
     ),
+    "factor_value": ("trade_date", "ts_code", "factor_name"),
+    "fina_audit": ("ts_code", "end_date"),
+    "index_weight": ("trade_date", "index_code", "con_code"),
     "limit_list_ths": ("trade_date", "ts_code"),
+    "major_news": ("src", "pub_time", "title"),
     "shibor_quote": ("date", "bank"),
+    "slb_sec_detail": ("trade_date", "ts_code", "tenor"),
     "us_basic": ("ts_code",),
 }
+
+
+# A reviewed logical identity may contain an optional discriminator.  Calendar
+# time is the notable case: Tushare legitimately reports events whose release
+# time is not fixed.  All other newly reviewed dimensions below are required
+# to prevent a partially shaped row from silently entering a current-state
+# relation under an ambiguous identity.
+_REQUIRED_IDENTITY_OVERRIDES: dict[str, tuple[str, ...]] = {
+    "eco_cal": ("date", "currency", "country", "event"),
+    "factor_value": ("trade_date", "ts_code", "factor_name"),
+    "fina_audit": ("ts_code", "end_date"),
+    "fund_nav": ("nav_date", "ts_code"),
+    "fund_portfolio": ("ts_code", "end_date", "symbol"),
+    "index_weight": ("trade_date", "index_code", "con_code"),
+    "major_news": ("src", "pub_time", "title"),
+    "slb_sec_detail": ("trade_date", "ts_code", "tenor"),
+}
+
+
+_DATE_COLUMN_OVERRIDES: dict[str, str] = {
+    # Observation period and publication date are different concepts.
+    "fina_audit": "end_date",
+    "fund_manager": "begin_date",
+    "fund_nav": "nav_date",
+    "fund_portfolio": "end_date",
+}
+
+
+_AVAILABILITY_COLUMN_OVERRIDES: dict[str, str] = {
+    "fina_audit": "ann_date",
+    "fund_manager": "ann_date",
+    "fund_nav": "ann_date",
+    "fund_portfolio": "ann_date",
+}
+
+
+def _contract_column(
+    api_name: str,
+    fields: tuple[NormalizedField, ...],
+    overrides: dict[str, str],
+) -> str | None:
+    column = overrides.get(api_name)
+    if column is None:
+        return None
+    if column not in {field.name for field in fields}:
+        raise ValueError(
+            f"column override for {api_name} references missing field: {column}"
+        )
+    return column
 
 
 def _business_identity_fields(
@@ -242,8 +303,15 @@ def load_normalization_contracts() -> tuple[NormalizationContract, ...]:
             for value in interface.output_parameters
             if value.get("name")
         )
-        date_column = _canonical_date_column(fields)
-        required_identity = _identity_fields(fields, date_column)
+        date_column = _contract_column(
+            api_name=interface.api_name,
+            fields=fields,
+            overrides=_DATE_COLUMN_OVERRIDES,
+        ) or _canonical_date_column(fields)
+        required_identity = _REQUIRED_IDENTITY_OVERRIDES.get(
+            interface.api_name,
+            _identity_fields(fields, date_column),
+        )
         business_identity, identity_confidence = _business_identity_fields(
             interface.api_name,
             fields,
@@ -259,6 +327,11 @@ def load_normalization_contracts() -> tuple[NormalizationContract, ...]:
                 source_doc_id=interface.source_doc_id,
                 fields=fields,
                 date_column=date_column,
+                availability_column=_contract_column(
+                    api_name=interface.api_name,
+                    fields=fields,
+                    overrides=_AVAILABILITY_COLUMN_OVERRIDES,
+                ),
                 identity_fields=required_identity,
                 business_identity_fields=business_identity,
                 identity_confidence=identity_confidence,

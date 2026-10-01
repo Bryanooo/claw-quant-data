@@ -9,6 +9,7 @@ import pandas as pd
 from collectors.base import BaseCollector
 from collectors.tushare_raw import (
     IncompleteCollectionError,
+    is_provider_verified_empty,
     verify_complete_response,
 )
 from service.tushare_policy import TusharePolicyRegistry
@@ -59,7 +60,14 @@ class CyqChipsCollector(BaseCollector):
         end: date,
         policy,
     ) -> pd.DataFrame:
-        frame = self._as_frame(super().fetch(**params))
+        provider_empty_reason = None
+        try:
+            frame = self._as_frame(super().fetch(**params))
+        except Exception as exc:
+            if not is_provider_verified_empty(self.API_NAME, params, exc):
+                raise
+            frame = pd.DataFrame()
+            provider_empty_reason = str(exc)
         self._verify_returned_dates(frame, start, end)
         try:
             proof = verify_complete_response(
@@ -91,13 +99,17 @@ class CyqChipsCollector(BaseCollector):
                 return pd.DataFrame(columns=frame.columns)
             return pd.concat(frames, ignore_index=True)
 
-        self._partition_scopes.append(
-            {
-                **proof,
-                "start_date": start.strftime("%Y%m%d"),
-                "end_date": end.strftime("%Y%m%d"),
-            }
-        )
+        evidence = {
+            **proof,
+            "start_date": start.strftime("%Y%m%d"),
+            "end_date": end.strftime("%Y%m%d"),
+        }
+        if provider_empty_reason:
+            evidence.update({
+                "provider_verified_empty": True,
+                "provider_empty_reason": provider_empty_reason,
+            })
+        self._partition_scopes.append(evidence)
         return frame
 
     def partition_completion_evidence(self) -> dict:

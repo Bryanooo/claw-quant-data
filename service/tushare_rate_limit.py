@@ -11,11 +11,17 @@ from zoneinfo import ZoneInfo
 import psycopg2
 
 from service.config import DB_CONFIG, TUSHARE_GLOBAL_MIN_INTERVAL_SECONDS
-from service.collection_jobs.context import is_durable_job_active
+from service.acquisition_runtime.context import is_durable_job_active
 
 
 GLOBAL_RATE_KEY = "__token_global__"
-MAX_INLINE_DURABLE_WAIT_SECONDS = 5.0
+# The default deployment runs up to seventeen collector workers behind a
+# 0.5-second token-wide interval, so a healthy reservation can legitimately be
+# roughly nine seconds ahead.  A five-second threshold made multi-request
+# collectors restart forever under normal concurrency.  Short waits remain
+# inline; genuinely long interface windows and daily quotas still release the
+# durable lease.
+MAX_INLINE_DURABLE_WAIT_SECONDS = 15.0
 # Live provider response on 2026-09-20 proves that this token is limited to 40
 # major_news calls per Shanghai calendar day (and 20/minute). Reserve only 35
 # so manual verification and clock skew cannot push production over quota.

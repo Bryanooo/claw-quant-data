@@ -91,6 +91,15 @@ class InterfaceDataService:
                 if name in output_fields
             ]
         )
+        dataset = (
+            self._registry.get(api_name)
+            if contract.implementation.get("mode") == "generic_raw"
+            else None
+        )
+        allowed_filters = output_fields | {"_record_hash"}
+        standard_filters = (
+            set(dataset.standard_filter_names) if dataset else allowed_filters
+        )
         return {
             **self._summary(contract),
             "description": contract.description,
@@ -100,7 +109,9 @@ class InterfaceDataService:
             ],
             "input_parameters": list(contract.input_parameters),
             "output_parameters": list(contract.output_parameters),
-            "allowed_filters": sorted(output_fields | {"_record_hash"}),
+            "allowed_filters": sorted(allowed_filters),
+            "standard_filters": sorted(standard_filters),
+            "advanced_filters": sorted(allowed_filters - standard_filters),
             "date_fields": date_fields,
         }
 
@@ -116,6 +127,8 @@ class InterfaceDataService:
         limit: int,
         offset: int,
         include_total: bool,
+        filter_mode: str = "standard",
+        cursor: str | None = None,
     ) -> dict:
         contract = self._require_collectable(api_name)
         if contract.implementation.get("mode") != "generic_raw":
@@ -139,6 +152,8 @@ class InterfaceDataService:
             limit=limit,
             offset=offset,
             include_total=include_total,
+            filter_mode=filter_mode,
+            cursor=cursor,
         )
         return {
             "data": result["data"],

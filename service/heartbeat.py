@@ -19,11 +19,12 @@ class Heartbeat:
         self,
         component: str,
         *,
+        instance_id: str | None = None,
         interval_seconds: int = 15,
         details: dict | None = None,
     ):
         self.component = component
-        self.instance_id = f"{os.uname().nodename}-{uuid4().hex[:8]}"
+        self.instance_id = instance_id or f"{os.uname().nodename}-{uuid4().hex[:8]}"
         self.interval_seconds = interval_seconds
         self.details = {"app_revision": APP_REVISION, **dict(details or {})}
         self._stop = Event()

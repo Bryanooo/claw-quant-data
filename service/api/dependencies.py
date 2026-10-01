@@ -4,27 +4,29 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from service.collection_jobs.registry import TASKS
-from service.collection_jobs.repository import JobRepository
-from service.collection_jobs.service import CollectionJobService
-from service.collection_jobs.fanout_campaigns import FanoutCampaignService
-from service.collection_monitor import CollectionMonitorService
 from service.data_coverage.service import CoverageService
 from service.data_health import DataHealthService
 from service.data_service.registry import DATASETS
 from service.data_service.repository import DatasetRepository
 from service.data_service.service import DataService
+from service.data_service.canonical_market import CanonicalMarketDataService
+from service.data_service.canonical_fund import CanonicalFundDataService
+from service.data_service.canonical_equity import CanonicalEquityDataService
+from service.data_service.canonical_equity_events import CanonicalEquityEventService
+from service.data_service.canonical_equity_actions import CanonicalEquityActionService
+from service.data_service.canonical_index import CanonicalIndexDataService
 from service.data_service.interfaces import InterfaceDataService
 from service.data_service.raw_archive import RawArchiveRepository, RawArchiveService
 from service.initialization.service import InitializationService
 from service.normalization_monitor import NormalizationMonitorService
-from service.delivery_monitor import DeliveryMonitorService
 from service.investment_calendar import (
     InvestmentCalendarRepository,
     InvestmentCalendarService,
 )
+from service.orchestration_v2.repository import OrchestrationV2Repository
 from service.research.repository import ResearchRepository
 from service.research.service import ResearchService
+from service.source_connectors.query_runtime import QUERY_BROKER
 
 
 def get_data_service(request: Request) -> DataService:
@@ -33,6 +35,66 @@ def get_data_service(request: Request) -> DataService:
 
 
 DataServiceDependency = Annotated[DataService, Depends(get_data_service)]
+
+
+def get_canonical_market_service(request: Request) -> CanonicalMarketDataService:
+    return CanonicalMarketDataService(get_data_service(request), QUERY_BROKER)
+
+
+CanonicalMarketDataServiceDependency = Annotated[
+    CanonicalMarketDataService,
+    Depends(get_canonical_market_service),
+]
+
+
+def get_canonical_fund_service(request: Request) -> CanonicalFundDataService:
+    return CanonicalFundDataService(get_data_service(request), QUERY_BROKER)
+
+
+CanonicalFundDataServiceDependency = Annotated[
+    CanonicalFundDataService,
+    Depends(get_canonical_fund_service),
+]
+
+
+def get_canonical_equity_service(request: Request) -> CanonicalEquityDataService:
+    return CanonicalEquityDataService(get_data_service(request), QUERY_BROKER)
+
+
+CanonicalEquityDataServiceDependency = Annotated[
+    CanonicalEquityDataService,
+    Depends(get_canonical_equity_service),
+]
+
+
+def get_canonical_equity_event_service(request: Request) -> CanonicalEquityEventService:
+    return CanonicalEquityEventService(get_data_service(request), QUERY_BROKER)
+
+
+CanonicalEquityEventServiceDependency = Annotated[
+    CanonicalEquityEventService,
+    Depends(get_canonical_equity_event_service),
+]
+
+
+def get_canonical_equity_action_service(request: Request) -> CanonicalEquityActionService:
+    return CanonicalEquityActionService(get_data_service(request), QUERY_BROKER)
+
+
+CanonicalEquityActionServiceDependency = Annotated[
+    CanonicalEquityActionService,
+    Depends(get_canonical_equity_action_service),
+]
+
+
+def get_canonical_index_service(request: Request) -> CanonicalIndexDataService:
+    return CanonicalIndexDataService(get_data_service(request), QUERY_BROKER)
+
+
+CanonicalIndexDataServiceDependency = Annotated[
+    CanonicalIndexDataService,
+    Depends(get_canonical_index_service),
+]
 
 
 def get_research_service(request: Request) -> ResearchService:
@@ -85,30 +147,6 @@ NormalizationMonitorDependency = Annotated[
 ]
 
 
-def get_delivery_monitor_service() -> DeliveryMonitorService:
-    return DeliveryMonitorService()
-
-
-def get_collection_job_service() -> CollectionJobService:
-    return CollectionJobService(JobRepository(), TASKS)
-
-
-CollectionJobServiceDependency = Annotated[
-    CollectionJobService,
-    Depends(get_collection_job_service),
-]
-
-
-def get_fanout_campaign_service() -> FanoutCampaignService:
-    return FanoutCampaignService()
-
-
-FanoutCampaignServiceDependency = Annotated[
-    FanoutCampaignService,
-    Depends(get_fanout_campaign_service),
-]
-
-
 def get_coverage_service() -> CoverageService:
     return CoverageService()
 
@@ -117,10 +155,6 @@ CoverageServiceDependency = Annotated[
     CoverageService,
     Depends(get_coverage_service),
 ]
-
-
-def get_collection_monitor_service() -> CollectionMonitorService:
-    return CollectionMonitorService()
 
 
 def get_initialization_service() -> InitializationService:
@@ -135,9 +169,24 @@ InitializationServiceDependency = Annotated[
 
 def get_data_health_service(request: Request) -> DataHealthService:
     return DataHealthService(
-        collection_service=get_collection_monitor_service(),
         coverage_service=get_coverage_service(),
         data_service=get_data_service(request),
         initialization_service=get_initialization_service(),
-        delivery_service=get_delivery_monitor_service(),
+        orchestration_repository=get_orchestration_v2_repository(),
     )
+
+
+def get_orchestration_v2_repository() -> OrchestrationV2Repository:
+    """Return the isolated V2 control-plane repository.
+
+    V2 deliberately uses its own short transactions and remains independent
+    from the legacy application database wrapper until cutover is approved.
+    """
+
+    return OrchestrationV2Repository()
+
+
+OrchestrationV2RepositoryDependency = Annotated[
+    OrchestrationV2Repository,
+    Depends(get_orchestration_v2_repository),
+]

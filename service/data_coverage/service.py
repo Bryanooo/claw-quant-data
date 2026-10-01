@@ -49,17 +49,17 @@ class CoverageService:
         start_date: date | None = None,
         end_date: date | None = None,
         idempotency_key: str | None = None,
+        include_unscheduled: bool = False,
     ) -> dict:
         rules = (
             [self._registry.get(name) for name in dict.fromkeys(dataset_names)]
             if dataset_names
-            else list(self._registry.scheduled())
-        )
-        non_auditable = [rule.dataset_name for rule in rules if not rule.auditable]
-        if non_auditable:
-            raise InvalidCoverageRequestError(
-                "datasets do not have date partitions: " + ", ".join(non_auditable)
+            else list(
+                self._registry.list()
+                if include_unscheduled
+                else self._registry.scheduled()
             )
+        )
         today = local_today()
         resolved_end = end_date or today
         if resolved_end > today:
@@ -75,12 +75,9 @@ class CoverageService:
                 raise InvalidCoverageRequestError(
                     "start_date must not be later than end_date"
                 )
-            if (
-                (resolved_end - resolved_start).days > 3660
-                and rule.strategy is not CoverageStrategy.REPORT_QUARTERLY
-            ):
+            if (resolved_end - resolved_start).days > 20000:
                 raise InvalidCoverageRequestError(
-                    "one audit may cover at most 3660 days"
+                    "one audit may cover at most 20000 days"
                 )
             raw_key = f"{base_key}:{rule.dataset_name}"
             job_key = (
@@ -121,7 +118,9 @@ class CoverageService:
                     "strategy": rule.strategy.value,
                     "description": rule.description,
                     "coverage_level": rule.coverage_level,
+                    "strict_audit_mode": rule.strict_audit_mode,
                     "auditable": rule.auditable,
+                    "date_partitioned": rule.date_partitioned,
                     "scheduled": rule.scheduled,
                     "release_after": (
                         rule.release_after.isoformat(timespec="minutes")
@@ -136,6 +135,12 @@ class CoverageService:
             )
         queue = self._repository.queue_counts()
         audited = [item for item in datasets if item["latest"]]
+        status_counts = {
+            status: sum(
+                item["latest"]["status"] == status for item in audited
+            )
+            for status in ("complete", "empty", "gaps", "unverified")
+        }
         scheduled_auditable = [
             item for item in datasets
             if item["scheduled"] and item["auditable"]
@@ -152,14 +157,23 @@ class CoverageService:
                     for item in datasets
                 ),
                 "observed_partition_rules": sum(
-                    item["coverage_level"] == "observed_partitions"
+                    item["coverage_level"] == "observed_scope_transport"
                     for item in datasets
                 ),
                 "non_temporal": sum(
-                    item["coverage_level"] == "not_applicable"
+                    item["coverage_level"] == "exhaustive_snapshot"
                     for item in datasets
                 ),
                 "audited": len(audited),
+                # Keep a strict data-state breakdown.  In particular,
+                # ``missing_partitions == 0`` is not evidence that an
+                # ``unverified`` audit is complete.
+                "strictly_verified": (
+                    status_counts["complete"] + status_counts["empty"]
+                ),
+                "complete": status_counts["complete"],
+                "verified_empty": status_counts["empty"],
+                "unverified": status_counts["unverified"],
                 "scheduled_audited": sum(
                     bool(item["latest"]) for item in scheduled_auditable
                 ),
@@ -172,9 +186,7 @@ class CoverageService:
                     and not item["latest"]
                     for item in datasets
                 ),
-                "with_gaps": sum(
-                    item["latest"]["status"] == "gaps" for item in audited
-                ),
+                "with_gaps": status_counts["gaps"],
                 "missing_partitions": sum(
                     item["latest"]["missing_partitions"] for item in audited
                 ),
@@ -213,7 +225,7 @@ class CoverageService:
                 status=status,
                 limit=limit,
             )
-            if rule.auditable
+            if rule.date_partitioned
             else []
         )
         covering_audit = getattr(self._repository, "covering_audit", None)
@@ -223,14 +235,16 @@ class CoverageService:
                 start_date=start_date,
                 end_date=end_date,
             )
-            if rule.auditable and callable(covering_audit)
+            if rule.date_partitioned and callable(covering_audit)
             else None
         )
         return {
             "dataset": dataset_name,
             "strategy": rule.strategy.value,
             "coverage_level": rule.coverage_level,
+            "strict_audit_mode": rule.strict_audit_mode,
             "auditable": rule.auditable,
+            "date_partitioned": rule.date_partitioned,
             "scheduled": rule.scheduled,
             "detects_missing_partitions": rule.detects_missing_partitions,
             "range_audit": range_audit,

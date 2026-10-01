@@ -6,13 +6,22 @@ from fastapi import APIRouter, Depends, Query
 
 from service.api.dependencies import ResearchServiceDependency, get_data_health_service
 from service.data_health import DataHealthService
+from service.research.validation import validation_catalog
 
 
 router = APIRouter(prefix="/v1/research", tags=["research"])
 
 
+@router.get("/validation-set")
+def research_validation_set() -> dict:
+    return validation_catalog()
+
+
 @router.get("/capabilities")
 def research_capabilities(service: ResearchServiceDependency) -> dict:
+    # Capability discovery is static plus the lightweight backfill ledger.
+    # Strict runtime data state has its own endpoint and is intentionally not
+    # hidden behind (or recomputed by) catalog discovery.
     return service.capabilities()
 
 
@@ -20,13 +29,9 @@ def research_capabilities(service: ResearchServiceDependency) -> dict:
 def research_readiness(
     service: DataHealthService = Depends(get_data_health_service),
 ) -> dict:
-    """Return bounded quality evidence without exposing the operations API."""
+    """Return strict data state and a separate task execution state."""
 
-    payload = service.summary()
-    payload["scope"] = "research_readiness"
-    payload["capabilities_url"] = "/api/v1/research/capabilities"
-    payload.pop("full_health_url", None)
-    return payload
+    return service.research_readiness()
 
 
 @router.get("/stocks/{ts_code}/fundamentals")
@@ -141,6 +146,62 @@ def market_breadth(
     as_of: date | None = None,
 ) -> dict:
     return service.market_breadth(as_of=as_of)
+
+
+@router.get("/macro/regime")
+def macro_regime(
+    service: ResearchServiceDependency,
+    as_of: date | None = None,
+) -> dict:
+    """Return a transparent growth/inflation/liquidity regime snapshot."""
+
+    return service.macro_regime(as_of=as_of)
+
+
+@router.get("/macro/{theme}")
+def macro_theme(
+    theme: str,
+    service: ResearchServiceDependency,
+    periods: int = Query(default=24, ge=2, le=120),
+    as_of: date | None = None,
+) -> dict:
+    """Return bounded growth, inflation, or liquidity source series."""
+
+    return service.macro_theme(theme, periods=periods, as_of=as_of)
+
+
+@router.get("/etfs/flows")
+def etf_flows(
+    service: ResearchServiceDependency,
+    lookback_observations: int = Query(default=5, ge=1, le=250),
+    limit: int = Query(default=30, ge=1, le=100),
+    as_of: date | None = None,
+) -> dict:
+    """Return creation/redemption proxies grouped by ETF exposure."""
+
+    return service.etf_flows(
+        lookback_observations=lookback_observations,
+        limit=limit,
+        as_of=as_of,
+    )
+
+
+@router.get("/etfs/state-team-signals")
+def state_team_etf_signals(
+    service: ResearchServiceDependency,
+    lookback_observations: int = Query(default=5, ge=1, le=250),
+    minimum_flow_yi: float = Query(default=5.0, ge=0.0, le=100000.0),
+    limit: int = Query(default=30, ge=1, le=100),
+    as_of: date | None = None,
+) -> dict:
+    """Return explicitly evidence-tiered ETF state-team candidates."""
+
+    return service.state_team_etf_signals(
+        lookback_observations=lookback_observations,
+        minimum_flow_yi=minimum_flow_yi,
+        limit=limit,
+        as_of=as_of,
+    )
 
 
 @router.get("/sectors/{provider}/rotation")

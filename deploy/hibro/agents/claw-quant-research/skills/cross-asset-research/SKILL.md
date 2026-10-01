@@ -10,4 +10,5 @@ Use `/v1/research/instruments/{asset_type}/{code}/technicals` with asset types `
 ETF price action does not replace composition/NAV/share-flow analysis. Sector index action does
 not replace constituent breadth. Au99.99 reflects domestic RMB gold and cannot by itself separate
 global bullion from currency effects. Never hide `limited_history` or claim a long-cycle signal
-from a sparse monthly series.
+from a sparse monthly series. Use the ETF-flow specialist for share-flow or investor-identity
+questions; this Skill owns price structure and cross-asset comparison.

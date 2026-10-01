@@ -25,10 +25,9 @@ from psycopg2 import sql
 from service.collector_catalog import discover_collectors
 from service.clock import business_now
 from service.config import DB_CONFIG
-from service.fanout_scheduling import SCHEDULED_FANOUT_RECIPES
+from service.orchestration_v2.catalog import acquisition_task_blueprints
 from service.tushare_catalog import TushareInterfaceCatalog
-from service.tushare_policy import TusharePolicyRegistry
-from service.tushare_scheduling import DEDICATED_SCHEDULED_APIS
+from service.tushare_normalization import normalized_table_name
 
 
 def _json_default(value: Any) -> str:
@@ -48,6 +47,15 @@ def _implementation_tables() -> dict[str, set[str]]:
 
     result: dict[str, set[str]] = defaultdict(set)
     for contract in TushareInterfaceCatalog().list():
+        # CatalogRawCollector owns one dynamically generated typed table per
+        # interface.  Its static ``table_name`` is only the optional anomaly
+        # quarantine, not the business table.  Omitting the generated table
+        # made every healthy generic interface look empty after raw capture
+        # was correctly reduced to anomalies_only.
+        if contract.implementation.get("mode") == "generic_raw":
+            result[contract.api_name].add(
+                normalized_table_name(contract.api_name)
+            )
         for reference in contract.implementation.get("references", ()):
             if ":" in reference:
                 path, class_name = reference.split(":", 1)
@@ -62,9 +70,29 @@ def _implementation_tables() -> dict[str, set[str]]:
     return result
 
 
+def _scheduled_api_names(scheduled_task_keys: set[str]) -> set[str]:
+    """Resolve the endpoint the active V2 runtime actually selects per task."""
+
+    result: set[str] = set()
+    for task in acquisition_task_blueprints():
+        if task.task_key not in scheduled_task_keys:
+            continue
+        selected = sorted(
+            task.endpoints,
+            key=lambda item: (
+                item.endpoint_key != task.task_key,
+                item.endpoint_key.endswith("_vip"),
+                item.source_id != "tushare",
+                item.endpoint_key,
+            ),
+        )[0]
+        if selected.source_id == "tushare":
+            result.add(selected.endpoint_key)
+    return result
+
+
 def build_report() -> dict[str, Any]:
     catalog = TushareInterfaceCatalog()
-    policies = TusharePolicyRegistry()
     implementation_tables = _implementation_tables()
     connection = psycopg2.connect(**DB_CONFIG)
     try:
@@ -79,10 +107,10 @@ def build_report() -> dict[str, Any]:
             }
             cursor.execute(
                 """
-                SELECT COALESCE(api_name, parameters->>'api_name') AS api_name,
+                SELECT task_key AS api_name,
                        COUNT(*) FILTER (WHERE status = 'success'),
                        MAX(finished_at) FILTER (WHERE status = 'success')
-                FROM sys_collection_job
+                FROM orchestration_v2.task_execution
                 GROUP BY 1
                 """
             )
@@ -91,6 +119,16 @@ def build_report() -> dict[str, Any]:
                 for api_name, count, last_at in cursor.fetchall()
                 if api_name
             }
+            cursor.execute(
+                """
+                SELECT task_key
+                FROM orchestration_v2.task_definition
+                WHERE lifecycle_status='active'
+                  AND workflow_kind='acquisition'
+                  AND definition->'schedule'->>'mode'='cron'
+                """
+            )
+            scheduled_task_keys = {row[0] for row in cursor.fetchall()}
 
             table_counts: dict[str, int] = {}
             for table_name in sorted({t for values in implementation_tables.values() for t in values}):
@@ -102,22 +140,15 @@ def build_report() -> dict[str, Any]:
         connection.close()
 
     rows = []
-    scheduled_fanout_apis = {
-        recipe.api_name for recipe in SCHEDULED_FANOUT_RECIPES
-    }
+    scheduled_apis = _scheduled_api_names(scheduled_task_keys)
     for contract in catalog.list():
         if not contract.collectable:
             continue
-        policy = policies.get(contract.api_name)
         tables = sorted(implementation_tables.get(contract.api_name, ()))
         raw_rows = raw.get(contract.api_name, {}).get("rows", 0)
         normalized_rows = sum(table_counts.get(table, 0) for table in tables)
         positive = raw_rows > 0 or normalized_rows > 0
-        automatic = (
-            contract.api_name in DEDICATED_SCHEDULED_APIS
-            or policy.automatic_safe
-            or contract.api_name in scheduled_fanout_apis
-        )
+        automatic = contract.api_name in scheduled_apis
         rows.append(
             {
                 "api_name": contract.api_name,
@@ -192,12 +223,12 @@ def main() -> None:
     parser.add_argument(
         "--json",
         type=Path,
-        default=PROJECT_ROOT / "reports" / "tushare_data_presence.json",
+        default=PROJECT_ROOT / "reports" / "tushare_data_presence_latest.json",
     )
     parser.add_argument(
         "--markdown",
         type=Path,
-        default=PROJECT_ROOT / "reports" / "tushare_data_presence.md",
+        default=PROJECT_ROOT / "reports" / "tushare_data_presence_latest.md",
     )
     arguments = parser.parse_args()
     report = build_report()

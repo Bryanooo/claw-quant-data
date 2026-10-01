@@ -6,12 +6,12 @@ ST股票列表采集器（含风险警示板明细）
 
 两步走：
 1. 每日调 stock_st 获取当日所有ST股票列表
-2. 对列表中的每只股票，调 st 接口获取详细的变更原因
+2. 按发布日期/实施日期增量获取当日变更，并继承上一快照；仅对首次出现且
+   当日事件缺失的标的调用单标的 st 接口兜底
 
 注意：此采集器的 fetch 方法做了两个 API 的合并，store 也因此保留了自定义逻辑。
 """
 
-import time
 import pandas as pd
 import psycopg2
 import psycopg2.extras
@@ -22,6 +22,7 @@ class StockSTCollector(BaseCollector):
     API_NAME = "stock_st"  # 仅用于标识，实际 fetch 也会调 st 接口
     table_name = "stock_st"
     pk_columns = ["ts_code", "trade_date"]
+    DETAIL_FIELDS = "ts_code,name,pub_date,imp_date,st_tpye,st_reason,st_explain"
 
     # ── step 1: 获取当日ST列表 ──
     def fetch_stock_st(self, trade_date: str) -> pd.DataFrame:
@@ -39,11 +40,82 @@ class StockSTCollector(BaseCollector):
         """调 st 接口获取某只股票的ST警示板明细"""
         df = self.pro.st(
             ts_code=ts_code,
-            fields="ts_code,name,pub_date,imp_date,st_tpye,st_reason,st_explain"
+            fields=self.DETAIL_FIELDS,
         )
         if df is None or df.empty:
             return []
         return df.to_dict(orient="records")
+
+    def fetch_st_updates(self, trade_date: str) -> list[dict]:
+        """Fetch only detail events published or taking effect on a date.
+
+        ``st`` is an event history endpoint rather than a daily snapshot.  Two
+        bounded date queries cover both announcements and effective changes;
+        querying every currently-ST security would turn one daily job into
+        hundreds of upstream calls.
+        """
+        frames: list[pd.DataFrame] = []
+        for date_field in ("pub_date", "imp_date"):
+            frame = self.pro.st(
+                **{date_field: trade_date, "fields": self.DETAIL_FIELDS}
+            )
+            if frame is not None and not frame.empty:
+                frames.append(frame)
+        if not frames:
+            return []
+        combined = pd.concat(frames, ignore_index=True)
+        return combined.drop_duplicates().to_dict(orient="records")
+
+    def _load_previous_details(
+        self,
+        ts_codes: list[str],
+        trade_date: str,
+    ) -> dict[str, dict]:
+        """Load the latest known detail state before ``trade_date`` in one query."""
+        if not ts_codes:
+            return {}
+        conn = get_db_conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON (ts_code)
+                           ts_code, pub_date, imp_date, st_type,
+                           st_reason, st_explain
+                    FROM stock_st
+                    WHERE ts_code = ANY(%s)
+                      AND trade_date < %s::DATE
+                      AND (pub_date IS NOT NULL OR imp_date IS NOT NULL
+                           OR st_type IS NOT NULL OR st_reason IS NOT NULL
+                           OR st_explain IS NOT NULL)
+                    ORDER BY ts_code, trade_date DESC
+                    """,
+                    (ts_codes, trade_date),
+                )
+                return {row["ts_code"]: dict(row) for row in cur.fetchall()}
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _latest_details(records: list[dict]) -> dict[str, dict]:
+        """Select the newest event for every security deterministically."""
+        result: dict[str, dict] = {}
+        for record in records:
+            code = safe_str(record.get("ts_code"))
+            if not code:
+                continue
+            candidate_key = (
+                safe_str(record.get("imp_date")) or "",
+                safe_str(record.get("pub_date")) or "",
+            )
+            current = result.get(code)
+            current_key = (
+                safe_str(current.get("imp_date")) or "",
+                safe_str(current.get("pub_date")) or "",
+            ) if current else ("", "")
+            if current is None or candidate_key >= current_key:
+                result[code] = record
+        return result
 
     # ── 采集入口 ──
     def fetch(self, **params) -> pd.DataFrame:
@@ -52,6 +124,7 @@ class StockSTCollector(BaseCollector):
           - trade_date: 交易日期 YYYYMMDD
         """
         trade_date = params.get("trade_date", "")
+        include_details = bool(params.get("include_details", False))
         if not trade_date:
             raise ValueError("必须指定 trade_date")
 
@@ -64,18 +137,38 @@ class StockSTCollector(BaseCollector):
         stocks = list_df.to_dict(orient="records")
         self.logger.info(f"  共 {len(stocks)} 只ST标的")
 
-        # step 2: 逐只获取明细
-        self.logger.info(f"🔍 step2: 逐只获取风险警示明细...")
-        detail_map = {}
-        for i, s in enumerate(stocks):
-            code = s["ts_code"]
+        # Historical stock_st completeness is one bounded list request per
+        # date.  The separate ``st`` detail endpoint is security-scoped and
+        # date-independent; refetching it for every stock on every historical
+        # date multiplies a 1-request leaf into ~200 requests without adding
+        # historical information.  Daily refresh may explicitly enrich the
+        # current snapshot once.
+        if not include_details:
+            return list_df.assign(
+                pub_date=None,
+                imp_date=None,
+                st_type=None,
+                st_reason=None,
+                st_explain=None,
+            )
+
+        # step 2: 当日事件覆盖前日状态；仅首次出现的标的逐只兜底。
+        codes = [s["ts_code"] for s in stocks]
+        detail_map = self._load_previous_details(codes, trade_date)
+        updates = self._latest_details(self.fetch_st_updates(trade_date))
+        detail_map.update(updates)
+
+        missing_codes = [code for code in codes if code not in detail_map]
+        if missing_codes:
+            self.logger.info(
+                "🔍 step2: %s 个首次出现标的缺少当日事件，执行单标的兜底...",
+                len(missing_codes),
+            )
+        for code in missing_codes:
             details = self.fetch_st_detail(code)
-            if details:
-                sorted_d = sorted(details, key=lambda x: x.get("imp_date", "") or "", reverse=True)
-                detail_map[code] = sorted_d[0]
-            if (i + 1) % 50 == 0:
-                self.logger.info(f"  明细进度: {i+1}/{len(stocks)}")
-                time.sleep(0.5)
+            selected = self._latest_details(details).get(code)
+            if selected:
+                detail_map[code] = selected
 
         # step 3: 合并数据
         merged = []
@@ -97,7 +190,9 @@ class StockSTCollector(BaseCollector):
                 d = detail_map[code]
                 row["pub_date"] = safe_str(d.get("pub_date"))
                 row["imp_date"] = safe_str(d.get("imp_date"))
-                row["st_type"] = safe_str(d.get("st_tpye"))
+                # Tushare historically exposed the misspelled ``st_tpye``;
+                # accept both spellings so a provider correction is harmless.
+                row["st_type"] = safe_str(d.get("st_type") or d.get("st_tpye"))
                 row["st_reason"] = safe_str(d.get("st_reason"))
                 row["st_explain"] = safe_str(d.get("st_explain"))
             merged.append(row)
@@ -121,11 +216,11 @@ class StockSTCollector(BaseCollector):
                     SET name = EXCLUDED.name,
                         type = EXCLUDED.type,
                         type_name = EXCLUDED.type_name,
-                        pub_date = EXCLUDED.pub_date,
-                        imp_date = EXCLUDED.imp_date,
-                        st_type = EXCLUDED.st_type,
-                        st_reason = EXCLUDED.st_reason,
-                        st_explain = EXCLUDED.st_explain
+                        pub_date = COALESCE(EXCLUDED.pub_date, stock_st.pub_date),
+                        imp_date = COALESCE(EXCLUDED.imp_date, stock_st.imp_date),
+                        st_type = COALESCE(EXCLUDED.st_type, stock_st.st_type),
+                        st_reason = COALESCE(EXCLUDED.st_reason, stock_st.st_reason),
+                        st_explain = COALESCE(EXCLUDED.st_explain, stock_st.st_explain)
                 """
 
                 vals = [tuple(r.get(c) for c in [

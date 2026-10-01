@@ -11,6 +11,7 @@ class CoverageStrategy(str, Enum):
     TRADING_DAILY = "trading_daily"
     TRADING_WEEKLY = "trading_weekly"
     TRADING_MONTHLY = "trading_monthly"
+    CALENDAR_MONTHLY = "calendar_monthly"
     REPORT_QUARTERLY = "report_quarterly"
     OBSERVED_ONLY = "observed_only"
     NON_TEMPORAL = "non_temporal"
@@ -32,14 +33,23 @@ class CoverageRule:
     # not mature and must not be reported or auto-repaired as a gap.
     release_after: time | None = None
     default_lookback_days: int = 120
+    # First partition for which the upstream contract actually guarantees
+    # history. Requests may start earlier, but pre-availability dates are not
+    # missing obligations and remain visible only as observed partitions.
+    availability_start: date | None = None
     description: str = ""
     entity_reference: str | None = None
     min_entity_ratio: float | None = None
     scheduled: bool = False
     # Some event-like daily interfaces legitimately publish no rows on an
-    # otherwise open market day. Only a successful, verified empty collection
-    # job for the exact partition may satisfy such an expectation.
+    # otherwise open market day. Only a successful, verified empty V2
+    # execution for the exact partition may satisfy such an expectation.
     accept_verified_empty: bool = False
+    # Sparse event datasets can contain physical rows while still representing
+    # a truncated query. When enabled, a partition is complete only if a
+    # successful V2 acquisition proves that its whole logical range was
+    # exhausted (or authoritatively empty).
+    require_transport_proof: bool = False
     # When set, verified empty evidence is accepted only for partitions older
     # than this many days. This preserves strict recent reporting expectations
     # while allowing provably empty sparse historical periods.
@@ -53,16 +63,29 @@ class CoverageRule:
 
     @property
     def auditable(self) -> bool:
-        return bool(
-            self.date_column and self.strategy != CoverageStrategy.NON_TEMPORAL
-        )
+        # Every public dataset must be auditable. Temporal datasets are
+        # checked by partitions/scopes; non-temporal datasets are checked as
+        # exhaustive snapshots with collection evidence.
+        return True
+
+    @property
+    def date_partitioned(self) -> bool:
+        return bool(self.date_column and self.strategy != CoverageStrategy.NON_TEMPORAL)
+
+    @property
+    def strict_audit_mode(self) -> str:
+        if self.strategy == CoverageStrategy.NON_TEMPORAL:
+            return "exhaustive_snapshot"
+        if self.strategy == CoverageStrategy.OBSERVED_ONLY:
+            return "observed_scope_transport"
+        return "expected_partition"
 
     @property
     def coverage_level(self) -> str:
         if self.strategy == CoverageStrategy.NON_TEMPORAL:
-            return "not_applicable"
+            return "exhaustive_snapshot"
         if self.strategy == CoverageStrategy.OBSERVED_ONLY:
-            return "observed_partitions"
+            return "observed_scope_transport"
         return "expected_partitions"
 
     @property

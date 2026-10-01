@@ -3,7 +3,7 @@ name: claw-quant-fundamental-research
 description: Analyze an A-share company's financial quality, growth, valuation, business mix, and risks from Claw Quant's governed research APIs. Use for company fundamental analysis, financial trend review, valuation, or investment-thesis requests; do not use for technical-chart-only analysis.
 ---
 
-# Claw Quant Fundamental Research
+# Claw Quant Company Fundamental Research
 
 Use only the governed research commands:
 
@@ -17,7 +17,16 @@ Use only the governed research commands:
 Stop and disclose the limitation when a required dataset is missing. Treat `unknown_empty`
 as unknown, never as proof that an event did not happen.
 
-Build the conclusion from four separate lenses:
+Load only the guidance required by the question:
+
+- financial performance and accounting quality: read
+  [references/financial-quality.md](references/financial-quality.md);
+- valuation, dividends, repurchases, or shareholder return: read
+  [references/valuation-and-allocation.md](references/valuation-and-allocation.md);
+- full investment thesis, scenarios, risks, and falsifiers: read
+  [references/thesis-and-risks.md](references/thesis-and-risks.md).
+
+Build a full-company conclusion from four separate lenses:
 
 1. Growth: compare like-for-like fiscal periods; distinguish quarterly, cumulative interim,
    and annual figures.
@@ -35,3 +44,6 @@ date, market-data date, quality status, and material data gaps.
 
 Separate observed facts, derived metrics, and interpretation. Do not issue a buy/sell verdict
 from valuation alone.
+
+This Skill covers companies, not macro regimes or industry aggregates. Route macro questions to
+`$claw-quant-macro-research` and industry questions to `$claw-quant-industry-research`.

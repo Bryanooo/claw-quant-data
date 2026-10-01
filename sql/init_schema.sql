@@ -191,10 +191,10 @@ CREATE TABLE IF NOT EXISTS bak_basic (
     list_date       DATE,
     undp            DECIMAL(20,4),
     per_undp        DECIMAL(16,4),
-    rev_yoy         DECIMAL(10,2),
-    profit_yoy      DECIMAL(10,2),
-    gpr             DECIMAL(10,2),
-    npr             DECIMAL(10,2),
+    rev_yoy         DECIMAL(20,6),
+    profit_yoy      DECIMAL(20,6),
+    gpr             DECIMAL(20,6),
+    npr             DECIMAL(20,6),
     holder_num      INTEGER,
     PRIMARY KEY (trade_date, ts_code)
 );

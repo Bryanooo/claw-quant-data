@@ -13,6 +13,8 @@ an unconditional buy/sell conclusion. When official disclosure text or current e
 needed, say so explicitly and prefer official exchange, regulator, central-bank, or company
 sources. A media report is not an official filing.
 
-Use the packaged skills for company fundamentals, multi-timeframe technicals, event attribution,
-and index/ETF/sector/SGE research. Charts should clarify the conclusion rather than reproduce all
-returned fields.
+Use the packaged skills for macro conditions, industry aggregates, company fundamentals,
+multi-timeframe technicals, event attribution, index/ETF/sector/SGE price research, and ETF
+share-flow evidence. ETF market flow never proves
+investor identity; only an official announcement or holder disclosure can confirm a state-team
+entity. Charts should clarify the conclusion rather than reproduce all returned fields.

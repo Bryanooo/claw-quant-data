@@ -21,4 +21,4 @@ FROM base AS runtime
 
 COPY . .
 
-CMD ["python", "collectors/scheduler.py"]
+CMD ["python", "-m", "collectors.scheduler"]

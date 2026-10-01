@@ -14,8 +14,16 @@ Run the governed endpoint and keep the requested observation date explicit:
 ./clawq research repurchase-progress TS_CODE
 ```
 
-Read [references/methodology.md](references/methodology.md) before explaining support,
-resistance, wave structure, candlestick patterns, or bull/bear lines.
+Load only the guidance needed for the question:
+
+- trend, multi-timeframe structure, candlesticks, and price gaps: read
+  [references/trend-and-momentum.md](references/trend-and-momentum.md);
+- volume, price-volume confirmation, volatility, and risk: read
+  [references/volume-and-risk.md](references/volume-and-risk.md);
+- support/resistance, pivot families, Fibonacci, and named trend boundaries: read
+  [references/levels-and-structure.md](references/levels-and-structure.md);
+- wave and Chan candidates: read
+  [references/wave-and-chan.md](references/wave-and-chan.md).
 
 Render the returned `chart.points` as a real candlestick chart when visual output is available.
 Use aligned panels for volume and momentum; overlay only the few moving averages or Bollinger

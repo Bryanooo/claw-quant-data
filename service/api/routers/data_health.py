@@ -21,3 +21,11 @@ def data_health_summary(
     service: DataHealthService = Depends(get_data_health_service),
 ) -> dict:
     return service.summary()
+
+
+@router.get("/history-obligations")
+def history_obligations(
+    service: DataHealthService = Depends(get_data_health_service),
+) -> dict:
+    """Return initialization coverage by upstream interface, not job state."""
+    return service.history_obligations()

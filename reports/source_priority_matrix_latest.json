@@ -1,0 +1,1668 @@
+{
+  "generated_at": "2026-10-01T04:43:43.640156+00:00",
+  "policy": "local canonical DB first; quota source only by explicit policy",
+  "summary": {
+    "routes": 163,
+    "local_db_first": 57,
+    "financial_data_first": 106,
+    "active_implicit_fallbacks": 0,
+    "active_canonical_fallbacks": 29
+  },
+  "items": [
+    {
+      "route": "/api/v1/altdata/hot-plate-rank",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/altdata/hot-stock-rank",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/common/entity_relationship",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/common/industry-chain-tree",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/common/stock-belong-industry-chain",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/common/symbol-by-cond",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_basic",
+        "fund_basic",
+        "index_basic",
+        "hk_basic",
+        "us_basic",
+        "sge_basic"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/common/trading-day",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "trade_calendar",
+        "hk_tradecal",
+        "us_tradecal",
+        "fut_trade_cal"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/common/trading-state",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "explicit_realtime_query",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "实时产品没有等价的已持久化快照；必须显式请求实时能力"
+    },
+    {
+      "route": "/api/v1/fund/asset-allocation",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/bond-portfolio",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/dividend",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_div"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_fund_cash_dividends",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/fund-archive",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_basic"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_common_profile_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/fund-charge-rate",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/fund-company-info",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_company"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/fund-manager",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_manager"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_fund_manager_tenures",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/fund-portfolio",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/invest-industry",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/net-value",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_nav",
+        "fund_daily"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_bounded_nav_range",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/plate-fund-relevancy",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/share-split",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_adj"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/stock-portfolio",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_portfolio"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_quarterly_stock_holdings",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund/trade-limit",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund/yield-rank",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/fund_derived/benchmark-excess",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_daily",
+        "fund_nav",
+        "index_daily"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/fund_derived/risk-return",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_daily",
+        "fund_nav"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/hk_stock/adr-conversion-ratio",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/equity-structure",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/free-float",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/high-shareholding-concentration",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/ipo-key-indicators",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/ratings",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/restricted-share-unlock-schedule",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/risk-list",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/shareholding-changes",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/short-position-statistics",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/short-selling",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/special-notices",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/special-securities",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/suspend-resumption",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/target-price",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/hk_stock/temporary-parallel-trading",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/index_fnd/index-constituents-list-weight",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "index_weight",
+        "index_member_all"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_sh_sz_weighted_constituents",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/index_fnd/index-fnd-estimates-summary",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/index_fnd/index-fnd-financial-ratios",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/index_fnd/index-fnd-financial-ratios-single",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/index_fnd/index-fnd-financial-statement",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/index_fnd/index-profile-basic-info",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "index_basic"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_sh_sz_index_profile",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/info/announcements",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/info/news-global-search",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/info/research-reports",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "report_rc"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/info/tag/category",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/info/tag/query",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/macro/data-query",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "cn_cpi",
+        "cn_gdp",
+        "cn_m",
+        "cn_pmi",
+        "cn_ppi",
+        "sf_month",
+        "shibor",
+        "shibor_lpr",
+        "libor",
+        "hibor",
+        "us_tbr",
+        "us_tltr",
+        "us_trltr",
+        "us_trycr",
+        "us_tycr"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/macro/meta-search",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/onecode/query",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_daily",
+        "stock_daily_basic",
+        "index_daily",
+        "fund_daily",
+        "fund_nav",
+        "financial_indicator"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/onecode/recall",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/quote/auction-snapshot",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "explicit_realtime_query",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "实时产品没有等价的已持久化快照；必须显式请求实时能力"
+    },
+    {
+      "route": "/api/v1/quote/basic-snapshot",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "explicit_realtime_query",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "实时产品没有等价的已持久化快照；必须显式请求实时能力"
+    },
+    {
+      "route": "/api/v1/quote/capital-flow-range",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "moneyflow",
+        "moneyflow_dc",
+        "moneyflow_ths",
+        "moneyflow_ind_dc",
+        "moneyflow_ind_ths",
+        "moneyflow_mkt_dc"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/quote/derived-snapshot",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "explicit_realtime_query",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "实时产品没有等价的已持久化快照；必须显式请求实时能力"
+    },
+    {
+      "route": "/api/v1/quote/kline-batch",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_daily",
+        "index_daily",
+        "index_weekly",
+        "index_monthly",
+        "fund_daily",
+        "hk_daily",
+        "sge_daily",
+        "fut_daily",
+        "opt_daily",
+        "cb_daily",
+        "forex_daily"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_daily_unadjusted",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/sector/plate-component",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "ths_member",
+        "dc_member",
+        "tdx_member",
+        "index_member_all"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/sector/plate-fund-relevancy",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/sector/plate-list",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "ths_index",
+        "dc_index",
+        "tdx_index",
+        "index_classify"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/sector/sector-capital-flow",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "moneyflow_ind_dc",
+        "moneyflow_ind_ths",
+        "margin",
+        "margin_detail"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/sector/sector-financial-cumulative",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/sector/sector-financial-point",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/sector/sector-financial-quarterly",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/sector/sector-valuation",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "index_dailybasic"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/after-daily-quote",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock/ashare-cdr-conversion-ratio",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock/block-trading-details",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "block_trade"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/change-plan",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock/component-list-belonged",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "index_member_all",
+        "ths_member",
+        "dc_member",
+        "tdx_member"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/daily-valuation-indicators",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_daily_basic"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_daily_core_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/market-detail",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock/risk-alerts",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stk_alert",
+        "stock_st"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_risk_alerts",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/sc-activitie",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock/sc-trade",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock/sh-hold-stat",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "hk_hold",
+        "stock_hsgt"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/stock-index-constituents-list",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "index_member_all",
+        "index_weight"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/suspend-resumption",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_suspend"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_suspensions",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/tech-indicators",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_daily",
+        "adj_factor",
+        "stk_factor",
+        "stk_factor_pro"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/tech-patterns",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_daily",
+        "adj_factor"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock/tra-variant",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/actual-controller",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/asset-restructuring",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/balance-sheet",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "balancesheet"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_balance_core_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/broker-golden-stocks",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "broker_recommend"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/buyback-plans",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "repurchase"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_repurchase_plan_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/concert-parties",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/consensus-details",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/consensus-stats",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/controlling-shareholder",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/delisting-info",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/depository-receipt",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/dividend-details",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "dividend"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_core_dividend_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/dividend-record",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "dividend"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/employee-ownership-plan",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/equity-structure",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/executive-compensation",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stk_rewards"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/free-float",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/fund-raising-usage",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/growth-rates-acc",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "financial_indicator"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_core_financial_metrics",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/growth-rates-quarter",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "income",
+        "cashflow",
+        "financial_indicator"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/guarantee-events",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/guarantee-stats",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/hk-intermediary-holdings",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/holder-count",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stk_holdernumber"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_holder_count_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/holding-stats",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/holding-subsidiaries",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/income-cashflow-acc",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "income",
+        "cashflow"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_cumulative_core_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/income-cashflow-single",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "income",
+        "cashflow"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/industry-classification",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_basic",
+        "index_classify"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/investor-relations",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/ipo-primary",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/ipo-quote-details",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/ipo-winning-numbers",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/listing-rules",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/litigation-arbitration",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/main-business-business",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fina_mainbz"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_business_segments",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/main-business-industry",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fina_mainbz"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_business_segments",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/main-business-product",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fina_mainbz"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_business_segments",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/main-business-region",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fina_mainbz"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_business_segments",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/metrics-ttm",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "financial_indicator"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_core_ttm_financials",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/performance-forecast",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "forecast"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_core_forecast_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/prelim-acc",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "express"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_cumulative_preliminary_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/prelim-balance",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "express"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/prelim-quarter",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "express"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/rating-summary",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/regulatory-penalties",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/related-party-transactions",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/restricted-release-calendar",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "share_float"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_restricted_releases",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/review-process",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/risk-factor-csi300",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/risk-factor-csi500",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/risk-factor-sh000001",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/risk-factor-sw",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/seo-placement-details",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/shareholder-commitment",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/shareholder-list",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "top10_holders",
+        "top10_floatholders"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_major_shareholders",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/shareholder-meeting",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/specialty-metrics-period",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/specialty-metrics-point",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/stock-basic-info",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "stock_basic",
+        "stock_company"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_identity_fields",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/stock-rel-fund-holdings-top",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "fund_portfolio"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "adapter_required",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/stock_fnd/style-classification",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/takeover-offers",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/target-price",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/tender-offers",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_fnd/yield-factor",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/stock_sh_equity/freeze-pledge",
+      "preferred_read": "local_db_first",
+      "local_datasets": [
+        "pledge_detail",
+        "pledge_stat"
+      ],
+      "financial_data_role": "quota_fallback_after_local_miss",
+      "adapter_status": "partial_ready_a_share_pledge_events",
+      "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
+      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+    },
+    {
+      "route": "/api/v1/us_stock/adr-ratio-changes",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/capital-events",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/company-ownership",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/concept-components",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/dividends",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/equity-structure",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/ratings",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/security-markings",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v1/us_stock/target-price",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v2/info/news/article",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    },
+    {
+      "route": "/api/v2/info/news/search_evidence",
+      "preferred_read": "financial_data_first",
+      "local_datasets": [],
+      "financial_data_role": "primary_until_local_dataset_exists",
+      "adapter_status": "canonical_dataset_required",
+      "local_scope": "none",
+      "reason": "当前没有等价的本地规范数据集；需先建立规范数据集或查询适配器"
+    }
+  ]
+}

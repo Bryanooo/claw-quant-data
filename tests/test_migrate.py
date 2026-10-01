@@ -1,7 +1,12 @@
+import pytest
+
 from scripts.migrate import (
     FORMAT_ONLY_CHECKSUM_ALIASES,
     _checksum_is_compatible,
+    _concurrent_index_name,
+    _is_non_transactional_migration,
     _load_checksum_manifest,
+    _non_transactional_statements,
     _validate_migration_files,
 )
 from service.config import PROJECT_ROOT
@@ -28,4 +33,29 @@ def test_published_migration_files_match_immutable_manifest():
 
     _validate_migration_files(paths)
 
-    assert len(_load_checksum_manifest()) == len(paths) == 57
+    manifest = _load_checksum_manifest()
+    assert len(manifest) == len(paths)
+    assert "072_business_query_indexes.sql" in manifest
+
+
+def test_non_transactional_migration_accepts_only_idempotent_concurrent_indexes():
+    text = """-- migrate: no-transaction
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_one ON example (id);
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_two ON example (created_at);
+    """
+
+    assert _is_non_transactional_migration(text) is True
+    assert _non_transactional_statements(text) == [
+        "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_one ON example (id)",
+        "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_two ON example (created_at)",
+    ]
+    assert _concurrent_index_name(
+        _non_transactional_statements(text)[0]
+    ) == "idx_one"
+
+
+def test_non_transactional_migration_rejects_arbitrary_sql():
+    with pytest.raises(RuntimeError, match="may contain only"):
+        _non_transactional_statements(
+            "-- migrate: no-transaction\nDELETE FROM example;"
+        )

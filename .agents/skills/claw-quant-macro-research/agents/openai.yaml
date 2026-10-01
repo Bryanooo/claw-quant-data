@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 宏观环境研究"
+  short_description: "增长通胀流动性与宏观状态的证据化研究工作流"
+  default_prompt: "Use $claw-quant-macro-research to assess the macro environment from governed growth, inflation, liquidity, and policy evidence."

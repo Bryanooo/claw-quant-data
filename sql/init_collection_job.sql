@@ -43,9 +43,11 @@ CREATE TABLE IF NOT EXISTS sys_collection_job (
     started_at       TIMESTAMPTZ,
     finished_at      TIMESTAMPTZ,
     CONSTRAINT ck_collection_job_status
-        CHECK (status IN ('queued', 'running', 'success', 'failed', 'superseded')),
+        CHECK (status IN (
+            'queued', 'running', 'paused', 'success', 'failed', 'superseded'
+        )),
     CONSTRAINT ck_collection_job_attempts
-        CHECK (attempt >= 0 AND max_attempts BETWEEN 1 AND 5),
+        CHECK (attempt >= 0 AND max_attempts BETWEEN 1 AND 20),
     CONSTRAINT ck_collection_job_priority CHECK (priority BETWEEN 0 AND 100),
     CONSTRAINT ck_collection_job_recheck_generation
         CHECK (recheck_generation BETWEEN 0 AND 20),

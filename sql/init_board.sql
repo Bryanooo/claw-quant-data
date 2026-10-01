@@ -365,9 +365,10 @@ COMMENT ON COLUMN hm_list.orgs IS '关联营业部';
 -- 15. ths_hot — 同花顺热榜
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS ths_hot (
+    source_key    VARCHAR(32) NOT NULL,
     trade_date    VARCHAR(8)  NOT NULL,
     data_type     VARCHAR(8)  NOT NULL,
-    ts_code       VARCHAR(16) NOT NULL,
+    ts_code       VARCHAR(16),
     ts_name       VARCHAR(64),
     rank          INTEGER     NOT NULL,
     pct_change    NUMERIC(8,3),
@@ -376,7 +377,7 @@ CREATE TABLE IF NOT EXISTS ths_hot (
     rank_reason   TEXT,
     hot           NUMERIC(20,4),
     rank_time     VARCHAR(20) NOT NULL DEFAULT '',
-    PRIMARY KEY (trade_date, ts_code, rank, data_type, rank_time)
+    PRIMARY KEY (source_key)
 );
 COMMENT ON TABLE  ths_hot              IS '同花顺热榜';
 COMMENT ON COLUMN ths_hot.trade_date    IS '交易日期';

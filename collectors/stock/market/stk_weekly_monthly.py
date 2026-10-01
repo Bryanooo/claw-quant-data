@@ -163,16 +163,3 @@ class StkWeeklyMonthlyCollector(BaseCollector):
             return len(rows)
         finally:
             conn.close()
-
-
-# 兼容旧版 Backfill 函数
-def backfill_2026():
-    """补 2026 年历史数据"""
-    from collectors.stock.market.suspend_d import SuspendDCollector
-    c = SuspendDCollector()
-    start = "20260101"
-    from service.clock import business_today
-
-    end = business_today().strftime("%Y%m%d")
-    # ... 省略，保留旧逻辑
-    pass

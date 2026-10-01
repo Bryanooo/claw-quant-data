@@ -20,6 +20,8 @@ _STANDARD_QUERY_PARAMETERS = {
     "limit",
     "offset",
     "include_total",
+    "filter_mode",
+    "cursor",
 }
 
 
@@ -48,6 +50,8 @@ def query_interface_records(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     include_total: bool = False,
+    filter_mode: str = Query(default="standard", pattern="^(standard|advanced)$"),
+    cursor: str | None = None,
 ) -> dict:
     filters: dict[str, str] = {}
     for name, value in request.query_params.multi_items():
@@ -63,4 +67,6 @@ def query_interface_records(
         limit=limit,
         offset=offset,
         include_total=include_total,
+        filter_mode=filter_mode,
+        cursor=cursor,
     )

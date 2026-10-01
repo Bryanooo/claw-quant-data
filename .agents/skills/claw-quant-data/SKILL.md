@@ -9,6 +9,25 @@ Use only the repository's public Agent contract under `/api/v1/research/*` throu
 `./clawq`. Do not couple answers to physical tables, raw SQL, lower service layers, or
 undocumented response fields.
 
+## Specialist routing
+
+Use this Skill for contract discovery, readiness, and bounded general queries. For a full
+research workflow, use the narrowest specialist Skill:
+
+- macro growth, inflation, liquidity, and regime: `$claw-quant-macro-research`;
+- industry fundamentals, valuation, contributors, and breadth:
+  `$claw-quant-industry-research`;
+- company financial quality, valuation, and shareholder return:
+  `$claw-quant-fundamental-research`;
+- K-line, indicators, volume, levels, waves, and charting: `$claw-quant-technical-research`;
+- catalyst and price-move attribution: `$claw-quant-event-research`;
+- index, ETF, sector, and SGE spot price comparison: `$claw-quant-cross-asset-research`;
+- ETF creation/redemption, exposure rotation, and state-team evidence:
+  `$claw-quant-etf-flow-research`.
+
+Combined questions may use more than one specialist, but all facts and deterministic metrics
+still come from the same research contract.
+
 ## Query workflow
 
 1. Run `./clawq research readiness`. If the API is unavailable, report the failure and
@@ -17,8 +36,8 @@ undocumented response fields.
    and to identify declared data or source gaps.
 3. Use the narrowest research command: a stock or sector research pack for context,
    then a deterministic fundamental, valuation, technical, capital-flow, event-study,
-   repurchase-progress, instrument-technicals, market-breadth, sector-rotation, or
-   investment-calendar command as needed.
+   repurchase-progress, instrument-technicals, market-breadth, sector-rotation, ETF-flow,
+   state-team-signal, or investment-calendar command as needed.
 4. Pass `--as-of` for historical research whenever the command supports it. Inspect
    `meta.quality`, `meta.provenance`, `meta.gaps`, and `external_data_needed` instead of
    inferring completeness from a non-empty response.

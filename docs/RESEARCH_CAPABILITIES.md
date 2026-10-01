@@ -18,17 +18,18 @@
 
 ## 已实现的派生服务
 
-11 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、9 个聚合研究服务。
-它们不是“11 种分析”，
+18 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、1 个研究验证集和
+15 个聚合研究服务。它们不是“18 种分析”，
 也不表示已经覆盖所有可能的投研方法；投研方法本身没有封闭全集。项目定义了一份
-可验收的 v1 基线：59 项核心能力中，当前 51 项已由研究接口直接服务，3 项可由
-已有 Tushare 数据补采后增加服务，另 5 项仍受外部数据源或额度约束。能力目录会
+可验收的 v1 基线：72 项核心能力中，当前 61 项已由研究接口直接服务，3 项可由
+已有 Tushare 数据补采后增加服务，另 8 项仍受外部数据源或额度约束。能力目录会
 返回逐项 `techniques.served` 和 `techniques.gaps`，不再只给一个容易误解的总数。
 
 | 接口 | 覆盖能力 |
 |---|---|
 | `GET /api/v1/research/capabilities` | 能力目录、补采工作流、新数据源待办 |
 | `GET /api/v1/research/readiness` | 面向 Agent 的研究数据时效、覆盖、失败和初始化摘要 |
+| `GET /api/v1/research/validation-set` | 股票、指数、ETF、黄金、宏观和行业的可重复验收案例 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 财务趋势、盈利、成长、现金质量、偿债、效率、杜邦与主营构成 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | PE/PB/PS/股息率历史分位、同行中位数、DCF/DDM 输入 |
 | `GET /api/v1/research/stocks/{ts_code}/technicals` | K线与缺口、MA/MACD/ADX/Aroon/PSAR、RSI/KDJ/CCI/Williams/MFI/StochRSI、量能异常/价量四象限/突破确认/背离/换手率/日线VWAP代理、ATR/布林/下行风险、Ichimoku、Donchian、Supertrend、六类枢轴、斐波那契回撤、缠论候选结构、基准风险和绘图序列 |
@@ -37,15 +38,26 @@
 | `GET /api/v1/research/stocks/{ts_code}/repurchase-progress` | 结构化回购方案、最新累计实施进度、执行均价与公告后相对收益 |
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 事件窗口收益、基准收益、异常收益和 CAR |
 | `GET /api/v1/research/market/breadth` | 涨跌分布、均线扩散、成交和涨跌停情绪 |
+| `GET /api/v1/research/macro/regime` | 增长、通胀、流动性分项及透明规则的宏观状态 |
+| `GET /api/v1/research/macro/{theme}` | GDP/PMI、CPI/PPI、货币社融和利率的有界序列 |
+| `GET /api/v1/research/etfs/flows` | ETF份额变化、估算申赎资金、指数暴露聚合和市场表现 |
+| `GET /api/v1/research/etfs/state-team-signals` | 市场流量/疑似/已确认三档证据；没有正式身份材料时不确认国家队归因 |
 | `GET /api/v1/research/sectors/{provider}/rotation` | THS/DC/TDX 当前有效板块内按日收益复利的强弱排序，并披露实际数据日与滞后 |
+| `GET /api/v1/research/sectors/{provider}/{sector_code}/fundamentals` | 时点成员财务聚合、同比、估值覆盖和主要贡献公司 |
+| `GET /api/v1/research/sectors/{provider}/{sector_code}/breadth` | 时点成员涨跌比例、均线扩散和行情覆盖 |
 
-当前 51 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 31 项、
-资金与筹码 5 项、回购进展 1 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项。仍有 8 项缺口：
+当前 61 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 31 项、
+资金与筹码 5 项、回购进展 1 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项、
+ETF资金与证据信号 2 项、宏观 4 项、行业 4 项。仍有 11 项缺口：
 一致预期修正、股东与机构行为、总股东回报可以用现有接口补齐；公告证据、治理风险、
-新闻事件、新闻情绪和微观结构需要派生能力或新数据源。逐项机器可读状态以能力目录为准。
+新闻事件、新闻情绪、ETF持有人身份归因、微观结构、宏观外部/财政数据和行业经营
+驱动需要派生能力或新数据源。逐项机器
+可读状态以能力目录为准。
 
 这些接口只输出可复现的研究事实和指标，不输出买卖建议。估值模型不会在缺少增长、
 折现率等显式假设时伪造“合理价格”。
+宏观观察期、行业成员时点、聚合口径和调用示例见
+[宏观与行业研究契约](MACRO_INDUSTRY_RESEARCH.md)。
 
 ### 技术结构的确认口径
 
@@ -71,7 +83,7 @@ Beta、相关性、零无风险利率 Alpha、年化跟踪误差和信息比率�
 和20/60/120周期及年初锚定的日线VWAP代理。代理使用日K典型价与成交量，不能冒充盘中
 VWAP或真实成交量分布；CVD、主动买卖、盘口失衡和冲击成本仍需逐笔或Level-2数据。
 
-## 待补采的现有接口
+## 初始化历史义务
 
 补采工作按以下顺序执行。后一阶段只有在前一阶段任务无活动失败、完整性证据通过后
 才应启动，避免高基数扇出挤占日常采集资源。
@@ -79,8 +91,8 @@ VWAP或真实成交量分布；CVD、主动买卖、盘口失衡和冲击成本�
 1. `major_news`：从 2018 年起按“来源×日”建立可恢复任务；单来源命中 400 行上限时
    自动细分到更小时间窗口，上限响应不能作为完整。当前 Token 实测仅 40 次/天且
    20 次/分钟，系统按 35 次/上海自然日和 3.2 秒最小间隔留出安全余量；小任务保证
-   限频恢复时不丢失已经完成的来源/日期；这些叶子按月形成持久化批次，
-   并由独立 `worker-news` 执行，避免新闻额度拖住其他初始化和历史补采；
+   限频恢复时不丢失已经完成的来源/日期；V2 会在同一执行实例中持久化节点游标，
+   由 `worker-v2-backfill` 执行并受独立资源池与额度控制，避免新闻额度拖住日常采集；
 2. `report_rc`：卖方预测和评级历史，目标从 2010 年开始；
 3. `top10_holders`、`top10_floatholders`、`fund_portfolio`、`hk_hold`、
    `stk_holdertrade`、`stk_holdernumber`：股东与机构行为；
@@ -89,13 +101,16 @@ VWAP或真实成交量分布；CVD、主动买卖、盘口失衡和冲击成本�
 6. `stk_mins`：分钟行情。当前 Token 限制为每天 2 次，只能做小范围证券池，不能
    声称完成全市场历史。
 
-`full` 初始化计划 v6 已内置前五组研究历史，以及 `adj_factor`、`fund_daily`、
+`full` 初始化计划 v8 已内置前五组研究历史，以及 `adj_factor`、`fund_daily`、
 `fund_adj`、`sge_daily`、`ths_daily` 的逐交易日完整分区，不再依赖安装后人工运行
 一次性的修复脚本。分钟行情
 仍作为明确的受限项留在预检提醒中，系统不会虚假承诺全市场完成。
 
 补采成功不能只看任务 `success`。每个分区必须有请求范围、分页耗尽或安全扇出证据，
 并在标准表中核对起止日期、实体覆盖和行数变化。
+
+全目录历史义务、研究依赖穿透和验证集的统一口径见
+[数据就绪、审计与研究验收](DATA_ASSURANCE.md)。
 
 补采由 `scripts/manage_research_backfills.py` 管理；`--group next` 只会在前一组没有
 活动任务、未解决失败且完整性均通过后推进。查看持久化进度：
@@ -145,6 +160,12 @@ CLI 与 REST 对应，例如：
 ./clawq research instrument-technicals spot Au99.99
 ./clawq research repurchase-progress 300750.SZ
 ./clawq research market-breadth
+./clawq research macro-regime --as-of 2026-09-18
+./clawq research macro-theme inflation --periods 24 --as-of 2026-09-18
+./clawq research industry-fundamentals ths 884229.TI --as-of 2026-09-18
+./clawq research industry-breadth ths 884229.TI --as-of 2026-09-18
+./clawq research etf-flows --lookback-observations 5
+./clawq research state-team-signals --lookback-observations 5 --minimum-flow-yi 5
 ./clawq research sector-rotation ths --lookback-days 60
 ./clawq research calendar --start-date 2026-09-01 --end-date 2026-09-30
 ```

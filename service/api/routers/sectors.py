@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Query
 
-from service.api.dependencies import DataServiceDependency
+from service.api.dependencies import DataServiceDependency, ResearchServiceDependency
 from service.api.schemas import (
     SectorListResponse,
     SectorMembersResponse,
@@ -86,4 +86,36 @@ def sector_research_pack(
         lookback_days=lookback_days,
         member_limit=member_limit,
         as_of=as_of,
+    )
+
+
+@router.get("/{provider}/{sector_code}/fundamentals")
+def sector_fundamentals(
+    provider: str,
+    sector_code: str,
+    service: ResearchServiceDependency,
+    contributor_limit: int = Query(default=10, ge=1, le=50),
+    as_of: date | None = None,
+) -> dict:
+    """Aggregate point-in-time member financials and valuation evidence."""
+
+    return service.industry_fundamentals(
+        provider.lower(),
+        sector_code.upper(),
+        contributor_limit=contributor_limit,
+        as_of=as_of,
+    )
+
+
+@router.get("/{provider}/{sector_code}/breadth")
+def sector_breadth(
+    provider: str,
+    sector_code: str,
+    service: ResearchServiceDependency,
+    as_of: date | None = None,
+) -> dict:
+    """Return member-level participation instead of inferring it from the index."""
+
+    return service.industry_breadth(
+        provider.lower(), sector_code.upper(), as_of=as_of
     )

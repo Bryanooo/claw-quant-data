@@ -22,8 +22,9 @@ Analyze each asset in this order:
    higher timeframe.
 3. Use swing zones and the returned pivot families as scenarios, not targets guaranteed to trade.
 4. Compare relative strength only when the benchmark has overlapping dates.
-5. For ETFs, separately request composition, NAV, share, and flow capabilities when available;
-   price technicals alone do not explain tracking error or investor flows.
+5. For ETFs, use this Skill for price structure and cross-asset comparison. Route creation,
+   redemption, exposure rotation, or investor-identity questions to
+   `$claw-quant-etf-flow-research`; price technicals alone do not explain investor flows.
 6. For sectors, separate index trend from constituent breadth and concentration. If member breadth
    is unavailable, state that the conclusion is price-index-only.
 7. For SGE spot, state that domestic RMB gold embeds global bullion and currency effects; do not

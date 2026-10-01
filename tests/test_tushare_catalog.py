@@ -21,23 +21,27 @@ from scripts.report_tushare_data_presence import _implementation_tables
 from scripts.audit_tushare_interfaces import discover_document_leaves
 
 
-def test_catalog_docs_are_complete_and_do_not_contain_token():
+def test_catalog_contract_is_complete_and_does_not_contain_token():
     contracts_path = PROJECT_ROOT / "docs" / "tushare" / "contracts.json"
     payload = json.loads(contracts_path.read_text(encoding="utf-8"))
     contracts = payload["interfaces"]
     names = {item["api_name"] for item in contracts}
-    markdown_files = {
-        path.stem for path in (PROJECT_ROOT / "docs" / "tushare" / "interfaces").glob("*.md")
-    }
-
     assert len(names) >= 231
-    assert markdown_files == names
     assert "daily" in names
     assert "limit_cpt_list" in names
     assert "limit_list_cpt" not in names
-    assert "${TUSHARE_TOKEN}" in (
-        PROJECT_ROOT / "docs" / "tushare" / "interfaces" / "daily.md"
-    ).read_text(encoding="utf-8")
+    daily = next(item for item in contracts if item["api_name"] == "daily")
+    assert {item["name"] for item in daily["input_parameters"]} >= {
+        "trade_date",
+        "start_date",
+        "end_date",
+    }
+    assert {item["name"] for item in daily["output_parameters"]} >= {
+        "ts_code",
+        "trade_date",
+        "close",
+    }
+    assert daily["response_examples"]
     serialized_contracts = contracts_path.read_text(encoding="utf-8")
     assert not re.search(
         r"(?:tushare[_ -]?token|token)\s*[:=]\s*[0-9a-f]{32,}",
@@ -77,15 +81,27 @@ def test_every_interface_has_an_operational_collection_policy():
     assert TusharePolicyRegistry().get("etf_sh_cons").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("etf_sz_cons").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("fund_share").pagination_mode == "offset"
+    assert TusharePolicyRegistry().get("etf_share_size").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("share_float").pagination_mode == "offset"
+    assert TusharePolicyRegistry().get("fut_holding").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("stk_limit").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("fund_basic").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("index_weekly").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("index_monthly").pagination_mode == "offset"
+    from service.acquisition_runtime.fanout import FANOUT_DEFINITIONS
+
+    assert "index_weekly" not in FANOUT_DEFINITIONS
+    assert "index_monthly" not in FANOUT_DEFINITIONS
+    assert TusharePolicyRegistry().get("index_weekly").parameter_strategy == "trade_date"
+    assert TusharePolicyRegistry().get("index_monthly").parameter_strategy == "trade_date"
+    assert TusharePolicyRegistry().get("adj_factor").pagination_mode == "offset"
+    assert TusharePolicyRegistry().get("stk_factor").pagination_mode == "offset"
+    assert TusharePolicyRegistry().get("stk_factor_pro").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("stk_mins").automatic_safe is False
     assert TusharePolicyRegistry().get("factor_value").automatic_safe is False
     assert TusharePolicyRegistry().get("fund_basic").automatic_safe is False
-    assert TusharePolicyRegistry().get("fut_weekly_detail").parameter_strategy == "manual"
+    assert TusharePolicyRegistry().get("fut_weekly_detail").parameter_strategy == "week"
+    assert TusharePolicyRegistry().get("fut_weekly_detail").automatic_safe is True
 
 
 def test_reviewed_official_contracts_cannot_be_lost_by_navigation_changes():
@@ -116,7 +132,8 @@ def test_live_verified_hong_kong_interface_policies_are_bounded():
     assert policies.get("hk_hold").pagination_mode == "offset"
     assert policies.get("hk_daily").automatic_safe is True
     assert policies.get("hk_daily").min_interval_seconds == 3600.0
-    assert policies.get("ccass_hold_detail").parameter_strategy == "manual"
+    assert policies.get("ccass_hold_detail").parameter_strategy == "ts_code_fanout"
+    assert policies.get("ccass_hold_detail").automatic_safe is False
     assert policies.get("ccass_hold_detail").automatic_safe is False
 
 
@@ -159,6 +176,38 @@ def test_raw_collector_uses_dynamic_tushare_query(monkeypatch):
     }
 
 
+def test_cyq_chips_bounded_provider_absence_is_verified_empty(monkeypatch):
+    monkeypatch.setattr(BaseCollector, "__init__", lambda self: None)
+    monkeypatch.setattr(CatalogRawCollector, "_wait_for_rate_slot", lambda self: None)
+    collector = CatalogRawCollector("cyq_chips")
+
+    class FakePro:
+        def query(self, _api_name, **_parameters):
+            raise RuntimeError("指定数据不存在，请确认参数！")
+
+    collector.pro = FakePro()
+    frame = collector.fetch(
+        ts_code="000005.SZ", start_date="20180101", end_date="20180131"
+    )
+
+    assert frame.empty
+    assert collector._provider_empty_evidence["provider_verified_empty"] is True
+
+
+def test_cyq_chips_provider_error_is_not_hidden_for_unbounded_request(monkeypatch):
+    monkeypatch.setattr(BaseCollector, "__init__", lambda self: None)
+    monkeypatch.setattr(CatalogRawCollector, "_wait_for_rate_slot", lambda self: None)
+    collector = CatalogRawCollector("cyq_chips")
+
+    class FakePro:
+        def query(self, _api_name, **_parameters):
+            raise RuntimeError("指定数据不存在，请确认参数！")
+
+    collector.pro = FakePro()
+    with pytest.raises(RuntimeError, match="指定数据不存在"):
+        collector.fetch(ts_code="000005.SZ")
+
+
 def test_raw_collector_reserves_distributed_rate_slot(monkeypatch):
     monkeypatch.setattr(BaseCollector, "__init__", lambda self: None)
     collector = CatalogRawCollector("cn_cpi")
@@ -192,6 +241,12 @@ def test_raw_fetch_uses_logical_scope_for_storage_identity(monkeypatch):
 
 def test_raw_store_deduplicates_equal_payloads(monkeypatch):
     monkeypatch.setattr(BaseCollector, "__init__", lambda self: None)
+    # This test exercises the optional full-payload archive path. Production
+    # defaults to ``anomalies_only`` and does not duplicate successful typed
+    # rows in tushare_raw_record.
+    monkeypatch.setattr(
+        "collectors.tushare_raw.TUSHARE_RAW_RECORD_CAPTURE_MODE", "all"
+    )
     collector = CatalogRawCollector("cn_cpi")
     collector._request_parameters = {"start_m": "202601"}
 

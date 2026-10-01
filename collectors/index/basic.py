@@ -9,6 +9,7 @@
 
 import pandas as pd
 from collectors.base import BaseCollector
+from collectors.contracts import CollectorResult
 from collectors.tushare_raw import IncompleteCollectionError
 
 
@@ -102,7 +103,11 @@ class IndexBasicCollector(BaseCollector):
 
             # The unfiltered response is intentionally used only as a bounded
             # discovery sample. It is never stored or mistaken for complete.
-            sample = self.fetch(market="CSI")
+            # This unbounded response is discovery-only. ``fetch`` performs
+            # the normal 8,000-row rejection, which is correct for storage but
+            # would prevent us from learning the observed category vocabulary.
+            # Read the provider frame directly and never persist the sample.
+            sample = self.pro.index_basic(market="CSI")
             if sample is None:
                 sample = pd.DataFrame()
             categories = set(self.CSI_CATEGORIES)
@@ -135,3 +140,39 @@ class IndexBasicCollector(BaseCollector):
         snapshot = self.transform(pd.concat(frames, ignore_index=True))
         snapshot = snapshot.drop_duplicates(subset=self.pk_columns, keep="last")
         return self.store_snapshot(snapshot)
+
+    def run_complete_snapshot(self) -> CollectorResult:
+        """Execute the endpoint-specific partition plan with durable evidence.
+
+        The generic offset paginator is unsafe for ``index_basic`` because its
+        provider offset is not a substitute for the market/category partition
+        contract.  Exposing this explicit protocol lets both V2 and direct
+        calls use the same atomic, completeness-proven snapshot path.
+        """
+
+        self._request_count = 0
+        self._raw_archive_requests = []
+        self._raw_resolved_records = 0
+        self._sanitization_nul_characters = 0
+        self._sanitization_fields = set()
+        stored = self.collect_full_snapshot()
+        spec = self.spec()
+        return CollectorResult(
+            collector_name=spec.qualified_name,
+            collector_version=spec.version,
+            api_name=spec.api_name,
+            table_name=spec.table_name,
+            fetched_rows=stored,
+            stored_rows=stored,
+            request_count=int(getattr(self, "_request_count", 0)),
+            partitions=tuple(self.MARKETS),
+            evidence={
+                "verified": True,
+                "verification_type": "market_and_csi_category_partitions",
+                "markets": list(self.MARKETS),
+                "csi_categories": list(self.CSI_CATEGORIES),
+                "write_mode": "atomic_snapshot",
+                "raw_archive": self._raw_archive_evidence(),
+                "sanitization": self._sanitization_evidence(),
+            },
+        )

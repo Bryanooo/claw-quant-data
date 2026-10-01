@@ -1,4 +1,10 @@
-from service.data_service.catalog import build_data_service_catalog
+from service.api.app import create_app
+from service.data_service.catalog import CANONICAL_ENDPOINTS, build_data_service_catalog
+
+
+class FakeDatabase:
+    def close(self):
+        pass
 
 
 def test_catalog_distinguishes_registration_from_observed_raw_coverage():
@@ -43,6 +49,15 @@ def test_catalog_distinguishes_registration_from_observed_raw_coverage():
         "dated_datasets": 1,
         "mapped_interfaces": 2,
         "direct_interface_queries": 1,
+        "canonical_endpoints": 24,
     }
-    assert research["metrics"]["endpoints"] == 21
+    assert research["metrics"]["endpoints"] == 28
     assert all(item["status"] == "available" for item in research["items"])
+
+
+def test_every_advertised_canonical_endpoint_exists_in_openapi():
+    paths = create_app(database_factory=FakeDatabase).openapi()["paths"]
+
+    for endpoint in CANONICAL_ENDPOINTS:
+        assert endpoint["path"] in paths, endpoint["path"]
+        assert endpoint["method"].lower() in paths[endpoint["path"]]

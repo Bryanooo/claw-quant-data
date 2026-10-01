@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant ETF资金研究"
+  short_description: "ETF份额资金流、指数迁移与国家队证据分级研究"
+  default_prompt: "Use $claw-quant-etf-flow-research to analyze ETF creations, redemptions, exposure rotation, and state-team evidence without overstating investor identity."

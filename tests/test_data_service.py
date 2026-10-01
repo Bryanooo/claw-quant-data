@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from service.data_service.models import (
+    DatasetQuery,
     DatasetSpec,
     InvalidQueryError,
 )
@@ -80,6 +81,12 @@ def test_registry_rejects_duplicate_names():
         DatasetRegistry([dataset, dataset])
 
 
+def test_fund_nav_uses_effective_nav_date_for_period_queries():
+    dataset = DATASETS.get("fund_nav")
+
+    assert dataset.date_column == "nav_date"
+
+
 def test_registry_exposes_curated_datasets():
     names = {dataset.name for dataset in DATASETS.list()}
 
@@ -107,6 +114,31 @@ def test_freshness_probe_uses_indexed_storage_instead_of_current_view():
     assert dataset.freshness_read_table == "tushare_norm_daily_basic"
     assert "tushare_norm_daily_basic" in repr(database.statement)
     assert "tushare_current_daily_basic" not in repr(database.statement)
+
+
+def test_estimated_rows_uses_bounded_presence_probe_when_stats_lag():
+    class StatisticsLagDatabase:
+        def __init__(self):
+            self.statements = []
+
+        def fetch_one(self, statement, _params=()):
+            self.statements.append(statement)
+            if len(self.statements) == 1:
+                return {"estimated_rows": 0}
+            return {"present": 1}
+
+    dataset = DatasetSpec(
+        name="new_rows",
+        table="new_rows",
+        description="recently loaded rows",
+        category="test",
+        primary_keys=("id",),
+    )
+    database = StatisticsLagDatabase()
+
+    assert DatasetRepository(database).estimated_rows(dataset) == 1
+    assert len(database.statements) == 2
+    assert "LIMIT 1" in repr(database.statements[1])
 
 
 def test_registry_exposes_every_collector_table():
@@ -316,6 +348,164 @@ def test_query_rejects_unknown_filters():
             offset=0,
             include_total=False,
         )
+
+
+def test_normalized_measure_filter_requires_bounded_advanced_opt_in():
+    service = DataService(FakeRepository(), DATASETS)
+
+    with pytest.raises(InvalidQueryError, match="filter_mode=advanced"):
+        service.query_dataset(
+            "stock_daily_basic",
+            exact_filters={"pe": "12.5"},
+            date_value=None,
+            start_date=None,
+            end_date=None,
+            limit=20,
+            offset=0,
+            include_total=False,
+        )
+
+    with pytest.raises(InvalidQueryError, match="unbounded scan"):
+        service.query_dataset(
+            "stock_daily_basic",
+            exact_filters={"pe": "12.5"},
+            date_value=None,
+            start_date=None,
+            end_date=None,
+            limit=20,
+            offset=0,
+            include_total=False,
+            filter_mode="advanced",
+        )
+
+    result = service.query_dataset(
+        "stock_daily_basic",
+        exact_filters={"ts_code": "300750.SZ", "pe": "12.5"},
+        date_value=None,
+        start_date=None,
+        end_date=None,
+        limit=20,
+        offset=0,
+        include_total=False,
+        filter_mode="advanced",
+    )
+
+    assert result["data"]
+
+
+def test_cursor_pagination_uses_stable_business_order():
+    class CursorRepository(FakeRepository):
+        def __init__(self):
+            super().__init__()
+            self.queries = []
+
+        def records(self, dataset, query):
+            self.queries.append(query)
+            if query.cursor_values is None:
+                return [
+                    {"trade_date": date(2026, 9, 24), "ts_code": "000003.SZ"},
+                    {"trade_date": date(2026, 9, 24), "ts_code": "000002.SZ"},
+                    {"trade_date": date(2026, 9, 24), "ts_code": "000001.SZ"},
+                ]
+            return [
+                {"trade_date": date(2026, 9, 24), "ts_code": "000001.SZ"}
+            ]
+
+    repository = CursorRepository()
+    service = DataService(repository, DATASETS)
+    first = service.query_dataset(
+        "stock_daily",
+        exact_filters={},
+        date_value=None,
+        start_date=None,
+        end_date=None,
+        limit=2,
+        offset=0,
+        include_total=False,
+    )
+
+    assert first["page"]["has_more"] is True
+    assert first["page"]["next_cursor"]
+
+    second = service.query_dataset(
+        "stock_daily",
+        exact_filters={},
+        date_value=None,
+        start_date=None,
+        end_date=None,
+        limit=2,
+        offset=0,
+        include_total=False,
+        cursor=first["page"]["next_cursor"],
+    )
+
+    assert repository.queries[1].cursor_values == ("2026-09-24", "000002.SZ")
+    assert second["page"]["has_more"] is False
+
+
+def test_cursor_rejects_wrong_dataset_and_deep_offset():
+    service = DataService(FakeRepository(), DATASETS)
+    cursor = service._encode_cursor(
+        DATASETS.get("stock_daily"),
+        {"trade_date": date(2026, 9, 24), "ts_code": "000001.SZ"},
+    )
+
+    with pytest.raises(InvalidQueryError, match="does not match"):
+        service.query_dataset(
+            "index_daily",
+            exact_filters={},
+            date_value=None,
+            start_date=None,
+            end_date=None,
+            limit=20,
+            offset=0,
+            include_total=False,
+            cursor=cursor,
+        )
+
+    with pytest.raises(InvalidQueryError, match="use cursor pagination"):
+        service.query_dataset(
+            "stock_daily",
+            exact_filters={},
+            date_value=None,
+            start_date=None,
+            end_date=None,
+            limit=20,
+            offset=10_001,
+            include_total=False,
+        )
+
+
+def test_repository_uses_keyset_predicate_for_cursor_values():
+    class CapturingDatabase:
+        def fetch_all(self, statement, params=()):
+            self.statement = statement
+            self.params = params
+            return []
+
+    dataset = DatasetSpec(
+        name="prices",
+        table="prices",
+        description="prices",
+        category="test",
+        primary_keys=("trade_date", "ts_code"),
+        default_order=("trade_date", "ts_code"),
+    )
+    database = CapturingDatabase()
+
+    DatasetRepository(database).records(
+        dataset,
+        DatasetQuery(
+            exact_filters={},
+            limit=101,
+            cursor_values=("2026-09-24", "000001.SZ"),
+        ),
+    )
+
+    rendered = repr(database.statement)
+    assert "trade_date" in rendered and "ts_code" in rendered
+    assert "<" in rendered
+    assert database.params == ("2026-09-24", "000001.SZ", 101, 0)
 
 
 def test_stock_research_pack_aggregates_governed_datasets_without_advice():

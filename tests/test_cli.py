@@ -294,6 +294,66 @@ def test_technical_research_cli_forwards_chart_scope(capsys):
     )]
 
 
+def test_macro_and_industry_research_cli_use_governed_routes(capsys):
+    paths = {
+        "/v1/research/macro/regime": {"data": {}, "meta": {}},
+        "/v1/research/macro/liquidity": {"data": {}, "meta": {}},
+        "/v1/research/sectors/ths/884229.TI/fundamentals": {
+            "data": {}, "meta": {}
+        },
+        "/v1/research/sectors/ths/884229.TI/breadth": {
+            "data": {}, "meta": {}
+        },
+    }
+    client = FakeClient(paths)
+
+    assert run_cli(
+        ["research", "macro-regime", "--as-of", "2026-09-18"],
+        client,
+        capsys,
+    )[0] == 0
+    assert run_cli(
+        [
+            "research", "macro-theme", "liquidity",
+            "--periods", "36", "--as-of", "2026-09-18",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert run_cli(
+        [
+            "research", "industry-fundamentals", "ths", "884229.ti",
+            "--contributor-limit", "5", "--as-of", "2026-09-18",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+    assert run_cli(
+        [
+            "research", "industry-breadth", "ths", "884229.ti",
+            "--as-of", "2026-09-18",
+        ],
+        client,
+        capsys,
+    )[0] == 0
+
+    assert client.calls == [
+        ("/v1/research/macro/regime", {"as_of": "2026-09-18"}),
+        (
+            "/v1/research/macro/liquidity",
+            {"periods": 36, "as_of": "2026-09-18"},
+        ),
+        (
+            "/v1/research/sectors/ths/884229.TI/fundamentals",
+            {"contributor_limit": 5, "as_of": "2026-09-18"},
+        ),
+        (
+            "/v1/research/sectors/ths/884229.TI/breadth",
+            {"as_of": "2026-09-18"},
+        ),
+    ]
+
+
 def test_instrument_technical_cli_preserves_sge_code_case(capsys):
     path = "/v1/research/instruments/spot/Au99.99/technicals"
     client = FakeClient({path: {"data": {"timeframes": {}}, "meta": {}}})

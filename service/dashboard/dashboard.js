@@ -1,10 +1,10 @@
 const $ = (id) => document.getElementById(id);
-const state = { execution: { page: 1, before: null, history: [], next: null }, services: { page: 1, size: 20, items: null }, sourceDependency: { page: 1, size: 20, view: null }, initId: null };
-const labels = {queued:"排队",running:"运行",retrying:"重试",validating:"校验",publishing:"发布",success:"成功",attention:"需处理",not_dispatched:"未派发",not_due:"尚未到发布时间",complete:"完整",empty_verified:"已验证为空",gaps:"缺失",partial:"不完整",indeterminate:"待确认"};
+const state = { execution: { page: 1, before: null, history: [], next: null }, today: { page: 1, size: 20, items: [] }, services: { page: 1, size: 20, items: null }, sourceDependency: { page: 1, size: 20, view: null }, initId: null };
+const labels = {queued:"排队",running:"运行",retrying:"重试",validating:"校验",publishing:"发布",success:"成功",attention:"需处理",not_dispatched:"未派发",not_due:"尚未到调度或发布时间",not_expected:"非交易日无需执行",complete:"完整",empty_verified:"已验证为空",gaps:"缺失",partial:"不完整",indeterminate:"待确认",ready:"严格就绪",ready_after_repair:"补采恢复",active:"进行中",waiting_upstream:"等待上游",operator_action_required:"需要处理"};
 const fmt = (v) => Number(v || 0).toLocaleString();
 const esc = (v) => String(v ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pill = (v) => `<span class="pill ${esc(v)}">${esc(labels[v] || v)}</span>`;
-const isoDate = (d) => d.toISOString().slice(0,10);
+const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const monthValue = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 
 async function api(path, options={}) {
@@ -20,7 +20,7 @@ function notice(message) { $("notice").textContent=message; $("notice").classLis
 function activate(name) {
   document.querySelectorAll("[data-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.panel!==name));
   document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x.dataset.view===name));
-  const names={overview:"V2 数据总览",today:"今日交付",executions:"执行实例",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据源",services:"服务目录",investment:"投资日历"};
+  const names={overview:"数据运营总览",today:"今日交付",executions:"执行历史",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据源",services:"服务目录",investment:"投资日历"};
   $("pageTitle").textContent=names[name];
   ({today:loadToday,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,services:loadServices,investment:loadInvestment}[name]||(()=>{}))();
 }
@@ -28,20 +28,48 @@ function activate(name) {
 async function loadOverview() {
   const health = await api("/api/v1/ops/data-health");
   const s=health.summary;
-  $("metricActive").textContent=fmt(s.active_task_instances); $("metricAttention").textContent=fmt(s.attention_task_instances);
-  $("metricReady").textContent=`${fmt(s.ready_dataset_states)} / ${fmt(s.latest_dataset_states)}`; $("metricMissing").textContent=fmt(s.missing_partitions);
+  const readyRate=s.latest_dataset_states?Math.round(s.ready_dataset_states*1000/s.latest_dataset_states)/10:100;
+  $("metricActive").textContent=fmt(s.active_task_instances); $("metricAttention").textContent=fmt(s.open_issues);
+  $("metricReady").textContent=`${fmt(s.ready_dataset_states)} / ${fmt(s.latest_dataset_states)}`; $("metricMissing").textContent=`${fmt(s.missing_partitions)} / ${fmt(s.partial_partitions)}`;
   const banner=$("healthBanner"); banner.className=`health-banner ${health.status}`;
-  banner.innerHTML=`<div><small>V2 系统状态</small><strong>${health.status==="healthy"?"数据链路健康":health.status==="critical"?"存在必须处理的问题":"仍有采集或核验进行中"}</strong><p>活动实例 ${fmt(s.active_task_instances)} · 需处理 ${fmt(s.attention_task_instances)} · 未就绪状态 ${fmt(s.not_ready_dataset_states)}</p></div>`;
-  $("issueList").innerHTML=health.issues.length?health.issues.map(x=>`<div class="issue ${x.severity}"><div><strong>${esc(x.dataset)} · ${esc(x.observation_key)}</strong><small>${esc(x.status)} · ${esc(x.action)}</small></div>${x.source_execution_id?`<button data-execution="${x.source_execution_id}">实例 #${x.source_execution_id}</button>`:""}</div>`).join(""):'<p>当前没有 V2 数据状态异常。</p>';
+  const headline=health.status==="healthy"?"数据链路健康":s.operator_action_required?`${fmt(s.operator_action_required)} 个问题需要处理`:`数据主体可用，${fmt(s.waiting_upstream)} 个数据集等待上游`;
+  $("healthKicker").textContent=health.status==="healthy"?"全部正常":s.operator_action_required?"需要处理":"自动恢复中";
+  $("healthTitle").textContent=headline;
+  $("healthSummary").textContent=`最新状态 ${s.ready_dataset_states}/${s.latest_dataset_states} 已就绪；当前 ${s.open_issues} 个问题，历史重试尝试 ${s.attention_attempts} 次。尝试次数不再当作问题数。`;
+  $("readinessRate").textContent=`${readyRate}%`;
+  $("flowExecution").textContent=s.operator_action_required?`${s.operator_action_required} 个需要处理`:s.active_task_instances?`${s.active_task_instances} 个正在运行`:"调度正常";
+  $("flowExecutionHint").textContent=`当前逻辑范围；执行历史保留 ${fmt(s.attention_attempts)} 次异常尝试`;
+  $("flowValidation").textContent=s.not_ready_dataset_states?`${s.not_ready_dataset_states} 个未通过`:`${s.latest_dataset_states} 个全部通过`;
+  $("flowValidationHint").textContent=`缺失 ${fmt(s.missing_partitions)} · 不完整 ${fmt(s.partial_partitions)}`;
+  $("flowDelivery").textContent=s.not_ready_dataset_states?"已限制未就绪数据":"服务数据已就绪";
+  $("flowDeliveryHint").textContent=`${fmt(s.ready_dataset_states)} 个最新数据状态可供服务读取`;
+  $("issueCount").textContent=fmt(s.open_issues);
+  $("issueList").innerHTML=health.issues.length?health.issues.map(x=>{
+    const ratio=x.completeness_ratio==null?"—":`${Math.round(x.completeness_ratio*1000)/10}%`;
+    const quantity=x.expected_count==null?"":`<span>实体完整度 ${fmt(x.actual_count)} / ${fmt(x.expected_count)}（${ratio}）</span>`;
+    const next=x.next_automatic_repair_at?`<span>下次自动复查 ${new Date(x.next_automatic_repair_at).toLocaleString("zh-CN",{hour12:false})}</span>`:"";
+    const explanation=x.resolution_state==="waiting_upstream"?"最近一次采集已成功，但上游尚未发布完整截面；系统会按限定范围自动复查。":"数据校验未通过，需要检查来源执行并做范围补采。";
+    return `<div class="issue ${x.severity}"><div><div class="issue-title"><strong>${esc(x.dataset)}</strong>${pill(x.resolution_state)}<span>${esc(x.observation_key)}</span></div><div class="issue-meta"><span>${esc(explanation)}</span>${quantity}${next}</div></div><div class="issue-actions">${x.source_execution_id?`<button data-execution="${x.source_execution_id}">查看最近尝试</button>`:""}</div></div>`;
+  }).join(""):'<div class="empty-state">当前没有数据缺失或完整性问题。</div>';
   $("updatedAt").textContent=`更新于 ${new Date(health.generated_at).toLocaleTimeString("zh-CN")}`;
+}
+
+function renderTodayRows(){
+  const status=$("todayStatus").value,query=$("todaySearch").value.trim().toLowerCase();
+  const items=state.today.items.filter(x=>(!status||x.delivery_status===status)&&(!query||[x.task_key,x.delivery_status,x.execution_status,x.current_node_key].join(" ").toLowerCase().includes(query)));
+  const pages=Math.max(1,Math.ceil(items.length/state.today.size));state.today.page=Math.min(state.today.page,pages);const start=(state.today.page-1)*state.today.size,rows=items.slice(start,start+state.today.size);
+  $("todayRows").innerHTML=rows.map(x=>{const displayStatus=x.not_due_reason==="non_trading_day"?"not_expected":(x.execution_status||x.status);const delivery=x.not_due_reason==="non_trading_day"?"not_expected":(x.delivery_status||"attention");return `<tr><td><strong>${esc(x.task_key)}</strong></td><td>${esc(x.observation_key||$("todayDate").value)}</td><td>${pill(displayStatus)}</td><td>${esc(x.current_node_key)}</td><td>${pill(delivery)} · ${fmt(x.ready_datasets)} / ${fmt(x.datasets)}${x.problem_datasets?` · <b>${fmt(x.problem_datasets)} 异常</b>`:""}</td><td>${fmt(x.rows_written)} / ${fmt(x.rows_fetched)}</td><td>${x.task_execution_id?`<button data-execution="${x.task_execution_id}">详情</button>`:"—"}</td></tr>`;}).join("")||'<tr><td colspan="7">没有匹配任务</td></tr>';
+  $("todayResultCount").textContent=`${items.length} 个任务`;
+  $("todayPage").textContent=`第 ${state.today.page} / ${pages} 页`;
+  $("todayPrev").disabled=state.today.page===1;$("todayNext").disabled=state.today.page===pages;
 }
 
 async function loadToday() {
   const day=$("todayDate").value||isoDate(new Date());
   const view=await api(`/api/v1/ops/orchestration-v2/today?data_date=${day}`), s=view.summary;
   $("todayExpected").textContent=fmt(s.expected); $("todayReady").textContent=fmt(s.strictly_ready); $("todayActive").textContent=fmt(s.active); $("todayProblem").textContent=fmt(s.attention+s.not_dispatched);
-  $("todaySummary").textContent=`${day} 数据交付：严格就绪 ${s.strictly_ready}/${s.expected} 个已到期任务；${s.recovered||0} 个由后续补采恢复；${s.not_due||0} 个次晨发布任务尚未到期。执行实例失败不再覆盖已修复的数据状态。`;
-  $("todayRows").innerHTML=view.items.map(x=>`<tr><td><strong>${esc(x.task_key)}</strong></td><td>${esc(x.observation_key)}</td><td>${pill(x.execution_status||x.status)}</td><td>${esc(x.current_node_key)}</td><td>${pill(x.delivery_status||"attention")} · ${fmt(x.ready_datasets)} / ${fmt(x.datasets)}${x.problem_datasets?` · <b>${fmt(x.problem_datasets)} 异常</b>`:""}</td><td>${fmt(x.rows_written)} / ${fmt(x.rows_fetched)}</td><td>${x.task_execution_id?`<button data-execution="${x.task_execution_id}">详情</button>`:"—"}</td></tr>`).join("")||'<tr><td colspan="7">没有应执行任务</td></tr>';
+  $("todaySummary").textContent=!view.trade_day?`${day} 为非交易日：没有日常采集任务到期；${s.not_due||0} 个计划定义仅作参考，不计异常。`:`${day} 数据交付：严格就绪 ${s.strictly_ready}/${s.expected} 个已到期任务；${s.recovered||0} 个由后续补采恢复；${s.not_due||0} 个任务尚未到调度或发布时间。执行实例失败不再覆盖已修复的数据状态。`;
+  state.today.items=view.items;state.today.page=1;renderTodayRows();
 }
 
 async function loadExecutions(reset=false) {
@@ -93,10 +121,11 @@ async function loadInvestment(){const month=$("investmentMonth").value||monthVal
 async function refresh(){notice("");try{await loadOverview();const active=document.querySelector(".nav.active")?.dataset.view;if(active&&active!=="overview")await ({today:loadToday,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,services:loadServices,investment:loadInvestment}[active]||(()=>{}))();}catch(e){notice(`加载失败：${e.message}`);}}
 
 document.querySelector("nav").onclick=e=>{const b=e.target.closest("[data-view]");if(b)activate(b.dataset.view)};
-document.body.onclick=e=>{const b=e.target.closest("[data-execution]");if(b)showExecution(b.dataset.execution)};
-$("sidebarToggle").onclick=()=>$("sidebar").classList.toggle("collapsed"); $("themeToggle").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("cq-theme",document.body.classList.contains("dark")?"dark":"light")};
-$("refreshButton").onclick=refresh; $("todayDate").onchange=loadToday; $("executionQuery").onclick=()=>loadExecutions(true); $("calendarMonth").onchange=loadCalendar; $("auditAll").onclick=auditAll; $("initStartButton").onclick=startInitialization; $("sourceDependencyQuery").onclick=()=>loadSources(true); $("serviceQuery").onclick=()=>loadServices(true); $("investmentMonth").onchange=loadInvestment; $("detailClose").onclick=()=>$("detailDialog").close();
+document.body.onclick=e=>{const execution=e.target.closest("[data-execution]");if(execution){showExecution(execution.dataset.execution);return;}const target=e.target.closest("[data-view-target]");if(target)activate(target.dataset.viewTarget);};
+$("sidebarToggle").onclick=()=>{const collapsed=$("sidebar").classList.toggle("collapsed");localStorage.setItem("cq-sidebar",collapsed?"collapsed":"expanded");}; $("themeToggle").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("cq-theme",document.body.classList.contains("dark")?"dark":"light")};
+$("refreshButton").onclick=refresh; $("todayDate").onchange=loadToday; $("todayQuery").onclick=()=>{state.today.page=1;renderTodayRows();}; $("todaySearch").onkeydown=e=>{if(e.key==="Enter"){state.today.page=1;renderTodayRows();}}; $("executionQuery").onclick=()=>loadExecutions(true); $("calendarMonth").onchange=loadCalendar; $("auditAll").onclick=auditAll; $("initStartButton").onclick=startInitialization; $("sourceDependencyQuery").onclick=()=>loadSources(true); $("serviceQuery").onclick=()=>loadServices(true); $("investmentMonth").onchange=loadInvestment; $("detailClose").onclick=()=>$("detailDialog").close();
+$("todayPrev").onclick=()=>{if(state.today.page>1){state.today.page--;renderTodayRows();}};$("todayNext").onclick=()=>{state.today.page++;renderTodayRows();};
 $("executionPrev").onclick=()=>{if(state.execution.page===1)return;state.execution.before=state.execution.history.pop()||null;state.execution.page--;loadExecutions()};$("executionNext").onclick=()=>{if(!state.execution.next)return;state.execution.history.push(state.execution.before);state.execution.before=state.execution.next;state.execution.page++;loadExecutions()};
 $("servicePrev").onclick=()=>{if(state.services.page>1){state.services.page--;loadServices();}};$("serviceNext").onclick=()=>{state.services.page++;loadServices();};
 $("sourceDependencyPrev").onclick=()=>{if(state.sourceDependency.page>1){state.sourceDependency.page--;loadSources();}};$("sourceDependencyNext").onclick=()=>{state.sourceDependency.page++;loadSources();};
-$("todayDate").value=isoDate(new Date());$("calendarMonth").value=monthValue();$("investmentMonth").value=monthValue();$("initEnd").value=isoDate(new Date(Date.now()-86400000));if(localStorage.getItem("cq-theme")==="dark")document.body.classList.add("dark");refresh();setInterval(refresh,30000);
+$("todayDate").value=isoDate(new Date());$("calendarMonth").value=monthValue();$("investmentMonth").value=monthValue();$("initEnd").value=isoDate(new Date(Date.now()-86400000));if(localStorage.getItem("cq-theme")==="dark")document.body.classList.add("dark");if(localStorage.getItem("cq-sidebar")==="collapsed")$("sidebar").classList.add("collapsed");refresh();setInterval(refresh,30000);

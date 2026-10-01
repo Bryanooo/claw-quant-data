@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 import json
 import secrets
 from typing import Any
@@ -57,6 +57,40 @@ class OrchestrationV2Repository:
         return connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     @staticmethod
+    def _first_daily_schedule_at(
+        expression: str | None,
+        observation_date,
+        *,
+        tzinfo,
+    ) -> datetime | None:
+        """Resolve the first fixed-time occurrence from a daily cron.
+
+        V2-generated daily definitions use explicit minute/hour lists.  If a
+        future hand-authored definition uses a dynamic cron token, returning
+        ``None`` deliberately avoids hiding work as not due.
+        """
+
+        fields = (expression or "").split()
+        if len(fields) != 5:
+            return None
+        try:
+            minutes = [int(value) for value in fields[0].split(",")]
+            hours = [int(value) for value in fields[1].split(",")]
+        except ValueError:
+            return None
+        candidates = [
+            datetime.combine(
+                observation_date,
+                time(hour=hour, minute=minute),
+                tzinfo=tzinfo,
+            )
+            for hour in hours
+            for minute in minutes
+            if 0 <= hour <= 23 and 0 <= minute <= 59
+        ]
+        return min(candidates) if candidates else None
+
+    @staticmethod
     def _lock_version_key(cursor, namespace: int, key: str) -> None:
         cursor.execute("SELECT pg_advisory_xact_lock(%s, hashtext(%s))", (namespace, key))
 
@@ -96,6 +130,7 @@ class OrchestrationV2Repository:
                 "endpoints": {},
                 "definitions": {},
                 "executions": {},
+                "current_executions": {},
                 "dataset_states": {},
             }
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
@@ -134,6 +169,28 @@ class OrchestrationV2Repository:
                 """
             )
             executions = {row["key"]: row["value"] for row in cursor.fetchall()}
+            # ``executions`` is the immutable ledger distribution.  It is
+            # useful for audits, but it must not be presented as the number of
+            # currently open problems: repeated repair attempts for the same
+            # logical task/date would otherwise inflate one incident into many
+            # alerts.  This projection keeps only the newest attempt for every
+            # logical scope and is the correct source for operational health.
+            cursor.execute(
+                """
+                WITH latest AS (
+                    SELECT DISTINCT ON (task_key, observation_key)
+                           status
+                    FROM orchestration_v2.task_execution
+                    ORDER BY task_key, observation_key,
+                             task_execution_id DESC
+                )
+                SELECT status AS key, count(*)::INTEGER AS value
+                FROM latest GROUP BY status
+                """
+            )
+            current_executions = {
+                row["key"]: row["value"] for row in cursor.fetchall()
+            }
             cursor.execute(
                 """
                 SELECT data_status || CASE WHEN ready THEN ':ready' ELSE ':not_ready' END AS key,
@@ -149,6 +206,7 @@ class OrchestrationV2Repository:
             "endpoints": endpoints,
             "definitions": definitions,
             "executions": executions,
+            "current_executions": current_executions,
             "dataset_states": dataset_states,
             "engine": "orchestration_v2",
         }
@@ -424,6 +482,8 @@ class OrchestrationV2Repository:
                     GROUP BY output.task_key
                 )
                 SELECT active.task_key,
+                       active.definition->'schedule'->>'expression'
+                           AS schedule_expression,
                        execution.task_execution_id, execution.observation_key,
                        COALESCE(execution.status, 'not_dispatched') AS status,
                        execution.current_node_key, execution.attempt,
@@ -450,19 +510,42 @@ class OrchestrationV2Repository:
                 ),
             )
             items = [dict(row) for row in cursor.fetchall()]
+            cursor.execute(
+                """
+                SELECT COALESCE((
+                    SELECT is_open=1 FROM trade_cal
+                    WHERE exchange='SSE' AND cal_date=%s LIMIT 1
+                ), false) AS trade_day
+                """,
+                (observation_date,),
+            )
+            trade_day = bool(cursor.fetchone()["trade_day"])
+        now = business_now()
         for item in items:
-            now = business_now()
             next_morning_release = datetime.combine(
                 observation_date + timedelta(days=1),
                 NEXT_MORNING_TASK_RELEASE_TIME,
                 tzinfo=now.tzinfo,
             )
-            if (
-                item["status"] == "not_dispatched"
-                and item["task_key"] in NEXT_MORNING_TASKS
-                and now < next_morning_release
-            ):
-                item["status"] = "not_due"
+            first_schedule = self._first_daily_schedule_at(
+                item.get("schedule_expression"),
+                observation_date,
+                tzinfo=now.tzinfo,
+            )
+            if item["status"] == "not_dispatched":
+                due_at = (
+                    next_morning_release
+                    if item["task_key"] in NEXT_MORNING_TASKS
+                    else first_schedule
+                )
+                if not trade_day:
+                    item["status"] = "not_due"
+                    item["not_due_reason"] = "non_trading_day"
+                elif observation_date > now.date() or (
+                    due_at is not None and now < due_at
+                ):
+                    item["status"] = "not_due"
+                    item["not_due_reason"] = "schedule_pending"
             item["execution_status"] = item["status"]
             data_ready = (
                 item["datasets"] > 0
@@ -492,6 +575,7 @@ class OrchestrationV2Repository:
         return {
             "engine": "orchestration_v2",
             "data_date": observation_date,
+            "trade_day": trade_day,
             "summary": {
                 "planned": len(items),
                 "expected": len(items) - not_due,

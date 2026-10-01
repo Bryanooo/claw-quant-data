@@ -28,3 +28,12 @@ def test_dashboard_exposes_paginated_service_lineage():
     assert 'api("/api/v1/catalog")' in script
     assert "local_datasets" in script
     assert "fallback_routes" in script
+
+
+def test_dashboard_exposes_financial_data_dependency_matrix():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    assert "Financial Data 依赖矩阵" in html
+    assert "无本地规范等价" in html
+    assert 'api("/api/v1/data/source-priorities")' in script
+    assert "financial_data_required_now" in script

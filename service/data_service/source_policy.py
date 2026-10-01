@@ -224,6 +224,31 @@ class RouteSourcePolicy:
     local_scope: str
     reason: str
 
+    @property
+    def dependency_class(self) -> str:
+        if self.route in REALTIME_FINANCIAL_ROUTES:
+            return "financial_data_realtime_required"
+        if not self.local_datasets:
+            return "financial_data_primary_no_local_canonical"
+        if self.adapter_status.startswith("partial_ready"):
+            return "local_first_canonical_fallback_ready"
+        return "local_overlap_adapter_pending"
+
+    @property
+    def requires_financial_data(self) -> bool:
+        return self.dependency_class in {
+            "financial_data_realtime_required",
+            "financial_data_primary_no_local_canonical",
+        }
+
+    @property
+    def public_access(self) -> str:
+        if self.dependency_class == "local_first_canonical_fallback_ready":
+            return "canonical_api_with_bounded_fallback"
+        if self.dependency_class == "local_overlap_adapter_pending":
+            return "local_dataset_or_explicit_provider_gateway"
+        return "explicit_provider_gateway_only"
+
     def as_dict(self) -> dict:
         return {
             "route": self.route,
@@ -233,6 +258,9 @@ class RouteSourcePolicy:
             "adapter_status": self.adapter_status,
             "local_scope": self.local_scope,
             "reason": self.reason,
+            "dependency_class": self.dependency_class,
+            "requires_financial_data": self.requires_financial_data,
+            "public_access": self.public_access,
         }
 
 
@@ -279,6 +307,38 @@ def route_source_policy(route: str) -> RouteSourcePolicy:
 
 def source_policy_catalog() -> tuple[RouteSourcePolicy, ...]:
     return tuple(route_source_policy(route) for route in sorted(FINANCIAL_DATA_ROUTES))
+
+
+def source_policy_summary(
+    policies: tuple[RouteSourcePolicy, ...] | None = None,
+) -> dict[str, int]:
+    policies = source_policy_catalog() if policies is None else policies
+    classes = {
+        name: sum(item.dependency_class == name for item in policies)
+        for name in (
+            "local_first_canonical_fallback_ready",
+            "local_overlap_adapter_pending",
+            "financial_data_realtime_required",
+            "financial_data_primary_no_local_canonical",
+        )
+    }
+    return {
+        "routes": len(policies),
+        "local_db_first": sum(
+            item.preferred_read == LOCAL_DB_FIRST for item in policies
+        ),
+        "financial_data_first": sum(
+            item.preferred_read == FINANCIAL_DATA_FIRST for item in policies
+        ),
+        "financial_data_required_now": sum(
+            item.requires_financial_data for item in policies
+        ),
+        "active_implicit_fallbacks": 0,
+        "active_canonical_fallbacks": classes[
+            "local_first_canonical_fallback_ready"
+        ],
+        **classes,
+    }
 
 
 def dataset_fallback_routes(dataset_name: str) -> tuple[str, ...]:

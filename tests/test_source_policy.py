@@ -5,8 +5,10 @@ from service.data_service.source_policy import (
     FINANCIAL_ROUTE_LOCAL_DATASETS,
     dataset_fallback_routes,
     source_policy_catalog,
+    source_policy_summary,
 )
 from service.source_connectors.financial_data_catalog import FINANCIAL_DATA_ROUTES
+from service.api.routers.datasets import get_source_priorities
 
 
 def test_every_financial_route_has_an_explicit_source_policy():
@@ -16,6 +18,60 @@ def test_every_financial_route_has_an_explicit_source_policy():
     assert {item.route for item in policies} == FINANCIAL_DATA_ROUTES
     assert {item.preferred_read for item in policies} == {
         LOCAL_DB_FIRST, FINANCIAL_DATA_FIRST,
+    }
+
+
+def test_financial_data_dependency_classes_are_complete_and_disjoint():
+    policies = source_policy_catalog()
+    summary = source_policy_summary(policies)
+
+    assert summary == {
+        "routes": 163,
+        "local_db_first": 57,
+        "financial_data_first": 106,
+        "financial_data_required_now": 106,
+        "active_implicit_fallbacks": 0,
+        "active_canonical_fallbacks": 29,
+        "local_first_canonical_fallback_ready": 29,
+        "local_overlap_adapter_pending": 28,
+        "financial_data_realtime_required": 4,
+        "financial_data_primary_no_local_canonical": 102,
+    }
+    assert sum(
+        summary[key]
+        for key in (
+            "local_first_canonical_fallback_ready",
+            "local_overlap_adapter_pending",
+            "financial_data_realtime_required",
+            "financial_data_primary_no_local_canonical",
+        )
+    ) == summary["routes"]
+    assert all(item.as_dict()["dependency_class"] for item in policies)
+
+
+def test_source_priority_api_can_filter_required_and_realtime_routes():
+    required = get_source_priorities(
+        dependency_class=None,
+        requires_financial_data=True,
+        namespace=None,
+        limit=500,
+        offset=0,
+    )
+    realtime = get_source_priorities(
+        dependency_class="financial_data_realtime_required",
+        requires_financial_data=None,
+        namespace=None,
+        limit=500,
+        offset=0,
+    )
+    assert required["page"]["total"] == 106
+    assert len(required["items"]) == 106
+    assert realtime["page"]["total"] == 4
+    assert {item["route"] for item in realtime["items"]} == {
+        "/api/v1/common/trading-state",
+        "/api/v1/quote/auction-snapshot",
+        "/api/v1/quote/basic-snapshot",
+        "/api/v1/quote/derived-snapshot",
     }
 
 

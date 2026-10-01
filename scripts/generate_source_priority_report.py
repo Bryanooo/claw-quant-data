@@ -9,8 +9,8 @@ import json
 from pathlib import Path
 
 from service.data_service.source_policy import (
-    LOCAL_DB_FIRST,
     source_policy_catalog,
+    source_policy_summary,
 )
 
 
@@ -22,20 +22,11 @@ def main() -> None:
 
     policies = source_policy_catalog()
     generated_at = datetime.now(timezone.utc).isoformat()
-    local_count = sum(item.preferred_read == LOCAL_DB_FIRST for item in policies)
-    ready_count = sum(
-        item.adapter_status.startswith("partial_ready") for item in policies
-    )
+    summary = source_policy_summary(policies)
     payload = {
         "generated_at": generated_at,
         "policy": "local canonical DB first; quota source only by explicit policy",
-        "summary": {
-            "routes": len(policies),
-            "local_db_first": local_count,
-            "financial_data_first": len(policies) - local_count,
-            "active_implicit_fallbacks": 0,
-            "active_canonical_fallbacks": ready_count,
-        },
+        "summary": summary,
         "items": [item.as_dict() for item in policies],
     }
 
@@ -58,27 +49,35 @@ def main() -> None:
         "- `local_db_first`：先读已经由 Tushare 定时采集并写入 DB 的规范数据；"
         "只有请求切片缺失或超过新鲜度 SLA，且 Financial Data 规范适配器通过契约测试后，才允许消耗额度回退。",
         "- `financial_data_first`：当前没有等价本地规范数据集，或能力本身是显式实时查询；"
-        "返回外部前仍必须经过规范字段、代码、日期和单位适配。",
+        "当前只能显式调用供应商网关；若要进入规范/研究接口，必须先完成字段、代码、"
+        "日期和单位适配。",
         "- 当前隐式回退数为 **0**。仅规范接口可触发已通过测试的有限回退；"
         "`adapter_required` 不是已启用，避免供应商原生模型混入统一接口。",
         "",
         "## 汇总",
         "",
-        "| Financial Data 路由 | 本地 DB 优先 | Financial Data 优先 | 已启用规范适配 |",
-        "|---:|---:|---:|---:|",
-        f"| {len(policies)} | {local_count} | {len(policies) - local_count} | {ready_count} |",
+        "| Financial Data 路由 | 当前依赖 Financial Data | 实时必须依赖 | 无本地规范等价 | 本地优先且可回退 | 本地重叠但适配待完成 |",
+        "|---:|---:|---:|---:|---:|---:|",
+        f"| {summary['routes']} | {summary['financial_data_required_now']} | "
+        f"{summary['financial_data_realtime_required']} | "
+        f"{summary['financial_data_primary_no_local_canonical']} | "
+        f"{summary['local_first_canonical_fallback_ready']} | "
+        f"{summary['local_overlap_adapter_pending']} |",
+        "",
+        "> “无本地规范等价”描述的是当前系统状态，不等同于已经证明 Tushare 完全没有"
+        "语义相近接口；其中也可能有尚未完成映射和标准化的缺口。",
         "",
         "## 完整路由清单",
         "",
-        "| 路由 | 读取优先级 | 本地规范数据集 | Financial Data 角色 | 规范化状态 | 本地适用范围 |",
+        "| 路由 | 依赖分类 | 当前必须依赖 FD | 对外访问 | 本地规范数据集 | 规范化状态 |",
         "|---|---|---|---|---|---|",
     ]
     for item in policies:
         datasets = ", ".join(f"`{name}`" for name in item.local_datasets) or "—"
         lines.append(
-            f"| `{item.route}` | `{item.preferred_read}` | {datasets} | "
-            f"`{item.financial_data_role}` | `{item.adapter_status}` | "
-            f"{item.local_scope} |"
+            f"| `{item.route}` | `{item.dependency_class}` | "
+            f"{'是' if item.requires_financial_data else '否'} | "
+            f"`{item.public_access}` | {datasets} | `{item.adapter_status}` |"
         )
     markdown_path = Path(args.markdown)
     markdown_path.parent.mkdir(parents=True, exist_ok=True)

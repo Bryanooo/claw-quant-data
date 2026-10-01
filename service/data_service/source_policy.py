@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from service.data_service.provider_equivalence import financial_tushare_mapping
 from service.source_connectors.financial_data_catalog import FINANCIAL_DATA_ROUTES
 
 
@@ -250,7 +251,7 @@ class RouteSourcePolicy:
         return "explicit_provider_gateway_only"
 
     def as_dict(self) -> dict:
-        return {
+        result = {
             "route": self.route,
             "preferred_read": self.preferred_read,
             "local_datasets": list(self.local_datasets),
@@ -262,6 +263,10 @@ class RouteSourcePolicy:
             "requires_financial_data": self.requires_financial_data,
             "public_access": self.public_access,
         }
+        result["provider_equivalence"] = financial_tushare_mapping(
+            self.route
+        ).as_dict()
+        return result
 
 
 def route_source_policy(route: str) -> RouteSourcePolicy:

@@ -202,12 +202,25 @@ GET /api/v1/data/source-priorities
 GET /api/v1/data/source-priorities?requires_financial_data=true
 GET /api/v1/data/source-priorities?dependency_class=financial_data_realtime_required
 GET /api/v1/data/source-priorities?dependency_class=financial_data_primary_no_local_canonical
+GET /api/v1/data/source-priorities?equivalence_class=tushare_direct
+GET /api/v1/data/source-priorities?equivalence_class=tushare_derived
+GET /api/v1/data/source-priorities?equivalence_class=tushare_announcement_parse
+GET /api/v1/data/source-priorities?equivalence_class=financial_data_only
+GET /api/v1/data/source-priorities/tushare-endpoints
+GET /api/v1/data/source-priorities/tushare-endpoints?mapping_status=no_financial_data_counterpart
 ```
 
 当前四类互斥且覆盖全部路由：29 条本地优先且规范回退已就绪、28 条本地已有重叠但
 Financial Data 适配待完成、4 条实时能力必须依赖 Financial Data、102 条当前没有本地
 规范等价数据。后两类合计 106 条，表示系统今天确实依赖 Financial Data；“无本地规范
 等价”不应被解释为已经证明 Tushare 完全没有语义相近接口。
+
+供应商能力使用另一组四类互斥口径覆盖同一批 163 条路由：26 条 Tushare
+直接等价、34 条可确定性派生、22 条可从 Tushare A 股公告原文解析、81 条必须
+依赖 Financial Data 才能满足完整合同。81 条中有 52 条存在 Tushare 局部重叠，
+但由于市场、字段、来源口径或实时性不完整，禁止将其提升为完整等价。响应会同时
+给出每个 Tushare 接口的当前 Token 权限；能力存在、Token 可用和本地规范适配器
+就绪是三个独立状态。
 
 统一任务参数：
 

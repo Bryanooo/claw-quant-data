@@ -5,46 +5,57 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Claw Quant · V2 数据控制台</title>
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261001-service-lineage" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261002-clarity" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
     <div class="brand"><span>CQ</span><div><strong>Claw Quant</strong><small>V2 Data Ops</small></div></div>
     <button id="sidebarToggle" class="icon-button" title="收起侧栏">☰</button>
     <nav>
-      <button class="nav active" data-view="overview">总览</button>
-      <button class="nav" data-view="today">今日交付</button>
-      <button class="nav" data-view="executions">执行实例</button>
-      <button class="nav" data-view="calendar">数据日历</button>
-      <button class="nav" data-view="coverage">覆盖审计</button>
-      <button class="nav" data-view="initialization">数据初始化</button>
-      <button class="nav" data-view="sources">数据源</button>
-      <button class="nav" data-view="services">服务目录</button>
-      <button class="nav" data-view="investment">投资日历</button>
+      <p class="nav-group">工作台</p>
+      <button class="nav active" data-view="overview"><span>⌂</span><b>运营总览</b></button>
+      <button class="nav" data-view="today"><span>◷</span><b>今日交付</b></button>
+      <button class="nav" data-view="calendar"><span>▦</span><b>数据日历</b></button>
+      <p class="nav-group">治理</p>
+      <button class="nav" data-view="executions"><span>≡</span><b>执行历史</b></button>
+      <button class="nav" data-view="coverage"><span>✓</span><b>覆盖审计</b></button>
+      <button class="nav" data-view="initialization"><span>↻</span><b>数据初始化</b></button>
+      <p class="nav-group">资产</p>
+      <button class="nav" data-view="services"><span>◇</span><b>服务目录</b></button>
+      <button class="nav" data-view="sources"><span>⇄</span><b>数据源</b></button>
+      <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
     </nav>
     <div class="sidebar-foot"><span class="dot"></span><span id="engineLabel">orchestration_v2</span></div>
   </aside>
 
   <main>
     <header>
-      <div><p class="eyebrow">DATA RELIABILITY WORKSPACE</p><h1 id="pageTitle">V2 数据总览</h1></div>
+      <div><p class="eyebrow">DATA OPERATIONS</p><h1 id="pageTitle">数据运营总览</h1></div>
       <div class="actions"><span id="updatedAt">正在连接…</span><button id="themeToggle">◐</button><button id="refreshButton" class="primary">刷新</button></div>
     </header>
     <div id="notice" class="notice hidden"></div>
 
     <section class="view" data-panel="overview">
-      <div id="healthBanner" class="health-banner loading"><div><small>系统状态</small><strong>正在加载 V2 控制面</strong><p>任务状态和数据状态分别核验。</p></div></div>
-      <div class="metrics">
-        <article><span>活动实例</span><strong id="metricActive">—</strong><small>排队、运行、验证、发布</small></article>
-        <article><span>需处理实例</span><strong id="metricAttention">—</strong><small>尚未被后续成功恢复</small></article>
-        <article><span>就绪数据状态</span><strong id="metricReady">—</strong><small>V2 严格校验后发布</small></article>
-        <article><span>缺失周期</span><strong id="metricMissing">—</strong><small>覆盖审计确认缺失</small></article>
+      <div id="healthBanner" class="health-banner loading">
+        <div class="health-copy"><span id="healthKicker" class="status-kicker">正在核验</span><strong id="healthTitle">正在加载数据控制面</strong><p id="healthSummary">任务状态和数据状态分别核验。</p><div class="hero-actions"><button data-view-target="today">查看今日交付</button><button data-view-target="coverage">查看覆盖审计</button></div></div>
+        <div class="readiness-gauge"><span id="readinessRate">—</span><small>最新状态就绪率</small></div>
       </div>
-      <section class="card"><div class="card-head"><div><p class="eyebrow">ACTION CENTER</p><h2>当前问题</h2></div></div><div id="issueList" class="issue-list"></div></section>
+      <div class="flow-grid" aria-label="数据交付链路">
+        <article class="flow-step"><span class="flow-index">1</span><div><small>任务执行</small><strong id="flowExecution">正在读取</strong><p id="flowExecutionHint">调度、采集、重试</p></div></article>
+        <article class="flow-step"><span class="flow-index">2</span><div><small>数据校验</small><strong id="flowValidation">正在读取</strong><p id="flowValidationHint">完整性与覆盖率</p></div></article>
+        <article class="flow-step"><span class="flow-index">3</span><div><small>服务供给</small><strong id="flowDelivery">正在读取</strong><p id="flowDeliveryHint">只有校验通过才就绪</p></div></article>
+      </div>
+      <div class="metrics overview-metrics">
+        <article><span>当前活动</span><strong id="metricActive">—</strong><small>正在运行的逻辑范围</small></article>
+        <article><span>当前问题</span><strong id="metricAttention">—</strong><small>按数据集与日期去重</small></article>
+        <article><span>严格就绪</span><strong id="metricReady">—</strong><small>最新 V2 数据状态</small></article>
+        <article><span>历史缺口</span><strong id="metricMissing">—</strong><small>缺失周期 / 不完整周期</small></article>
+      </div>
+      <section class="card action-center"><div class="card-head"><div><p class="eyebrow">OPEN ISSUES</p><h2>问题与恢复动作</h2><p>这里只展示当前数据问题；重复重试记录请到“执行历史”查看。</p></div><span id="issueCount" class="count-badge">—</span></div><div id="issueList" class="issue-list"></div></section>
     </section>
 
     <section class="view hidden" data-panel="today">
-      <section class="card"><div class="card-head"><div><p class="eyebrow">DATA DATE</p><h2>今日严格交付</h2><p id="todaySummary">按数据日期核验，不按任务创建日期统计。</p></div><input id="todayDate" type="date" /></div><div class="metrics compact"><article><span>应执行</span><strong id="todayExpected">—</strong></article><article><span>严格就绪</span><strong id="todayReady">—</strong></article><article><span>进行中</span><strong id="todayActive">—</strong></article><article><span>异常 / 未派发</span><strong id="todayProblem">—</strong></article></div><div class="table-wrap"><table><thead><tr><th>任务</th><th>数据日期</th><th>执行状态</th><th>节点</th><th>数据集校验</th><th>行数</th><th></th></tr></thead><tbody id="todayRows"></tbody></table></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">DATA DATE</p><h2>今日严格交付</h2><p id="todaySummary">按数据日期核验，不按任务创建日期统计。</p></div><input id="todayDate" type="date" /></div><div class="metrics compact"><article><span>应执行</span><strong id="todayExpected">—</strong></article><article><span>严格就绪</span><strong id="todayReady">—</strong></article><article><span>进行中</span><strong id="todayActive">—</strong></article><article><span>异常 / 未派发</span><strong id="todayProblem">—</strong></article></div><div class="list-toolbar"><div class="filters"><select id="todayStatus"><option value="">全部交付状态</option><option value="ready">严格就绪</option><option value="ready_after_repair">补采恢复</option><option value="active">进行中</option><option value="attention">异常</option><option value="not_dispatched">未派发</option><option value="not_due">尚未到期</option></select><input id="todaySearch" placeholder="搜索任务或数据集状态"/><button id="todayQuery">筛选</button></div><span id="todayResultCount" class="muted"></span></div><div class="table-wrap"><table><thead><tr><th>任务</th><th>数据日期</th><th>执行状态</th><th>节点</th><th>数据集校验</th><th>行数</th><th></th></tr></thead><tbody id="todayRows"></tbody></table></div><footer><button id="todayPrev">上一页</button><span id="todayPage">第 1 页</span><button id="todayNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="executions">
@@ -78,6 +89,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">实例详情</h2><button id="detailClose">关闭</button></div><pre id="detailBody"></pre></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261001-service-lineage" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261002-clarity" defer></script>
 </body>
 </html>

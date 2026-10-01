@@ -99,8 +99,9 @@ def test_orchestration_v2_read_model_handles_an_installed_control_plane():
         "status",
         "missing_tables",
         "endpoints",
-        "definitions",
+            "definitions",
             "executions",
+            "current_executions",
             "dataset_states",
             "engine",
         }
@@ -136,5 +137,7 @@ def test_today_delivery_is_definition_driven_before_dispatch():
     view = OrchestrationV2Repository().today_delivery(date(2099, 1, 2))
 
     assert view["engine"] == "orchestration_v2"
-    assert view["summary"]["expected"] > 0
-    assert view["summary"]["not_dispatched"] == view["summary"]["expected"]
+    assert view["summary"]["planned"] > 0
+    assert view["summary"]["expected"] == 0
+    assert view["summary"]["not_dispatched"] == 0
+    assert view["summary"]["not_due"] == view["summary"]["planned"]

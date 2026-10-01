@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from service.clock import business_now
@@ -39,7 +40,8 @@ class DataHealthService:
         coverage = self._coverage.overview()
         initialization = self._initialization.overview()
         states = self._orchestration.latest_dataset_states()
-        executions = control.get("executions", {})
+        ledger_executions = control.get("executions", {})
+        executions = control.get("current_executions") or ledger_executions
         active = sum(int(executions.get(status, 0)) for status in _ACTIVE)
         attention = int(executions.get("attention", 0))
         not_ready = [item for item in states.values() if not item.get("ready")]
@@ -54,13 +56,47 @@ class DataHealthService:
             late_published = item["dataset_name"] in {
                 "ccass_hold", "etf_share_size", "margin", "margin_detail",
             }
+            partition = None
+            observation_start = item.get("observation_start")
+            if isinstance(observation_start, str):
+                try:
+                    observation_start = date.fromisoformat(observation_start)
+                except ValueError:
+                    observation_start = None
+            if observation_start and hasattr(self._coverage, "list_partitions"):
+                detail = self._coverage.list_partitions(
+                    item["dataset_name"],
+                    start_date=observation_start,
+                    end_date=observation_start,
+                    status="problem",
+                    limit=1,
+                )
+                partition = next(iter(detail.get("partitions", [])), None)
             issues.append({
                 "kind": "dataset_not_ready",
-                "severity": "critical" if item["data_status"] in {"gaps", "partial"} else "warning",
+                # Late-published data is a confirmed incomplete partition, but
+                # it is not an operator failure while bounded rechecks are
+                # scheduled.  Keeping it visible as ``waiting_upstream`` avoids
+                # both false-green data and a false critical incident.
+                "severity": "warning" if late_published else "critical",
                 "confidence": "confirmed",
                 "dataset": item["dataset_name"],
                 "observation_key": item["observation_key"],
                 "status": item["data_status"],
+                "resolution_state": (
+                    "waiting_upstream" if late_published else "operator_action_required"
+                ),
+                "actual_count": (
+                    partition.get("entity_count") if partition else item.get("actual_count")
+                ),
+                "expected_count": (
+                    partition.get("expected_entity_count") if partition else None
+                ),
+                "completeness_ratio": (
+                    float(partition["entity_coverage_ratio"])
+                    if partition and partition.get("entity_coverage_ratio") is not None
+                    else None
+                ),
                 "action": (
                     "await the upstream late publication; a fresh bounded V2 "
                     "repair is scheduled automatically, then inspect the source "
@@ -76,7 +112,26 @@ class DataHealthService:
                 ),
                 "source_execution_id": item.get("source_execution_id"),
             })
-        status = "critical" if attention or gaps else "warning" if active or not_ready else "healthy"
+        mapped_attention = {
+            item["source_execution_id"]
+            for item in issues
+            if item.get("source_execution_id") is not None
+        }
+        unmapped_attention = max(0, attention - len(mapped_attention))
+        operator_action_required = (
+            sum(item["resolution_state"] == "operator_action_required" for item in issues)
+            + unmapped_attention
+        )
+        waiting_upstream = sum(
+            item["resolution_state"] == "waiting_upstream" for item in issues
+        )
+        status = (
+            "critical"
+            if operator_action_required
+            else "warning"
+            if active or not_ready or waiting_upstream
+            else "healthy"
+        )
         return {
             "generated_at": business_now().isoformat(),
             "engine": "orchestration_v2",
@@ -84,6 +139,10 @@ class DataHealthService:
             "summary": {
                 "active_task_instances": active,
                 "attention_task_instances": attention,
+                "attention_attempts": int(ledger_executions.get("attention", 0)),
+                "open_issues": len(issues),
+                "operator_action_required": operator_action_required,
+                "waiting_upstream": waiting_upstream,
                 "datasets": coverage["summary"]["datasets"],
                 "latest_dataset_states": len(states),
                 "ready_dataset_states": sum(bool(item.get("ready")) for item in states.values()),

@@ -57,6 +57,10 @@ FORMAT_ONLY_CHECKSUM_ALIASES = {
         "7e757e9088da3d7ac4b277f527c98d8610a49bd6e6fc61db16962f8a376f7c00":
             "105d50b5310bccff8d9e1d3bff05c73afbd1ce5e0a6082387f3ac4c6b948c929",
     },
+    "079_normalize_v2_verified_empty_states": {
+        "64a0ec0e6f27684228d16092267389612d36830553ff06f229153401371c7692":
+            "2f6f1f2f63a13a5f55e0ad1b2499dcc22eec2eddb1c45d540bdedc4f4c7ff475",
+    },
 }
 
 

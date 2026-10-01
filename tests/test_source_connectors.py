@@ -83,6 +83,17 @@ def test_financial_data_query_through_source_is_registered_without_secret():
     assert len(FINANCIAL_DATA_ROUTES) == 163
 
 
+def test_financial_data_gateway_is_registered_in_openapi():
+    from service.api.app import create_app
+
+    class FakeDatabase:
+        def close(self):
+            pass
+
+    paths = create_app(database_factory=FakeDatabase).openapi()["paths"]
+    assert "post" in paths["/api/v1/data/sources/financial_data/query"]
+
+
 def test_financial_data_connector_validates_and_returns_protocol_payload():
     calls = []
     connector = FinancialDataConnector(

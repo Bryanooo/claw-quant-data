@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
 from typing import Any
 
 from service.clock import business_now
@@ -10,6 +9,7 @@ from service.data_coverage.service import CoverageService
 from service.data_service.service import DataService
 from service.initialization.service import InitializationService
 from service.orchestration_v2.repository import OrchestrationV2Repository
+from service.orchestration_v2.late_repair import next_late_repair_at
 from service.research.readiness import evaluate_research_readiness
 
 
@@ -49,11 +49,7 @@ class DataHealthService:
         ]
         issues = []
         now = business_now()
-        late_repair_at = datetime.combine(
-            now.date(), time(23, 58), tzinfo=now.tzinfo
-        )
-        if late_repair_at <= now:
-            late_repair_at += timedelta(days=1)
+        late_repair_at = next_late_repair_at(now)
         for item in sorted(gaps, key=lambda row: row["dataset_name"]):
             late_published = item["dataset_name"] in {
                 "ccass_hold", "etf_share_size", "margin", "margin_detail",

@@ -43,7 +43,10 @@ from service.api.schemas import (
     FreshnessItem,
     RecordsResponse,
 )
-from service.data_service.source_policy import source_policy_catalog
+from service.data_service.source_policy import (
+    source_policy_catalog,
+    source_policy_summary,
+)
 
 router = APIRouter(prefix="/v1/data", tags=["data"])
 
@@ -76,21 +79,54 @@ def get_freshness(
 
 
 @router.get("/source-priorities")
-def get_source_priorities() -> dict:
+def get_source_priorities(
+    dependency_class: str | None = None,
+    requires_financial_data: bool | None = None,
+    namespace: str | None = None,
+    limit: int = Query(default=500, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
     """Expose reviewed DB-first/quota-source precedence for every FD route."""
     policies = source_policy_catalog()
-    local_first = sum(item.preferred_read == "local_db_first" for item in policies)
-    ready = sum(item.adapter_status.startswith("partial_ready") for item in policies)
+    filtered = list(policies)
+    if dependency_class:
+        filtered = [
+            item for item in filtered
+            if item.dependency_class == dependency_class
+        ]
+    if requires_financial_data is not None:
+        filtered = [
+            item for item in filtered
+            if item.requires_financial_data is requires_financial_data
+        ]
+    if namespace:
+        normalized_namespace = namespace.strip("/")
+        filtered = [
+            item for item in filtered
+            if len(item.route.split("/")) > 3
+            and item.route.split("/")[3] == normalized_namespace
+        ]
+    total = len(filtered)
     return {
         "policy": "local canonical DB first; quota source only by explicit policy",
-        "summary": {
-            "routes": len(policies),
-            "local_db_first": local_first,
-            "financial_data_first": len(policies) - local_first,
-            "active_implicit_fallbacks": 0,
-            "active_canonical_fallbacks": ready,
+        "semantics": {
+            "financial_data_required_now": (
+                "routes whose capability currently has no local canonical equivalent, "
+                "including explicit real-time products"
+            ),
+            "no_local_canonical_warning": (
+                "no local canonical equivalent does not prove that Tushare has no "
+                "semantically related endpoint; it may also indicate an unmapped gap"
+            ),
         },
-        "items": [item.as_dict() for item in policies],
+        "summary": source_policy_summary(policies),
+        "page": {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": offset + limit < total,
+        },
+        "items": [item.as_dict() for item in filtered[offset:offset + limit]],
     }
 
 

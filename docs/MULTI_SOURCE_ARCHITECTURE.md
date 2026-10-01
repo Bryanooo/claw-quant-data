@@ -194,6 +194,21 @@ GET /api/v1/data/sources/tushare/endpoints?limit=100&offset=0
 GET /api/v1/data/sources/tushare/endpoints/daily
 ```
 
+Financial Data 的 163 条上游业务路由通过以下接口公开完整依赖分类，而不是只显示一个
+Connector 总数：
+
+```http
+GET /api/v1/data/source-priorities
+GET /api/v1/data/source-priorities?requires_financial_data=true
+GET /api/v1/data/source-priorities?dependency_class=financial_data_realtime_required
+GET /api/v1/data/source-priorities?dependency_class=financial_data_primary_no_local_canonical
+```
+
+当前四类互斥且覆盖全部路由：29 条本地优先且规范回退已就绪、28 条本地已有重叠但
+Financial Data 适配待完成、4 条实时能力必须依赖 Financial Data、102 条当前没有本地
+规范等价数据。后两类合计 106 条，表示系统今天确实依赖 Financial Data；“无本地规范
+等价”不应被解释为已经证明 Tushare 完全没有语义相近接口。
+
 统一任务参数：
 
 ```json

@@ -23,6 +23,7 @@ def test_dashboard_distinguishes_task_and_data_state():
     assert "采集任务" in html
     assert "执行历史" in html
     assert "查看节点" in script
+    assert "查看任务定义与节点" in script
 
 
 def test_dashboard_overview_uses_deduplicated_issue_semantics():

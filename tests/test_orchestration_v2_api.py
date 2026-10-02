@@ -297,11 +297,11 @@ def test_stable_operator_api_separates_tasks_from_executions():
 
 
 def test_stable_task_catalog_accepts_cadence_filter():
-    repository = FakeOrchestrationV2Repository()
-    app = build_app(repository)
-    response = TestClient(app).get(
-        "/api/v1/ops/tasks?cadence=weekly&lifecycle_status=active"
-    )
+    client, repository = make_client()
+    with client:
+        response = client.get(
+            "/api/v1/ops/tasks?cadence=weekly&lifecycle_status=active"
+        )
     assert response.status_code == 200
     assert repository.calls == [
         (

@@ -9,13 +9,17 @@ Use only the governed research commands:
 
 ```bash
 ./clawq research readiness
-./clawq research fundamentals TS_CODE --periods 12
-./clawq research valuation TS_CODE --lookback-days 730
-./clawq stock research-pack TS_CODE --financial-periods 8
+./clawq research capabilities
+./clawq research fundamentals TS_CODE --periods 12 --as-of YYYY-MM-DD
+./clawq research valuation TS_CODE --lookback-days 730 --as-of YYYY-MM-DD
+./clawq research repurchase-progress TS_CODE --as-of YYYY-MM-DD
+./clawq stock research-pack TS_CODE --financial-periods 8 --as-of YYYY-MM-DD
 ```
 
 Stop and disclose the limitation when a required dataset is missing. Treat `unknown_empty`
-as unknown, never as proof that an event did not happen.
+as unknown, never as proof that an event did not happen. Keep every call on the same `as_of`
+cutoff and inspect `meta.quality`, `meta.provenance`, `meta.gaps`, and
+`external_data_needed` before interpreting a non-empty response.
 
 Load only the guidance required by the question:
 
@@ -26,7 +30,7 @@ Load only the guidance required by the question:
 - full investment thesis, scenarios, risks, and falsifiers: read
   [references/thesis-and-risks.md](references/thesis-and-risks.md).
 
-Build a full-company conclusion from four separate lenses:
+Build a full-company conclusion from five separate lenses:
 
 1. Growth: compare like-for-like fiscal periods; distinguish quarterly, cumulative interim,
    and annual figures.
@@ -35,7 +39,10 @@ Build a full-company conclusion from four separate lenses:
 3. Valuation: prefer the company's own historical distribution; use peer medians only after
    checking comparability and outliers. Do not invent a fair value without explicit discount,
    growth, and forecast-horizon assumptions.
-4. Risks and falsifiers: state what future evidence would weaken the thesis.
+4. Capital allocation and shareholder return: separate announced plans from executed cash
+   return. Use repurchase progress, dividends, dilution, and financing events only when their
+   coverage and announcement dates are explicit. Never infer repurchase execution from price.
+5. Risks and falsifiers: state what future evidence would weaken the thesis.
 
 When several periods are available, visualize the decision-driving series—normally revenue
 growth, net-income growth, gross/net margin, ROE/ROIC, and operating-cash conversion—instead
@@ -44,6 +51,11 @@ date, market-data date, quality status, and material data gaps.
 
 Separate observed facts, derived metrics, and interpretation. Do not issue a buy/sell verdict
 from valuation alone.
+
+For the market response to a repurchase, earnings release, or other corporate action, combine
+this Skill with `$claw-quant-event-research`; use `$claw-quant-technical-research` only for the
+price and volume structure. Event attribution and chart behavior do not replace the underlying
+capital-allocation facts.
 
 This Skill covers companies, not macro regimes or industry aggregates. Route macro questions to
 `$claw-quant-macro-research` and industry questions to `$claw-quant-industry-research`.

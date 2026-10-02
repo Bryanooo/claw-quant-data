@@ -9,6 +9,7 @@ Start with the governed contract and keep one cutoff across all calls:
 
 ```bash
 ./clawq research readiness
+./clawq research capabilities
 ./clawq research macro-regime --as-of YYYY-MM-DD
 ./clawq research macro-theme growth --periods 24 --as-of YYYY-MM-DD
 ./clawq research macro-theme inflation --periods 24 --as-of YYYY-MM-DD
@@ -20,6 +21,11 @@ making a historical claim. Begin with component facts, then explain the rule-bas
 policy interpretation, market transmission, and portfolio implications separate from observed
 data. Use the investment calendar for known releases and official external sources for policy
 documents or publication timestamps that the API declares missing.
+
+For China LPR, use the canonical `cn_lpr` series exposed by the research contract. ChinaMoney
+official publication rows are authoritative; the Tushare `shibor_lpr` collector is a fallback
+transport when official coverage is unavailable. Never label LPR as Shibor or merge the two
+rate concepts into one series.
 
 Show the as-of date, latest observation date per series, direction changes, conflicts, revisions
 or vintage limitations, and the evidence that could falsify the conclusion. A regime label is a

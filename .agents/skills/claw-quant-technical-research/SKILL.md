@@ -9,10 +9,16 @@ Run the governed endpoint and keep the requested observation date explicit:
 
 ```bash
 ./clawq research readiness
-./clawq research technicals TS_CODE --lookback-days 400 --chart-points 120
-./clawq research capital-flow TS_CODE --lookback-days 60
-./clawq research repurchase-progress TS_CODE
+./clawq research capabilities
+./clawq research technicals TS_CODE --lookback-days 400 --chart-points 120 --as-of YYYY-MM-DD
+./clawq research capital-flow TS_CODE --lookback-days 60 --as-of YYYY-MM-DD
 ```
+
+Keep all calls on the same `as_of` cutoff. Inspect `meta.quality`, `meta.provenance`,
+`meta.gaps`, and `external_data_needed` before interpreting a non-empty response. Repurchases,
+dividends, and capital allocation are fundamental/event evidence, not technical indicators;
+route those questions to `$claw-quant-fundamental-research` and
+`$claw-quant-event-research`.
 
 Load only the guidance needed for the question:
 

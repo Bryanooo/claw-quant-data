@@ -8,6 +8,8 @@ description: Analyze sector and industry fundamentals, valuation, member breadth
 Resolve the provider and sector code first, then keep the same membership cutoff:
 
 ```bash
+./clawq research readiness
+./clawq research capabilities
 ./clawq sector list --provider ths --query 半导体
 ./clawq research industry-fundamentals ths 884229.TI --as-of YYYY-MM-DD
 ./clawq research industry-breadth ths 884229.TI --as-of YYYY-MM-DD

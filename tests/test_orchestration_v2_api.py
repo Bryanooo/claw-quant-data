@@ -69,6 +69,10 @@ class FakeOrchestrationV2Repository:
             for value in (19, 18, 17)
         ]
 
+    def count_executions(self, **kwargs):
+        self.calls.append(("execution_count", kwargs))
+        return 3
+
     def get_definition(self, definition_id):
         self.calls.append(("definition", {"definition_id": definition_id}))
         if definition_id == 404:
@@ -286,8 +290,30 @@ def test_stable_operator_api_separates_tasks_from_executions():
     assert detail.json()["task"]["definition"]["nodes"][0]["key"] == "acquire"
     assert executions.status_code == 200
     assert executions.json()["items"][0]["resolution"]["retryable"] is True
+    assert executions.json()["page"]["total"] == 3
     assert [call[0] for call in repository.calls] == [
-        "definitions", "definition", "executions"
+        "definitions", "definition", "executions", "execution_count"
+    ]
+
+
+def test_stable_task_catalog_accepts_cadence_filter():
+    repository = FakeOrchestrationV2Repository()
+    app = build_app(repository)
+    response = TestClient(app).get(
+        "/api/v1/ops/tasks?cadence=weekly&lifecycle_status=active"
+    )
+    assert response.status_code == 200
+    assert repository.calls == [
+        (
+            "definitions",
+            {
+                "limit": 51,
+                "before_id": None,
+                "lifecycle_status": "active",
+                "workflow_kind": None,
+                "cadence": "weekly",
+            },
+        )
     ]
 
 

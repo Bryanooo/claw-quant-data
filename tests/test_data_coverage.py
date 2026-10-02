@@ -184,9 +184,10 @@ def test_known_provider_history_boundaries_are_shared_with_coverage_rules():
         assert rule.availability_start == boundary
         assert rule.revision >= 2
 
-    shibor_lpr = COVERAGE_RULES.get("shibor_lpr")
-    assert shibor_lpr.availability_start == date(2013, 10, 25)
-    assert shibor_lpr.revision == 3
+    cn_lpr = COVERAGE_RULES.get("cn_lpr")
+    assert cn_lpr.availability_start == date(2013, 10, 25)
+    assert cn_lpr.collection_api_name == "shibor_lpr"
+    assert cn_lpr.revision == 3
 
 
 def test_authoritative_empty_exact_day_products_are_not_false_failures():
@@ -233,14 +234,14 @@ def test_public_dataset_aliases_map_to_collection_api_names():
 def test_research_market_series_have_exact_date_repair_paths():
     for dataset_name in (
         "adj_factor", "dc_daily", "etf_share_size", "fund_adj",
-        "fund_daily", "sge_daily", "shibor", "shibor_lpr", "tdx_daily",
+        "fund_daily", "sge_daily", "shibor", "cn_lpr", "tdx_daily",
     ):
         assert is_safe_repair_dataset(dataset_name)
 
 
 def test_monthly_date_series_normalizes_publication_day_to_month_end():
     expression = repr(CoverageRepository._date_expression(
-        COVERAGE_RULES.get("shibor_lpr")
+        COVERAGE_RULES.get("cn_lpr")
     ))
 
     assert "date_trunc('month'" in expression
@@ -793,7 +794,7 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert COVERAGE_RULES.get("ggt_monthly").collection_api_name == "ggt_monthly"
     assert COVERAGE_RULES.get("ggt_monthly").availability_start == date(2014, 11, 1)
     assert COVERAGE_RULES.get("shibor").strategy.value == "trading_daily"
-    assert COVERAGE_RULES.get("shibor_lpr").strategy.value == "calendar_monthly"
+    assert COVERAGE_RULES.get("cn_lpr").strategy.value == "calendar_monthly"
     assert COVERAGE_RULES.get("sge_daily").strategy.value == "trading_daily"
     etf_share = COVERAGE_RULES.get("etf_share_size")
     assert etf_share.accept_verified_empty is True

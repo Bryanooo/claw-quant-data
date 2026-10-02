@@ -166,7 +166,7 @@ RESEARCH_DATA_CONTRACTS: tuple[dict[str, Any], ...] = (
             _dependency("cn_m", "money supply", history_days=3650),
             _dependency("sf_month", "social financing", history_days=3650),
             _dependency("shibor", "money-market rates", history_days=1095),
-            _dependency("shibor_lpr", "loan prime rate", history_days=3650),
+            _dependency("cn_lpr", "loan prime rate", history_days=3650),
         ),
     },
     {
@@ -464,7 +464,7 @@ def lineage_catalog() -> list[dict[str, Any]]:
             **item,
             "source_ids": (
                 ["chinamoney", "tushare"]
-                if dataset == "shibor_lpr"
+                if dataset == "cn_lpr"
                 else ["tushare"]
             ),
             "read_strategy": "local_db_first",

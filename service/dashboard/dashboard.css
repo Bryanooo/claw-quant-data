@@ -156,6 +156,9 @@ footer { display: flex; align-items: center; justify-content: flex-end; gap: 12p
 .provider-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb,var(--good) 12%,transparent); }
 .provider-card h3 { min-height: 48px; margin: 0 0 2px; font-size: 17px; line-height: 1.4; }
 .provider-card > code { color: var(--muted); font-size: 11px; }
+.provider-purpose { min-height: 38px; margin: 9px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.provider-datasets { display: flex; gap: 5px; margin-top: 8px; }
+.provider-datasets span { padding: 3px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font: 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; font-weight: 800; }
 .provider-capability { display: flex; align-items: baseline; gap: 8px; margin: 18px 0; }
 .provider-capability strong { font-size: 30px; line-height: 1; letter-spacing: -.04em; }
 .provider-capability span { color: var(--muted); }

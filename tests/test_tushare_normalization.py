@@ -56,9 +56,13 @@ def test_multidimensional_business_identity_is_contract_reviewed():
 
 def test_every_typed_contract_is_exposed_as_a_dataset():
     registered = {dataset.table: dataset for dataset in DATASETS.list()}
+    public_name_overrides = {"shibor_lpr": "cn_lpr"}
 
     for contract in NORMALIZATION_CONTRACTS.list():
         dataset = registered[contract.table_name]
-        assert dataset.name == contract.api_name
+        assert dataset.name == public_name_overrides.get(
+            contract.api_name,
+            contract.api_name,
+        )
         assert dataset.primary_keys == ("_record_hash",)
         assert set(contract.field_names) <= set(dataset.exact_filters)

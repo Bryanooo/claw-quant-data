@@ -426,7 +426,7 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     assert [node.kind.value for node in by_key["daily"].nodes] == [
         "condition", "scope_plan", "acquire", "validate", "publish"
     ]
-    assert [node.kind.value for node in by_key["shibor_lpr"].nodes] == [
+    assert [node.kind.value for node in by_key["cn_lpr"].nodes] == [
         "condition", "scope_plan", "acquire", "merge", "validate", "publish"
     ]
     assert [node.kind.value for node in by_key["macro_regime"].nodes] == [

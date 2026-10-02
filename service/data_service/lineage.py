@@ -138,7 +138,7 @@ CANONICAL_ENDPOINT_LINEAGE: dict[str, dict[str, Any]] = {
 _RESEARCH_FIXED_DATASETS: dict[str, tuple[str, ...]] = {
     "/api/v1/research/macro/{theme}": (
         "cn_gdp", "cn_pmi", "cn_cpi", "cn_ppi", "cn_m", "sf_month",
-        "shibor", "shibor_lpr",
+        "shibor", "cn_lpr",
     ),
     "/api/v1/research/stocks/{ts_code}/snapshot": (
         "stock_basic", "stock_daily", "stock_daily_basic", "moneyflow",

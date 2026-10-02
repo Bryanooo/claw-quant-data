@@ -48,7 +48,7 @@ FINANCIAL_ROUTE_LOCAL_DATASETS: dict[str, tuple[str, ...]] = {
     "/api/v1/index_fnd/index-profile-basic-info": ("index_basic",),
     "/api/v1/macro/data-query": (
         "cn_cpi", "cn_gdp", "cn_m", "cn_pmi", "cn_ppi", "sf_month",
-        "shibor", "shibor_lpr", "libor", "hibor", "us_tbr", "us_tltr",
+        "shibor", "cn_lpr", "libor", "hibor", "us_tbr", "us_tltr",
         "us_trltr", "us_trycr", "us_tycr",
     ),
     "/api/v1/onecode/query": (

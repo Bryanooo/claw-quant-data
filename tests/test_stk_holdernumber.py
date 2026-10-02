@@ -69,10 +69,11 @@ def test_public_dataset_keeps_business_filters_and_effective_date_contract():
 
 
 def test_lpr_dataset_uses_provider_neutral_canonical_view():
-    dataset = build_dataset_registry().get("shibor_lpr")
+    dataset = build_dataset_registry().get("cn_lpr")
 
     assert dataset.table == "tushare_norm_shibor_lpr"
-    assert dataset.read_table == "canonical_shibor_lpr"
+    assert dataset.read_table == "canonical_cn_lpr"
+    assert dataset.description.startswith("LPR")
     assert dataset.source_ids == ("chinamoney", "tushare")
     assert dataset.merge_policy == (
         "official_source_precedence_by_publication_date"

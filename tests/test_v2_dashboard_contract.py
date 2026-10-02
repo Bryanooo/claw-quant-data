@@ -42,7 +42,34 @@ def test_today_delivery_has_client_side_filter_and_pagination():
     assert 'id="todayStatus"' in html
     assert 'id="todayPrev"' in html and 'id="todayNext"' in html
     assert "renderTodayRows" in script
+    assert "output_datasets" in script
+    assert "日历型数据可能已由此前快照覆盖" in script
     assert "getFullYear" in script
+
+
+def test_task_catalog_filters_by_cadence_and_shows_data_flow():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    assert 'id="taskCadence"' in html
+    assert 'value="daily"' in html and 'value="weekly"' in html
+    assert 'p.set("cadence"' in script
+    assert "dataset-flow" in script
+    assert "taskResultCount" in script
+
+
+def test_execution_history_shows_total_count():
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    assert "view.page.total" in script
+    assert "共 ${fmt(state.execution.total)} 条" in script
+
+
+def test_investment_calendar_is_prominent_and_initialization_is_secondary():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    investment = html.index('data-view="investment"')
+    governance = html.index('<p class="nav-group">治理</p>')
+    assert investment < governance
+    assert 'class="nav" data-view="initialization"' not in html
+    assert 'data-view-target="initialization"' in html
 
 
 def test_data_calendar_detail_is_actionable_and_paginated():

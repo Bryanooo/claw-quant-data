@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Claw Quant · 数据控制台</title>
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261002-ops-model" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261002-list-ux" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -15,16 +15,15 @@
       <p class="nav-group">工作台</p>
       <button class="nav active" data-view="overview"><span>⌂</span><b>运营总览</b></button>
       <button class="nav" data-view="today"><span>◷</span><b>今日交付</b></button>
+      <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
       <button class="nav" data-view="calendar"><span>▦</span><b>数据日历</b></button>
       <p class="nav-group">治理</p>
       <button class="nav" data-view="tasks"><span>⌘</span><b>采集任务</b></button>
       <button class="nav" data-view="executions"><span>≡</span><b>执行历史</b></button>
       <button class="nav" data-view="coverage"><span>✓</span><b>覆盖审计</b></button>
-      <button class="nav" data-view="initialization"><span>↻</span><b>数据初始化</b></button>
       <p class="nav-group">资产</p>
       <button class="nav" data-view="services"><span>◇</span><b>服务目录</b></button>
       <button class="nav" data-view="sources"><span>⇄</span><b>数据依赖</b></button>
-      <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
     </nav>
     <div class="sidebar-foot"><span class="dot"></span><span id="engineLabel">数据服务运行中</span></div>
   </aside>
@@ -60,7 +59,7 @@
     </section>
 
     <section class="view hidden" data-panel="tasks">
-      <section class="card"><div class="card-head"><div><p class="eyebrow">TASK DEFINITIONS</p><h2>采集任务</h2><p>这里是可执行任务的定义；“执行历史”是这些任务每次运行产生的实例。</p></div><div class="filters"><select id="taskKind"><option value="">全部类型</option><option value="acquisition">原生采集</option><option value="transformation">派生计算</option></select><select id="taskLifecycle"><option value="active">当前启用</option><option value="draft">草稿</option><option value="retired">已停用</option><option value="">全部版本</option></select><input id="taskSearch" placeholder="搜索任务或数据集"/><button id="taskQuery">筛选</button></div></div><div class="table-wrap"><table><thead><tr><th>任务</th><th>类型 / 版本</th><th>调度</th><th>输入</th><th>输出</th><th>节点</th><th></th></tr></thead><tbody id="taskRows"></tbody></table></div><footer><button id="taskPrev">上一页</button><span id="taskPage">第 1 页</span><button id="taskNext">下一页</button></footer></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">TASK DEFINITIONS</p><h2>采集任务</h2><p>任务是长期定义，实例是某次运行。可按执行周期、类型和生命周期筛选。</p></div></div><div class="list-toolbar"><div class="filters"><select id="taskCadence"><option value="">全部周期</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="dependency">依赖触发</option><option value="manual">按需</option></select><select id="taskKind"><option value="">全部类型</option><option value="acquisition">原生采集</option><option value="transformation">派生计算</option></select><select id="taskLifecycle"><option value="active">当前启用</option><option value="draft">草稿</option><option value="retired">已停用</option><option value="">全部版本</option></select><input id="taskSearch" placeholder="搜索任务、输入或输出数据集"/><button id="taskQuery">筛选</button></div><span id="taskResultCount" class="muted"></span></div><div class="table-wrap"><table><thead><tr><th>任务定义</th><th>周期 / 调度</th><th>类型 / 版本</th><th>数据流</th><th>节点</th><th></th></tr></thead><tbody id="taskRows"></tbody></table></div><footer><button id="taskPrev">上一页</button><span id="taskPage">第 1 页</span><button id="taskNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="executions">
@@ -73,7 +72,7 @@
     </section>
 
     <section class="view hidden" data-panel="coverage">
-      <section class="card"><div class="card-head"><div><p class="eyebrow">STRICT AUDIT</p><h2>全部数据集覆盖审计</h2><p id="coverageSummary">读取中…</p></div><button id="auditAll">重新审计全部</button></div><div class="table-wrap"><table><thead><tr><th>数据集</th><th>策略</th><th>审计状态</th><th>范围</th><th>缺失</th><th>不完整</th><th>可修复</th></tr></thead><tbody id="coverageRows"></tbody></table></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">STRICT AUDIT</p><h2>全部数据集覆盖审计</h2><p id="coverageSummary">读取中…</p></div><div class="filters"><button id="auditAll">重新审计全部</button><button class="quiet-action" data-view-target="initialization">初始化与全量恢复</button></div></div><div class="table-wrap"><table><thead><tr><th>数据集</th><th>策略</th><th>审计状态</th><th>范围</th><th>缺失</th><th>不完整</th><th>可修复</th></tr></thead><tbody id="coverageRows"></tbody></table></div></section>
     </section>
 
     <section class="view hidden" data-panel="initialization">
@@ -95,6 +94,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261002-ops-model-2" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261002-list-ux" defer></script>
 </body>
 </html>

@@ -218,6 +218,7 @@ class OrchestrationV2Repository:
         before_id: int | None = None,
         lifecycle_status: str | None = None,
         workflow_kind: str | None = None,
+        cadence: str | None = None,
     ) -> list[dict]:
         if not self.schema_exists():
             return []
@@ -232,6 +233,9 @@ class OrchestrationV2Repository:
         if workflow_kind is not None:
             conditions.append("workflow_kind = %s")
             params.append(workflow_kind)
+        if cadence is not None:
+            conditions.append("definition->'scope_contract'->>'cadence' = %s")
+            params.append(cadence)
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
         params.append(limit)
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
@@ -251,6 +255,32 @@ class OrchestrationV2Repository:
                 tuple(params),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def count_executions(
+        self,
+        *,
+        status: str | None = None,
+        task_key: str | None = None,
+    ) -> int:
+        """Count the immutable execution ledger for operator pagination."""
+        if not self.schema_exists():
+            return 0
+        conditions: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            conditions.append("status = %s")
+            params.append(status)
+        if task_key is not None:
+            conditions.append("task_key = %s")
+            params.append(task_key)
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                "SELECT count(*)::BIGINT AS total "
+                "FROM orchestration_v2.task_execution" + where,
+                tuple(params),
+            )
+            return int(cursor.fetchone()["total"])
 
     def list_executions(
         self,
@@ -501,6 +531,9 @@ class OrchestrationV2Repository:
                 ), state_rollup AS (
                     SELECT output.task_key,
                            count(*)::integer AS datasets,
+                           array_agg(
+                             output.dataset_name ORDER BY output.dataset_name
+                           ) AS output_datasets,
                            count(*) FILTER (WHERE state.ready)::integer
                                AS ready_datasets,
                            count(*) FILTER (
@@ -525,6 +558,8 @@ class OrchestrationV2Repository:
                        execution.created_at,
                        execution.started_at, execution.finished_at,
                        COALESCE(state.datasets, 0) AS datasets,
+                       COALESCE(state.output_datasets, ARRAY[]::text[])
+                           AS output_datasets,
                        COALESCE(state.ready_datasets, 0) AS ready_datasets,
                        COALESCE(state.problem_datasets, 0) AS problem_datasets
                 FROM active

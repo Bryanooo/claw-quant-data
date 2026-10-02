@@ -111,6 +111,9 @@ def tasks(
     repository: OrchestrationV2RepositoryDependency,
     lifecycle_status: Literal["draft", "active", "retired"] | None = None,
     workflow_kind: Literal["acquisition", "transformation"] | None = None,
+    cadence: Literal[
+        "daily", "weekly", "monthly", "quarterly", "manual", "dependency",
+    ] | None = None,
     before_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
@@ -119,6 +122,7 @@ def tasks(
         before_id=before_id,
         lifecycle_status=lifecycle_status,
         workflow_kind=workflow_kind,
+        cadence=cadence,
     )
     return _page(items, limit=limit, id_field="task_definition_id")
 
@@ -152,9 +156,15 @@ def executions(
         status=execution_status,
         task_key=task_key,
     )
+    total = repository.count_executions(
+        status=execution_status,
+        task_key=task_key,
+    )
     for item in items:
         item["resolution"] = _resolution(item)
-    return _page(items, limit=limit, id_field="task_execution_id")
+    result = _page(items, limit=limit, id_field="task_execution_id")
+    result["page"]["total"] = total
+    return result
 
 
 @router.get("/executions/{execution_id}")

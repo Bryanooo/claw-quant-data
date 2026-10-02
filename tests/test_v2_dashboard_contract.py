@@ -87,7 +87,7 @@ def test_dashboard_separates_public_services_from_internal_dependencies():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     assert "对外服务目录" in html
-    assert "上游数据依赖" in html
+    assert "上游数据源" in html
     assert "servicePrev" in html and "serviceNext" in html
     assert 'api("/api/v1/catalog")' in script
     assert "local_datasets" in script
@@ -97,9 +97,23 @@ def test_dashboard_separates_public_services_from_internal_dependencies():
 def test_dashboard_exposes_financial_data_dependency_matrix():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
-    assert "依赖能力映射" in html
+    assert "数据能力供给策略" in html
     assert "Tushare 公告解析" in html
     assert "Financial Data 必需" in html
     assert 'api("/api/v1/data/source-priorities")' in script
     assert "provider_equivalence_summary" in script
     assert "equivalence_class" in script
+
+
+def test_data_dependency_page_has_provider_and_supply_strategy_hierarchy():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    css = (ROOT / "service/dashboard/dashboard.css").read_text()
+    assert "上游数据源" in html
+    assert "数据能力供给策略" in html
+    assert 'class="strategy-grid"' in html
+    assert 'data-source-class="tushare_direct"' in html
+    assert 'data-source-class="financial_data_only"' in html
+    assert "provider-card" in script
+    assert "coverageLabels" in script
+    assert ".source-mapping-table" in css

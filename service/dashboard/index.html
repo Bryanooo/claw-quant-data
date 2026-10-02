@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Claw Quant · 数据控制台</title>
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261002-list-ux" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261002-source-redesign" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -80,8 +80,8 @@
     </section>
 
     <section class="view hidden" data-panel="sources">
-      <section class="card"><div class="card-head"><div><p class="eyebrow">INTERNAL DEPENDENCIES</p><h2>上游数据依赖</h2><p>Tushare、Financial Data 等是系统内部依赖，不是对外服务。凭据只从环境变量读取。</p></div></div><div id="sourceCards" class="source-grid"></div></section>
-      <section class="card"><div class="card-head"><div><p class="eyebrow">PROVIDER EQUIVALENCE</p><h2>依赖能力映射</h2><p>用于说明同一数据能力优先读取哪个本地数据集、缺失时依赖哪个上游；部分市场或字段重叠不算完整等价。</p></div><div class="filters"><select id="sourceDependencyClass"><option value="">全部四类</option><option value="tushare_direct">Tushare 直接等价</option><option value="tushare_derived">Tushare 确定性派生</option><option value="tushare_announcement_parse">Tushare 公告解析</option><option value="financial_data_only">Financial Data 必需</option></select><input id="sourceDependencySearch" placeholder="搜索依赖路由、Tushare 接口或数据集"/><button id="sourceDependencyQuery">查询</button></div></div><div class="metrics compact"><article><span>直接等价</span><strong id="sourceRouteCount">—</strong></article><article><span>确定性派生</span><strong id="sourceRequiredCount">—</strong></article><article><span>公告解析</span><strong id="sourceRealtimeCount">—</strong></article><article><span>Financial Data 必需</span><strong id="sourceNoLocalCount">—</strong></article></div><div class="table-wrap"><table><thead><tr><th>依赖能力</th><th>归属</th><th>Tushare 接口 / 权限</th><th>覆盖结论</th><th>本地规范数据</th><th>判定依据</th></tr></thead><tbody id="sourceDependencyRows"></tbody></table></div><footer><button id="sourceDependencyPrev">上一页</button><span id="sourceDependencyPage">第 1 页</span><button id="sourceDependencyNext">下一页</button></footer></section>
+      <section class="card source-overview"><div class="source-overview-head"><div><p class="eyebrow">UPSTREAM REGISTRY</p><h2>上游数据源</h2><p>这里只展示内部依赖。系统优先读取已落库且通过校验的数据，确实缺失时才查询外部数据源。</p></div><div class="source-kpis"><span><b id="sourceProviderCount">—</b> 个数据源</span><span><b id="sourceCapabilityCount">—</b> 项登记能力</span><span><b id="sourcePersistCount">—</b> 个可持久化</span></div></div><div id="sourceCards" class="provider-grid"></div></section>
+      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">SUPPLY STRATEGY</p><h2>数据能力供给策略</h2><p>每个能力都明确本地数据、Tushare 与 Financial Data 的职责，避免同一请求在不同来源间产生口径漂移。</p></div><span id="sourceDependencyTotal" class="count-badge">—</span></div><div class="strategy-grid"><button class="strategy-filter direct" data-source-class="tushare_direct"><span>01</span><div><strong id="sourceRouteCount">—</strong><b>Tushare 直接等价</b><small>本地数据可直接供给</small></div></button><button class="strategy-filter derived" data-source-class="tushare_derived"><span>02</span><div><strong id="sourceRequiredCount">—</strong><b>确定性派生</b><small>基于本地数据计算得到</small></div></button><button class="strategy-filter parsing" data-source-class="tushare_announcement_parse"><span>03</span><div><strong id="sourceRealtimeCount">—</strong><b>公告解析</b><small>从公告证据提取字段</small></div></button><button class="strategy-filter external" data-source-class="financial_data_only"><span>04</span><div><strong id="sourceNoLocalCount">—</strong><b>Financial Data 必需</b><small>本地暂不具备完整口径</small></div></button></div><div class="mapping-toolbar"><div><strong>能力映射明细</strong><small id="sourceDependencyResult">读取中…</small></div><div class="filters"><select id="sourceDependencyClass"><option value="">全部供给策略</option><option value="tushare_direct">Tushare 直接等价</option><option value="tushare_derived">Tushare 确定性派生</option><option value="tushare_announcement_parse">Tushare 公告解析</option><option value="financial_data_only">Financial Data 必需</option></select><input id="sourceDependencySearch" placeholder="搜索能力、接口或数据集"/><button id="sourceDependencyQuery">筛选</button></div></div><div class="table-wrap"><table class="source-mapping-table"><thead><tr><th>数据能力</th><th>供给策略</th><th>本地规范数据</th><th>上游参考</th><th>判定说明</th></tr></thead><tbody id="sourceDependencyRows"></tbody></table></div><footer><button id="sourceDependencyPrev">上一页</button><span id="sourceDependencyPage">第 1 页</span><button id="sourceDependencyNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="services">
@@ -94,6 +94,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261002-list-ux" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261002-source-redesign" defer></script>
 </body>
 </html>

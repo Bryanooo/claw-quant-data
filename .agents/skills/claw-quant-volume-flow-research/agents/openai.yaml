@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 量价与资金研究"
+  short_description: "成交量确认、资金流、两融、北向与筹码证据"
+  default_prompt: "Use $claw-quant-volume-flow-research to assess price-volume confirmation and governed flow evidence with explicit optional-data quality."

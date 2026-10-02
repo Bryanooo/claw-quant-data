@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 财务质量研究"
+  short_description: "成长、盈利、现金、资产负债与营运效率"
+  default_prompt: "Use $claw-quant-financial-quality-research to assess this company's operating and accounting quality with period and disclosure-date discipline."

@@ -1,11 +1,12 @@
 ---
 name: claw-quant-technical-research
-description: Analyze A-share price action with candlesticks, trend, momentum, volume, volatility, support/resistance, relative strength, and reproducible wave candidates from Claw Quant research APIs. Use for technical analysis, K-line charts, timing, oversold/overbought, or price-level questions; do not present subjective wave counts as facts.
+description: Synthesize a complete multi-timeframe technical view from price-trend, volume-flow, levels-risk, wave-structure, cross-asset, ETF-flow, and chart evidence. Use for full technical reports or scenario requests; use the narrower component Skills for one technical lens.
 ---
 
-# Claw Quant Technical Research
+# Claw Quant Technical Research Synthesis
 
-Run the governed endpoint and keep the requested observation date explicit:
+This is the Technical Research Agent's synthesis Skill. Start with the shared data contract and
+keep the requested observation date explicit:
 
 ```bash
 ./clawq research readiness
@@ -20,20 +21,17 @@ dividends, and capital allocation are fundamental/event evidence, not technical 
 route those questions to `$claw-quant-fundamental-research` and
 `$claw-quant-event-research`.
 
-Load only the guidance needed for the question:
+Load only the Skills needed for the question:
 
-- trend, multi-timeframe structure, candlesticks, and price gaps: read
-  [references/trend-and-momentum.md](references/trend-and-momentum.md);
-- volume, price-volume confirmation, volatility, and risk: read
-  [references/volume-and-risk.md](references/volume-and-risk.md);
-- support/resistance, pivot families, Fibonacci, and named trend boundaries: read
-  [references/levels-and-structure.md](references/levels-and-structure.md);
-- wave and Chan candidates: read
-  [references/wave-and-chan.md](references/wave-and-chan.md).
-
-Render the returned `chart.points` as a real candlestick chart when visual output is available.
-Use aligned panels for volume and momentum; overlay only the few moving averages or Bollinger
-bands that matter to the conclusion. Never substitute a dense metric table for price structure.
+- K-line, multi-timeframe trend, patterns, and momentum: `$claw-quant-price-trend-research`;
+- volume, price-volume confirmation, and governed flow evidence:
+  `$claw-quant-volume-flow-research`;
+- support/resistance, pivots, Fibonacci, volatility, and risk:
+  `$claw-quant-levels-risk-research`;
+- ZigZag, Elliott, and Chan candidates: `$claw-quant-wave-chan-research`;
+- index, ETF, sector, or SGE comparison: `$claw-quant-cross-asset-research`;
+- ETF share flows and identity evidence: `$claw-quant-etf-flow-research`;
+- visual output: `$claw-quant-market-charting`.
 
 Analyze in this order:
 
@@ -53,15 +51,7 @@ Analyze in this order:
 8. Wave and Chan candidates: describe alternate scenarios and invalidation, not a single certain
    count. Read the returned Chan variant and never turn a candidate buy/sell point into advice.
 
-Report open price gaps separately from ordinary support/resistance. A full gap is filled only after
-price crosses its far boundary; partial penetration is not a completed fill.
-
-Treat a candlestick pattern as a candidate until the next bar, trend, and volume confirm it.
-Treat oversold as a condition, not a reversal signal. State the exact formula or method behind
-every important level.
-
-Always compare `data.timeframes.1d`, `1w`, and `1mo`. A daily reversal candidate that conflicts
-with weekly/monthly trend is lower confidence. Use `data.long_horizon` for calendar-year returns,
-CAGR, 52-week position, and drawdown; do not invent annual RSI/MACD when annual history is short.
-Use Ichimoku, Donchian, and Supertrend as overlapping trend evidence, not three independent votes.
-Use StochRSI and CMF only with their price regime and volume context.
+End with a primary scenario, an alternate scenario, and explicit price/volume/time invalidation.
+Treat oversold as a condition rather than a reversal signal, and never convert wave or Chan
+candidates into trading advice. A whole-market screener is not currently part of the governed
+research contract; do not emulate one by querying lower data APIs or raw SQL.

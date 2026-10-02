@@ -1,36 +1,38 @@
 ---
 name: claw-quant-fundamental-research
-description: Analyze an A-share company's financial quality, growth, valuation, business mix, and risks from Claw Quant's governed research APIs. Use for company fundamental analysis, financial trend review, valuation, or investment-thesis requests; do not use for technical-chart-only analysis.
+description: Synthesize a complete A-share fundamental thesis from macro, industry, company-quality, valuation, shareholder-return, disclosure, and event evidence. Use for full-company fundamental reports or investment-thesis requests; use the narrower component Skills for a single lens.
 ---
 
-# Claw Quant Company Fundamental Research
+# Claw Quant Fundamental Research Synthesis
 
-Use only the governed research commands:
+This is the Fundamental Research Agent's synthesis Skill. It does not replace the component
+research Skills or bypass their evidence boundaries. Start with the shared data contract:
 
 ```bash
 ./clawq research readiness
 ./clawq research capabilities
-./clawq research fundamentals TS_CODE --periods 12 --as-of YYYY-MM-DD
-./clawq research valuation TS_CODE --lookback-days 730 --as-of YYYY-MM-DD
-./clawq research repurchase-progress TS_CODE --as-of YYYY-MM-DD
 ./clawq stock research-pack TS_CODE --financial-periods 8 --as-of YYYY-MM-DD
 ```
 
-Stop and disclose the limitation when a required dataset is missing. Treat `unknown_empty`
-as unknown, never as proof that an event did not happen. Keep every call on the same `as_of`
-cutoff and inspect `meta.quality`, `meta.provenance`, `meta.gaps`, and
-`external_data_needed` before interpreting a non-empty response.
+Keep one `as_of` cutoff and preserve each component's quality, provenance, gaps, and
+external-data requirements. Treat `unknown_empty` as unknown, never as proof that an event did
+not happen.
 
-Load only the guidance required by the question:
+Load only the Skills required by the question:
 
-- financial performance and accounting quality: read
-  [references/financial-quality.md](references/financial-quality.md);
-- valuation, dividends, repurchases, or shareholder return: read
-  [references/valuation-and-allocation.md](references/valuation-and-allocation.md);
-- full investment thesis, scenarios, risks, and falsifiers: read
-  [references/thesis-and-risks.md](references/thesis-and-risks.md).
+- macro environment and transmission: `$claw-quant-macro-research`;
+- industry fundamentals and breadth: `$claw-quant-industry-research`;
+- company growth, profitability, cash quality, and balance sheet:
+  `$claw-quant-financial-quality-research`;
+- valuation, repurchase, dividend, dilution, and shareholder return:
+  `$claw-quant-valuation-shareholder-research`;
+- official disclosures, ownership, governance, litigation, and regulatory evidence:
+  `$claw-quant-disclosure-governance-research`;
+- catalyst timing and abnormal returns: `$claw-quant-event-research`.
+- decision-driving financial, valuation, contribution, and event charts:
+  `$claw-quant-market-charting`.
 
-Build a full-company conclusion from five separate lenses:
+Build the conclusion from five separate lenses:
 
 1. Growth: compare like-for-like fiscal periods; distinguish quarterly, cumulative interim,
    and annual figures.
@@ -44,18 +46,13 @@ Build a full-company conclusion from five separate lenses:
    coverage and announcement dates are explicit. Never infer repurchase execution from price.
 5. Risks and falsifiers: state what future evidence would weaken the thesis.
 
-When several periods are available, visualize the decision-driving series—normally revenue
-growth, net-income growth, gross/net margin, ROE/ROIC, and operating-cash conversion—instead
-of replacing the whole analysis with tables. Always show the financial period, announcement
-date, market-data date, quality status, and material data gaps.
+For scenario construction, risk transmission, and falsifiers, read
+[references/thesis-and-risks.md](references/thesis-and-risks.md). Always show the financial
+period, announcement date, market-data date, quality status, and material gaps. Do not average
+component confidence into a false precision score: name the evidence that limits the thesis.
 
 Separate observed facts, derived metrics, and interpretation. Do not issue a buy/sell verdict
 from valuation alone.
 
-For the market response to a repurchase, earnings release, or other corporate action, combine
-this Skill with `$claw-quant-event-research`; use `$claw-quant-technical-research` only for the
-price and volume structure. Event attribution and chart behavior do not replace the underlying
-capital-allocation facts.
-
-This Skill covers companies, not macro regimes or industry aggregates. Route macro questions to
-`$claw-quant-macro-research` and industry questions to `$claw-quant-industry-research`.
+Use `$claw-quant-technical-research` only when the requested output also needs market-price
+structure. Technical confirmation does not repair a weak or missing fundamental premise.

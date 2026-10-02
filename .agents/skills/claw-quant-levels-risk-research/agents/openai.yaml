@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 关键价位与风险"
+  short_description: "支撑压力、枢轴、斐波那契、波动与相对风险"
+  default_prompt: "Use $claw-quant-levels-risk-research to explain reproducible levels, risk windows, and invalidation conditions."

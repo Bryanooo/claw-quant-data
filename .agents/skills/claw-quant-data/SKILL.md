@@ -11,15 +11,23 @@ undocumented response fields.
 
 ## Specialist routing
 
-Use this Skill for contract discovery, readiness, and bounded general queries. For a full
-research workflow, use the narrowest specialist Skill:
+Use this Skill for contract discovery, readiness, and bounded data queries. It is shared by the
+Fundamental Research Agent and Technical Research Agent; it does not itself perform investment
+reasoning. For interpretation, use the narrowest specialist Skill:
 
 - macro growth, inflation, liquidity, and regime: `$claw-quant-macro-research`;
 - industry fundamentals, valuation, contributors, and breadth:
   `$claw-quant-industry-research`;
-- company financial quality, valuation, and shareholder return:
-  `$claw-quant-fundamental-research`;
-- K-line, indicators, volume, levels, waves, and charting: `$claw-quant-technical-research`;
+- full company fundamental synthesis: `$claw-quant-fundamental-research`;
+- company financial quality: `$claw-quant-financial-quality-research`;
+- valuation and shareholder return: `$claw-quant-valuation-shareholder-research`;
+- disclosure and governance evidence: `$claw-quant-disclosure-governance-research`;
+- full technical synthesis: `$claw-quant-technical-research`;
+- price and trend: `$claw-quant-price-trend-research`;
+- volume and flow: `$claw-quant-volume-flow-research`;
+- levels and risk: `$claw-quant-levels-risk-research`;
+- wave and Chan structure: `$claw-quant-wave-chan-research`;
+- research charting: `$claw-quant-market-charting`;
 - catalyst and price-move attribution: `$claw-quant-event-research`;
 - index, ETF, sector, and SGE spot price comparison: `$claw-quant-cross-asset-research`;
 - ETF creation/redemption, exposure rotation, and state-team evidence:

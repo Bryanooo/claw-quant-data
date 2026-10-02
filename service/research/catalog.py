@@ -211,6 +211,14 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
 
 
 GAP_TECHNIQUES: tuple[dict[str, Any], ...] = (
+    {
+        "id": "technical-screening",
+        "name": "全市场技术条件筛选",
+        "domain": "技术面",
+        "status": "planned",
+        "action": "derive",
+        "required_contract": "受治理的候选列表、覆盖率、排序方法与审计证据",
+    },
     {"id": "analyst-revisions", "name": "一致预期与盈利修正", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "analyst"},
     {"id": "ownership-behavior", "name": "股东与机构行为", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "ownership"},
     {"id": "shareholder-return", "name": "总股东回报", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "shareholder-return"},
@@ -226,14 +234,6 @@ GAP_TECHNIQUES: tuple[dict[str, Any], ...] = (
 
 
 BACKFILL_WORKSTREAMS: tuple[dict[str, Any], ...] = (
-    {
-        "id": "etf-share-flow-history",
-        "group": "etf-flow",
-        "name": "ETF份额与规模历史",
-        "interfaces": ["etf_share_size"],
-        "status": "planned",
-        "reason": "当前只覆盖2026年5月以后，无法校准长期异常分位或回测历次官方增持事件。",
-    },
     {
         "id": "news-history",
         "group": "news",
@@ -352,10 +352,12 @@ def capability_catalog(
             "baseline_techniques": len(SERVED_TECHNIQUES) + len(GAP_TECHNIQUES),
             "currently_served": len(SERVED_TECHNIQUES),
             "planned_from_existing_sources": sum(
-                item["action"] == "backfill" for item in GAP_TECHNIQUES
+                item["action"] in {"backfill", "derive"}
+                for item in GAP_TECHNIQUES
             ),
             "external_or_constrained": sum(
-                item["action"] != "backfill" for item in GAP_TECHNIQUES
+                item["action"] not in {"backfill", "derive"}
+                for item in GAP_TECHNIQUES
             ),
             # Kept for clients that consumed the original fields. They now
             # mean the explicit v1 baseline and techniques served today.

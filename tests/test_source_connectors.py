@@ -69,6 +69,8 @@ def test_chinamoney_official_lpr_endpoint_is_registered():
     endpoint = SOURCE_REGISTRY.get_endpoint("chinamoney", "lpr_history")
 
     assert source.display_name.startswith("中国货币网")
+    assert source.configuration["canonical_datasets"] == ["cn_lpr"]
+    assert "LPR" in source.configuration["business_scope"]
     assert endpoint.cadence == "monthly"
     assert endpoint.completeness_policy["authoritative"] is True
 

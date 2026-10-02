@@ -54,7 +54,7 @@
 | 多资产技术面 | 股票/指数/ETF/板块/黄金对应行情、复权和基准数据集 | 同一套多周期技术分析模型 |
 | 事件研究 | `stock_daily`、`index_daily` | 事件窗口收益与累计异常收益 |
 | 市场宽度 | `stock_daily`、`limit_list_d` | 涨跌分布、均线扩散、涨跌停情绪 |
-| 宏观状态 | `cn_gdp`、`cn_pmi`、`cn_cpi`、`cn_ppi`、`cn_m`、`sf_month`、`shibor`、`shibor_lpr` | 增长、通胀、流动性状态；LPR为中国货币网+Tushare |
+| 宏观状态 | `cn_gdp`、`cn_pmi`、`cn_cpi`、`cn_ppi`、`cn_m`、`sf_month`、`shibor`、`cn_lpr` | 增长、通胀、流动性状态；`cn_lpr` 由中国货币网官方数据优先、Tushare 兜底 |
 | 宏观主题序列 | 同上 | 增长、通胀或流动性的有界历史序列 |
 | ETF资金流 | `etf_share_size`、`etf_basic`、`fund_basic`、`index_daily` | 份额申赎、估算资金流和市场表现 |
 | 国家队ETF信号 | 同ETF资金流 | 市场流量/疑似/确认三级证据，禁止无持有人证据的确认归因 |

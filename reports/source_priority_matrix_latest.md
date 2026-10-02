@@ -1,6 +1,6 @@
 # 数据源优先级矩阵
 
-> 生成时间：`2026-10-01T15:09:52.222228+00:00`。机器可读版本见 [`source_priority_matrix_latest.json`](source_priority_matrix_latest.json)。
+> 生成时间：`2026-10-02T11:06:19.905188+00:00`。机器可读版本见 [`source_priority_matrix_latest.json`](source_priority_matrix_latest.json)。
 
 ## 统一规则
 
@@ -502,7 +502,7 @@
 | `/api/v1/info/research-reports` | `local_overlap_adapter_pending` | 否 | `local_dataset_or_explicit_provider_gateway` | `report_rc` | `adapter_required` |
 | `/api/v1/info/tag/category` | `financial_data_primary_no_local_canonical` | 是 | `explicit_provider_gateway_only` | — | `canonical_dataset_required` |
 | `/api/v1/info/tag/query` | `financial_data_primary_no_local_canonical` | 是 | `explicit_provider_gateway_only` | — | `canonical_dataset_required` |
-| `/api/v1/macro/data-query` | `local_overlap_adapter_pending` | 否 | `local_dataset_or_explicit_provider_gateway` | `cn_cpi`, `cn_gdp`, `cn_m`, `cn_pmi`, `cn_ppi`, `sf_month`, `shibor`, `shibor_lpr`, `libor`, `hibor`, `us_tbr`, `us_tltr`, `us_trltr`, `us_trycr`, `us_tycr` | `adapter_required` |
+| `/api/v1/macro/data-query` | `local_overlap_adapter_pending` | 否 | `local_dataset_or_explicit_provider_gateway` | `cn_cpi`, `cn_gdp`, `cn_m`, `cn_pmi`, `cn_ppi`, `sf_month`, `shibor`, `cn_lpr`, `libor`, `hibor`, `us_tbr`, `us_tltr`, `us_trltr`, `us_trycr`, `us_tycr` | `adapter_required` |
 | `/api/v1/macro/meta-search` | `financial_data_primary_no_local_canonical` | 是 | `explicit_provider_gateway_only` | — | `canonical_dataset_required` |
 | `/api/v1/onecode/query` | `local_overlap_adapter_pending` | 否 | `local_dataset_or_explicit_provider_gateway` | `stock_daily`, `stock_daily_basic`, `index_daily`, `fund_daily`, `fund_nav`, `financial_indicator` | `adapter_required` |
 | `/api/v1/onecode/recall` | `financial_data_primary_no_local_canonical` | 是 | `explicit_provider_gateway_only` | — | `canonical_dataset_required` |

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01T15:09:52.222228+00:00",
+  "generated_at": "2026-10-02T11:06:19.905188+00:00",
   "policy": "local canonical DB first; quota source only by explicit policy",
   "summary": {
     "routes": 163,
@@ -4430,7 +4430,7 @@
         "cn_ppi",
         "sf_month",
         "shibor",
-        "shibor_lpr",
+        "cn_lpr",
         "libor",
         "hibor",
         "us_tbr",

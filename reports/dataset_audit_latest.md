@@ -1,17 +1,17 @@
 # 全量数据集严格审计报告
 
-生成时间：`2026-10-01T00:07:57.633950+08:00`
+生成时间：`2026-10-02T19:07:55.611475+08:00`
 
 ## 结论摘要
 
 - 数据集：194；具备审计能力：194；缺少审计能力：0。
 - 审计模式：`{'exhaustive_snapshot': 32, 'expected_partition': 50, 'observed_scope_transport': 112}`。
-- 业务数据综合状态：`{'complete': 107, 'empty': 30, 'unverified': 56}`；最新有界审计状态：`{'complete': 124, 'empty': 32, 'unverified': 38}`。
-- 已确认缺失分区：0；存在数据但不完整/缺少传输证明：0。
+- 业务数据综合状态：`{'complete': 109, 'empty': 21, 'gaps': 2, 'unverified': 61}`；最新有界审计状态：`{'complete': 126, 'empty': 21, 'gaps': 2, 'unverified': 45}`。
+- 已确认缺失分区：0；存在数据但不完整/缺少传输证明：2。
 - 数据集历史可用起点尚未证明、不得直接当成缺失的候选分区：91930。
 - 旧规则遗留、必须重审后才能判定的分区：0。
-- 补采状态：`{'evidence_sidecar_not_applicable': 1, 'history_boundary_review': 19, 'manual_scope_required': 34, 'not_needed': 137, 'observed_scope_not_globally_provable': 3}`。
-- V2：控制面 `installed`；业务数据集基线映射 193/193；现有 V2 补采/修复实例 9795；按任务×逻辑周期仍需 0 个实例。
+- 补采状态：`{'attention_after_retry': 2, 'evidence_sidecar_not_applicable': 1, 'history_boundary_review': 17, 'manual_scope_required': 34, 'not_needed': 130, 'observed_scope_not_globally_provable': 10}`。
+- V2：控制面 `installed`；业务数据集基线映射 193/193；现有 V2 补采/修复实例 9799；按任务×逻辑周期仍需 2 个实例。
 
 > `success` 只表示任务执行完成；“最新有界审计通过”也不自动等于全部历史完整。综合状态还会合并全历史分区账本、旧规则版本和活动补采。`unverified` 不得解释为完整。
 
@@ -39,15 +39,16 @@
 | cb_rate | exhaustive_snapshot | unverified | 0 | 0 | 0/0 | manual_scope_required | cb_rate/active | — |
 | cb_rating | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | cb_rating/active | — |
 | cb_share | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | cb_share/active | — |
-| ccass_hold | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | ccass_hold/active | — |
+| ccass_hold | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | ccass_hold/active | — |
 | ccass_hold_detail | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | ccass_hold_detail/active | — |
 | ci_daily | expected_partition | complete | 0 | 0 | 0/0 | not_needed | ci_daily/active | — |
 | ci_index_member | exhaustive_snapshot | unverified | 0 | 0 | 0/0 | manual_scope_required | ci_index_member/active | — |
-| cn_cpi | expected_partition | empty | 0 | 0 | 0/0 | not_needed | cn_cpi/active | — |
-| cn_gdp | expected_partition | empty | 0 | 0 | 0/0 | not_needed | cn_gdp/active | — |
-| cn_m | expected_partition | empty | 0 | 0 | 0/0 | not_needed | cn_m/active | — |
+| cn_cpi | expected_partition | complete | 0 | 0 | 0/0 | not_needed | cn_cpi/active | — |
+| cn_gdp | expected_partition | complete | 0 | 0 | 0/0 | not_needed | cn_gdp/active | — |
+| cn_lpr | expected_partition | complete | 0 | 0 | 0/0 | not_needed | cn_lpr/active | — |
+| cn_m | expected_partition | complete | 0 | 0 | 0/0 | not_needed | cn_m/active | — |
 | cn_pmi | expected_partition | complete | 0 | 0 | 0/0 | not_needed | cn_pmi/active | — |
-| cn_ppi | expected_partition | empty | 0 | 0 | 0/0 | not_needed | cn_ppi/active | — |
+| cn_ppi | expected_partition | complete | 0 | 0 | 0/0 | not_needed | cn_ppi/active | — |
 | cn_schedule | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | cn_schedule/active | — |
 | cyq_chips | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | cyq_chips/active | — |
 | cyq_perf | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | cyq_perf/active | — |
@@ -73,7 +74,7 @@
 | fina_mainbz | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | fina_mainbz/active | — |
 | financial_indicator | expected_partition | complete | 0 | 0 | 0/0 | not_needed | financial_indicator/active | — |
 | forecast | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | forecast/active | — |
-| forex_daily | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | fx_daily/active | — |
+| forex_daily | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | fx_daily/active | — |
 | ft_limit | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | ft_limit/active | — |
 | fund_adj | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | fund_adj/active | — |
 | fund_basic | exhaustive_snapshot | unverified | 0 | 0 | 0/0 | manual_scope_required | fund_basic/active | — |
@@ -102,8 +103,8 @@
 | gz_index | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | gz_index/active | — |
 | hibor | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | hibor/active | — |
 | hk_basic | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | hk_basic/active | — |
-| hk_daily | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | hk_daily/active | — |
-| hk_hold | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | hk_hold/active | — |
+| hk_daily | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | hk_daily/active | — |
+| hk_hold | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | hk_hold/active | — |
 | hk_tradecal | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | hk_tradecal/active | — |
 | hm_list | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | hm_list/active | — |
 | hsgt_top10 | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | hsgt_top10/active | — |
@@ -128,14 +129,14 @@
 | limit_list_ths | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | limit_list_ths/active | — |
 | limit_step | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | limit_step/active | — |
 | major_news | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | major_news/active | — |
-| margin | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | margin/active | — |
-| margin_detail | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | margin_detail/active | — |
+| margin | expected_partition | gaps | 0 | 1 | 0/0 | attention_after_retry | margin/active | 2026-09-30 |
+| margin_detail | expected_partition | gaps | 0 | 1 | 0/0 | attention_after_retry | margin_detail/active | 2026-09-30 |
 | margin_secs | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | margin_secs/active | — |
 | mkt_idx_bmk | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | mkt_idx_bmk/active | — |
 | moneyflow | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | moneyflow/active | — |
 | moneyflow_cnt_ths | expected_partition | complete | 0 | 0 | 0/0 | not_needed | moneyflow_cnt_ths/active | — |
 | moneyflow_dc | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | moneyflow_dc/active | — |
-| moneyflow_hsgt | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | moneyflow_hsgt/active | — |
+| moneyflow_hsgt | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | moneyflow_hsgt/active | — |
 | moneyflow_ind_dc | expected_partition | complete | 0 | 0 | 0/0 | not_needed | moneyflow_ind_dc/active | — |
 | moneyflow_ind_ths | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | moneyflow_ind_ths/active | — |
 | moneyflow_mkt_dc | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | moneyflow_mkt_dc/active | — |
@@ -152,12 +153,11 @@
 | report_rc | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | report_rc/active | — |
 | repurchase | expected_partition | complete | 0 | 0 | 0/0 | not_needed | repurchase/active | — |
 | rt_hk_k | exhaustive_snapshot | unverified | 0 | 0 | 0/0 | manual_scope_required | rt_hk_k/active | — |
-| sf_month | expected_partition | empty | 0 | 0 | 0/0 | not_needed | sf_month/active | — |
+| sf_month | expected_partition | complete | 0 | 0 | 0/0 | not_needed | sf_month/active | — |
 | sge_basic | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | sge_basic/active | — |
 | sge_daily | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | sge_daily/active | — |
 | share_float | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | share_float/active | — |
 | shibor | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | shibor/active | — |
-| shibor_lpr | expected_partition | empty | 0 | 0 | 0/0 | not_needed | shibor_lpr/active | — |
 | shibor_quote | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | shibor_quote/active | — |
 | slb_len | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | slb_len/active | — |
 | slb_len_mm | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | slb_len_mm/active | — |
@@ -189,7 +189,7 @@
 | stock_hsgt | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | stock_hsgt/active | — |
 | stock_limit | expected_partition | complete | 0 | 0 | 0/0 | not_needed | stk_limit/active | — |
 | stock_st | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | stock_st/active | — |
-| stock_suspend | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | suspend_d/active | — |
+| stock_suspend | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | suspend_d/active | — |
 | sw_daily | expected_partition | complete | 0 | 0 | 0/0 | not_needed | sw_daily/active | — |
 | sz_daily_info | expected_partition | unverified | 0 | 0 | 0/0 | history_boundary_review | sz_daily_info/active | — |
 | tdx_daily | expected_partition | complete | 0 | 0 | 0/0 | not_needed | tdx_daily/active | — |
@@ -203,7 +203,7 @@
 | top10_holders | observed_scope_transport | unverified | 0 | 0 | 0/0 | manual_scope_required | top10_holders/active | — |
 | top_inst | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | top_inst/active | — |
 | top_list | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | top_list/active | — |
-| trade_calendar | observed_scope_transport | complete | 0 | 0 | 0/0 | not_needed | trade_cal/active | — |
+| trade_calendar | observed_scope_transport | unverified | 0 | 0 | 0/0 | observed_scope_not_globally_provable | trade_cal/active | — |
 | tushare_raw | exhaustive_snapshot | unverified | 0 | 0 | 0/0 | evidence_sidecar_not_applicable | —/not_applicable | — |
 | us_basic | exhaustive_snapshot | complete | 0 | 0 | 0/0 | not_needed | us_basic/active | — |
 | us_tbr | observed_scope_transport | empty | 0 | 0 | 0/0 | not_needed | us_tbr/active | — |
@@ -218,6 +218,8 @@
 
 | 任务 | 逻辑周期实例数 | 输出数据集 | 周期样例 |
 |---|---:|---|---|
+| margin | 1 | margin | 2026-09-30 |
+| margin_detail | 1 | margin_detail | 2026-09-30 |
 
 ## 口径
 

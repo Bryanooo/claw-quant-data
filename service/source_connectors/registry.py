@@ -120,7 +120,10 @@ TUSHARE_SOURCE = SourceSpec(
     base_url="https://api.tushare.pro",
     timezone="Asia/Shanghai",
     license_policy={"persist_raw_records": True},
-    configuration={"adapter": "tushare"},
+    configuration={
+        "adapter": "tushare",
+        "business_scope": "证券、基金、指数、宏观等批量基础数据",
+    },
 )
 
 
@@ -135,7 +138,11 @@ CHINAMONEY_SOURCE = SourceSpec(
         "persist_raw_records": True,
         "official_public_data": True,
     },
-    configuration={"adapter": "chinamoney"},
+    configuration={
+        "adapter": "chinamoney",
+        "business_scope": "中国贷款市场报价利率（LPR）历史",
+        "canonical_datasets": ["cn_lpr"],
+    },
 )
 
 
@@ -157,6 +164,7 @@ FINANCIAL_DATA_SOURCE = SourceSpec(
         "adapter": "financial_data",
         "api_version": "1.6.0",
         "catalog_discovered_routes": 163,
+        "business_scope": "本地规范数据无法覆盖时的限额按需补充",
     },
 )
 

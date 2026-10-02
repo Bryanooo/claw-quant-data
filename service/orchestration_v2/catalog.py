@@ -48,12 +48,17 @@ _EQUIVALENT_ENDPOINT_GROUPS: dict[str, tuple[str, ...]] = {
 
 
 _OUTPUT_DATASET_OVERRIDES = {
+    "shibor_lpr": "cn_lpr",
     "daily": "stock_daily",
     "fx_daily": "forex_daily",
     "stk_limit": "stock_limit",
     "suspend_d": "stock_suspend",
     "ths_daily": "industry_daily",
     "trade_cal": "trade_calendar",
+}
+
+_TASK_KEY_OVERRIDES = {
+    "shibor_lpr": "cn_lpr",
 }
 
 
@@ -140,9 +145,9 @@ _DERIVED_TASKS = (
     ),
     TransformationTaskBlueprint(
         "macro_regime",
-        ("cn_gdp", "cn_cpi", "cn_pmi", "cn_ppi", "cn_m", "sf_month", "shibor_lpr"),
+        ("cn_gdp", "cn_cpi", "cn_pmi", "cn_ppi", "cn_m", "sf_month", "cn_lpr"),
         ("macro_regime",),
-        ("cn_gdp", "cn_cpi", "cn_pmi", "cn_ppi", "cn_m", "sf_month", "shibor_lpr"),
+        ("cn_gdp", "cn_cpi", "cn_pmi", "cn_ppi", "cn_m", "sf_month", "cn_lpr"),
         60,
     ),
     TransformationTaskBlueprint(
@@ -185,8 +190,9 @@ def acquisition_task_blueprints() -> tuple[AcquisitionTaskBlueprint, ...]:
                 EndpointRef("chinamoney", "lpr_history"),
                 *endpoint_refs,
             )
+        task_key = _TASK_KEY_OVERRIDES.get(endpoint_key, endpoint_key)
         tasks.append(AcquisitionTaskBlueprint(
-            task_key=endpoint_key,
+            task_key=task_key,
             endpoints=endpoint_refs,
             output_datasets=(
                 _OUTPUT_DATASET_OVERRIDES.get(endpoint_key, endpoint_key),

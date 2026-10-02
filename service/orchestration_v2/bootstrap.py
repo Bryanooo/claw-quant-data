@@ -93,7 +93,7 @@ def task_documents(
                 ),
             ),
         ]
-        if len(task.endpoints) > 1 and task.task_key == "shibor_lpr":
+        if len(task.endpoints) > 1 and task.task_key == "cn_lpr":
             nodes.append(_node("merge", "merge", "builtin.merge.v1"))
         nodes.extend((
             _node("validate", "validate", "builtin.validate.v1"),

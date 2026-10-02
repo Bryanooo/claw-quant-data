@@ -259,7 +259,7 @@ class CoverageRepository:
     @staticmethod
     def _date_expression(rule: CoverageRule) -> sql.Composed:
         column = sql.Identifier(rule.date_column)
-        # Some upstream monthly series (for example shibor_lpr) persist the
+        # Some upstream monthly series (for example cn_lpr) persist the
         # publication day as a real DATE, while the coverage contract is one
         # observation per calendar month. Normalize those physical dates to
         # the same month-end key produced by ``completed_months``.

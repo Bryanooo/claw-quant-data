@@ -161,7 +161,14 @@ _NORMALIZED_READ_VIEW_OVERRIDES = {
     # exposing a provider-neutral current view to readers and coverage audits.
     # This preserves the typed ingestion contract and makes merge semantics
     # explicit instead of pretending the canonical view is a storage table.
-    "shibor_lpr": "canonical_shibor_lpr",
+    "shibor_lpr": "canonical_cn_lpr",
+}
+
+# Upstream endpoint names are transport identities, not public dataset names.
+# Tushare calls its combined rate endpoint ``shibor_lpr`` even though the
+# returned series is LPR only; expose an unambiguous provider-neutral name.
+_NORMALIZED_DATASET_NAME_OVERRIDES = {
+    "shibor_lpr": "cn_lpr",
 }
 
 _NORMALIZED_SOURCE_OVERRIDES = {
@@ -500,7 +507,10 @@ def build_dataset_registry() -> DatasetRegistry:
         )
         datasets.append(
             DatasetSpec(
-                name=contract.api_name,
+                name=_NORMALIZED_DATASET_NAME_OVERRIDES.get(
+                    contract.api_name,
+                    contract.api_name,
+                ),
                 table=table_name,
                 description=f"{contract.title}（契约驱动标准化数据）",
                 category=contract.category,

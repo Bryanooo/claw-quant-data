@@ -414,8 +414,9 @@ _EXPLICIT_RULES = [
             revision=2,
         ),
         _rule(
-            "shibor_lpr",
+            "cn_lpr",
             CoverageStrategy.CALENDAR_MONTHLY,
+            collection_api_name="shibor_lpr",
             entity_column=None,
             grace_days=25,
             default_lookback_days=3650,

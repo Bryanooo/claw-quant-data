@@ -314,7 +314,7 @@ class ResearchRepository:
                 """
                 WITH latest AS (
                     SELECT DISTINCT ON (date) *
-                    FROM tushare_norm_shibor_lpr
+                    FROM canonical_cn_lpr
                     WHERE date IS NOT NULL
                     ORDER BY date, _source_collected_at DESC, _last_seen_at DESC
                 )

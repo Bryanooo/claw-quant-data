@@ -37,6 +37,7 @@ from service.tushare_policy import TusharePolicyRegistry
 # upstream APIs use a different transport name; this mapping keeps the V2 task,
 # normalized table and coverage rule on one stable dataset identity.
 DATASET_API_ALIASES = {
+    "cn_lpr": "shibor_lpr",
     "forex_daily": "fx_daily",
     "industry_daily": "ths_daily",
     "stock_suspend": "suspend_d",

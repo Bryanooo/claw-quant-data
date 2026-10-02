@@ -5,7 +5,9 @@ description: Produce chart-led daily, weekly, monthly, and long-horizon technica
 
 # Technical Research
 
-Use the stock `/technicals` endpoint. Analyze monthly, weekly, then daily trend; use long-horizon
+Read `/readiness` and `/capabilities`, keep one `as_of`, then use the stock `/technicals` and
+`/capital-flow` endpoints. Inspect quality, provenance, gaps, and external-data requirements.
+Analyze monthly, weekly, then daily trend; use long-horizon
 calendar returns and drawdown separately. Cover price structure, MA/MACD/ADX, RSI/KDJ/CCI/
 Williams/MFI/StochRSI, volume activity and price-volume regimes, breakout confirmation,
 OBV/A-D divergence, PVT/Force/EOM, turnover and daily anchored-VWAP proxies,
@@ -18,3 +20,7 @@ variant before interpreting fractals, strokes, centers, divergence, or buy/sell 
 ZigZag, Elliott, and Chan labels are scenarios; oversold is a condition, not a reversal signal.
 Daily anchored-VWAP values are explicitly proxies; never claim an intraday volume profile, CVD,
 or order imbalance without minute, trade, or Level-2 data.
+
+Repurchases, dividends, and capital allocation are fundamental/event evidence rather than
+technical indicators. Route them to the fundamental and event specialists; do not infer a
+corporate action from chart behavior.

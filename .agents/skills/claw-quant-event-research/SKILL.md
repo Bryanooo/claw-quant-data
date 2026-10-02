@@ -8,6 +8,8 @@ description: Investigate why an A-share moved by combining Claw Quant price/even
 Start with the governed research surface:
 
 ```bash
+./clawq research readiness
+./clawq research capabilities
 ./clawq stock research-pack TS_CODE --lookback-days 180
 ./clawq research technicals TS_CODE --lookback-days 400
 ./clawq research event-study TS_CODE --event-date EVENT_DATE --pre-days 5 --post-days 10

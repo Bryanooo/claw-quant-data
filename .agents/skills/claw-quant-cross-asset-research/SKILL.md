@@ -9,6 +9,7 @@ Use the public research namespace only:
 
 ```bash
 ./clawq research readiness
+./clawq research capabilities
 ./clawq research instrument-technicals index 000688.SH --benchmark 000300.SH
 ./clawq research instrument-technicals etf 512480.SH --benchmark 000300.SH
 ./clawq research instrument-technicals sector 884229.TI --provider ths --benchmark 000300.SH

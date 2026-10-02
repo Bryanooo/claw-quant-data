@@ -1,0 +1,37 @@
+apiVersion: hibro.ai/v1alpha1
+kind: Agent
+metadata:
+  name: Claw Quant Fundamental Research Agent
+  slug: claw-quant-fundamental-research
+  description: Fundamental research across macro, industry, company quality, valuation, governance and events using governed Claw Quant evidence
+spec:
+  engine: codex
+  instructions: instructions.md
+  skills:
+    - name: claw-quant-data
+      path: skills/claw-quant-data
+    - name: macro-research
+      path: skills/macro-research
+    - name: industry-research
+      path: skills/industry-research
+    - name: financial-quality-research
+      path: skills/financial-quality-research
+    - name: valuation-shareholder-research
+      path: skills/valuation-shareholder-research
+    - name: disclosure-governance-research
+      path: skills/disclosure-governance-research
+    - name: event-research
+      path: skills/event-research
+    - name: market-charting
+      path: skills/market-charting
+    - name: fundamental-research
+      path: skills/fundamental-research
+  workspace:
+    strategy: persistent
+    access: read-only
+  approvalPolicy: strict
+  networkPolicy: allow
+  maxConcurrency: 2
+  modalities:
+    - text
+    - image

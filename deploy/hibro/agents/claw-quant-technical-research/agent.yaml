@@ -1,0 +1,37 @@
+apiVersion: hibro.ai/v1alpha1
+kind: Agent
+metadata:
+  name: Claw Quant Technical Research Agent
+  slug: claw-quant-technical-research
+  description: Multi-timeframe price, volume, flow, levels, risk, wave, ETF and cross-asset technical research over governed Claw Quant evidence
+spec:
+  engine: codex
+  instructions: instructions.md
+  skills:
+    - name: claw-quant-data
+      path: skills/claw-quant-data
+    - name: price-trend-research
+      path: skills/price-trend-research
+    - name: volume-flow-research
+      path: skills/volume-flow-research
+    - name: levels-risk-research
+      path: skills/levels-risk-research
+    - name: wave-chan-research
+      path: skills/wave-chan-research
+    - name: cross-asset-research
+      path: skills/cross-asset-research
+    - name: etf-flow-research
+      path: skills/etf-flow-research
+    - name: market-charting
+      path: skills/market-charting
+    - name: technical-research
+      path: skills/technical-research
+  workspace:
+    strategy: persistent
+    access: read-only
+  approvalPolicy: strict
+  networkPolicy: allow
+  maxConcurrency: 2
+  modalities:
+    - text
+    - image

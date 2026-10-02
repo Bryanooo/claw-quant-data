@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 波浪与缠论"
+  short_description: "可审计的ZigZag、波浪、分型、中枢与背驰候选"
+  default_prompt: "Use $claw-quant-wave-chan-research to build primary and alternate structural scenarios with explicit invalidation."

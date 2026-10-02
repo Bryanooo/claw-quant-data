@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 公告与治理证据"
+  short_description: "公告原文、持仓治理、诉讼监管的证据分级"
+  default_prompt: "Use $claw-quant-disclosure-governance-research to verify this governance or disclosure claim against official evidence and disclose unavailable coverage."

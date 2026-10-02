@@ -638,14 +638,19 @@ def test_capability_catalog_separates_derived_backfill_and_new_sources():
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
     assert catalog["summary"]["agent_endpoints"] == 18
     assert catalog["summary"]["derived_endpoints"] == 15
-    assert catalog["summary"]["backfill_workstreams"] == 7
+    assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 6
-    assert catalog["summary"]["baseline_techniques"] == 72
+    assert catalog["summary"]["baseline_techniques"] == 73
     assert catalog["summary"]["currently_served"] == 61
-    assert catalog["summary"]["planned_from_existing_sources"] == 3
+    assert catalog["summary"]["planned_from_existing_sources"] == 4
     assert catalog["summary"]["external_or_constrained"] == 8
     assert len(catalog["techniques"]["served"]) == 61
-    assert len(catalog["techniques"]["gaps"]) == 11
+    assert len(catalog["techniques"]["gaps"]) == 12
+    screening = next(
+        item for item in catalog["techniques"]["gaps"]
+        if item["id"] == "technical-screening"
+    )
+    assert screening["action"] == "derive"
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"
     assert analyst["active"] == 2

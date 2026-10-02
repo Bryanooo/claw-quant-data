@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 估值与股东回报"
+  short_description: "历史估值、同行比较、回购执行与资本配置"
+  default_prompt: "Use $claw-quant-valuation-shareholder-research to analyze valuation and executed shareholder return without confusing announcements with cash delivered."

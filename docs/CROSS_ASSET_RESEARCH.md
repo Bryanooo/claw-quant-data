@@ -50,5 +50,5 @@ v7 已将 `adj_factor`、`fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` �
 - `Au99.99` 是人民币计价国内黄金。归因全球金价与汇率贡献需要稳定的国际黄金和
   USD/CNH 历史；当前接口只对国内现货本身给出技术结论。
 
-Hibro Node 部署包见 `deploy/hibro/agents/claw-quant-research`。该包以不可变 Revision
+Hibro Node 部署包见 `deploy/hibro/agents/claw-quant-technical-research`。该包以不可变 Revision
 承载研究 Agent 与八个只读 Skill，不包含 Token、数据库凭据或管理接口。

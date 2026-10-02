@@ -17,53 +17,49 @@ Claw Quant 保存可复现的研究事实，Skill 保存可复用的研究过程
 公式、口径、证据等级或数据质量判断不能只写在 Skill 中，否则 CLI、Dashboard 和
 不同 Agent 会产生不一致结果。Skill 不应直接访问数据库，也不能用叙事覆盖接口告警。
 
-## 当前 Skill 拆分
+## 以 Agent 为中心的组织方式
 
-### `claw-quant-data`
+Skill 不再平铺给一个万能 Agent。Hibro 交付两个独立 Agent，每个 Agent 组合完成自身
+研究任务所需的数据 Skill、方法 Skill 和综合 Skill。两个 Agent 可以复用同一个逻辑
+Skill，但各自的部署包保持自包含、可独立发布和回滚。
 
-研究层总入口和路由器。负责 readiness、capabilities、公共契约和通用边界，不负责
-生成一份包罗所有方法的巨型报告。
+### 基本面研究 Agent
 
-### `claw-quant-fundamental-research`
+部署位置：`deploy/hibro/agents/claw-quant-fundamental-research`
 
-公司财务质量、成长、现金流、资本效率、主营结构、估值和股东回报。它是公司层
-Skill，不再承载宏观和行业研究。主文件只负责工作流路由，财务质量、估值/资本配置、
-投资逻辑/反证分别按需加载 reference，避免把所有方法塞进单个上下文。
+| Skill | 职责 |
+|---|---|
+| `claw-quant-data` | readiness、capabilities、统一 `as_of`、来源和缺口；不做投资判断 |
+| `macro-research` | 增长、通胀、流动性及其向公司经营和估值的传导 |
+| `industry-research` | 行业财务、估值、贡献集中度、成分宽度和可比边界 |
+| `financial-quality-research` | 成长、盈利、现金转换、资产负债、营运效率和主营构成 |
+| `valuation-shareholder-research` | 历史/同行估值、情景输入、回购执行和股东回报边界 |
+| `disclosure-governance-research` | 公告、持仓、治理、诉讼和监管的官方证据账本 |
+| `event-research` | 事件时间线、异常收益、驱动排序和因果强度 |
+| `market-charting` | 财务趋势、估值、贡献度、事件和场景图表 |
+| `fundamental-research` | 组合前述证据，形成情景、风险和反证条件 |
 
-### `claw-quant-technical-research`
+宏观历史 `as_of` 仍不是严格首次发布版本。LPR 对外统一为 `cn_lpr`，中国货币网官方
+发布记录优先；Tushare `shibor_lpr` 只是采集回退接口名，不能把 LPR 与 Shibor 混称。
 
-个股 K 线、日周月趋势、动量、量价、波动、关键价位、枢轴、波浪和缠论候选。
-图表布局和多指标解释属于 Skill；OHLCV 复权、指标、关键价位公式及风险计算属于服务端。
-趋势动量、价量风险、关键价位、波浪缠论四类方法按问题渐进加载。
+### 技术面研究 Agent
 
-### `claw-quant-macro-research`
+部署位置：`deploy/hibro/agents/claw-quant-technical-research`
 
-增长、通胀、货币社融、利率与宏观状态。服务端提供带观察期的原始序列和透明状态规则；
-Skill 负责传导路径、事件联动、冲突证据和结论边界。当前历史 `as_of` 不是严格首次发布
-版本快照，涉及“当时已知信息”必须补官方发布日期与历史版本。
-LPR 对外统一为 `cn_lpr`，中国货币网官方发布记录优先；Tushare `shibor_lpr` 只是采集
-回退接口名，不能因此把 LPR 与 Shibor 混为同一利率。
+| Skill | 职责 |
+|---|---|
+| `claw-quant-data` | 行情研究契约、质量、来源、时间边界和缺口 |
+| `price-trend-research` | 日周月价格结构、K线、趋势、动量和缺口 |
+| `volume-flow-research` | 量价确认、累计量能、资金流、两融、北向、大宗和筹码 |
+| `levels-risk-research` | 支撑压力、枢轴、斐波那契、波动、下行和基准风险 |
+| `wave-chan-research` | 可审计 ZigZag、Elliott 和缠论候选及失效条件 |
+| `cross-asset-research` | 指数、ETF、行业与 SGE 现货的统一技术比较 |
+| `etf-flow-research` | ETF 份额申赎、暴露迁移和国家队证据边界 |
+| `market-charting` | K线、财务趋势、资金流、宽度和跨资产图表 |
+| `technical-research` | 组合证据形成主情景、备选情景和失效条件 |
 
-### `claw-quant-industry-research`
-
-按明确供应方和时点成员研究行业财务聚合、估值、贡献集中度、内部宽度与价格结构。
-服务端负责成员时点、财务口径和覆盖率；Skill 负责行业可比性、供需逻辑与经营驱动。
-上市公司聚合收入不能冒充全行业需求。
-
-### `claw-quant-event-research`
-
-公告、政策、新闻与价格变化的事件归因。事件收益和 CAR 属于服务端；官方材料搜索、
-时间线、因果强度和冲突证据属于 Skill。媒体标题不能直接成为因果事实。
-
-### `claw-quant-cross-asset-research`
-
-指数、ETF、行业板块和 SGE 现货的价格技术比较。它关注不同资产的趋势和相对强弱，
-不负责 ETF 投资者身份或资金迁移判断。
-
-### `claw-quant-etf-flow-research`
-
-ETF 份额申赎、指数暴露资金流、持续性、稳定市场特征和国家队证据分级。流量计算与
-证据状态属于服务端；多窗口编排、官方持有人材料核验和研究表达属于 Skill。
+全市场技术筛选仍缺少受治理的候选列表接口，因此暂不创建空壳 `technical-screening`
+Skill。应先实现服务端筛选契约、覆盖率和审计，再将它加入技术面 Agent。
 
 ## 研究能力归属
 
@@ -92,16 +88,29 @@ ETF 份额申赎、指数暴露资金流、持续性、稳定市场特征和国�
 - 行业产能、库存、产品价格、订单和供需高频数据仍需要分行业新增数据源，不能用
   板块行情或上市公司财务聚合冒充。
 
+## 当前数据缺口
+
+核心财务与日周月技术研究所需的必需数据已经就绪，但高级研究仍受以下缺口约束：
+
+- `fina_mainbz` 未严格验证，主营构成结论需要降级；
+- `margin_detail` 有部分周期缺口，`hk_hold` 已过期，`cyq_perf` 未严格验证；
+- 公告全文、治理/诉讼/监管、分析师预期修正和完整时点持仓仍不完整；
+- 行业产能、库存、产品价格、订单与供需缺少统一合法数据源；
+- 分钟历史受调用额度约束，逐笔成交和 Level-2 尚无数据源，不能提供真实微观结构；
+- 严格宏观首次发布版本、财政脉冲、外部平衡和海外政策仍是部分能力。
+
+`capabilities` 负责公开这些缺口；Skill 只能降低结论或请求官方证据，不能绕过告警。
+
 ## 组合使用
 
-完整个股研究通常组合宏观、行业、公司基本面、技术面和事件 Skill；ETF 研究组合
-宏观、跨资产技术和 ETF 资金 Skill。总入口 Skill 只负责路由和能力检查。所有组合都必须共享同一个
-`as_of`，保留每个接口的 `meta.quality`、`provenance` 和缺口，避免把不同数据时点的
-结果拼成虚假的同步结论。
+基本面 Agent 与技术面 Agent 可以针对同一证券分别产出结论，但不得互相覆盖证据缺口。
+需要联合报告时，由调用方并列两份结论并解释冲突。所有组件共享同一个 `as_of`，保留
+每个接口的 `meta.quality`、`provenance` 和缺口，避免把不同数据时点拼成虚假同步结论。
 
 ## 仓库版与 Hibro 交付版
 
 `.agents/skills/` 是完整方法与渐进式 reference 的权威版本；
-`deploy/hibro/agents/claw-quant-research/skills/` 是面向 Hibro Agent 的精简交付版本。
-两者允许详细程度不同，但必须保持同一组八个研究域、相同公共研究边界、相同能力归属
-和关键数据语义。契约测试会校验这些不变量，避免只更新一边造成部署漂移。
+两个 `deploy/hibro/agents/claw-quant-*-research/skills/` 目录是面向 Hibro Agent 的精简
+交付版本。当前共有 16 个逻辑 Skill；基本面 Agent 和技术面 Agent 各装配 9 个，
+其中 `claw-quant-data` 与 `market-charting` 被两个 Agent 共享，因此装配数之和不是逻辑 Skill 总数。契约测试
+校验权威定义、两个 Agent 装配集合、公共研究边界和关键数据语义，避免部署漂移。

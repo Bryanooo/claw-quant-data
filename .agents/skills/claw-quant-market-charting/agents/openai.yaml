@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claw Quant 研究图表"
+  short_description: "K线、财务趋势、资金流与跨资产可视化"
+  default_prompt: "Use $claw-quant-market-charting to render a decision-focused chart from governed research fields with visible quality caveats."

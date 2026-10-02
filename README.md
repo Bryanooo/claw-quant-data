@@ -174,6 +174,9 @@ Dashboard 的“服务目录”直接读取 `/api/v1/catalog`，可按原始审�
 字段、代码、日期和单位契约测试的规范接口，在本地目标切片缺失时受控回退。
 
 研究 Agent 的外部供给统一放在 `/api/v1/research/*`。通用数据查询不会伪装成研究结论。
+Hibro 交付按研究角色拆成独立的基本面 Agent 与技术面 Agent；两者共享受治理的数据
+获取和图表 Skill，但分别装配自己的研究方法。具体见
+[`docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md`](docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md)。
 
 ## Dashboard
 

@@ -1702,6 +1702,50 @@ class OrchestrationV2Repository:
                 reconciled += 1
         return reconciled
 
+    def attention_covered_by_active_execution_ids(
+        self, *, limit: int = 5000
+    ) -> tuple[int, ...]:
+        """Return old incidents currently covered by a newer active scope.
+
+        The old failure remains immutable evidence until the replacement is
+        independently validated. Operators should nevertheless see it as
+        recovery-in-progress rather than as a second action item.
+        """
+
+        if not 1 <= limit <= 5000:
+            raise ValueError("limit must be between 1 and 5000")
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT attention.task_execution_id
+                FROM orchestration_v2.task_execution AS attention
+                WHERE attention.status='attention'
+                  AND attention.observation_start IS NOT NULL
+                  AND attention.observation_end IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM orchestration_v2.task_execution AS recovery
+                      WHERE recovery.task_key=attention.task_key
+                        AND recovery.task_execution_id>
+                            attention.task_execution_id
+                        AND recovery.status IN (
+                            'created','queued','running','waiting_dependency',
+                            'retrying','validating','publishing'
+                        )
+                        AND recovery.observation_start<=
+                            attention.observation_start
+                        AND recovery.observation_end>=
+                            attention.observation_end
+                  )
+                ORDER BY attention.task_execution_id
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return tuple(
+                int(row["task_execution_id"]) for row in cursor.fetchall()
+            )
+
     def supersede_invalid_scope_executions(
         self,
         execution_ids: tuple[int, ...],

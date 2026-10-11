@@ -348,6 +348,13 @@ def test_duplicate_attention_reconciler_rejects_unbounded_limit():
         repository.reconcile_duplicate_attention_executions(limit=5001)
 
 
+def test_covered_attention_reader_rejects_unbounded_limit():
+    repository = OrchestrationV2Repository()
+
+    with pytest.raises(ValueError, match="between 1 and 5000"):
+        repository.attention_covered_by_active_execution_ids(limit=5001)
+
+
 def test_operator_supersede_invalid_scope_empty_selection_never_opens_database():
     repository = OrchestrationV2Repository()
 

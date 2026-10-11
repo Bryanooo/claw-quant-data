@@ -85,6 +85,13 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     },
     {
         "method": "GET",
+        "path": "/api/v1/research/market/technical-screen",
+        "name": "全市场技术条件筛选",
+        "domain": "市场研究",
+        "description": "按透明预设筛选并排序A股候选，同时披露全市场覆盖率和严格审计证据。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/macro/regime",
         "name": "宏观状态",
         "domain": "宏观研究",
@@ -194,6 +201,7 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "chip-distribution", "name": "筹码分布", "domain": "资金", "endpoint": "capital-flow"},
     {"id": "event-study", "name": "事件窗口异常收益", "domain": "事件", "endpoint": "event-study"},
     {"id": "market-breadth", "name": "市场宽度", "domain": "市场", "endpoint": "market-breadth"},
+    {"id": "technical-screening", "name": "全市场技术条件筛选", "domain": "技术面", "endpoint": "technical-screen"},
     {"id": "sector-rotation", "name": "板块轮动", "domain": "板块", "endpoint": "sector-rotation"},
     {"id": "etf-share-flow", "name": "ETF份额资金流", "domain": "ETF", "endpoint": "etf-flows"},
     {"id": "etf-state-team-signals", "name": "国家队ETF证据信号", "domain": "ETF", "endpoint": "state-team-signals"},
@@ -211,14 +219,6 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
 
 
 GAP_TECHNIQUES: tuple[dict[str, Any], ...] = (
-    {
-        "id": "technical-screening",
-        "name": "全市场技术条件筛选",
-        "domain": "技术面",
-        "status": "planned",
-        "action": "derive",
-        "required_contract": "受治理的候选列表、覆盖率、排序方法与审计证据",
-    },
     {"id": "analyst-revisions", "name": "一致预期与盈利修正", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "analyst"},
     {"id": "ownership-behavior", "name": "股东与机构行为", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "ownership"},
     {"id": "shareholder-return", "name": "总股东回报", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "shareholder-return"},
@@ -344,6 +344,60 @@ def capability_catalog(
     for configured in BACKFILL_WORKSTREAMS:
         item = dict(configured)
         runtime = (backfill_statuses or {}).get(item["group"])
+        if runtime is None and backfill_statuses:
+            members = [
+                backfill_statuses[interface]
+                for interface in item["interfaces"]
+                if interface in backfill_statuses
+            ]
+            if members:
+                coverage_states = {
+                    member.get("coverage_status")
+                    for member in members
+                    if member.get("coverage_status")
+                }
+                runtime = {
+                    "engine": "orchestration_v2",
+                    "executions": sum(member.get("executions", 0) for member in members),
+                    "active": sum(member.get("active", 0) for member in members),
+                    "unresolved": sum(member.get("unresolved", 0) for member in members),
+                    "completed": sum(member.get("completed", 0) for member in members),
+                    "cancelled": sum(member.get("cancelled", 0) for member in members),
+                    "expected_partitions": sum(
+                        member.get("expected_partitions", 0) for member in members
+                    ),
+                    "present_partitions": sum(
+                        member.get("present_partitions", 0) for member in members
+                    ),
+                    "missing_partitions": sum(
+                        member.get("missing_partitions", 0) for member in members
+                    ),
+                    "partial_partitions": sum(
+                        member.get("partial_partitions", 0) for member in members
+                    ),
+                }
+                runtime["coverage_status"] = (
+                    "gaps"
+                    if coverage_states & {"gaps", "unverified"}
+                    else "complete"
+                    if coverage_states and coverage_states <= {"complete", "empty"}
+                    else "unaudited"
+                )
+                runtime["status"] = (
+                    "attention" if runtime["unresolved"]
+                    else "running" if runtime["active"]
+                    else "attention" if runtime["coverage_status"] == "gaps"
+                    else "complete" if runtime["coverage_status"] == "complete"
+                    else "paused" if runtime["cancelled"]
+                    else "planned"
+                )
+                runtime["reason"] = (
+                    f"严格审计：完整 {runtime['present_partitions']}/"
+                    f"{runtime['expected_partitions']}，缺失 "
+                    f"{runtime['missing_partitions']}，不完整 "
+                    f"{runtime['partial_partitions']}；活动实例 "
+                    f"{runtime['active']}，未解决异常 {runtime['unresolved']}。"
+                )
         if runtime:
             item.update(runtime)
         backfills.append(item)

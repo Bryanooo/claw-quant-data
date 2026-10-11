@@ -129,6 +129,13 @@ _DEFINITIONS = (
         ("CFFEX", "DCE", "CZCE", "SHFE", "INE", "GFEX"),
         allow_date_window=True,
     ),
+    # Without exchange_id the summary endpoint defaults to SSE. All exchange
+    # partitions belong to the same logical task acquire node.
+    FanoutDefinition(
+        "margin", "static", "exchange_id", "trade_date", 1,
+        ("SSE", "SZSE", "BSE"),
+        allow_date_window=True,
+    ),
     FanoutDefinition(
         # Live gateway verification on 2026-09-08 showed that this endpoint
         # does not accept comma-separated index codes: a 20-code request

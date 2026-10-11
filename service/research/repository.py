@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import date
+from threading import Lock
+from time import monotonic
 
 from psycopg2 import sql
 
@@ -13,6 +15,10 @@ _SECTOR_TABLES = {
     "dc": ("dc_daily", "pct_change", "vol", "compact"),
     "tdx": ("tdx_daily", "pct_change", "vol", "compact"),
 }
+
+_TECHNICAL_SCREEN_CACHE_SECONDS = 60.0
+_TECHNICAL_SCREEN_CACHE: dict[date, tuple[float, dict]] = {}
+_TECHNICAL_SCREEN_CACHE_LOCK = Lock()
 
 
 class ResearchRepository:
@@ -83,8 +89,173 @@ class ResearchRepository:
             (as_of,),
         )
 
+    def technical_screen_snapshot(self, as_of: date) -> dict:
+        """Return one governed cross-sectional technical factor snapshot.
+
+        Split-adjusted price geometry is reconstructed from the provider's
+        daily return series. This avoids comparing raw price levels across
+        corporate actions while keeping the screen on the indexed daily table.
+        """
+        now = monotonic()
+        with _TECHNICAL_SCREEN_CACHE_LOCK:
+            cached = _TECHNICAL_SCREEN_CACHE.get(as_of)
+            if cached and now - cached[0] <= _TECHNICAL_SCREEN_CACHE_SECONDS:
+                return cached[1]
+        rows = self._database.fetch_all(
+            """
+            WITH target AS (
+                SELECT max(trade_date) AS trade_date
+                FROM daily
+                WHERE trade_date <= %s
+            ), recent_dates AS MATERIALIZED (
+                SELECT DISTINCT d.trade_date
+                FROM daily AS d
+                CROSS JOIN target
+                WHERE d.trade_date <= target.trade_date
+                ORDER BY d.trade_date DESC
+                -- Screening rules need at most 120 completed observations.
+                -- Keep a small buffer for newly listed/suspended securities
+                -- without scanning 1.4M+ rows on every bounded query.
+                LIMIT 125
+            ), raw AS MATERIALIZED (
+                SELECT d.ts_code, d.trade_date, d.close, d.pct_chg,
+                       d.vol, d.amount,
+                       exp(sum(ln(greatest(
+                           1 + COALESCE(d.pct_chg, 0)::double precision / 100,
+                           0.000001
+                       ))) OVER (
+                           PARTITION BY d.ts_code ORDER BY d.trade_date
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                       )) AS price_index
+                FROM daily AS d
+                JOIN recent_dates USING (trade_date)
+            ), changes AS (
+                SELECT raw.*,
+                       price_index - lag(price_index) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                       ) AS price_change
+                FROM raw
+            ), factors AS (
+                SELECT changes.*,
+                       row_number() OVER (
+                           PARTITION BY ts_code ORDER BY trade_date DESC
+                       ) AS latest_rank,
+                       count(*) OVER (PARTITION BY ts_code) AS history_observations,
+                       lag(price_index, 1) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                       ) AS previous_index,
+                       lag(price_index, 20) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                       ) AS index_20d_ago,
+                       lag(price_index, 60) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                       ) AS index_60d_ago,
+                       avg(price_index) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
+                       ) AS ma20,
+                       avg(price_index) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 59 PRECEDING AND CURRENT ROW
+                       ) AS ma60,
+                       avg(price_index) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 119 PRECEDING AND CURRENT ROW
+                       ) AS ma120,
+                       max(price_index) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING
+                       ) AS prior_high20,
+                       avg(vol) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING
+                       ) AS prior_volume20,
+                       avg(greatest(price_change, 0)) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 13 PRECEDING AND CURRENT ROW
+                       ) AS average_gain14,
+                       avg(greatest(-price_change, 0)) OVER (
+                           PARTITION BY ts_code ORDER BY trade_date
+                           ROWS BETWEEN 13 PRECEDING AND CURRENT ROW
+                       ) AS average_loss14
+                FROM changes
+            ), universe AS (
+                SELECT count(*)::INTEGER AS expected_securities
+                FROM stock_basic
+                CROSS JOIN target
+                WHERE list_status='L'
+                  AND (list_date IS NULL OR list_date='' OR
+                       to_date(list_date, 'YYYYMMDD') <= target.trade_date)
+            ), audit AS (
+                SELECT partition.status, partition.row_count,
+                       partition.entity_count,
+                       partition.expected_entity_count,
+                       partition.entity_coverage_ratio,
+                       partition.checked_at
+                FROM sys_data_coverage_partition AS partition
+                CROSS JOIN target
+                WHERE partition.dataset_name='stock_daily'
+                  AND partition.partition_date=target.trade_date
+            )
+            SELECT factors.ts_code, basic.name, basic.industry, basic.market,
+                   factors.trade_date, factors.close, factors.pct_chg,
+                   factors.vol, factors.amount, factors.price_index,
+                   factors.previous_index, factors.index_20d_ago,
+                   factors.index_60d_ago, factors.ma20, factors.ma60,
+                   factors.ma120, factors.prior_high20,
+                   factors.prior_volume20, factors.average_gain14,
+                   factors.average_loss14, factors.history_observations,
+                   universe.expected_securities,
+                   count(*) OVER ()::INTEGER AS observed_securities,
+                   audit.status AS audit_status,
+                   audit.row_count AS audit_row_count,
+                   audit.entity_count AS audit_entity_count,
+                   audit.expected_entity_count AS audit_expected_entity_count,
+                   audit.entity_coverage_ratio AS audit_entity_coverage_ratio,
+                   audit.checked_at AS audit_checked_at
+            FROM factors
+            JOIN stock_basic AS basic USING (ts_code)
+            CROSS JOIN universe
+            LEFT JOIN audit ON TRUE
+            WHERE factors.latest_rank=1
+              AND factors.trade_date=(SELECT trade_date FROM target)
+            ORDER BY factors.ts_code
+            """,
+            (as_of,),
+        )
+        if not rows:
+            result = {"rows": [], "summary": {}}
+            with _TECHNICAL_SCREEN_CACHE_LOCK:
+                _TECHNICAL_SCREEN_CACHE[as_of] = (now, result)
+            return result
+        first = rows[0]
+        summary_keys = {
+            "expected_securities", "observed_securities", "audit_status",
+            "audit_row_count", "audit_entity_count",
+            "audit_expected_entity_count", "audit_entity_coverage_ratio",
+            "audit_checked_at",
+        }
+        summary = {key: first.get(key) for key in summary_keys}
+        result = {
+            "rows": [
+                {key: value for key, value in row.items() if key not in summary_keys}
+                for row in rows
+            ],
+            "summary": summary,
+        }
+        with _TECHNICAL_SCREEN_CACHE_LOCK:
+            _TECHNICAL_SCREEN_CACHE.clear()
+            _TECHNICAL_SCREEN_CACHE[as_of] = (now, result)
+        return result
+
     def backfill_statuses(self) -> dict[str, dict]:
-        """Return effective V2 history state grouped by acquisition task."""
+        """Return execution progress and independently audited data state.
+
+        A successful workflow proves that code ran; it does not prove that a
+        dataset's historical contract is complete.  Keep both facts in the
+        same projection so the research catalog cannot label a workstream
+        ready from execution counts alone.
+        """
         rows = self._database.fetch_all(
             """
             SELECT task_key AS group_name,
@@ -108,7 +279,18 @@ class ResearchRepository:
                    )::INTEGER AS unresolved,
                    count(*) FILTER (
                        WHERE status='success'
-                   )::INTEGER AS complete
+                   )::INTEGER AS complete,
+                   count(*) FILTER (
+                       WHERE status='cancelled'
+                         AND NOT EXISTS (
+                           SELECT 1
+                           FROM orchestration_v2.task_execution AS recovered
+                           WHERE recovered.task_key=execution.task_key
+                             AND recovered.observation_key=execution.observation_key
+                             AND recovered.status='success'
+                             AND recovered.task_execution_id > execution.task_execution_id
+                         )
+                   )::INTEGER AS cancelled
             FROM orchestration_v2.task_execution AS execution
             WHERE purpose IN ('backfill','initialization','repair')
             GROUP BY group_name
@@ -123,6 +305,7 @@ class ResearchRepository:
                 "active": int(row["active"] or 0),
                 "unresolved": int(row["unresolved"] or 0),
                 "completed": int(row["complete"] or 0),
+                "cancelled": int(row["cancelled"] or 0),
             }
         for state in states.values():
             total = state["executions"]
@@ -130,6 +313,8 @@ class ResearchRepository:
                 status = "attention"
             elif state["active"]:
                 status = "running"
+            elif state["cancelled"]:
+                status = "paused"
             elif total:
                 # Resolved failures and superseded attempts are historical
                 # evidence, not unfinished work.  ``active`` and ``unresolved``
@@ -138,6 +323,39 @@ class ResearchRepository:
             else:  # pragma: no cover - a grouped row always has at least one record
                 status = "planned"
             state["status"] = status
+        # Reuse the same durable aggregate used by the operations dashboard.
+        # Import locally to keep the research query module free of a startup
+        # dependency on coverage orchestration.
+        from service.data_coverage.repository import CoverageRepository
+
+        for dataset_name, audit in CoverageRepository().latest_audits().items():
+            state = states.setdefault(dataset_name, {
+                "engine": "orchestration_v2",
+                "executions": 0,
+                "active": 0,
+                "unresolved": 0,
+                "completed": 0,
+                "cancelled": 0,
+                "status": "planned",
+            })
+            coverage_status = str(audit.get("status") or "unverified")
+            state.update({
+                "coverage_status": coverage_status,
+                "coverage_start": audit.get("start_date"),
+                "coverage_end": audit.get("end_date"),
+                "expected_partitions": int(audit.get("expected_partitions") or 0),
+                "present_partitions": int(audit.get("present_partitions") or 0),
+                "missing_partitions": int(audit.get("missing_partitions") or 0),
+                "partial_partitions": int(audit.get("partial_partitions") or 0),
+            })
+            if not state["unresolved"] and not state["active"]:
+                state["status"] = (
+                    "complete"
+                    if coverage_status in {"complete", "empty"}
+                    else "attention"
+                    if coverage_status in {"gaps", "unverified"}
+                    else "planned"
+                )
         return states
 
     def latest_stock_valuations(

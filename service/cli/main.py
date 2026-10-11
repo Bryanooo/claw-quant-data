@@ -271,6 +271,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_breadth.add_argument("--as-of")
     research_breadth.set_defaults(handler=_research_market_breadth)
+    research_screen = research_commands.add_parser(
+        "technical-screen",
+        help="rank audited A-share candidates by transparent technical presets",
+    )
+    research_screen.add_argument(
+        "--preset",
+        choices=("trend", "breakout", "oversold-reversal", "volume-breakout"),
+        default="trend",
+    )
+    research_screen.add_argument("--limit", type=_bounded_integer(1, 200), default=50)
+    research_screen.add_argument(
+        "--minimum-amount-thousand-yuan", type=float, default=0
+    )
+    research_screen.add_argument(
+        "--include-st", action="store_true",
+        help="include ST and *ST securities",
+    )
+    research_screen.add_argument("--as-of")
+    research_screen.set_defaults(handler=_research_technical_screen)
     research_macro_regime = research_commands.add_parser(
         "macro-regime", help="show growth, inflation and liquidity regime evidence"
     )
@@ -789,6 +808,22 @@ def _research_market_breadth(client: ApiClient, args: argparse.Namespace) -> Any
         client,
         "/v1/research/market/breadth",
         params={"as_of": args.as_of} if args.as_of else None,
+    )
+
+
+def _research_technical_screen(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {
+        "preset": args.preset,
+        "limit": args.limit,
+        "minimum_amount_thousand_yuan": args.minimum_amount_thousand_yuan,
+        "exclude_st": not args.include_st,
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client,
+        "/v1/research/market/technical-screen",
+        params=params,
     )
 
 

@@ -120,6 +120,11 @@ _PERIOD_DATE_OVERRIDES = {
     # metadata and can legitimately point at a later day, so auditing it would
     # report false gaps even after every requested NAV partition was verified.
     "fund_nav": ("nav_date", DateStorage.DATE),
+    # report_rc is keyed by a content hash because multiple brokers and
+    # forecast quarters can coexist for one stock/day.  The business
+    # partition is nevertheless the provider's report_date and must remain
+    # queryable/auditable as a calendar-day series.
+    "report_rc": ("report_date", DateStorage.DATE),
     # ths_hot uses a content-derived source key because non-A-share ranks may
     # not have ts_code; trade_date remains its business partition.
     "ths_hot": ("trade_date", DateStorage.COMPACT),
@@ -137,6 +142,12 @@ _TABLE_PERIOD_DATE_OVERRIDES = {
 
 
 _EXACT_FILTER_OVERRIDES = {
+    "report_rc": {
+        "source_key": "source_key",
+        "ts_code": "ts_code",
+        "report_date": "report_date",
+        "org_name": "org_name",
+    },
     "stk_holdernumber": {
         "source_key": "source_key",
         "ts_code": "ts_code",
@@ -152,6 +163,7 @@ _EXACT_FILTER_OVERRIDES = {
 
 
 _DEFAULT_ORDER_OVERRIDES = {
+    "report_rc": ("report_date", "ts_code", "source_key"),
     "stk_holdernumber": ("end_date", "ann_date", "ts_code"),
 }
 

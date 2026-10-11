@@ -9,6 +9,7 @@ from service.data_service.models import DateStorage
 
 class CoverageStrategy(str, Enum):
     TRADING_DAILY = "trading_daily"
+    CALENDAR_DAILY = "calendar_daily"
     TRADING_WEEKLY = "trading_weekly"
     TRADING_MONTHLY = "trading_monthly"
     CALENDAR_MONTHLY = "calendar_monthly"
@@ -32,6 +33,9 @@ class CoverageRule:
     # following morning.  Before this Shanghai-local time, the newest date is
     # not mature and must not be reported or auto-repaired as a gap.
     release_after: time | None = None
+    # Becomes due on the next open market day at ``release_after``. A plain
+    # calendar-day grace cannot model weekends and exchange holidays safely.
+    release_on_next_trade_day: bool = False
     default_lookback_days: int = 120
     # First partition for which the upstream contract actually guarantees
     # history. Requests may start earlier, but pre-availability dates are not

@@ -11,5 +11,6 @@ chart. Use cross-asset or ETF-flow Skills only when the instrument or question r
 
 End with primary and alternate scenarios plus explicit invalidation. Do not turn overbought,
 oversold, candlestick, wave, or Chan candidates into a recommendation. Do not claim intraday
-VWAP, volume profile, order imbalance, or Level-2 evidence from daily data. Do not emulate the
-currently missing market-wide screener through lower APIs or SQL. Never mutate collection state.
+VWAP, volume profile, order imbalance, or Level-2 evidence from daily data. Use the packaged
+technical-screening Skill for market-wide discovery and never recreate its ranking through lower
+APIs or SQL. Never mutate collection state.

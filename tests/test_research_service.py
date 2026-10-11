@@ -11,6 +11,7 @@ from service.research.service import (
     _pivot_systems,
     _zigzag,
 )
+from service.research.catalog import capability_catalog
 
 
 class FakeDataService:
@@ -80,6 +81,54 @@ class FakeRepository:
             "above_ma60": 45,
             "limit_up": 8,
             "limit_down": 2,
+        }
+
+    def technical_screen_snapshot(self, _as_of):
+        return {
+            "rows": [
+                {
+                    "ts_code": "000001.SZ", "name": "平安银行",
+                    "industry": "银行", "market": "主板",
+                    "trade_date": date(2026, 9, 18), "close": Decimal("12"),
+                    "pct_chg": Decimal("2"), "vol": Decimal("180"),
+                    "amount": Decimal("500000"), "price_index": Decimal("1.8"),
+                    "previous_index": Decimal("1.7"),
+                    "index_20d_ago": Decimal("1.5"),
+                    "index_60d_ago": Decimal("1.2"),
+                    "ma20": Decimal("1.6"), "ma60": Decimal("1.4"),
+                    "ma120": Decimal("1.1"), "prior_high20": Decimal("1.75"),
+                    "prior_volume20": Decimal("100"),
+                    "average_gain14": Decimal("0.02"),
+                    "average_loss14": Decimal("0.01"),
+                    "history_observations": 260,
+                },
+                {
+                    "ts_code": "000002.SZ", "name": "*ST示例",
+                    "industry": "地产", "market": "主板",
+                    "trade_date": date(2026, 9, 18), "close": Decimal("3"),
+                    "pct_chg": Decimal("3"), "vol": Decimal("200"),
+                    "amount": Decimal("100000"), "price_index": Decimal("2"),
+                    "previous_index": Decimal("1.8"),
+                    "index_20d_ago": Decimal("1.5"),
+                    "index_60d_ago": Decimal("1.2"),
+                    "ma20": Decimal("1.7"), "ma60": Decimal("1.4"),
+                    "ma120": Decimal("1.1"), "prior_high20": Decimal("1.9"),
+                    "prior_volume20": Decimal("100"),
+                    "average_gain14": Decimal("0.02"),
+                    "average_loss14": Decimal("0.01"),
+                    "history_observations": 260,
+                },
+            ],
+            "summary": {
+                "expected_securities": 2,
+                "observed_securities": 2,
+                "audit_status": "present",
+                "audit_row_count": 2,
+                "audit_entity_count": 2,
+                "audit_expected_entity_count": 2,
+                "audit_entity_coverage_ratio": Decimal("1"),
+                "audit_checked_at": None,
+            },
         }
 
     def macro_series(self, **_kwargs):
@@ -636,24 +685,69 @@ def test_etf_flow_and_state_team_views_keep_identity_evidence_explicit():
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 18
-    assert catalog["summary"]["derived_endpoints"] == 15
+    assert catalog["summary"]["agent_endpoints"] == 19
+    assert catalog["summary"]["derived_endpoints"] == 16
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 6
     assert catalog["summary"]["baseline_techniques"] == 73
-    assert catalog["summary"]["currently_served"] == 61
-    assert catalog["summary"]["planned_from_existing_sources"] == 4
+    assert catalog["summary"]["currently_served"] == 62
+    assert catalog["summary"]["planned_from_existing_sources"] == 3
     assert catalog["summary"]["external_or_constrained"] == 8
-    assert len(catalog["techniques"]["served"]) == 61
-    assert len(catalog["techniques"]["gaps"]) == 12
+    assert len(catalog["techniques"]["served"]) == 62
+    assert len(catalog["techniques"]["gaps"]) == 11
     screening = next(
-        item for item in catalog["techniques"]["gaps"]
+        item for item in catalog["techniques"]["served"]
         if item["id"] == "technical-screening"
     )
-    assert screening["action"] == "derive"
+    assert screening["endpoint"] == "technical-screen"
     analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
     assert analyst["status"] == "running"
     assert analyst["active"] == 2
+
+
+def test_backfill_workstream_status_is_gated_by_data_audit_not_task_success():
+    catalog = capability_catalog({
+        "report_rc": {
+            "engine": "orchestration_v2",
+            "executions": 20,
+            "active": 0,
+            "unresolved": 0,
+            "completed": 20,
+            "cancelled": 0,
+            "coverage_status": "gaps",
+            "expected_partitions": 100,
+            "present_partitions": 80,
+            "missing_partitions": 5,
+            "partial_partitions": 15,
+        }
+    })
+
+    analyst = next(item for item in catalog["backfills"] if item["group"] == "analyst")
+    assert analyst["status"] == "attention"
+    assert analyst["coverage_status"] == "gaps"
+    assert analyst["completed"] == 20
+    assert analyst["missing_partitions"] == 5
+    assert "完整 80/100" in analyst["reason"]
+
+
+def test_technical_screen_discloses_rules_coverage_and_audit_evidence():
+    result = ResearchService(
+        FakeDataService({}), FakeRepository()
+    ).technical_screen(
+        preset="trend",
+        limit=10,
+        as_of=date(2026, 9, 18),
+    )
+
+    assert [item["ts_code"] for item in result["data"]["candidates"]] == [
+        "000001.SZ"
+    ]
+    assert result["data"]["candidates"][0]["matched_rules"] == [
+        "price_above_ma20", "ma20_above_ma60", "ma60_above_ma120"
+    ]
+    assert result["meta"]["coverage"]["ratio"] == 1.0
+    assert result["meta"]["audit_evidence"]["status"] == "present"
+    assert result["meta"]["quality"]["status"] == "ready"
 
 
 def test_valuation_batches_peer_market_rows_through_repository():

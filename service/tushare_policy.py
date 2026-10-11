@@ -111,6 +111,16 @@ _TRADE_DATE_ALTERNATIVES = {
     "index_daily",
 }
 
+# The generated upstream contract marks ``ts_code`` as required for both
+# shareholder-rank endpoints. Live gateway probes proved that ``period`` alone
+# returns the full market and honors standard limit/offset pagination. Treat
+# the stock code as an alternative filter for these exact report-period
+# partitions; otherwise one quarter needlessly expands to roughly 5,500 calls.
+_REPORT_PERIOD_ALTERNATIVES = {
+    "top10_floatholders",
+    "top10_holders",
+}
+
 _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     # These endpoints document all parameters as optional but reject an empty
     # request. The override encodes the smallest complete request partition.
@@ -129,6 +139,8 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     # repeating pages. These bounded scopes are safer than 32k fund-code jobs.
     "fund_nav": "trade_date",
     "fund_portfolio": "report_period",
+    "top10_floatholders": "report_period",
+    "top10_holders": "report_period",
     "fut_index_daily": "ts_code_fanout",
     # A market-wide ccass_hold_detail date contains more than one million
     # institution-seat rows. It must remain an explicitly scoped query rather
@@ -244,6 +256,11 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # resumable without falling back to tens of thousands of symbol calls.
     "fund_nav",
     "fund_portfolio",
+    # Live 2026-10-11 probes for period=20260630 returned distinct 1,000-row
+    # pages at offsets 0/1,000/2,000 for both interfaces. Exhausting the next
+    # page is the completeness proof for the market-wide quarterly partition.
+    "top10_floatholders",
+    "top10_holders",
     # Live verification on 2026-09-07 exhausted the day's 22,248-row
     # ``float_date`` partition in four distinct pages (6,000/6,000/6,000/
     # 4,248).  Without offset exhaustion the first round page was correctly
@@ -409,6 +426,8 @@ def derive_policy(contract: TushareInterfaceContract) -> TushareCollectionPolicy
     }.get(strategy, set())
     unsupported_required = required - supported_required
     if contract.api_name in _TRADE_DATE_ALTERNATIVES:
+        unsupported_required -= {"ts_code", "symbol", "code"}
+    if contract.api_name in _REPORT_PERIOD_ALTERNATIVES:
         unsupported_required -= {"ts_code", "symbol", "code"}
     automatic_safe = (
         contract.collectable

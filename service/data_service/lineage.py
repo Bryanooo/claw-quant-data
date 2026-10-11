@@ -175,6 +175,7 @@ _RESEARCH_FIXED_DATASETS: dict[str, tuple[str, ...]] = {
     ),
     "/api/v1/research/investment-calendar": ("eco_cal", "fut_basic"),
     "/api/v1/research/investment-calendar/{event_date}": ("eco_cal", "fut_basic"),
+    "/api/v1/research/market/technical-screen": ("stock_daily", "stock_basic"),
 }
 
 _SYSTEM_RESEARCH_ENDPOINTS = {

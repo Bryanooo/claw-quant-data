@@ -66,6 +66,20 @@ MARKET_WIDE_FANOUT_OVERRIDES = {
     "fund_portfolio",
     "index_weekly",
     "index_monthly",
+    "top10_floatholders",
+    "top10_holders",
+}
+
+# Idempotency identifies the acquisition *contract*, not just the logical
+# date.  Increment only the affected API when a proven provider quirk changes
+# its request shape; otherwise an old terminal execution would suppress the
+# corrected repair forever.  Keeping this scoped avoids replaying unrelated
+# historical work after an implementation-only deployment.
+RECOVERY_PLAN_REVISIONS = {
+    "margin": 2,
+    "margin_detail": 2,
+    "top10_floatholders": 2,
+    "top10_holders": 2,
 }
 
 
@@ -288,7 +302,10 @@ def build_reverse_recovery_plan(
                 "max_pages": max(policy.max_pages, 1000),
                 "resume": True,
             }
-        scope_identity = f"{dataset_name}:{partition.key}"
+        plan_revision = RECOVERY_PLAN_REVISIONS.get(partition.api_name, 1)
+        scope_identity = (
+            f"{dataset_name}:{partition.key}:plan-v{plan_revision}"
+        )
         period_key = (
             f"rh:{partition.end_date:%Y%m%d}:"
             f"{hashlib.sha256(scope_identity.encode()).hexdigest()[:12]}"

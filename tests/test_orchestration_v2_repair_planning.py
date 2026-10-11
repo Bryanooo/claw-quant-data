@@ -14,6 +14,7 @@ from service.orchestration_v2.repair_planning import (
     observation_identity,
     observation_bounds,
     plan_period_repairs,
+    validate_quota_guarded_history_scope,
     validate_single_period_scope,
 )
 
@@ -135,6 +136,28 @@ def test_static_provider_partitions_stay_inside_one_v2_execution_node():
     assert all(item.period_key == "2026-09-24" for item in specs)
 
 
+def test_margin_summary_fans_out_all_exchanges_inside_one_acquire_node():
+    fanout = FANOUT_DEFINITIONS["margin"]
+    policy = TusharePolicyRegistry().get("margin")
+    specs = tuple(
+        OrchestrationV2Runtime._static_fanout_spec(
+            api_name="margin",
+            parameter_name=fanout.parameter_name,
+            parameter_value=exchange,
+            scope_kind=fanout.scope,
+            observation_date=date(2026, 10, 9),
+            purpose="daily",
+            policy=policy,
+        )
+        for exchange in fanout.static_values
+    )
+
+    assert len(specs) == 3
+    assert {
+        item.parameters["parameters"]["exchange_id"] for item in specs
+    } == {"SSE", "SZSE", "BSE"}
+
+
 def test_static_provider_retry_skips_only_verified_request_partitions():
     policy = TusharePolicyRegistry().get("opt_daily")
     specs = tuple(
@@ -209,6 +232,18 @@ def test_financial_period_is_one_whole_market_request():
             date(2026, 6, 30),
             {"period": "20260630"},
         ),
+        (
+            "top10_holders",
+            "end_date",
+            date(2026, 6, 30),
+            {"period": "20260630"},
+        ),
+        (
+            "top10_floatholders",
+            "end_date",
+            date(2026, 6, 30),
+            {"period": "20260630"},
+        ),
     ],
 )
 def test_proven_market_wide_endpoints_do_not_use_legacy_symbol_fanout(
@@ -240,7 +275,11 @@ def test_proven_market_wide_endpoints_do_not_use_legacy_symbol_fanout(
                 "acquisition_endpoint_id": 7,
                 "endpoint_key": task_key,
                 "source_id": "tushare",
-                "lifecycle_status": "active",
+                # Existing execution versions retain their exact immutable
+                # endpoint even after a newer contract retires it.
+                "lifecycle_status": (
+                    "retired" if task_key.startswith("top10_") else "active"
+                ),
             }
 
     monkeypatch.setattr(
@@ -256,7 +295,9 @@ def test_proven_market_wide_endpoints_do_not_use_legacy_symbol_fanout(
         "observation_end": observation_date,
         "frozen_scope": (
             {"policy_anchor_date": "2026-09-28"}
-            if task_key == "fund_portfolio" else {}
+            if task_key in {
+                "fund_portfolio", "top10_holders", "top10_floatholders"
+            } else {}
         ),
     })
 
@@ -349,6 +390,25 @@ def test_v2_execution_scope_rejects_multi_period_backfill():
         )
 
 
+def test_quota_guarded_history_is_one_bounded_resumable_execution():
+    contract = _contract("cyq_perf")
+    validate_quota_guarded_history_scope(
+        contracts=(contract,),
+        observation_start=date(2018, 1, 1),
+        observation_end=date(2026, 9, 30),
+        observation_key="history:2018-01-01:2026-09-30",
+        guarded_datasets=frozenset({"cyq_perf"}),
+    )
+    with pytest.raises(ValueError, match="restricted"):
+        validate_quota_guarded_history_scope(
+            contracts=(_contract("stock_daily"),),
+            observation_start=date(2018, 1, 1),
+            observation_end=date(2026, 9, 30),
+            observation_key="history:2018-01-01:2026-09-30",
+            guarded_datasets=frozenset({"cyq_perf"}),
+        )
+
+
 class _ExecutionRepository:
     def __init__(self, definition):
         self.definition = definition
@@ -389,4 +449,42 @@ def test_service_enforces_single_period_before_persistence():
             **base,
             "idempotency_key": "bad-range",
             "observation_end": date(2026, 9, 25),
+        })
+
+
+def test_service_allows_only_declared_quota_guarded_history_range():
+    from tests.test_orchestration_v2 import acquisition_definition
+    from service.orchestration_v2.contracts import TaskDefinitionDocument
+
+    raw = acquisition_definition(
+        task_key="cyq_perf",
+        output_datasets=["cyq_perf"],
+    )
+    raw["validation_contract"]["outputs"] = ["cyq_perf"]
+    raw["validation_contract"]["dataset_audits"][0]["dataset_name"] = "cyq_perf"
+    definition = TaskDefinitionDocument.model_validate(raw)
+    repository = _ExecutionRepository(definition)
+    service = OrchestrationV2Service(
+        repository,
+        allowed_handler_keys=(),
+        known_datasets=(),
+    )
+
+    request = {
+        "task_key": "cyq_perf",
+        "purpose": "initialization",
+        "trigger_source": "recovery",
+        "idempotency_key": "v2:init:cyq_perf:history",
+        "observation_key": "history:2018-01-01:2026-09-30",
+        "observation_start": date(2018, 1, 1),
+        "observation_end": date(2026, 9, 30),
+        "frozen_scope": {"recovery_scope": "quota_guarded_history"},
+    }
+    assert service.create_execution(request)[1] is True
+
+    with pytest.raises(ValueError, match="freeze its exact range"):
+        service.create_execution({
+            **request,
+            "idempotency_key": "v2:init:cyq_perf:bad-history",
+            "observation_key": "history:unbounded",
         })

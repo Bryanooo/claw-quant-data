@@ -2815,6 +2815,169 @@ class ResearchService:
             },
         }
 
+    def technical_screen(
+        self,
+        *,
+        preset: str = "trend",
+        limit: int = 50,
+        minimum_amount_thousand_yuan: float = 0,
+        exclude_st: bool = True,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Rank an audited A-share universe by deterministic technical rules."""
+        allowed = {"trend", "breakout", "oversold-reversal", "volume-breakout"}
+        if preset not in allowed:
+            raise InvalidQueryError(
+                f"unsupported technical screen preset: {preset}; "
+                f"expected one of {', '.join(sorted(allowed))}"
+            )
+        effective_as_of = as_of or business_now().date()
+        snapshot = self._repository.technical_screen_snapshot(effective_as_of)
+        rows = snapshot.get("rows") or []
+        if not rows:
+            raise RecordNotFoundError("no technical screen observation found")
+
+        candidates: list[dict[str, Any]] = []
+        eligible = 0
+        for row in rows:
+            history = int(row.get("history_observations") or 0)
+            name = str(row.get("name") or "")
+            amount = _number(row.get("amount")) or 0.0
+            if history < 60 or amount < minimum_amount_thousand_yuan:
+                continue
+            if exclude_st and (name.startswith("ST") or name.startswith("*ST")):
+                continue
+            eligible += 1
+            price = _number(row.get("price_index"))
+            previous = _number(row.get("previous_index"))
+            ma20 = _number(row.get("ma20"))
+            ma60 = _number(row.get("ma60"))
+            ma120 = _number(row.get("ma120"))
+            prior_high20 = _number(row.get("prior_high20"))
+            prior_volume20 = _number(row.get("prior_volume20"))
+            volume = _number(row.get("vol"))
+            avg_gain = _number(row.get("average_gain14"))
+            avg_loss = _number(row.get("average_loss14"))
+            return20 = (
+                _pct_change(price, row.get("index_20d_ago"))
+                if price is not None else None
+            )
+            return60 = (
+                _pct_change(price, row.get("index_60d_ago"))
+                if price is not None else None
+            )
+            volume_ratio = _safe_div(volume, prior_volume20)
+            rsi14 = (
+                100.0 if avg_loss == 0 and (avg_gain or 0) > 0
+                else 50.0 if avg_loss == 0
+                else 100 - 100 / (1 + (avg_gain or 0) / avg_loss)
+                if avg_loss is not None else None
+            )
+            reasons: list[str] = []
+            matched = False
+            if preset == "trend":
+                matched = (
+                    history >= 120 and None not in (price, ma20, ma60, ma120)
+                    and price > ma20 > ma60 > ma120
+                )
+                if matched:
+                    reasons = ["price_above_ma20", "ma20_above_ma60", "ma60_above_ma120"]
+                score = (return20 or 0) + 0.5 * (return60 or 0)
+            elif preset == "breakout":
+                matched = (
+                    None not in (price, prior_high20, volume_ratio)
+                    and price >= prior_high20 and volume_ratio >= 1.2
+                )
+                if matched:
+                    reasons = ["twenty_day_high_breakout", "volume_confirmation"]
+                score = (return20 or 0) + 10 * ((volume_ratio or 0) - 1)
+            elif preset == "oversold-reversal":
+                matched = (
+                    None not in (price, previous, rsi14)
+                    and rsi14 <= 35 and price > previous
+                )
+                if matched:
+                    reasons = ["rsi14_oversold", "positive_reversal_day"]
+                score = (35 - (rsi14 or 35)) + (_number(row.get("pct_chg")) or 0)
+            else:
+                matched = (
+                    None not in (price, ma20, volume_ratio)
+                    and price > ma20 and volume_ratio >= 1.5
+                    and (_number(row.get("pct_chg")) or 0) > 0
+                )
+                if matched:
+                    reasons = ["price_above_ma20", "volume_ratio_at_least_1_5", "positive_day"]
+                score = (return20 or 0) + 10 * ((volume_ratio or 0) - 1)
+            if not matched:
+                continue
+            candidates.append({
+                "ts_code": row["ts_code"],
+                "name": name,
+                "industry": row.get("industry"),
+                "market": row.get("market"),
+                "trade_date": row.get("trade_date"),
+                "score": _round(score),
+                "matched_rules": reasons,
+                "metrics": {
+                    "close": _number(row.get("close")),
+                    "daily_return_pct": _number(row.get("pct_chg")),
+                    "return_20d_pct": _round(return20),
+                    "return_60d_pct": _round(return60),
+                    "rsi14": _round(rsi14),
+                    "volume_ratio_20d": _round(volume_ratio),
+                    "amount_thousand_yuan": _round(amount),
+                    "history_observations": history,
+                },
+            })
+        candidates.sort(key=lambda item: (-float(item["score"] or 0), item["ts_code"]))
+        summary = snapshot.get("summary") or {}
+        expected = int(summary.get("expected_securities") or 0)
+        observed = int(summary.get("observed_securities") or len(rows))
+        coverage = observed / expected if expected else 0.0
+        audit_status = summary.get("audit_status")
+        warnings = []
+        if audit_status not in {"present", "observed_only"}:
+            warnings.append("latest stock_daily partition is not strictly present")
+        if coverage < 0.95:
+            warnings.append("latest market cross-section covers less than 95% of listed securities")
+        return {
+            "data": {
+                "preset": preset,
+                "candidates": candidates[:limit],
+                "matched": len(candidates),
+                "eligible_universe": eligible,
+            },
+            "meta": {
+                "as_of": effective_as_of,
+                "actual_data_date": rows[0].get("trade_date"),
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": (
+                    "deterministic split-adjusted return index reconstructed from "
+                    "daily pct_chg; one latest observation per listed A-share; "
+                    "preset rules are disclosed in matched_rules and ranking is stable"
+                ),
+                "provenance": ["stock_daily", "stock_basic"],
+                "coverage": {
+                    "expected_securities": expected,
+                    "observed_securities": observed,
+                    "ratio": _round(coverage, 6),
+                },
+                "audit_evidence": {
+                    "dataset": "stock_daily",
+                    "status": audit_status,
+                    "row_count": summary.get("audit_row_count"),
+                    "entity_count": summary.get("audit_entity_count"),
+                    "expected_entity_count": summary.get("audit_expected_entity_count"),
+                    "entity_coverage_ratio": _number(summary.get("audit_entity_coverage_ratio")),
+                    "checked_at": summary.get("audit_checked_at"),
+                },
+                "quality": {
+                    "status": "ready" if not warnings else "warning",
+                    "warnings": warnings,
+                },
+            },
+        }
+
     def etf_flows(
         self,
         *,

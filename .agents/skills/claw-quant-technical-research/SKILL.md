@@ -31,6 +31,7 @@ Load only the Skills needed for the question:
 - ZigZag, Elliott, and Chan candidates: `$claw-quant-wave-chan-research`;
 - index, ETF, sector, or SGE comparison: `$claw-quant-cross-asset-research`;
 - ETF share flows and identity evidence: `$claw-quant-etf-flow-research`;
+- governed whole-market candidate discovery: `$claw-quant-technical-screening`;
 - visual output: `$claw-quant-market-charting`.
 
 Analyze in this order:
@@ -53,5 +54,5 @@ Analyze in this order:
 
 End with a primary scenario, an alternate scenario, and explicit price/volume/time invalidation.
 Treat oversold as a condition rather than a reversal signal, and never convert wave or Chan
-candidates into trading advice. A whole-market screener is not currently part of the governed
-research contract; do not emulate one by querying lower data APIs or raw SQL.
+candidates into trading advice. Whole-market discovery must use `technical-screen`; do not
+emulate it by querying lower data APIs or raw SQL.

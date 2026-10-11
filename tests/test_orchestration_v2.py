@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -340,10 +341,25 @@ def test_resolved_attention_reconciler_rejects_unbounded_limit():
         repository.reconcile_resolved_attention_executions(limit=5001)
 
 
+def test_duplicate_attention_reconciler_rejects_unbounded_limit():
+    repository = OrchestrationV2Repository()
+
+    with pytest.raises(ValueError, match="between 1 and 5000"):
+        repository.reconcile_duplicate_attention_executions(limit=5001)
+
+
 def test_operator_supersede_invalid_scope_empty_selection_never_opens_database():
     repository = OrchestrationV2Repository()
 
     assert repository.supersede_invalid_scope_executions((), reason="nothing") == []
+
+
+def test_requeue_due_empty_selection_never_opens_database():
+    repository = OrchestrationV2Repository()
+
+    assert repository.requeue_due_daily_scope(
+        date(2026, 10, 9), (), reason="nothing"
+    ) == []
 
 
 def test_scope_refresh_preserves_initialization_lineage():

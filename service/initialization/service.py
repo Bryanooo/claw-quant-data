@@ -9,13 +9,16 @@ import time
 from service.clock import business_today
 from service.data_coverage.registry import COVERAGE_RULES
 from service.data_coverage.service import CoverageService
+from service.config import INITIALIZATION_RECOVERY_BATCH_LIMIT
 from service.initialization.repository import InitializationRepository
 from service.orchestration_v2.gap_repair import (
     create_repair_executions,
     current_problem_partitions,
     plan_current_repairs,
+    plan_quota_guarded_history_repairs,
 )
 from service.orchestration_v2.repository import OrchestrationV2Repository
+from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
 
 
 _TERMINAL = frozenset({"success", "attention", "superseded", "cancelled"})
@@ -91,8 +94,8 @@ class InitializationService:
 
     def get(self, initialization_id: int) -> dict:
         audits = self._repository.audit_jobs(initialization_id)
-        executions = self._repository.executions(initialization_id)
-        if not audits and not executions:
+        execution_summary = self._execution_summary(initialization_id)
+        if not audits and not execution_summary["total"]:
             raise LookupError(f"V2 initialization not found: {initialization_id}")
         initial_audits = [
             row for row in audits if ":verify:" not in row.get("idempotency_key", "")
@@ -113,7 +116,7 @@ class InitializationService:
         audit_counts = self._counts(audits)
         initial_audit_counts = self._counts(initial_audits)
         verification_counts = self._counts(latest_verification_audits)
-        execution_counts = self._counts(executions)
+        execution_counts = execution_summary["counts"]
         audit_failed = initial_audit_counts.get("failed", 0) + verification_counts.get(
             "failed", 0
         )
@@ -125,20 +128,16 @@ class InitializationService:
         # post-repair verification round.  Superseded/cancelled scopes are
         # retained as audit history but must not make an otherwise complete
         # historical campaign perpetually verification-pending.
-        latest_execution_id = max(
-            (
-                int(row["task_execution_id"])
-                for row in executions
-                if row.get("status") == "success"
-            ),
-            default=0,
-        )
+        latest_execution_id = execution_summary["latest_success_execution_id"]
         campaign_start, campaign_end = self._audit_bounds(initialization_id)
         campaign_problems = current_problem_partitions(
             start_date=campaign_start,
             end_date=campaign_end,
         )
-        if audit_failed or execution_failed:
+        control_status = self._repository.control_status(initialization_id)
+        if control_status == "paused":
+            status = "paused"
+        elif audit_failed or execution_failed:
             status = "attention"
         elif initial_audit_counts.get("queued", 0) or initial_audit_counts.get(
             "running", 0
@@ -146,7 +145,7 @@ class InitializationService:
             status = "auditing"
         elif active:
             status = "collecting"
-        elif executions and latest_verification_round < latest_execution_id:
+        elif execution_summary["total"] and latest_verification_round < latest_execution_id:
             status = "verification_pending"
         elif verification_counts.get("queued", 0) or verification_counts.get(
             "running", 0
@@ -166,11 +165,12 @@ class InitializationService:
             "initialization_id": initialization_id,
             "engine": "orchestration_v2",
             "status": status,
+            "control_status": control_status,
             "audit_counts": audit_counts,
             "verification_counts": verification_counts,
             "latest_verification_round": latest_verification_round or None,
             "execution_counts": execution_counts,
-            "planned_steps": len(audits) + len(executions),
+            "planned_steps": len(audits) + execution_summary["total"],
             "completed_steps": (
                 audit_counts.get("success", 0)
                 + audit_counts.get("failed", 0)
@@ -183,6 +183,8 @@ class InitializationService:
             "current_phase": (
                 "complete"
                 if status == "ready"
+                else "paused"
+                if status == "paused"
                 else "audit"
                 if status in {"auditing", "verification_pending", "verifying"}
                 else "recover"
@@ -190,11 +192,37 @@ class InitializationService:
             "phase_name": (
                 "initialization_complete"
                 if status == "ready"
+                else "initialization_paused"
+                if status == "paused"
                 else "strict_data_audit"
                 if status == "auditing"
                 else "strict_post_repair_verification"
                 if status in {"verification_pending", "verifying"}
                 else "v2_gap_recovery"
+            ),
+        }
+
+    def _execution_summary(self, initialization_id: int) -> dict:
+        summarize = getattr(self._repository, "execution_summary", None)
+        if callable(summarize):
+            return summarize(initialization_id)
+        # Test doubles and third-party repository adapters written before the
+        # aggregate projection can retain the original list contract.
+        executions = self._repository.executions(initialization_id)
+        return {
+            "total": len(executions),
+            "counts": self._counts(executions),
+            "latest_execution_id": max(
+                (int(row["task_execution_id"]) for row in executions),
+                default=0,
+            ),
+            "latest_success_execution_id": max(
+                (
+                    int(row["task_execution_id"])
+                    for row in executions
+                    if row.get("status") == "success"
+                ),
+                default=0,
             ),
         }
 
@@ -230,12 +258,12 @@ class InitializationService:
 
     def reconcile(self, initialization_id: int) -> dict:
         current = self.get(initialization_id)
+        if current["status"] == "paused":
+            return current
         if current["status"] == "verification_pending":
-            executions = self._repository.executions(initialization_id)
-            verification_round = max(
-                (int(row["task_execution_id"]) for row in executions),
-                default=0,
-            )
+            verification_round = self._execution_summary(
+                initialization_id
+            )["latest_execution_id"]
             datasets = [
                 rule.dataset_name for rule in COVERAGE_RULES.list() if rule.auditable
             ]
@@ -255,16 +283,36 @@ class InitializationService:
                 self._orchestration,
                 start_date=start,
                 end_date=end,
+                excluded_datasets=QUOTA_GUARDED_DATASETS,
             )
             audits = self._repository.audit_jobs(initialization_id)
             audit_round = max((int(row["job_id"]) for row in audits), default=0)
             create_repair_executions(
                 self._orchestration,
                 proposals=proposals,
+                limit=INITIALIZATION_RECOVERY_BATCH_LIMIT,
                 purpose="initialization",
                 trigger_source="recovery",
                 frozen_scope_extra={"initialization_id": str(initialization_id)},
                 idempotency_prefix=f"v2:init:{initialization_id}:a{audit_round}",
+            )
+            guarded = plan_quota_guarded_history_repairs(
+                self._orchestration,
+                start_date=start,
+                end_date=end,
+            )
+            create_repair_executions(
+                self._orchestration,
+                proposals=guarded,
+                purpose="initialization",
+                trigger_source="recovery",
+                frozen_scope_extra={
+                    "initialization_id": str(initialization_id),
+                    "recovery_scope": "quota_guarded_history",
+                },
+                idempotency_prefix=(
+                    f"v2:init:{initialization_id}:a{audit_round}:guarded"
+                ),
             )
             current = self.get(initialization_id)
         return current
@@ -291,12 +339,20 @@ class InitializationService:
 
     def pause(self, initialization_id: int) -> dict:
         self.get(initialization_id)
+        self._repository.set_control_status(initialization_id, "paused")
         self._repository.set_execution_status(initialization_id, "paused")
         return self.get(initialization_id)
 
     def resume(self, initialization_id: int) -> dict:
         self.get(initialization_id)
-        self._repository.set_execution_status(initialization_id, "resumed")
+        # Paused work is historical evidence.  Do not revive every cancelled
+        # instance: reconciliation will create only currently valid, safe
+        # repairs with fresh idempotency keys.
+        self._repository.supersede_legacy_quota_guarded_executions(
+            initialization_id,
+            task_keys=tuple(sorted(QUOTA_GUARDED_DATASETS)),
+        )
+        self._repository.set_control_status(initialization_id, "active")
         return self.reconcile(initialization_id)
 
     def activate(self, initialization_id: int) -> dict:

@@ -21,6 +21,7 @@ from service.orchestration_v2.repair_planning import (
     plan_period_repairs,
 )
 from service.orchestration_v2.service import OrchestrationV2Service
+from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
 
 
 def dataset_task_map() -> dict[str, str]:
@@ -124,6 +125,8 @@ def plan_current_repairs(
     *,
     start_date: date | None = None,
     end_date: date | None = None,
+    included_datasets: frozenset[str] | None = None,
+    excluded_datasets: frozenset[str] = frozenset(),
 ) -> tuple[RepairInstanceProposal, ...]:
     task_by_dataset = dataset_task_map()
     by_task: dict[str, dict[str, dict[date, str]]] = defaultdict(dict)
@@ -131,6 +134,10 @@ def plan_current_repairs(
         start_date=start_date,
         end_date=end_date,
     ).items():
+        if included_datasets is not None and dataset_name not in included_datasets:
+            continue
+        if dataset_name in excluded_datasets:
+            continue
         task_key = task_by_dataset.get(dataset_name)
         if task_key:
             by_task[task_key][dataset_name] = problems
@@ -151,6 +158,40 @@ def plan_current_repairs(
         key=lambda item: (item.observation_start or date.min, item.task_key),
         reverse=True,
     ))
+
+
+def plan_quota_guarded_history_repairs(
+    repository,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> tuple[RepairInstanceProposal, ...]:
+    """Collapse all audited gaps into one bounded execution per guarded task."""
+    task_by_dataset = dataset_task_map()
+    current = current_problem_partitions(
+        start_date=start_date,
+        end_date=end_date,
+    )
+    proposals: list[RepairInstanceProposal] = []
+    for dataset_name in sorted(QUOTA_GUARDED_DATASETS):
+        problems = current.get(dataset_name) or {}
+        task_key = task_by_dataset.get(dataset_name)
+        if not problems or not task_key or not repository.get_active_definition(task_key):
+            continue
+        start = min(problems)
+        end = max(problems)
+        proposals.append(RepairInstanceProposal(
+            task_key=task_key,
+            observation_key=(
+                f"history:{start.isoformat()}:{end.isoformat()}"
+            ),
+            observation_start=start,
+            observation_end=end,
+            observation_period=f"{start.isoformat()}..{end.isoformat()}",
+            datasets=(dataset_name,),
+            reasons=tuple(sorted(set(problems.values()))),
+        ))
+    return tuple(proposals)
 
 
 def create_repair_executions(
@@ -180,15 +221,25 @@ def create_repair_executions(
     last_execution_id: int | None = None
     by_task: dict[str, int] = defaultdict(int)
     for proposal in selected:
+        active_definition = repository.get_active_definition(proposal.task_key)
+        if not active_definition:
+            continue
+        definition_version = int(active_definition.get("version") or 1)
+        base_idempotency_key = (
+            f"{idempotency_prefix}:{proposal.task_key}:"
+            f"{proposal.observation_key}"
+            if idempotency_prefix
+            else proposal.idempotency_key
+        )
         row, was_created = service.create_execution(ExecutionRequest(
             task_key=proposal.task_key,
             purpose=purpose,
             trigger_source=trigger_source,
+            # A corrected task definition must be able to create a fresh
+            # execution for an observation whose older repair is terminal.
+            # Within one active definition this remains strictly idempotent.
             idempotency_key=(
-                f"{idempotency_prefix}:{proposal.task_key}:"
-                f"{proposal.observation_key}"
-                if idempotency_prefix
-                else proposal.idempotency_key
+                f"{base_idempotency_key}:definition:{definition_version}"
             ),
             observation_key=proposal.observation_key,
             observation_start=proposal.observation_start,

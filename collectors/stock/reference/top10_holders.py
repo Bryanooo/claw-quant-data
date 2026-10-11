@@ -1,18 +1,21 @@
 """
 前十大股东采集器
 接口：top10_holders
-采集策略：逐个股票按报告期拉
+采集策略：按报告期全市场分页；仍支持按股票查询
 """
 
 import re
 import pandas as pd
 from collectors.base import BaseCollector
+from collectors.contracts import PaginationMode
 
 
 class Top10HoldersCollector(BaseCollector):
     API_NAME = "top10_holders"
     table_name = "top10_holders"
     pk_columns = ["ts_code", "end_date", "holder_name"]
+    pagination_mode = PaginationMode.OFFSET
+    collector_version = "2"
 
     def _fix_date(self, val):
         if val is None:

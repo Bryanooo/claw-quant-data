@@ -9,10 +9,24 @@ from service.tushare_scheduling import parameters_for_policy
 class _Repository:
     def __init__(self):
         self.requests = []
+        self.superseded = []
+        self.requeued = []
 
     def create_execution(self, request):
         self.requests.append(request)
         return ({"task_key": request.task_key}, True)
+
+    def supersede_not_expected_daily_scope(
+        self, observation_date, task_keys, *, reason
+    ):
+        self.superseded.append((observation_date, task_keys, reason))
+        return [{"task_key": task_key} for task_key in task_keys]
+
+    def requeue_due_daily_scope(
+        self, observation_date, task_keys, *, reason
+    ):
+        self.requeued.append((observation_date, task_keys, reason))
+        return [{"task_key": task_key} for task_key in task_keys]
 
 
 def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
@@ -60,6 +74,66 @@ def test_daily_dispatch_does_not_create_weekend_work(monkeypatch):
 
     assert result["skipped"] == "not_a_trade_day"
     assert repository.requests == []
+
+
+def test_closed_day_keeps_next_morning_tasks_on_prior_open_day(monkeypatch):
+    repository = _Repository()
+    monkeypatch.setattr(
+        scheduling,
+        "query",
+        lambda *_args, **_kwargs: [
+            {"cal_date": date(2026, 10, 9)},
+            {"cal_date": date(2026, 10, 8)},
+            {"cal_date": date(2026, 9, 30)},
+        ],
+    )
+    monkeypatch.setattr(scheduling, "is_trade_day", lambda _value: True)
+
+    result = scheduling.dispatch_latest_daily_acquisitions(
+        date(2026, 10, 11),
+        include_current_daily=True,
+        repository=repository,
+    )
+
+    assert result["target_date"] == "2026-10-09"
+    assert result["delayed_target_date"] == "2026-10-08"
+    assert result["superseded_not_due"] == 4
+    assert result["requeued_after_release"] == 0
+    assert repository.superseded[0][0] == date(2026, 10, 9)
+    assert set(repository.superseded[0][1]) == {
+        "ccass_hold", "etf_share_size", "margin", "margin_detail"
+    }
+    by_task = {item.task_key: item for item in repository.requests}
+    assert by_task["margin"].observation_key == "2026-10-08"
+    assert by_task["margin_detail"].observation_key == "2026-10-08"
+
+
+def test_open_day_dispatches_previous_day_after_next_morning_release(monkeypatch):
+    repository = _Repository()
+    monkeypatch.setattr(
+        scheduling,
+        "query",
+        lambda *_args, **_kwargs: [
+            {"cal_date": date(2026, 10, 12)},
+            {"cal_date": date(2026, 10, 9)},
+            {"cal_date": date(2026, 10, 8)},
+        ],
+    )
+    monkeypatch.setattr(scheduling, "is_trade_day", lambda _value: True)
+
+    result = scheduling.dispatch_latest_daily_acquisitions(
+        date(2026, 10, 12),
+        include_current_daily=False,
+        next_morning_released=True,
+        repository=repository,
+    )
+
+    by_task = {item.task_key: item for item in repository.requests}
+    assert by_task["margin"].observation_key == "2026-10-09"
+    assert by_task["margin_detail"].observation_key == "2026-10-09"
+    assert result["superseded_not_due"] == 0
+    assert result["requeued_after_release"] == 4
+    assert repository.requeued[0][0] == date(2026, 10, 9)
 
 
 def test_reviewed_cadences_do_not_fall_back_to_snapshot_heuristics():

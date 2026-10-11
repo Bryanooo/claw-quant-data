@@ -68,6 +68,20 @@ def test_share_float_identity_preserves_distinct_announcements():
     )
 
 
+def test_shareholder_rank_collectors_use_exhaustive_offset_pagination():
+    contracts = {
+        item.api_name: item for item in discover_collectors()
+        if item.api_name in {"top10_holders", "top10_floatholders"}
+    }
+
+    assert set(contracts) == {"top10_holders", "top10_floatholders"}
+    assert all(
+        item.pagination_mode is PaginationMode.OFFSET
+        for item in contracts.values()
+    )
+    assert all(item.version == "2" for item in contracts.values())
+
+
 def test_ths_hot_identity_accepts_ranked_instruments_without_ts_code():
     contract = next(
         item for item in discover_collectors() if item.api_name == "ths_hot"

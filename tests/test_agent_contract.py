@@ -18,6 +18,7 @@ AUTHORITATIVE_SKILLS = {
     "claw-quant-market-charting",
     "claw-quant-price-trend-research",
     "claw-quant-technical-research",
+    "claw-quant-technical-screening",
     "claw-quant-valuation-shareholder-research",
     "claw-quant-volume-flow-research",
     "claw-quant-wave-chan-research",
@@ -43,6 +44,7 @@ TECHNICAL_AGENT_SKILLS = {
     "market-charting",
     "price-trend-research",
     "technical-research",
+    "technical-screening",
     "volume-flow-research",
     "wave-chan-research",
 }

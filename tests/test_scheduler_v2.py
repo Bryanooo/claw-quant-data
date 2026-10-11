@@ -32,6 +32,7 @@ def test_late_repair_dispatch_creates_fresh_bounded_v2_instances(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(scheduler_module, "business_now", lambda: now)
+    monkeypatch.setattr(scheduler_module, "is_trade_day", lambda _value: True)
     monkeypatch.setattr(
         scheduler_module, "OrchestrationV2Repository", lambda: repository
     )
@@ -53,13 +54,29 @@ def test_late_repair_dispatch_creates_fresh_bounded_v2_instances(monkeypatch):
     assert captured["plan"] == {
         "start_date": now.date().replace(day=23),
         "end_date": now.date(),
+        "included_datasets": scheduler_module.LATE_PUBLISHED_DATASETS,
     }
     assert captured["create"]["proposals"] == (proposal,)
     assert captured["create"]["limit"] == 500
     assert captured["create"]["trigger_source"] == "schedule"
     assert captured["create"]["idempotency_prefix"].endswith(
-        "2026-09-30T23:58"
+        "2026-09-30"
     )
+
+
+def test_late_repair_skips_non_trading_days(monkeypatch):
+    now = datetime(2026, 10, 3, 15, 58, tzinfo=ZoneInfo("Asia/Shanghai"))
+    monkeypatch.setattr(scheduler_module, "business_now", lambda: now)
+    monkeypatch.setattr(scheduler_module, "is_trade_day", lambda _value: False)
+    monkeypatch.setattr(
+        scheduler_module,
+        "plan_current_repairs",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("must not plan provider repairs on a closed day")
+        ),
+    )
+
+    assert scheduler_module.run_v2_late_repair_dispatch() == 0
 
 
 def test_late_repairs_run_at_multiple_post_close_windows():

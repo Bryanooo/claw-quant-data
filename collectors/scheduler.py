@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import signal
 import time
-from datetime import timedelta
+from datetime import time as wall_time, timedelta
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -28,8 +28,12 @@ from service.orchestration_v2.repository import OrchestrationV2Repository
 from service.orchestration_v2.late_repair import (
     LATE_REPAIR_HOURS,
     LATE_REPAIR_MINUTE,
+    LATE_PUBLISHED_DATASETS,
 )
-from service.orchestration_v2.scheduling import dispatch_due_acquisitions
+from service.orchestration_v2.scheduling import (
+    dispatch_due_acquisitions,
+    is_trade_day,
+)
 
 
 logger = logging.getLogger("scheduler-v2")
@@ -52,6 +56,9 @@ def run_v2_policy_dispatch() -> int:
     result = dispatch_due_acquisitions(
         now.date(),
         include_current_daily=now.hour >= 19,
+        next_morning_released=(
+            now.time().replace(tzinfo=None) >= wall_time(9, 15)
+        ),
     )
     if result["errors"]:
         raise RuntimeError(
@@ -74,12 +81,16 @@ def run_data_coverage_dispatch() -> int:
 
 def run_coverage_rule_reconciler() -> int:
     count = CoverageRuleReconciler().reconcile()
-    resolved = OrchestrationV2Repository().reconcile_resolved_attention_executions()
+    repository = OrchestrationV2Repository()
+    resolved = repository.reconcile_resolved_attention_executions()
+    duplicates = repository.reconcile_duplicate_attention_executions()
     if count:
         logger.warning("requeued %s stale-rule audits", count)
     if resolved:
         logger.info("superseded %s stale resolved attention executions", resolved)
-    return count + resolved
+    if duplicates:
+        logger.info("superseded %s duplicate attention attempts", duplicates)
+    return count + resolved + duplicates
 
 
 def run_v2_late_repair_dispatch() -> int:
@@ -93,11 +104,15 @@ def run_v2_late_repair_dispatch() -> int:
     """
 
     now = business_now()
+    if not is_trade_day(now.date()):
+        logger.info("skip V2 late repair on non-trading day %s", now.date())
+        return 0
     repository = OrchestrationV2Repository()
     proposals = plan_current_repairs(
         repository,
         start_date=now.date() - timedelta(days=7),
         end_date=now.date(),
+        included_datasets=LATE_PUBLISHED_DATASETS,
     )
     result = create_repair_executions(
         repository,
@@ -107,7 +122,7 @@ def run_v2_late_repair_dispatch() -> int:
         trigger_source="schedule",
         idempotency_prefix=(
             "v2:scheduled-late-repair:"
-            f"{now.strftime('%Y-%m-%dT%H:%M')}"
+            f"{now.date().isoformat()}"
         ),
         frozen_scope_extra={"dispatch": "v2_scheduled_late_repair"},
     )

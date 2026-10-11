@@ -364,41 +364,100 @@ class CoverageRepository:
             }
             transport_proof_dates: set[date] = set()
             if rule.require_transport_proof:
-                if rule.strategy == CoverageStrategy.CALENDAR_MONTHLY:
-                    cursor.execute(
-                        """
-                        SELECT DISTINCT execution.observation_end AS partition_date
-                        FROM orchestration_v2.task_execution AS execution
-                        JOIN orchestration_v2.task_execution_event AS event
-                          USING (task_execution_id)
-                        WHERE execution.task_key=%s
-                          AND execution.status='success'
-                          AND execution.observation_end BETWEEN %s AND %s
-                          AND event.event_type='node.acquire.request_completed'
-                          AND event.payload->'completion_evidence'->>'verified'='true'
-                        """,
-                        (collection_api_name, start_date, end_date),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        SELECT DISTINCT execution.observation_end AS partition_date
-                        FROM orchestration_v2.task_execution AS execution
-                        JOIN orchestration_v2.task_execution_event AS event
-                          USING (task_execution_id)
-                        WHERE execution.task_key=%s
-                          AND execution.status='success'
-                          AND execution.observation_end BETWEEN %s AND %s
-                          AND event.event_type='node.acquire.request_completed'
-                          AND event.payload->'completion_evidence'->>'verified'='true'
-                        """,
-                        (collection_api_name, start_date, end_date),
-                    )
+                # A verified V2 execution certifies its complete logical
+                # observation range.  History collectors often use bounded
+                # weekly/monthly windows, so recording only observation_end
+                # leaves every earlier physical partition falsely unverified.
+                # Expand the frozen range to dates here; this remains safe
+                # because the acquire event itself must carry collector-owned
+                # pagination/exhaustion evidence and the execution must have
+                # reached terminal success.
+                cursor.execute(
+                    """
+                    SELECT DISTINCT proof_day::date AS partition_date
+                    FROM orchestration_v2.task_execution AS execution
+                    JOIN orchestration_v2.task_execution_event AS event
+                      USING (task_execution_id)
+                    CROSS JOIN LATERAL generate_series(
+                        execution.observation_start,
+                        execution.observation_end,
+                        INTERVAL '1 day'
+                    ) AS proof_day
+                    WHERE execution.task_key=%s
+                      AND execution.status='success'
+                      AND execution.observation_start IS NOT NULL
+                      AND execution.observation_end IS NOT NULL
+                      AND execution.observation_end >= %s
+                      AND execution.observation_start <= %s
+                      AND event.event_type='node.acquire.request_completed'
+                      AND event.payload->'completion_evidence'->>'verified'='true'
+                    """,
+                    (collection_api_name, start_date, end_date),
+                )
                 transport_proof_dates = {
                     row["partition_date"]
                     for row in cursor.fetchall()
                     if row["partition_date"] is not None
                 }
+                if collection_api_name == "hk_hold":
+                    # hk_hold history was collected before the V2 cutover in
+                    # bounded market-wide windows.  The immutable raw ledger
+                    # records every page and the terminal empty page for each
+                    # logical request.  That terminal page is collector-owned
+                    # pagination exhaustion evidence, so it is valid transport
+                    # proof; merely having business rows is not.
+                    cursor.execute(
+                        """
+                        WITH exhausted AS (
+                            SELECT logical_request_hash,
+                                   logical_request_params,
+                                   CASE
+                                     WHEN logical_request_params ? 'trade_date'
+                                     THEN to_date(
+                                       logical_request_params->>'trade_date',
+                                       'YYYYMMDD'
+                                     )
+                                     ELSE to_date(
+                                       logical_request_params->>'start_date',
+                                       'YYYYMMDD'
+                                     )
+                                   END AS scope_start,
+                                   CASE
+                                     WHEN logical_request_params ? 'trade_date'
+                                     THEN to_date(
+                                       logical_request_params->>'trade_date',
+                                       'YYYYMMDD'
+                                     )
+                                     ELSE to_date(
+                                       logical_request_params->>'end_date',
+                                       'YYYYMMDD'
+                                     )
+                                   END AS scope_end
+                            FROM tushare_raw_request
+                            WHERE api_name='hk_hold'
+                            GROUP BY logical_request_hash,
+                                     logical_request_params
+                            HAVING bool_or(status='empty')
+                        )
+                        SELECT DISTINCT proof_day::date AS partition_date
+                        FROM exhausted
+                        CROSS JOIN LATERAL generate_series(
+                            exhausted.scope_start,
+                            exhausted.scope_end,
+                            INTERVAL '1 day'
+                        ) AS proof_day
+                        WHERE exhausted.scope_start IS NOT NULL
+                          AND exhausted.scope_end IS NOT NULL
+                          AND exhausted.scope_end >= %s
+                          AND exhausted.scope_start <= %s
+                        """,
+                        (start_date, end_date),
+                    )
+                    transport_proof_dates.update(
+                        row["partition_date"]
+                        for row in cursor.fetchall()
+                        if row["partition_date"] is not None
+                    )
                 incomplete_dates.update(
                     item.partition_date
                     for item in partitions
@@ -831,6 +890,28 @@ class CoverageRepository:
             row = cursor.fetchone()
             return row[0], row[1], int(row[2])
 
+    def next_market_partition(
+        self,
+        exchange: str,
+        after_date: date,
+        no_later_than: date,
+    ) -> date | None:
+        """Return the first open market date after one observation date."""
+
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT cal_date FROM trade_cal
+                WHERE exchange=%s AND is_open=1
+                  AND cal_date>%s AND cal_date<=%s
+                ORDER BY cal_date
+                LIMIT 1
+                """,
+                (exchange, after_date, no_later_than),
+            )
+            row = cursor.fetchone()
+        return row[0] if row else None
+
     def save_audit(self, job_id: int | None, result: CoverageAuditResult) -> int:
         """Persist an audit from the audit queue or V2 validation.
 
@@ -938,14 +1019,15 @@ class CoverageRepository:
             return audit_id
 
     def latest_audits(self) -> dict[str, dict]:
-        """Return the most representative current audit for each dataset.
+        """Return the current-rule aggregate health view for each dataset.
 
         A targeted repair can audit an old single day after the regular
-        rolling-window audit has finished.  Ordering only by execution time
-        made that historical point check replace the current health view.  A
-        newer covered end date is authoritative; for the same end date the
-        wider interval is more representative, with execution time used only
-        as the final tie-breaker.
+        rolling-window audit has finished.  Conversely, selecting only the
+        newest rolling window can hide older gaps proved by a full-history
+        audit.  Use only the highest observed rule revision, merge its audited
+        bounds, and calculate status from the durable partition ledger across
+        that entire range.  The newest audit row remains the provenance
+        representative, not the source of the aggregate health counters.
         """
         with (
             self._connection() as connection,
@@ -953,14 +1035,38 @@ class CoverageRepository:
         ):
             cursor.execute(
                 """
-                WITH trusted_ranges AS (
+                WITH revisioned AS (
+                    SELECT audit.*,
+                           COALESCE(
+                               NULLIF(audit.evidence->>'rule_revision', '')::integer,
+                               0
+                           ) AS observed_rule_revision
+                    FROM sys_data_coverage_audit AS audit
+                ), revision_frontier AS (
+                    SELECT dataset_name,
+                           max(observed_rule_revision) AS observed_rule_revision
+                    FROM revisioned
+                    GROUP BY dataset_name
+                ), eligible AS (
+                    SELECT revisioned.*
+                    FROM revisioned
+                    JOIN revision_frontier USING (
+                        dataset_name, observed_rule_revision
+                    )
+                ), audit_bounds AS (
+                    SELECT dataset_name,
+                           min(start_date) AS aggregate_start_date,
+                           max(end_date) AS aggregate_end_date
+                    FROM eligible
+                    GROUP BY dataset_name
+                ), trusted_ranges AS (
                     SELECT dataset_name, start_date, end_date,
                            max(end_date) OVER (
                                PARTITION BY dataset_name
                                ORDER BY start_date, end_date
                                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
                            ) AS previous_frontier
-                    FROM sys_data_coverage_audit
+                    FROM eligible
                     WHERE status IN ('complete', 'empty')
                       AND missing_partitions=0
                       AND partial_partitions=0
@@ -994,11 +1100,13 @@ class CoverageRepository:
                     GROUP BY dataset_name, span_id
                 ), representative AS (
                     SELECT DISTINCT ON (dataset_name) *
-                    FROM sys_data_coverage_audit
+                    FROM eligible
                     ORDER BY dataset_name, end_date DESC, start_date ASC,
                              finished_at DESC, audit_id DESC
                 )
                 SELECT representative.*,
+                       bounds.aggregate_start_date,
+                       bounds.aggregate_end_date,
                        span.verified_start_date,
                        span.verified_end_date,
                        current.expected_partitions AS current_expected_partitions,
@@ -1006,6 +1114,7 @@ class CoverageRepository:
                        current.missing_partitions AS current_missing_partitions,
                        current.partial_partitions AS current_partial_partitions
                 FROM representative
+                JOIN audit_bounds AS bounds USING (dataset_name)
                 LEFT JOIN LATERAL (
                     SELECT verified_start_date, verified_end_date
                     FROM verified_spans
@@ -1030,7 +1139,7 @@ class CoverageRepository:
                     FROM sys_data_coverage_partition AS partition
                     WHERE partition.dataset_name=representative.dataset_name
                       AND partition.partition_date BETWEEN
-                          representative.start_date AND representative.end_date
+                          bounds.aggregate_start_date AND bounds.aggregate_end_date
                 ) AS current ON TRUE
                 ORDER BY representative.dataset_name
                 """
@@ -1038,6 +1147,8 @@ class CoverageRepository:
             result = {}
             for raw in cursor.fetchall():
                 row = dict(raw)
+                row["start_date"] = row.pop("aggregate_start_date")
+                row["end_date"] = row.pop("aggregate_end_date")
                 current_expected = int(
                     row.pop("current_expected_partitions") or 0
                 )
@@ -1057,13 +1168,11 @@ class CoverageRepository:
                 # prevents a repaired day from remaining a false red alert
                 # until tomorrow's rolling audit.
                 if (
-                    row.get("strategy") not in {
-                        CoverageStrategy.OBSERVED_ONLY.value,
-                        CoverageStrategy.NON_TEMPORAL.value,
-                    }
+                    row.get("strategy") != CoverageStrategy.NON_TEMPORAL.value
                     and row.get("expected_partitions", 0) > 0
-                    and current_expected >= int(row["expected_partitions"])
+                    and current_expected > 0
                 ):
+                    row["expected_partitions"] = current_expected
                     row["present_partitions"] = current_present
                     row["missing_partitions"] = current_missing
                     row["partial_partitions"] = current_partial
@@ -1072,9 +1181,18 @@ class CoverageRepository:
                         if current_expected
                         else None
                     )
-                    row["status"] = (
-                        "gaps" if current_missing or current_partial else "complete"
-                    )
+                    if row.get("strategy") == CoverageStrategy.OBSERVED_ONLY.value:
+                        row["status"] = (
+                            "unverified"
+                            if current_missing or current_partial
+                            else "complete"
+                        )
+                    else:
+                        row["status"] = (
+                            "gaps"
+                            if current_missing or current_partial
+                            else "complete"
+                        )
                 result[row["dataset_name"]] = row
             return result
 

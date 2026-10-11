@@ -146,6 +146,24 @@ class CoverageCalculator:
             expected_dates = list(actual)
             calendar_complete = None
             calendar_bounds = (None, None)
+        elif rule.strategy == CoverageStrategy.CALENDAR_DAILY:
+            cutoff = min(
+                end_date,
+                as_of_date - timedelta(days=rule.grace_days + int(before_release)),
+            )
+            if cutoff < expectation_start:
+                expected_dates = []
+                calendar_days = 0
+                calendar_complete = True
+                calendar_bounds = (None, None)
+            else:
+                calendar_days = (cutoff - expectation_start).days + 1
+                expected_dates = [
+                    expectation_start + timedelta(days=offset)
+                    for offset in range(calendar_days)
+                ]
+                calendar_complete = True
+                calendar_bounds = (expectation_start, cutoff)
         elif rule.strategy == CoverageStrategy.REPORT_QUARTERLY:
             expected_dates = completed_quarters(
                 expectation_start, end_date, as_of_date
@@ -160,6 +178,56 @@ class CoverageCalculator:
             )
             calendar_complete = None
             calendar_bounds = (None, None)
+        elif (
+            rule.strategy == CoverageStrategy.TRADING_DAILY
+            and rule.release_on_next_trade_day
+        ):
+            cutoff = min(end_date, as_of_date)
+            if cutoff < expectation_start:
+                expected_dates = []
+                calendar_bounds = (None, None)
+                calendar_days = 0
+                calendar_complete = True
+            else:
+                calendar_min, calendar_max, calendar_days = (
+                    self._repository.calendar_coverage(
+                        rule.calendar_exchange,
+                        expectation_start,
+                        cutoff,
+                    )
+                )
+                calendar_bounds = (calendar_min, calendar_max)
+                required_calendar_days = (cutoff - expectation_start).days + 1
+                calendar_complete = bool(
+                    calendar_bounds[0]
+                    and calendar_bounds[1]
+                    and calendar_bounds[0] <= expectation_start
+                    and calendar_bounds[1] >= cutoff
+                    and calendar_days == required_calendar_days
+                )
+                expected_dates = list(
+                    self._repository.expected_market_partitions(
+                        rule,
+                        expectation_start,
+                        cutoff,
+                    )
+                )
+                if expected_dates:
+                    last_partition = expected_dates[-1]
+                    next_open = self._repository.next_market_partition(
+                        rule.calendar_exchange,
+                        last_partition,
+                        as_of_date,
+                    )
+                    last_is_mature = bool(
+                        next_open
+                        and (
+                            next_open < as_of_date
+                            or (next_open == as_of_date and not before_release)
+                        )
+                    )
+                    if not last_is_mature:
+                        expected_dates.pop()
         else:
             effective_grace_days = rule.grace_days + int(before_release)
             cutoff = min(end_date, as_of_date - timedelta(days=effective_grace_days))
@@ -278,6 +346,21 @@ class CoverageCalculator:
                 )
             elif expected:
                 status = "missing"
+            elif (
+                observed
+                and observed.known_incomplete
+                and rule.release_on_next_trade_day
+            ):
+                # A provider may expose one exchange before the documented
+                # next-business-day release is complete. Keep the early rows
+                # visible, but do not turn them into a repairable incident
+                # until this partition enters the expected set.
+                status = "observed_only"
+            elif observed and observed.known_incomplete:
+                # Observed-only does not invent a calendar, but it still must
+                # fail closed when physical rows have no exhaustive transport
+                # certificate for the range that produced them.
+                status = "partial"
             else:
                 status = "observed_only"
             partitions.append(
@@ -358,6 +441,7 @@ class CoverageCalculator:
                     else None
                 ),
                 "before_release": before_release,
+                "release_on_next_trade_day": rule.release_on_next_trade_day,
                 "detects_missing_partitions": rule.detects_missing_partitions,
                 "calendar_complete_for_range": calendar_complete,
                 "calendar_min_date": (

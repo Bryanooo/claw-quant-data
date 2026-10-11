@@ -16,6 +16,7 @@ from service.orchestration_v2.contracts import (
 
 _PERIOD_BY_STRATEGY = {
     CoverageStrategy.TRADING_DAILY: "day",
+    CoverageStrategy.CALENDAR_DAILY: "day",
     CoverageStrategy.TRADING_WEEKLY: "week",
     CoverageStrategy.TRADING_MONTHLY: "month",
     CoverageStrategy.CALENDAR_MONTHLY: "month",

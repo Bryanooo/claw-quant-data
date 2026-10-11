@@ -56,6 +56,7 @@ def _rule(
     entity_column: str | None = "ts_code",
     grace_days: int = 1,
     release_after: time | None = None,
+    release_on_next_trade_day: bool = False,
     default_lookback_days: int = 120,
     availability_start: date | None = None,
     description: str,
@@ -81,6 +82,7 @@ def _rule(
         entity_column=entity_column,
         grace_days=grace_days,
         release_after=release_after,
+        release_on_next_trade_day=release_on_next_trade_day,
         default_lookback_days=default_lookback_days,
         availability_start=availability_start,
         description=description,
@@ -268,9 +270,14 @@ _EXPLICIT_RULES = [
             entity_reference="margin_exchanges",
             min_entity_ratio=1.0,
             grace_days=1,
+            availability_start=date(2010, 3, 31),
             release_after=NEXT_MORNING_RELEASE_DATASETS["margin"],
-            description="按交易日检查沪深北三所汇总是否全部发布",
-            revision=2,
+            release_on_next_trade_day=True,
+            description=(
+                "自 2010-03-31 融资融券业务启动日起，按交易日检查"
+                "当期已开展业务的交易所汇总是否全部发布"
+            ),
+            revision=4,
         ),
         _rule(
             "margin_detail",
@@ -279,8 +286,97 @@ _EXPLICIT_RULES = [
             entity_reference="margin_secs",
             min_entity_ratio=0.98,
             grace_days=1,
+            availability_start=date(2010, 3, 31),
             release_after=NEXT_MORNING_RELEASE_DATASETS["margin_detail"],
-            description="按交易日及当日两融标的池识别交易所分批发布或截断",
+            release_on_next_trade_day=True,
+            description=(
+                "自 2010-03-31 融资融券业务启动日起，按交易日及当日"
+                "两融标的池识别交易所分批发布或截断"
+            ),
+            revision=4,
+        ),
+        _rule(
+            "cyq_perf",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column="ts_code",
+            entity_reference="stock_basic",
+            min_entity_ratio=0.90,
+            grace_days=1,
+            default_lookback_days=365,
+            availability_start=date(2018, 1, 1),
+            scheduled=False,
+            description=(
+                "2018 年起按 SSE 交易日和当期上市股票截面审计筹码胜率；"
+                "低于九成覆盖即判为部分采集"
+            ),
+            revision=2,
+        ),
+        _rule(
+            "fina_mainbz",
+            CoverageStrategy.REPORT_QUARTERLY,
+            collection_api_name="fina_mainbz",
+            entity_column="ts_code",
+            grace_days=0,
+            default_lookback_days=1825,
+            scheduled=False,
+            accept_verified_empty=True,
+            require_transport_proof=True,
+            description=(
+                "按已到披露期限的报告期审计主营行业/产品构成；稀疏季度"
+                "必须由 VIP 全市场分页穷尽证书证明，不能以已有行数代替完整性"
+            ),
+            revision=2,
+        ),
+        _rule(
+            "report_rc",
+            CoverageStrategy.CALENDAR_DAILY,
+            collection_api_name="report_rc",
+            entity_column=None,
+            grace_days=0,
+            release_after=time(22, 30),
+            default_lookback_days=365,
+            availability_start=date(2010, 1, 1),
+            scheduled=False,
+            accept_verified_empty=True,
+            require_transport_proof=True,
+            description=(
+                "2010 年起按自然日审计卖方研报；每日 19~22 点更新，"
+                "有行或权威空结果都必须由精确 report_date 的分页穷尽证书证明"
+            ),
+            revision=2,
+        ),
+        _rule(
+            "top10_holders",
+            CoverageStrategy.REPORT_QUARTERLY,
+            collection_api_name="top10_holders",
+            entity_column="ts_code",
+            grace_days=0,
+            default_lookback_days=3650,
+            availability_start=date(1990, 12, 31),
+            scheduled=False,
+            accept_verified_empty=True,
+            require_transport_proof=True,
+            description=(
+                "按已到披露期限的报告期审计前十大股东；一个季度任务在"
+                "采集节点内冻结当期上市股票全集并逐股穷尽，不能用已有行数代替"
+            ),
+            revision=2,
+        ),
+        _rule(
+            "top10_floatholders",
+            CoverageStrategy.REPORT_QUARTERLY,
+            collection_api_name="top10_floatholders",
+            entity_column="ts_code",
+            grace_days=0,
+            default_lookback_days=3650,
+            availability_start=date(2003, 3, 31),
+            scheduled=False,
+            accept_verified_empty=True,
+            require_transport_proof=True,
+            description=(
+                "按已到披露期限的报告期审计前十大流通股东；2003 年起"
+                "由季度任务在采集节点内冻结股票全集并逐股穷尽"
+            ),
             revision=2,
         ),
         _rule("index_weekly", CoverageStrategy.TRADING_WEEKLY, grace_days=2, description="检查每个完整交易周；指数研究池尚未配置"),
@@ -392,7 +488,16 @@ _EXPLICIT_RULES = [
         _rule("ccass_hold_detail", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", scheduled=False, description="单日超过百万行且需要显式范围；仅审计人工采集到的日期"),
         _rule("fut_index_daily", CoverageStrategy.OBSERVED_ONLY, description="南华商品指数缺少独立且完整的本地发布日历，仅审计静态指数全集的已观测日期"),
         _rule("hk_daily", CoverageStrategy.OBSERVED_ONLY, description="港股日线使用独立港股交易日历且接口限频一小时；仅审计已观测日期"),
-        _rule("hk_hold", CoverageStrategy.OBSERVED_ONLY, description="沪深港股通持股披露制度曾调整，不能用 SSE 日历反推历史日频缺口"),
+        _rule(
+            "hk_hold",
+            CoverageStrategy.OBSERVED_ONLY,
+            require_transport_proof=True,
+            description=(
+                "沪深港股通持股披露制度曾调整，不能用 SSE 日历反推"
+                "历史日频缺口；每个已观察分区仍必须落在分页穷尽的 V2 请求范围内"
+            ),
+            revision=2,
+        ),
         _rule("moneyflow_hsgt", CoverageStrategy.OBSERVED_ONLY, entity_column=None, description="沪深港通资金流混合多个市场日历，仅审计已观测日期"),
         _rule(
             "sge_daily",
@@ -471,6 +576,9 @@ _EXPLICIT_RULES = [
                     SAME_DAY_RELEASE_DATASETS.get(dataset_name)
                     or NEXT_MORNING_RELEASE_DATASETS.get(dataset_name)
                 ),
+                release_on_next_trade_day=(
+                    dataset_name in NEXT_MORNING_RELEASE_DATASETS
+                ),
                 description="按 SSE 交易日检查每日稳定发布的数据分区",
                 # These interfaces have rare, provider-authoritative empty open
                 # dates. They count only when an exact-date V2 execution
@@ -496,8 +604,10 @@ _EXPLICIT_RULES = [
                     else UPSTREAM_HISTORY_STARTS.get(dataset_name)
                 ),
                 revision=(
-                    3
-                    if dataset_name in {"bak_daily", "cb_daily", "etf_share_size"}
+                    4
+                    if dataset_name == "etf_share_size"
+                    else 3
+                    if dataset_name in {"bak_daily", "cb_daily"}
                     else 3
                     if dataset_name in {
                         "moneyflow_cnt_ths",

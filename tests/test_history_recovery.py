@@ -37,6 +37,8 @@ def test_reverse_recovery_uses_trade_date_for_provider_rejected_range_apis():
         "fund_daily": date(2021, 3, 26),
         "index_daily": date(2021, 3, 26),
         "index_monthly": date(2016, 8, 31),
+        "margin": date(2021, 3, 26),
+        "margin_detail": date(2021, 3, 26),
     }
     plan = build_reverse_recovery_plan(
         dataset_apis={name: name for name in targets},
@@ -56,6 +58,14 @@ def test_reverse_recovery_uses_trade_date_for_provider_rejected_range_apis():
     assert by_api["index_daily"].parameters["parameters"] == {
         "trade_date": "20210326"
     }
+    assert by_api["margin_detail"].parameters["parameters"] == {
+        "trade_date": "20210326"
+    }
+    assert plan.unsupported["margin"] == (
+        "requires bounded fan-out history campaign"
+    )
+    assert by_api["margin_detail"].idempotency_key.endswith(":plan-v2")
+    assert by_api["fund_daily"].idempotency_key.endswith(":plan-v1")
 
 
 def test_reverse_recovery_respects_verified_provider_availability_boundaries():
@@ -152,6 +162,33 @@ def test_reverse_recovery_uses_quarter_contract_for_gdp():
     assert plan.specs[0].parameters["parameters"] == {
         "start_q": "2023Q4", "end_q": "2023Q4",
     }
+
+
+def test_shareholder_rank_history_uses_market_wide_quarter_pagination():
+    plan = build_reverse_recovery_plan(
+        dataset_apis={
+            "top10_holders": "top10_holders",
+            "top10_floatholders": "top10_floatholders",
+        },
+        targets_by_dataset={
+            "top10_holders": [date(2026, 6, 30)],
+            "top10_floatholders": [date(2026, 6, 30)],
+        },
+        history_start=date(2026, 1, 1),
+        history_end=date(2026, 6, 30),
+        trade_dates=(),
+    )
+
+    assert not plan.unsupported
+    assert {item.api_name for item in plan.specs} == {
+        "top10_holders", "top10_floatholders"
+    }
+    assert all(
+        item.parameters["parameters"] == {"period": "20260630"}
+        for item in plan.specs
+    )
+    assert all(item.parameters["complete"] is True for item in plan.specs)
+    assert all(item.idempotency_key.endswith(":plan-v2") for item in plan.specs)
 
 
 def test_reverse_recovery_routes_derived_ggt_monthly_newest_first():

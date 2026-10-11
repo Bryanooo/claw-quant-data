@@ -55,11 +55,13 @@ Skill，但各自的部署包保持自包含、可独立发布和回滚。
 | `wave-chan-research` | 可审计 ZigZag、Elliott 和缠论候选及失效条件 |
 | `cross-asset-research` | 指数、ETF、行业与 SGE 现货的统一技术比较 |
 | `etf-flow-research` | ETF 份额申赎、暴露迁移和国家队证据边界 |
+| `technical-screening` | 受治理全市场候选发现、覆盖审计、透明预设和个股下钻 |
 | `market-charting` | K线、财务趋势、资金流、宽度和跨资产图表 |
 | `technical-research` | 组合证据形成主情景、备选情景和失效条件 |
 
-全市场技术筛选仍缺少受治理的候选列表接口，因此暂不创建空壳 `technical-screening`
-Skill。应先实现服务端筛选契约、覆盖率和审计，再将它加入技术面 Agent。
+全市场技术筛选已由 `/api/v1/research/market/technical-screen` 提供受治理候选列表、
+透明预设、稳定排序、覆盖率和严格审计证据。技术面 Agent 应只消费该契约，不得在
+Skill 中直接扫原始行情表另算一套口径。
 
 ## 研究能力归属
 
@@ -111,6 +113,6 @@ Skill。应先实现服务端筛选契约、覆盖率和审计，再将它加入
 
 `.agents/skills/` 是完整方法与渐进式 reference 的权威版本；
 两个 `deploy/hibro/agents/claw-quant-*-research/skills/` 目录是面向 Hibro Agent 的精简
-交付版本。当前共有 16 个逻辑 Skill；基本面 Agent 和技术面 Agent 各装配 9 个，
+交付版本。当前共有 17 个逻辑 Skill；基本面 Agent 装配 9 个，技术面 Agent 装配 10 个，
 其中 `claw-quant-data` 与 `market-charting` 被两个 Agent 共享，因此装配数之和不是逻辑 Skill 总数。契约测试
 校验权威定义、两个 Agent 装配集合、公共研究边界和关键数据语义，避免部署漂移。

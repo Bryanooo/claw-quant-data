@@ -25,7 +25,11 @@ MAX_INLINE_DURABLE_WAIT_SECONDS = 15.0
 # Live provider response on 2026-09-20 proves that this token is limited to 40
 # major_news calls per Shanghai calendar day (and 20/minute). Reserve only 35
 # so manual verification and clock skew cannot push production over quota.
-INTERFACE_DAILY_QUOTAS = {"major_news": 35}
+# The live provider response caps cyq_perf at 20,000 calls per Shanghai day.
+# Reserve 18,000: one routine full-market day (~5,500 calls) plus at most one
+# resumable historical sweep fit safely while leaving headroom for retries and
+# operator probes.
+INTERFACE_DAILY_QUOTAS = {"major_news": 35, "cyq_perf": 18_000}
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 

@@ -11,6 +11,15 @@ from service.orchestration_v2.contracts import TaskDefinitionDocument
 from service.orchestration_v2.gap_repair import create_repair_executions
 from service.orchestration_v2.repair_planning import plan_period_repairs
 from service.orchestration_v2.repository import OrchestrationV2Repository
+from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+
+
+# These fan-outs are safe when deliberately planned, but a single logical day
+# expands to the full listed-stock universe and is governed by a provider
+# daily-call quota.  The auditor must expose the gap without automatically
+# queuing several competing 5,000+ request executions.  Manual repair and the
+# resumable history/initialization path remain available.
+AUTO_REPAIR_EXCLUDED_DATASETS = QUOTA_GUARDED_DATASETS
 
 
 def _dataset_tasks() -> dict[str, str]:
@@ -34,8 +43,19 @@ class CoverageRepairPlanner:
 
     def submit(self, result: CoverageAuditResult, *, as_of: date | None = None) -> dict:
         del as_of
-        if not COVERAGE_AUTO_REPAIR_ENABLED or result.status == "unverified":
-            return {"eligible": 0, "created": 0, "execution_ids": []}
+        if (
+            not COVERAGE_AUTO_REPAIR_ENABLED
+            or result.status == "unverified"
+            or result.dataset_name in AUTO_REPAIR_EXCLUDED_DATASETS
+        ):
+            return {
+                "eligible": 0,
+                "created": 0,
+                "execution_ids": [],
+                "automatic_repair": "quota_guarded"
+                if result.dataset_name in AUTO_REPAIR_EXCLUDED_DATASETS
+                else "not_eligible",
+            }
         dates = [
             item.partition_date
             for item in result.partitions

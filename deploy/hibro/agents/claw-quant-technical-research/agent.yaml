@@ -22,6 +22,8 @@ spec:
       path: skills/cross-asset-research
     - name: etf-flow-research
       path: skills/etf-flow-research
+    - name: technical-screening
+      path: skills/technical-screening
     - name: market-charting
       path: skills/market-charting
     - name: technical-research

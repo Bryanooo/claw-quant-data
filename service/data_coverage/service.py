@@ -274,7 +274,15 @@ class CoverageService:
             "summary": {
                 "datasets": len(rows),
                 "ready": sum(
-                    row["status"] in {"present", "observed_only"}
+                    row["status"] == "present" and row.get("expected", True)
+                    for row in rows
+                ),
+                "observed": sum(
+                    row["status"] == "observed_only" for row in rows
+                ),
+                "not_due": sum(
+                    row["status"] == "observed_only"
+                    and not row.get("expected", False)
                     for row in rows
                 ),
                 "problems": sum(

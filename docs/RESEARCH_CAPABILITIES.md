@@ -18,13 +18,13 @@
 
 ## 已实现的派生服务
 
-18 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、1 个研究验证集和
-15 个聚合研究服务。它们不是“18 种分析”，
+19 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、1 个研究验证集和
+16 个聚合研究服务。它们不是“19 种分析”，
 也不表示已经覆盖所有可能的投研方法；投研方法本身没有封闭全集。项目定义了一份
-可验收的 v1 基线：73 项核心能力中，当前 61 项已由研究接口直接服务，4 项可由
+可验收的 v1 基线：73 项核心能力中，当前 62 项已由研究接口直接服务，3 项可由
 已有数据补采或派生契约后增加服务，另 8 项仍受外部数据源或额度约束。其中新增的
-全市场技术筛选必须先有受治理的候选列表、排序和覆盖审计，不能由 Skill 绕过研究层
-临时扫描原始表。能力目录会
+全市场技术筛选现已提供受治理的候选列表、稳定排序、覆盖率和底层分区审计证据，
+Skill 不需要也不允许绕过研究层临时扫描原始表。能力目录会
 返回逐项 `techniques.served` 和 `techniques.gaps`，不再只给一个容易误解的总数。
 
 | 接口 | 覆盖能力 |
@@ -40,6 +40,7 @@
 | `GET /api/v1/research/stocks/{ts_code}/repurchase-progress` | 结构化回购方案、最新累计实施进度、执行均价与公告后相对收益 |
 | `GET /api/v1/research/stocks/{ts_code}/event-study` | 事件窗口收益、基准收益、异常收益和 CAR |
 | `GET /api/v1/research/market/breadth` | 涨跌分布、均线扩散、成交和涨跌停情绪 |
+| `GET /api/v1/research/market/technical-screen` | 趋势、突破、超跌反转和放量突破候选；披露命中规则、排序、市场覆盖率与审计证据 |
 | `GET /api/v1/research/macro/regime` | 增长、通胀、流动性分项及透明规则的宏观状态 |
 | `GET /api/v1/research/macro/{theme}` | GDP/PMI、CPI/PPI、货币社融和利率的有界序列 |
 | `GET /api/v1/research/etfs/flows` | ETF份额变化、估算申赎资金、指数暴露聚合和市场表现 |
@@ -48,7 +49,7 @@
 | `GET /api/v1/research/sectors/{provider}/{sector_code}/fundamentals` | 时点成员财务聚合、同比、估值覆盖和主要贡献公司 |
 | `GET /api/v1/research/sectors/{provider}/{sector_code}/breadth` | 时点成员涨跌比例、均线扩散和行情覆盖 |
 
-当前 61 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 31 项、
+当前 62 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 32 项、
 资金与筹码 5 项、回购进展 1 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项、
 ETF资金与证据信号 2 项、宏观 4 项、行业 4 项。仍有 11 项缺口：
 一致预期修正、股东与机构行为、总股东回报可以用现有接口补齐；公告证据、治理风险、
@@ -99,7 +100,10 @@ VWAP或真实成交量分布；CVD、主动买卖、盘口失衡和冲击成本�
 3. `top10_holders`、`top10_floatholders`、`fund_portfolio`、`hk_hold`、
    `stk_holdertrade`、`stk_holdernumber`：股东与机构行为；
 4. `dividend`、`repurchase`、`share_float`：总股东回报与资本行动；
-5. `cyq_chips`、`cyq_perf`：筹码数据，按股票和不超过 31 天窗口限速扇出；
+5. `cyq_chips`、`cyq_perf`：筹码数据。`cyq_perf` 已实测单股票可一次获取 2018
+   年至今，因此 V2 使用一个有界历史执行实例，在 acquire 节点内按股票循环并保存
+   请求级断点；不再按天或按月生成执行实例。接口按 18,000 次/上海自然日预留额度，
+   低于上游实测 20,000 次限制；
 6. `stk_mins`：分钟行情。当前 Token 限制为每天 2 次，只能做小范围证券池，不能
    声称完成全市场历史。
 
@@ -162,6 +166,7 @@ CLI 与 REST 对应，例如：
 ./clawq research instrument-technicals spot Au99.99
 ./clawq research repurchase-progress 300750.SZ
 ./clawq research market-breadth
+./clawq research technical-screen --preset trend --limit 30
 ./clawq research macro-regime --as-of 2026-09-18
 ./clawq research macro-theme inflation --periods 24 --as-of 2026-09-18
 ./clawq research industry-fundamentals ths 884229.TI --as-of 2026-09-18

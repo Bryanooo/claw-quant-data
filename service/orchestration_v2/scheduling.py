@@ -131,6 +131,7 @@ def dispatch_due_acquisitions(
     as_of_date: date,
     *,
     include_current_daily: bool,
+    next_morning_released: bool = False,
     repository: OrchestrationV2Repository | None = None,
 ) -> dict[str, Any]:
     """Idempotently create every due V2 routine acquisition.
@@ -143,6 +144,7 @@ def dispatch_due_acquisitions(
     daily = dispatch_latest_daily_acquisitions(
         as_of_date,
         include_current_daily=include_current_daily,
+        next_morning_released=next_morning_released,
         repository=store,
     )
     totals = {
@@ -214,6 +216,7 @@ def dispatch_latest_daily_acquisitions(
     as_of_date: date,
     *,
     include_current_daily: bool,
+    next_morning_released: bool = False,
     repository: OrchestrationV2Repository | None = None,
 ) -> dict[str, Any]:
     """Resolve normal and T+1 scopes before dispatching routine work."""
@@ -235,14 +238,48 @@ def dispatch_latest_daily_acquisitions(
             "skipped": "trade_calendar_has_no_prior_open_day",
             "errors": {},
         }
-    if include_current_daily and dates[0] == as_of_date:
-        target = dates[0]
-        delayed = dates[1] if len(dates) > 1 else dates[0]
+    if dates[0] == as_of_date:
+        if include_current_daily:
+            target = dates[0]
+        else:
+            target = dates[1] if len(dates) > 1 else dates[0]
+        if next_morning_released:
+            delayed = dates[1] if len(dates) > 1 else dates[0]
+        else:
+            delayed = dates[2] if len(dates) > 2 else target
     else:
         target = next((item for item in dates if item < as_of_date), dates[0])
-        delayed = target
-    return dispatch_daily_acquisitions(
+        # A next-morning dataset for the latest open day is not necessarily
+        # published during a weekend/holiday. Keep those tasks on the prior
+        # closed trading day until the next business publication morning.
+        delayed = next((item for item in dates if item < target), target)
+    store = repository or OrchestrationV2Repository()
+    superseded = []
+    requeued = []
+    if delayed != target:
+        superseded = store.supersede_not_expected_daily_scope(
+            target,
+            tuple(sorted(NEXT_MORNING_TASKS)),
+            reason=(
+                "next-business-morning datasets are not due for "
+                f"{target.isoformat()}; current eligible partition is "
+                f"{delayed.isoformat()}"
+            ),
+        )
+    elif next_morning_released:
+        requeued = store.requeue_due_daily_scope(
+            target,
+            tuple(sorted(NEXT_MORNING_TASKS)),
+            reason=(
+                "next-business-morning publication gate opened for "
+                f"{target.isoformat()}"
+            ),
+        )
+    result = dispatch_daily_acquisitions(
         target,
         delayed_target_date=delayed,
-        repository=repository,
+        repository=store,
     )
+    result["superseded_not_due"] = len(superseded)
+    result["requeued_after_release"] = len(requeued)
+    return result

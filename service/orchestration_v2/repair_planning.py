@@ -153,3 +153,30 @@ def validate_single_period_scope(
         raise ValueError(
             "one V2 execution must cover exactly one logical observation period"
         )
+
+
+def validate_quota_guarded_history_scope(
+    *,
+    contracts: tuple[DatasetAuditContract, ...],
+    observation_start: date | None,
+    observation_end: date | None,
+    observation_key: str,
+    guarded_datasets: frozenset[str],
+) -> None:
+    """Validate one resumable, internally-fanned-out history execution.
+
+    This is intentionally narrower than a general multi-period bypass.  Every
+    output must be explicitly quota guarded, the range must be bounded, and
+    the key must freeze those exact bounds.  Symbols/pages remain acquire-node
+    requests and never become workflow executions.
+    """
+    datasets = frozenset(contract.dataset_name for contract in contracts)
+    if not datasets or not datasets.issubset(guarded_datasets):
+        raise ValueError("bounded history scope is restricted to quota-guarded datasets")
+    if observation_start is None or observation_end is None:
+        raise ValueError("bounded history scope requires observation start and end")
+    expected_key = (
+        f"history:{observation_start.isoformat()}:{observation_end.isoformat()}"
+    )
+    if observation_key != expected_key:
+        raise ValueError("bounded history observation key must freeze its exact range")

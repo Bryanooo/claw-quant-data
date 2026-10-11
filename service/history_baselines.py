@@ -132,6 +132,14 @@ EXACT_TRADE_DATE_HISTORY_APIS = frozenset(
         "index_dailybasic",
         "index_monthly",
         "index_weekly",
+        # ``margin_detail`` accepts start/end fields syntactically, but a live
+        # one-day range is capped at 2,001 rows while the equivalent
+        # ``trade_date`` request exhausts at the full ~4,400-row market
+        # cross-section.  Repairs must therefore use the same exact-date
+        # contract as the routine task; otherwise every retry deterministically
+        # rewrites the same partial partition.
+        "margin",
+        "margin_detail",
         "moneyflow_cnt_ths",
         "moneyflow_ind_dc",
         "moneyflow_ths",

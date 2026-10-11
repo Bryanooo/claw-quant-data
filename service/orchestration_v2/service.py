@@ -182,16 +182,29 @@ class OrchestrationV2Service:
         document = TaskDefinitionDocument.model_validate(definition["definition"])
         if parsed.purpose.value in {"initialization", "backfill", "repair"}:
             from service.orchestration_v2.repair_planning import (
+                validate_quota_guarded_history_scope,
                 validate_single_period_scope,
             )
+            from service.orchestration_v2.recovery_policy import (
+                QUOTA_GUARDED_DATASETS,
+            )
 
-            for contract in document.validation_contract.dataset_audits:
-                validate_single_period_scope(
-                    contract=contract,
+            if parsed.frozen_scope.get("recovery_scope") == "quota_guarded_history":
+                validate_quota_guarded_history_scope(
+                    contracts=document.validation_contract.dataset_audits,
                     observation_start=parsed.observation_start,
                     observation_end=parsed.observation_end,
                     observation_key=parsed.observation_key,
+                    guarded_datasets=QUOTA_GUARDED_DATASETS,
                 )
+            else:
+                for contract in document.validation_contract.dataset_audits:
+                    validate_single_period_scope(
+                        contract=contract,
+                        observation_start=parsed.observation_start,
+                        observation_end=parsed.observation_end,
+                        observation_key=parsed.observation_key,
+                    )
         return self._repository.create_execution(parsed)
 
     def transition_execution(

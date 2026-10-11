@@ -148,6 +148,29 @@ def market_breadth(
     return service.market_breadth(as_of=as_of)
 
 
+@router.get("/market/technical-screen")
+def market_technical_screen(
+    service: ResearchServiceDependency,
+    preset: str = Query(
+        default="trend",
+        pattern=r"^(trend|breakout|oversold-reversal|volume-breakout)$",
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+    minimum_amount_thousand_yuan: float = Query(default=0, ge=0),
+    exclude_st: bool = True,
+    as_of: date | None = None,
+) -> dict:
+    """Return ranked candidates with universe coverage and audit evidence."""
+
+    return service.technical_screen(
+        preset=preset,
+        limit=limit,
+        minimum_amount_thousand_yuan=minimum_amount_thousand_yuan,
+        exclude_st=exclude_st,
+        as_of=as_of,
+    )
+
+
 @router.get("/macro/regime")
 def macro_regime(
     service: ResearchServiceDependency,

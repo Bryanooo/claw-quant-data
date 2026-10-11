@@ -3,9 +3,13 @@
 """
 
 from collectors.base import BaseCollector
+from collectors.stock.extra.adaptive_date_window import (
+    AdaptiveDateWindowCollectorMixin,
+)
 
 
-class CyqPerfCollector(BaseCollector):
+class CyqPerfCollector(AdaptiveDateWindowCollectorMixin, BaseCollector):
     API_NAME = "cyq_perf"
     table_name = "cyq_perf"
     pk_columns = ["ts_code", "trade_date"]
+    collector_version = "2"

@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from collectors.stock.extra.cyq_chips import CyqChipsCollector
+from collectors.stock.extra.cyq_perf import CyqPerfCollector
 from collectors.tushare_raw import IncompleteCollectionError
 
 
@@ -137,4 +138,57 @@ def test_cyq_chips_rejects_an_ignored_date_window():
             ts_code="600722.SH",
             start_date="20260806",
             end_date="20260807",
+        )
+
+
+def test_cyq_perf_adaptively_proves_an_exact_1000_row_history():
+    calls = []
+
+    class FakePro:
+        def cyq_perf(self, **params):
+            calls.append(dict(params))
+            count = 1000 if len(calls) == 1 else 400 if len(calls) == 2 else 600
+            start = CyqPerfCollector._parse_date(params["start_date"])
+            end = CyqPerfCollector._parse_date(params["end_date"])
+            span = (end - start).days + 1
+            return pd.DataFrame([
+                {
+                    "ts_code": "001339.SZ",
+                    "trade_date": (
+                        start + timedelta(days=index % span)
+                    ).strftime("%Y%m%d"),
+                    "winner_rate": 0.5,
+                }
+                for index in range(count)
+            ])
+
+    collector = object.__new__(CyqPerfCollector)
+    collector.pro = FakePro()
+    frame = collector.fetch(
+        ts_code="001339.SZ",
+        start_date="20180102",
+        end_date="20260928",
+    )
+
+    assert len(frame) == 1000
+    assert len(calls) == 3
+    assert collector.partition_completion_evidence()["leaf_scopes"] == 2
+
+
+def test_cyq_perf_cannot_hide_a_single_day_cap():
+    class FakePro:
+        def cyq_perf(self, **_params):
+            return pd.DataFrame({
+                "ts_code": ["001339.SZ"] * 1000,
+                "trade_date": ["20260928"] * 1000,
+                "winner_rate": [0.5] * 1000,
+            })
+
+    collector = object.__new__(CyqPerfCollector)
+    collector.pro = FakePro()
+    with pytest.raises(IncompleteCollectionError, match="suspicious round cap"):
+        collector.fetch(
+            ts_code="001339.SZ",
+            start_date="20260928",
+            end_date="20260928",
         )

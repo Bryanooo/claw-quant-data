@@ -1361,6 +1361,104 @@ class OrchestrationV2Repository:
                 superseded.append(dict(row))
         return superseded
 
+    def requeue_due_daily_scope(
+        self,
+        observation_date,
+        task_keys: tuple[str, ...],
+        *,
+        reason: str,
+    ) -> list[dict]:
+        """Reactivate daily T+1 work previously parked as not yet due.
+
+        The original idempotency key and immutable definition are retained.
+        Creating a second execution would either conflict on that key or hide
+        the publication-gate transition behind a duplicate instance.
+        """
+
+        if not task_keys:
+            return []
+        requeued: list[dict] = []
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT execution.*, definition.definition
+                FROM orchestration_v2.task_execution AS execution
+                JOIN orchestration_v2.task_definition AS definition
+                  ON definition.task_definition_id=execution.task_definition_id
+                WHERE execution.purpose='daily'
+                  AND execution.observation_start=%s
+                  AND execution.observation_end=%s
+                  AND execution.task_key=ANY(%s)
+                  AND execution.status='superseded'
+                  AND execution.final_error_category='not_due'
+                ORDER BY execution.task_execution_id
+                FOR UPDATE OF execution
+                """,
+                (observation_date, observation_date, list(task_keys)),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                nodes = candidate["definition"].get("nodes", [])
+                node_status = {node["key"]: "pending" for node in nodes}
+                if nodes:
+                    node_status[nodes[0]["key"]] = "ready"
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET status='queued', eligible_at=NOW(), finished_at=NULL,
+                        current_node_key=%s, node_status=%s::jsonb,
+                        final_error_category=NULL, final_error_message=NULL,
+                        final_error_detail='{}'::jsonb,
+                        lease_owner=NULL, lease_token=NULL,
+                        lease_expires_at=NULL, updated_at=NOW()
+                    WHERE task_execution_id=%s
+                      AND status='superseded'
+                      AND final_error_category='not_due'
+                    RETURNING *
+                    """,
+                    (
+                        nodes[0]["key"] if nodes else None,
+                        json.dumps(node_status, ensure_ascii=False),
+                        execution_id,
+                    ),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    continue
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.dataset_state
+                    SET expectation_status='expected', data_status='pending',
+                        ready=false,
+                        validation_summary=validation_summary ||
+                            jsonb_build_object(
+                                'requeued_after_release', true,
+                                'requeue_reason', %s
+                            ),
+                        updated_at=NOW()
+                    WHERE source_execution_id=%s
+                    """,
+                    (reason, execution_id),
+                )
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.requeued_after_release",
+                    node_key=nodes[0]["key"] if nodes else None,
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        f"execution.requeued_after_release:{execution_id}:"
+                        f"{candidate['attempt_count']}"
+                    ),
+                    payload={
+                        "reason": reason,
+                        "observation_date": observation_date.isoformat(),
+                    },
+                    evidence_references=[],
+                )
+                requeued.append(dict(row))
+        return requeued
+
     def supersede_attention_executions(
         self,
         execution_ids: tuple[int, ...],
@@ -1460,9 +1558,19 @@ class OrchestrationV2Repository:
                     SELECT candidate.task_execution_id
                     FROM orchestration_v2.task_execution AS candidate
                     WHERE candidate.task_key=failed.task_key
-                      AND candidate.observation_key=failed.observation_key
                       AND candidate.status='success'
                       AND candidate.task_execution_id>failed.task_execution_id
+                      AND (
+                        candidate.observation_key=failed.observation_key
+                        OR (
+                          candidate.observation_start IS NOT NULL
+                          AND candidate.observation_end IS NOT NULL
+                          AND failed.observation_start IS NOT NULL
+                          AND failed.observation_end IS NOT NULL
+                          AND candidate.observation_start<=failed.observation_start
+                          AND candidate.observation_end>=failed.observation_end
+                        )
+                      )
                     ORDER BY candidate.task_execution_id DESC
                     LIMIT 1
                 ) AS replacement ON true
@@ -1513,6 +1621,83 @@ class OrchestrationV2Repository:
                         "task_execution_id": replacement_id,
                         "event": "execution.success",
                     }],
+                )
+                reconciled += 1
+        return reconciled
+
+    def reconcile_duplicate_attention_executions(self, *, limit: int = 500) -> int:
+        """Keep one actionable alert per logical task scope.
+
+        Repeated provider patrols are execution history, not independent open
+        incidents. Older attempts remain queryable as ``superseded`` while
+        the newest attention row remains the sole operator action target.
+        """
+
+        if not 1 <= limit <= 5000:
+            raise ValueError("limit must be between 1 and 5000")
+        reconciled = 0
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                WITH ranked AS (
+                    SELECT task_execution_id, task_key, observation_key,
+                           current_node_key, attempt_count,
+                           first_value(task_execution_id) OVER (
+                               PARTITION BY task_key, observation_key
+                               ORDER BY task_execution_id DESC
+                           ) AS current_execution_id,
+                           row_number() OVER (
+                               PARTITION BY task_key, observation_key
+                               ORDER BY task_execution_id DESC
+                           ) AS position
+                    FROM orchestration_v2.task_execution
+                    WHERE status='attention'
+                )
+                SELECT * FROM ranked
+                WHERE position > 1
+                ORDER BY task_execution_id
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                current_id = int(candidate["current_execution_id"])
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET status='superseded', finished_at=NOW(),
+                        final_error_category='duplicate_attention_attempt',
+                        final_error_message=%s,
+                        final_error_detail=final_error_detail ||
+                            jsonb_build_object(
+                                'current_attention_execution_id', %s,
+                                'corrective_action', 'deduplicate_attention_attempts'
+                            ),
+                        lease_owner=NULL, lease_token=NULL,
+                        lease_expires_at=NULL, updated_at=NOW()
+                    WHERE task_execution_id=%s AND status='attention'
+                    """,
+                    (
+                        f"superseded by current attention execution {current_id}",
+                        current_id,
+                        execution_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.superseded_duplicate_attention",
+                    node_key=candidate.get("current_node_key"),
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        "execution.superseded_duplicate_attention:"
+                        f"{execution_id}:{current_id}"
+                    ),
+                    payload={"current_attention_execution_id": current_id},
+                    evidence_references=[{"task_execution_id": current_id}],
                 )
                 reconciled += 1
         return reconciled
@@ -1958,16 +2143,30 @@ class OrchestrationV2Repository:
                             ),
                         lease_owner=NULL, lease_token=NULL,
                         lease_expires_at=NULL, updated_at=NOW()
-                    WHERE task_key=%s AND observation_key=%s
+                    WHERE task_key=%s
                       AND task_execution_id<>%s AND status='attention'
+                      AND (
+                        observation_key=%s
+                        OR (
+                          %s::date IS NOT NULL AND %s::date IS NOT NULL
+                          AND observation_start IS NOT NULL
+                          AND observation_end IS NOT NULL
+                          AND observation_start >= %s::date
+                          AND observation_end <= %s::date
+                        )
+                      )
                     RETURNING task_execution_id, current_node_key, attempt_count
                     """,
                     (
                         f"recovered by successful execution {execution_id}",
                         execution_id,
                         row["task_key"],
-                        row["observation_key"],
                         execution_id,
+                        row["observation_key"],
+                        row.get("observation_start"),
+                        row.get("observation_end"),
+                        row.get("observation_start"),
+                        row.get("observation_end"),
                     ),
                 )
                 for resolved in cursor.fetchall():

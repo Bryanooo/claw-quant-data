@@ -535,14 +535,24 @@ class OrchestrationV2Runtime:
             self._repository.get_endpoint(endpoint_id)
             for endpoint_id in document.acquisition_endpoint_ids
         ]
-        active = [item for item in endpoints if item and item["lifecycle_status"] == "active"]
-        if not active:
-            raise V2UnsupportedScopeError("task has no active acquisition endpoint")
+        # An execution is frozen to one immutable task definition, and that
+        # definition is frozen to exact endpoint version IDs. Publishing a new
+        # endpoint retires the previous version for *new* definitions; it must
+        # not invalidate already-created executions. Only unpublished drafts
+        # are non-runnable.
+        runnable = [
+            item for item in endpoints
+            if item and item["lifecycle_status"] in {"active", "retired"}
+        ]
+        if not runnable:
+            raise V2UnsupportedScopeError(
+                "task has no published acquisition endpoint"
+            )
         # Prefer the endpoint whose name is the task identity. For equivalent
         # normal/VIP endpoints, prefer the non-VIP route and retain provider
         # fallback work for the later multi-source runtime phase.
         selected = sorted(
-            active,
+            runnable,
             key=lambda item: (
                 item["endpoint_key"] != document.task_key,
                 item["endpoint_key"].endswith("_vip"),

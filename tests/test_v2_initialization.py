@@ -7,11 +7,20 @@ class InitRepository:
     def __init__(self):
         self.audits = []
         self.executions_ = []
+        self.control = "active"
 
     def audit_jobs(self, _id): return self.audits
     def executions(self, _id, limit=5000): return self.executions_[:limit]
     def find_latest_id(self): return 7 if self.audits else None
     def set_execution_status(self, *_args): return 0
+    def control_status(self, _id): return self.control
+    def set_control_status(self, _id, status): self.control = status
+    def supersede_legacy_quota_guarded_executions(self, _id, *, task_keys):
+        self.superseded_task_keys = task_keys
+        for row in self.executions_:
+            if row.get("status") == "attention" and row.get("task_key") in task_keys:
+                row["status"] = "superseded"
+        return 1
 
 
 class OrchestrationRepository:
@@ -142,3 +151,91 @@ def test_superseded_out_of_scope_execution_does_not_require_verification(
     assert campaign["completed_steps"] == campaign["planned_steps"] == 2
     assert campaign["current_phase"] == "complete"
     assert campaign["phase_name"] == "initialization_complete"
+
+
+def test_pause_is_durable_and_reconcile_does_not_create_more_work(monkeypatch):
+    repository = InitRepository()
+    repository.audits = [{
+        "job_id": 1,
+        "dataset_name": "stock_daily",
+        "status": "success",
+        "start_date": date(2026, 1, 1),
+        "end_date": date(2026, 1, 2),
+        "idempotency_key": "v2-init:7:audit:stock_daily",
+    }]
+    monkeypatch.setattr(
+        "service.initialization.service.current_problem_partitions",
+        lambda **_kwargs: {"stock_daily": {date(2026, 1, 2): "missing"}},
+    )
+    service = InitializationService(
+        repository, OrchestrationRepository(), Coverage(repository)
+    )
+
+    paused = service.pause(7)
+    reconciled = service.reconcile_active()
+
+    assert paused["status"] == "paused"
+    assert paused["control_status"] == "paused"
+    assert paused["phase_name"] == "initialization_paused"
+    assert reconciled["status"] == "paused"
+
+
+def test_resume_does_not_requeue_cancelled_execution_instances(monkeypatch):
+    repository = InitRepository()
+    repository.control = "paused"
+    repository.audits = [{
+        "job_id": 1,
+        "dataset_name": "stock_daily",
+        "status": "success",
+        "start_date": date(2026, 1, 1),
+        "end_date": date(2026, 1, 2),
+        "idempotency_key": "v2-init:7:audit:stock_daily",
+    }]
+    repository.executions_ = [{
+        "task_execution_id": 10,
+        "status": "cancelled",
+    }]
+    monkeypatch.setattr(
+        "service.initialization.service.current_problem_partitions",
+        lambda **_kwargs: {},
+    )
+    service = InitializationService(
+        repository, OrchestrationRepository(), Coverage(repository)
+    )
+
+    resumed = service.resume(7)
+
+    assert repository.control == "active"
+    assert resumed["status"] == "ready"
+    assert repository.superseded_task_keys == ("cyq_perf",)
+
+
+def test_resume_supersedes_only_legacy_quota_guarded_attention(monkeypatch):
+    repository = InitRepository()
+    repository.control = "paused"
+    repository.audits = [{
+        "job_id": 1,
+        "dataset_name": "cyq_perf",
+        "status": "success",
+        "start_date": date(2018, 1, 1),
+        "end_date": date(2026, 9, 30),
+        "idempotency_key": "v2-init:7:audit:cyq_perf",
+    }]
+    repository.executions_ = [{
+        "task_execution_id": 10,
+        "task_key": "cyq_perf",
+        "status": "attention",
+    }]
+    monkeypatch.setattr(
+        "service.initialization.service.current_problem_partitions",
+        lambda **_kwargs: {},
+    )
+    service = InitializationService(
+        repository, OrchestrationRepository(), Coverage(repository)
+    )
+
+    resumed = service.resume(7)
+
+    assert repository.executions_[0]["status"] == "superseded"
+    assert resumed["failed_steps"] == 0
+    assert resumed["status"] == "ready"

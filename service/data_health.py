@@ -55,6 +55,9 @@ class DataHealthService:
         issues = []
         now = business_now()
         late_repair_at = next_late_repair_at(now)
+        covered_attention = set(
+            self._orchestration.attention_covered_by_active_execution_ids()
+        )
         for item in sorted(gaps, key=lambda row: row["dataset_name"]):
             late_published = item["dataset_name"] in LATE_PUBLISHED_DATASETS
             partition = None
@@ -79,13 +82,22 @@ class DataHealthService:
                 # it is not an operator failure while bounded rechecks are
                 # scheduled.  Keeping it visible as ``waiting_upstream`` avoids
                 # both false-green data and a false critical incident.
-                "severity": "warning" if late_published else "critical",
+                "severity": (
+                    "warning"
+                    if late_published
+                    or item.get("source_execution_id") in covered_attention
+                    else "critical"
+                ),
                 "confidence": "confirmed",
                 "dataset": item["dataset_name"],
                 "observation_key": item["observation_key"],
                 "status": item["data_status"],
                 "resolution_state": (
-                    "waiting_upstream" if late_published else "operator_action_required"
+                    "waiting_upstream"
+                    if late_published
+                    else "repair_in_progress"
+                    if item.get("source_execution_id") in covered_attention
+                    else "operator_action_required"
                 ),
                 "actual_count": (
                     partition.get("entity_count") if partition else item.get("actual_count")
@@ -103,10 +115,17 @@ class DataHealthService:
                     "repair is scheduled automatically, then inspect the source "
                     "execution if the partition remains incomplete"
                     if late_published else
+                    "wait for the newer covering V2 repair and its independent "
+                    "validation; inspect that recovery only if it later fails"
+                    if item.get("source_execution_id") in covered_attention else
                     "inspect the source V2 execution and queue a scoped repair"
                 ),
                 "recovery_policy": (
-                    "scheduled_late_repair" if late_published else "scoped_repair"
+                    "scheduled_late_repair"
+                    if late_published
+                    else "active_covering_repair"
+                    if item.get("source_execution_id") in covered_attention
+                    else "scoped_repair"
                 ),
                 "next_automatic_repair_at": (
                     late_repair_at.isoformat() if late_published else None
@@ -118,13 +137,24 @@ class DataHealthService:
             for item in issues
             if item.get("source_execution_id") is not None
         }
-        unmapped_attention = max(0, attention - len(mapped_attention))
+        covered_unmapped_attention = covered_attention - mapped_attention
+        unmapped_attention = max(
+            0,
+            attention - len(mapped_attention) - len(covered_unmapped_attention),
+        )
         operator_action_required = (
             sum(item["resolution_state"] == "operator_action_required" for item in issues)
             + unmapped_attention
         )
         waiting_upstream = sum(
             item["resolution_state"] == "waiting_upstream" for item in issues
+        )
+        repair_in_progress = (
+            sum(
+                item["resolution_state"] == "repair_in_progress"
+                for item in issues
+            )
+            + len(covered_unmapped_attention)
         )
         status = (
             "critical"
@@ -144,6 +174,7 @@ class DataHealthService:
                 "open_issues": len(issues),
                 "operator_action_required": operator_action_required,
                 "waiting_upstream": waiting_upstream,
+                "repair_in_progress": repair_in_progress,
                 "datasets": coverage["summary"]["datasets"],
                 "latest_dataset_states": len(states),
                 "ready_dataset_states": sum(bool(item.get("ready")) for item in states.values()),

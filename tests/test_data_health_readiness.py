@@ -105,6 +105,9 @@ class FakeOverviewOrchestration:
             },
         }
 
+    def attention_covered_by_active_execution_ids(self):
+        return ()
+
 
 def test_overview_deduplicates_attempts_and_classifies_upstream_waiting():
     service = DataHealthService(
@@ -122,8 +125,38 @@ def test_overview_deduplicates_attempts_and_classifies_upstream_waiting():
     assert result["summary"]["open_issues"] == 2
     assert result["summary"]["waiting_upstream"] == 2
     assert result["summary"]["operator_action_required"] == 0
+    assert result["summary"]["repair_in_progress"] == 0
     assert {item["resolution_state"] for item in result["issues"]} == {
         "waiting_upstream"
     }
     assert result["issues"][0]["actual_count"] is not None
     assert result["issues"][0]["expected_count"] is not None
+
+
+class FakeCoveredAttentionOrchestration(FakeOverviewOrchestration):
+    def control_plane_summary(self):
+        return {
+            "executions": {"attention": 4},
+            "current_executions": {"attention": 4, "retrying": 1},
+        }
+
+    def latest_dataset_states(self):
+        return {}
+
+    def attention_covered_by_active_execution_ids(self):
+        return (1, 2, 3, 4)
+
+
+def test_overview_does_not_report_old_failures_as_actions_during_recovery():
+    service = DataHealthService(
+        coverage_service=FakeOverviewCoverage(),
+        data_service=FakeData(),
+        initialization_service=FakeInitialization(),
+        orchestration_repository=FakeCoveredAttentionOrchestration(),
+    )
+
+    result = service.overview()
+
+    assert result["status"] == "warning"
+    assert result["summary"]["operator_action_required"] == 0
+    assert result["summary"]["repair_in_progress"] == 4

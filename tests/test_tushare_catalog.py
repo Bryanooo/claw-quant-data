@@ -75,7 +75,7 @@ def test_every_interface_has_an_operational_collection_policy():
 
     assert {item.api_name for item in policies} == {item.api_name for item in contracts}
     collectable = [item for item in contracts if item.collectable]
-    assert len(collectable) == 201
+    assert len(collectable) == 202
     assert all(TusharePolicyRegistry().get(item.api_name).page_size > 0 for item in collectable)
     assert TusharePolicyRegistry().get("fund_adj").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("etf_sh_cons").pagination_mode == "offset"
@@ -95,6 +95,7 @@ def test_every_interface_has_an_operational_collection_policy():
     assert TusharePolicyRegistry().get("index_weekly").parameter_strategy == "trade_date"
     assert TusharePolicyRegistry().get("index_monthly").parameter_strategy == "trade_date"
     assert TusharePolicyRegistry().get("adj_factor").pagination_mode == "offset"
+    assert TusharePolicyRegistry().get("adj_factor").page_size == 6000
     assert TusharePolicyRegistry().get("stk_factor").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("stk_factor_pro").pagination_mode == "offset"
     assert TusharePolicyRegistry().get("stk_mins").automatic_safe is False
@@ -102,6 +103,12 @@ def test_every_interface_has_an_operational_collection_policy():
     assert TusharePolicyRegistry().get("fund_basic").automatic_safe is False
     assert TusharePolicyRegistry().get("fut_weekly_detail").parameter_strategy == "week"
     assert TusharePolicyRegistry().get("fut_weekly_detail").automatic_safe is True
+    us_daily = TusharePolicyRegistry().get("us_daily")
+    assert us_daily.parameter_strategy == "trade_date"
+    assert us_daily.pagination_mode == "offset"
+    assert us_daily.page_size == 6000
+    assert us_daily.min_interval_seconds == 3600.0
+    assert us_daily.automatic_safe is True
 
 
 def test_reviewed_official_contracts_cannot_be_lost_by_navigation_changes():

@@ -114,6 +114,183 @@ def parabolic_sar(
     }
 
 
+def niumen_breakout_series(
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    *,
+    high_window: int = 20,
+    atr_window: int = 14,
+    signal_window: int = 10,
+) -> dict[str, list[float | None]]:
+    """Return the daily TongdaXin-style Niumen and confirmation-line series.
+
+    ``REF(HHV(H, N), 1)`` deliberately excludes the current trading day.  In
+    contrast, the screenshot formula's ``MA(TR1, M)`` includes the current
+    day's completed true range.  Keeping those two timing rules explicit
+    prevents a current high from raising its own breakout threshold and avoids
+    accidental future-data leakage.
+    """
+
+    if not (len(highs) == len(lows) == len(closes)):
+        raise ValueError("highs, lows and closes must have equal length")
+    if min(high_window, atr_window, signal_window) <= 0:
+        raise ValueError("indicator windows must be positive")
+
+    true_ranges: list[float] = []
+    prior_highs: list[float | None] = []
+    atrv_values: list[float | None] = []
+    niumen_values: list[float | None] = []
+    confirmation_values: list[float | None] = []
+    signal_values: list[float | None] = []
+
+    for index, (high, low, close) in enumerate(zip(highs, lows, closes)):
+        previous_close = closes[index - 1] if index else close
+        true_ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+
+        prior_high = (
+            max(highs[index - high_window:index])
+            if index >= high_window
+            else None
+        )
+        atrv = (
+            mean(true_ranges[index - atr_window + 1:index + 1])
+            if index + 1 >= atr_window
+            else None
+        )
+        signal = (
+            mean(closes[index - signal_window + 1:index + 1])
+            if index + 1 >= signal_window
+            else None
+        )
+        prior_highs.append(prior_high)
+        atrv_values.append(atrv)
+        niumen_values.append(
+            prior_high + 0.5 * atrv
+            if prior_high is not None and atrv is not None
+            else None
+        )
+        confirmation_values.append(
+            prior_high + atrv
+            if prior_high is not None and atrv is not None
+            else None
+        )
+        signal_values.append(signal)
+
+    return {
+        "prior_high_20": prior_highs,
+        "atrv_sma_14": atrv_values,
+        "niumen_line": niumen_values,
+        "confirmation_line": confirmation_values,
+        "signal_ma_10": signal_values,
+    }
+
+
+def niumen_breakout_lines(
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    *,
+    high_window: int = 20,
+    atr_window: int = 14,
+    signal_window: int = 10,
+) -> dict[str, Any]:
+    """Summarize the latest completed-day Niumen breakout state."""
+
+    series = niumen_breakout_series(
+        highs,
+        lows,
+        closes,
+        high_window=high_window,
+        atr_window=atr_window,
+        signal_window=signal_window,
+    )
+    latest_niumen = series["niumen_line"][-1] if closes else None
+    latest_confirmation = series["confirmation_line"][-1] if closes else None
+    latest_prior_high = series["prior_high_20"][-1] if closes else None
+    latest_atrv = series["atrv_sma_14"][-1] if closes else None
+    latest_signal = series["signal_ma_10"][-1] if closes else None
+    if latest_niumen is None or latest_confirmation is None or not closes:
+        state = "unavailable"
+        status = "insufficient_history"
+    elif closes[-1] >= latest_confirmation:
+        state = "confirmed_breakout"
+        status = "ready"
+    elif closes[-1] >= latest_niumen:
+        state = "above_niumen_pending_confirmation"
+        status = "ready"
+    else:
+        state = "below_niumen"
+        status = "ready"
+
+    crossed_niumen = False
+    crossed_confirmation = False
+    if len(closes) >= 2:
+        previous_niumen = series["niumen_line"][-2]
+        previous_confirmation = series["confirmation_line"][-2]
+        crossed_niumen = bool(
+            previous_niumen is not None
+            and closes[-2] < previous_niumen
+            and latest_niumen is not None
+            and closes[-1] >= latest_niumen
+        )
+        crossed_confirmation = bool(
+            previous_confirmation is not None
+            and closes[-2] < previous_confirmation
+            and latest_confirmation is not None
+            and closes[-1] >= latest_confirmation
+        )
+
+    return {
+        "status": status,
+        "state": state,
+        "values": {
+            "prior_high_20": _round(latest_prior_high),
+            "atrv_sma_14": _round(latest_atrv),
+            "niumen_line": _round(latest_niumen),
+            "confirmation_line": _round(latest_confirmation),
+            "signal_ma_10": _round(latest_signal),
+        },
+        "events": {
+            "crossed_niumen_today": crossed_niumen,
+            "crossed_confirmation_today": crossed_confirmation,
+        },
+        "distance_from_niumen_pct": _round(
+            (closes[-1] / latest_niumen - 1) * 100
+            if closes and latest_niumen
+            else None
+        ),
+        "distance_from_confirmation_pct": _round(
+            (closes[-1] / latest_confirmation - 1) * 100
+            if closes and latest_confirmation
+            else None
+        ),
+        "parameters": {
+            "high_window_trading_days": high_window,
+            "atr_window_trading_days": atr_window,
+            "signal_window_trading_days": signal_window,
+            "niumen_atrv_multiplier": 0.5,
+            "confirmation_atrv_multiplier": 1.0,
+        },
+        "aliases": {
+            "niumen_line": "NML / 牛门线",
+            "confirmation_line": "QRL / 确认线 / 突破线",
+            "signal_ma_10": "SMX / 10日均线",
+        },
+        "calculation_timing": "after_daily_close",
+        "current_bar_policy": {
+            "rolling_high_excludes_current_trading_day": True,
+            "atrv_includes_current_completed_trading_day": True,
+        },
+        "formula": (
+            "TR=max(H-L,abs(H-REF(C,1)),abs(L-REF(C,1))); "
+            "ATRV=MA(TR,14); BASE=REF(HHV(H,20),1); "
+            "NIUMEN=BASE+0.5*ATRV; CONFIRMATION=BASE+1.0*ATRV; SIGNAL=MA(C,10)"
+        ),
+        "formula_version": "niumen-tongdaxin-v1",
+    }
+
+
 def downside_risk(returns: list[float], periods_per_year: int) -> dict[str, Any]:
     """Return historical downside statistics without distribution assumptions."""
 

@@ -1,9 +1,9 @@
 """Reviewed source precedence for canonical external datasets.
 
-The Financial Data provider exposes provider-native tools.  Those tools are
+The 蚂蚁数据源 provider exposes provider-native tools.  Those tools are
 not interchangeable with the canonical datasets served by ``/v1/data``.  This
 module records the reviewed overlap and, crucially, makes the quota policy
-deterministic: local canonical data wins; Financial Data is used only when a
+deterministic: local canonical data wins; 蚂蚁数据源 is used only when a
 canonical adapter exists and the requested local slice is absent or stale.
 """
 
@@ -271,7 +271,7 @@ class RouteSourcePolicy:
 
 def route_source_policy(route: str) -> RouteSourcePolicy:
     if route not in FINANCIAL_DATA_ROUTES:
-        raise KeyError(f"uncatalogued Financial Data route: {route}")
+        raise KeyError(f"uncatalogued 蚂蚁数据源 route: {route}")
     local_datasets = FINANCIAL_ROUTE_LOCAL_DATASETS.get(route, ())
     if local_datasets:
         return RouteSourcePolicy(
@@ -290,7 +290,7 @@ def route_source_policy(route: str) -> RouteSourcePolicy:
             ),
             reason=(
                 "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且"
-                "规范适配器已通过契约测试时才允许消耗 Financial Data 额度"
+                "规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度"
             ),
         )
     if route in REALTIME_FINANCIAL_ROUTES:

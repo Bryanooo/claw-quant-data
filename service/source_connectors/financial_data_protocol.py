@@ -1,4 +1,4 @@
-"""Strict decoding helpers for Financial Data tabular responses."""
+"""Strict decoding helpers for 蚂蚁数据源 tabular responses."""
 
 from __future__ import annotations
 
@@ -26,14 +26,21 @@ def tabular_rows(response: Mapping[str, Any], *, route: str) -> list[dict[str, A
     meta = result.get("meta")
     fields = meta.get("fields") if isinstance(meta, Mapping) else None
     data = result.get("data")
+    if not isinstance(data, list):
+        raise FinancialDataProtocolError("financial-data rows must be a list")
+    # The provider represents a legitimate empty result as both an empty
+    # field list and an empty row list.  Treating that shape as protocol drift
+    # would make one no-data route discard every valid result in the same
+    # research evidence batch.  Empty fields remain invalid whenever any row
+    # is present, so malformed payloads still fail closed.
+    if fields == [] and data == []:
+        return []
     if not isinstance(fields, list) or not fields or not all(
         isinstance(field, str) and field for field in fields
     ):
         raise FinancialDataProtocolError("financial-data fields are invalid")
     if len(set(fields)) != len(fields):
         raise FinancialDataProtocolError("financial-data fields must be unique")
-    if not isinstance(data, list):
-        raise FinancialDataProtocolError("financial-data rows must be a list")
 
     rows: list[dict[str, Any]] = []
     for raw in data:

@@ -24,6 +24,7 @@ from service.orchestration_v2.contracts import (
     TaskDefinitionDocument,
     canonical_digest,
 )
+from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
 
 
 class OrchestrationV2Repository:
@@ -131,6 +132,7 @@ class OrchestrationV2Repository:
                 "definitions": {},
                 "executions": {},
                 "current_executions": {},
+                "current_active_tasks": {},
                 "dataset_states": {},
             }
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
@@ -193,6 +195,27 @@ class OrchestrationV2Repository:
             }
             cursor.execute(
                 """
+                WITH latest AS (
+                    SELECT DISTINCT ON (task_key, observation_key)
+                           task_key, status
+                    FROM orchestration_v2.task_execution
+                    ORDER BY task_key, observation_key,
+                             task_execution_id DESC
+                )
+                SELECT task_key AS key, count(*)::INTEGER AS value
+                FROM latest
+                WHERE status IN (
+                    'created','queued','running','waiting_dependency',
+                    'retrying','validating','publishing'
+                )
+                GROUP BY task_key
+                """
+            )
+            current_active_tasks = {
+                row["key"]: row["value"] for row in cursor.fetchall()
+            }
+            cursor.execute(
+                """
                 SELECT data_status || CASE WHEN ready THEN ':ready' ELSE ':not_ready' END AS key,
                        count(*)::INTEGER AS value
                 FROM orchestration_v2.dataset_state
@@ -207,6 +230,7 @@ class OrchestrationV2Repository:
             "definitions": definitions,
             "executions": executions,
             "current_executions": current_executions,
+            "current_active_tasks": current_active_tasks,
             "dataset_states": dataset_states,
             "engine": "orchestration_v2",
         }
@@ -479,6 +503,74 @@ class OrchestrationV2Repository:
                 row["dataset_name"]: dict(row)
                 for row in cursor.fetchall()
             }
+
+    def ready_input_states(
+        self,
+        dataset_names: tuple[str, ...],
+        observation_key: str,
+    ) -> dict[str, dict]:
+        """Return the latest ready state for every exact dependency scope."""
+
+        if not dataset_names:
+            return {}
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (dataset_name)
+                       dataset_state_id, dataset_name, observation_key,
+                       observation_start, observation_end, revision,
+                       source_execution_id, published_at
+                FROM orchestration_v2.dataset_state
+                WHERE dataset_name = ANY(%s)
+                  AND observation_key=%s
+                  AND ready
+                ORDER BY dataset_name, revision DESC,
+                         updated_at DESC, dataset_state_id DESC
+                """,
+                (list(dataset_names), observation_key),
+            )
+            return {row["dataset_name"]: dict(row) for row in cursor.fetchall()}
+
+    def latest_common_ready_input_states(
+        self,
+        dataset_names: tuple[str, ...],
+    ) -> dict[str, dict]:
+        """Find the newest logical period certified ready for all inputs."""
+
+        if not dataset_names:
+            return {}
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                WITH latest AS (
+                    SELECT DISTINCT ON (dataset_name, observation_key)
+                           dataset_state_id, dataset_name, observation_key,
+                           observation_start, observation_end, revision,
+                           source_execution_id, published_at, ready
+                    FROM orchestration_v2.dataset_state
+                    WHERE dataset_name = ANY(%s)
+                    ORDER BY dataset_name, observation_key,
+                             revision DESC, updated_at DESC,
+                             dataset_state_id DESC
+                ), common_scope AS (
+                    SELECT observation_key, max(observation_end) AS observation_end
+                    FROM latest
+                    WHERE ready
+                    GROUP BY observation_key
+                    HAVING count(DISTINCT dataset_name)=%s
+                    ORDER BY max(observation_end) DESC NULLS LAST,
+                             observation_key DESC
+                    LIMIT 1
+                )
+                SELECT latest.*
+                FROM latest
+                JOIN common_scope USING (observation_key)
+                WHERE latest.ready
+                ORDER BY latest.dataset_name
+                """,
+                (list(dataset_names), len(dataset_names)),
+            )
+            return {row["dataset_name"]: dict(row) for row in cursor.fetchall()}
 
     def today_delivery(self, observation_date) -> dict:
         """Return today's due V2 tasks and their validated data state."""
@@ -1017,9 +1109,14 @@ class OrchestrationV2Repository:
                 if historical
                 else definition["definition"]["resource"]["resource_class"]
             )
+            quota_guarded_history = (
+                request.task_key in QUOTA_GUARDED_DATASETS
+                and request.frozen_scope.get("recovery_scope")
+                == "quota_guarded_history"
+            )
             priority = (
                 95
-                if request.purpose.value == "repair"
+                if request.purpose.value == "repair" or quota_guarded_history
                 else 30
                 if historical
                 else definition["definition"]["resource"]["priority"]
@@ -1746,6 +1843,273 @@ class OrchestrationV2Repository:
                 int(row["task_execution_id"]) for row in cursor.fetchall()
             )
 
+    def reconcile_redundant_pending_executions(self, *, limit: int = 1000) -> int:
+        """Retire an older pending scope already covered by a newer one.
+
+        Only queued/retrying executions are eligible.  An active replacement
+        must have the same purpose; a successfully validated replacement may
+        cross purposes (for example backfill replacing initialization).
+        Running work is never interrupted, and the replacement must cover the
+        complete dated scope of the older execution.
+        """
+
+        if not 1 <= limit <= 5000:
+            raise ValueError("limit must be between 1 and 5000")
+        reconciled = 0
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT pending.*,
+                       replacement.task_execution_id AS replacement_execution_id
+                FROM orchestration_v2.task_execution AS pending
+                JOIN LATERAL (
+                    SELECT newer.task_execution_id
+                    FROM orchestration_v2.task_execution AS newer
+                    WHERE newer.task_key=pending.task_key
+                      AND (
+                          newer.purpose=pending.purpose
+                          OR newer.status='success'
+                      )
+                      AND newer.task_execution_id>pending.task_execution_id
+                      AND newer.status IN (
+                          'created','queued','running','waiting_dependency',
+                          'retrying','validating','publishing','success'
+                      )
+                      AND newer.observation_start<=pending.observation_start
+                      AND newer.observation_end>=pending.observation_end
+                    ORDER BY newer.task_execution_id DESC
+                    LIMIT 1
+                ) AS replacement ON TRUE
+                WHERE pending.status IN ('queued','retrying')
+                  AND pending.observation_start IS NOT NULL
+                  AND pending.observation_end IS NOT NULL
+                ORDER BY pending.task_execution_id
+                FOR UPDATE OF pending SKIP LOCKED
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                replacement_id = int(candidate["replacement_execution_id"])
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET status='superseded', finished_at=NOW(),
+                        final_error_category='redundant_scope',
+                        final_error_message=%s,
+                        final_error_detail=final_error_detail ||
+                            jsonb_build_object(
+                                'replacement_execution_id', %s,
+                                'corrective_action', 'deduplicate_pending_scope'
+                            ),
+                        lease_owner=NULL, lease_token=NULL,
+                        lease_expires_at=NULL, updated_at=NOW()
+                    WHERE task_execution_id=%s
+                      AND status IN ('queued','retrying')
+                    """,
+                    (
+                        f"superseded by covering execution {replacement_id}",
+                        replacement_id,
+                        execution_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.superseded_redundant_scope",
+                    node_key=candidate.get("current_node_key"),
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        "execution.superseded_redundant_scope:"
+                        f"{execution_id}:{replacement_id}"
+                    ),
+                    payload={"replacement_execution_id": replacement_id},
+                    evidence_references=[{"task_execution_id": replacement_id}],
+                )
+                reconciled += 1
+        return reconciled
+
+    def reconcile_stale_audit_contract_executions(self, *, limit: int = 1000) -> int:
+        """Retire pending executions whose frozen audit contract is obsolete.
+
+        V2 deliberately refuses to validate an execution under a rule other
+        than the one frozen in its definition.  Once a new definition is
+        active, retrying the stale instance can therefore never succeed.  Keep
+        the evidence, retire only non-running instances, and let the repair
+        planner create replacements against the active definition.
+        """
+
+        if not 1 <= limit <= 5000:
+            raise ValueError("limit must be between 1 and 5000")
+        reconciled = 0
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT execution.*, active.task_definition_id
+                           AS replacement_definition_id,
+                       active.version AS replacement_definition_version
+                FROM orchestration_v2.task_execution AS execution
+                JOIN orchestration_v2.task_definition AS frozen
+                  ON frozen.task_definition_id=execution.task_definition_id
+                JOIN orchestration_v2.task_definition AS active
+                  ON active.task_key=execution.task_key
+                 AND active.lifecycle_status='active'
+                WHERE execution.status IN ('queued','retrying')
+                  AND execution.task_definition_id<>active.task_definition_id
+                  AND frozen.definition->'validation_contract'
+                      IS DISTINCT FROM active.definition->'validation_contract'
+                ORDER BY execution.task_execution_id
+                FOR UPDATE OF execution SKIP LOCKED
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                replacement_definition_id = int(
+                    candidate["replacement_definition_id"]
+                )
+                replacement_version = int(
+                    candidate["replacement_definition_version"]
+                )
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET status='superseded', finished_at=NOW(),
+                        final_error_category='audit_contract_superseded',
+                        final_error_message=%s,
+                        final_error_detail=final_error_detail ||
+                            jsonb_build_object(
+                                'replacement_definition_id', %s,
+                                'replacement_definition_version', %s,
+                                'corrective_action',
+                                'replan_with_active_audit_contract'
+                            ),
+                        lease_owner=NULL, lease_token=NULL,
+                        lease_expires_at=NULL, updated_at=NOW()
+                    WHERE task_execution_id=%s
+                      AND status IN ('queued','retrying')
+                    """,
+                    (
+                        "frozen audit contract was replaced by active "
+                        f"definition v{replacement_version}",
+                        replacement_definition_id,
+                        replacement_version,
+                        execution_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.superseded_audit_contract",
+                    node_key=candidate.get("current_node_key"),
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        "execution.superseded_audit_contract:"
+                        f"{execution_id}:{replacement_definition_id}"
+                    ),
+                    payload={
+                        "replacement_definition_id": replacement_definition_id,
+                        "replacement_definition_version": replacement_version,
+                    },
+                    evidence_references=[{
+                        "task_definition_id": replacement_definition_id,
+                    }],
+                )
+                reconciled += 1
+        return reconciled
+
+    def promote_quota_guarded_history_executions(self, *, limit: int = 100) -> int:
+        """Give priority only to the newest covering guarded-history scope."""
+
+        if not 1 <= limit <= 5000:
+            raise ValueError("limit must be between 1 and 5000")
+        normalized = 0
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT execution.*,
+                       CASE WHEN EXISTS (
+                           SELECT 1
+                           FROM orchestration_v2.task_execution AS newer
+                           WHERE newer.task_key=execution.task_key
+                             AND newer.task_execution_id>
+                                 execution.task_execution_id
+                             AND newer.status IN (
+                                 'created','queued','running',
+                                 'waiting_dependency','retrying','validating',
+                                 'publishing','success'
+                             )
+                             AND newer.observation_start<=
+                                 execution.observation_start
+                             AND newer.observation_end>=
+                                 execution.observation_end
+                       ) THEN 30 ELSE 95 END AS target_priority
+                FROM orchestration_v2.task_execution AS execution
+                WHERE execution.task_key=ANY(%s)
+                  AND execution.frozen_scope->>'recovery_scope'=
+                      'quota_guarded_history'
+                  AND execution.status IN ('queued','retrying')
+                  AND execution.priority <> CASE WHEN EXISTS (
+                      SELECT 1
+                      FROM orchestration_v2.task_execution AS newer
+                      WHERE newer.task_key=execution.task_key
+                        AND newer.task_execution_id>
+                            execution.task_execution_id
+                        AND newer.status IN (
+                            'created','queued','running',
+                            'waiting_dependency','retrying','validating',
+                            'publishing','success'
+                        )
+                        AND newer.observation_start<=execution.observation_start
+                        AND newer.observation_end>=execution.observation_end
+                  ) THEN 30 ELSE 95 END
+                ORDER BY execution.task_execution_id DESC
+                FOR UPDATE OF execution SKIP LOCKED
+                LIMIT %s
+                """,
+                (list(sorted(QUOTA_GUARDED_DATASETS)), limit),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                target_priority = int(candidate["target_priority"])
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET priority=%s, updated_at=NOW()
+                    WHERE task_execution_id=%s
+                      AND status IN ('queued','retrying')
+                      AND priority<>%s
+                    """,
+                    (target_priority, execution_id, target_priority),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.priority_normalized",
+                    node_key=candidate.get("current_node_key"),
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        f"execution.priority_normalized:{execution_id}:"
+                        f"{target_priority}"
+                    ),
+                    payload={
+                        "previous_priority": int(candidate["priority"]),
+                        "priority": target_priority,
+                        "reason": "quota_guarded_history_fairness",
+                    },
+                    evidence_references=[],
+                )
+                normalized += 1
+        return normalized
+
     def supersede_invalid_scope_executions(
         self,
         execution_ids: tuple[int, ...],
@@ -1894,6 +2258,139 @@ class OrchestrationV2Repository:
                 retried.append(dict(row))
         return retried
 
+    def recover_transient_attention_executions(
+        self,
+        *,
+        cooldown_seconds: int = 300,
+        max_recovery_rounds: int = 6,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Requeue current transient failures after a bounded cool-down.
+
+        Instance retry budgets protect an unhealthy provider from a tight
+        loop, but a terminal network/rate-limit failure must not require a
+        human to notice that connectivity later recovered.  Recovery rounds
+        are counted from append-only execution events, capped, and skipped
+        when a newer active or successful execution already covers the same
+        logical scope.
+        """
+
+        if not 0 <= cooldown_seconds <= 604_800:
+            raise ValueError("cooldown_seconds must be between 0 and 604800")
+        if not 1 <= max_recovery_rounds <= 100:
+            raise ValueError("max_recovery_rounds must be between 1 and 100")
+        if not 1 <= limit <= 5000:
+            raise ValueError("limit must be between 1 and 5000")
+        recovered: list[dict] = []
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT failed.*,
+                       COALESCE(recovery.rounds, 0) AS recovery_rounds
+                FROM orchestration_v2.task_execution AS failed
+                LEFT JOIN LATERAL (
+                    SELECT count(*)::integer AS rounds
+                    FROM orchestration_v2.task_execution_event AS event
+                    WHERE event.task_execution_id=failed.task_execution_id
+                      AND event.event_type='execution.auto_retry_transient'
+                ) AS recovery ON true
+                WHERE failed.status='attention'
+                  AND failed.final_error_category IN (
+                      'network', 'provider_transient', 'rate_limited',
+                      'database_transient', 'lease_expired'
+                  )
+                  AND failed.finished_at <=
+                      NOW()-(%s * INTERVAL '1 second')
+                  AND COALESCE(recovery.rounds, 0) < %s
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM orchestration_v2.task_execution AS newer
+                      WHERE newer.task_key=failed.task_key
+                        AND newer.task_execution_id>failed.task_execution_id
+                        AND (
+                          newer.status IN (
+                            'created','queued','running','waiting_dependency',
+                            'retrying','validating','publishing','success'
+                          )
+                          OR (
+                            newer.status='attention'
+                            AND newer.final_error_category IN (
+                              'network','provider_transient','rate_limited',
+                              'database_transient','lease_expired'
+                            )
+                          )
+                        )
+                        AND (
+                            newer.observation_key=failed.observation_key
+                            OR (
+                                newer.observation_start IS NOT NULL
+                                AND newer.observation_end IS NOT NULL
+                                AND failed.observation_start IS NOT NULL
+                                AND failed.observation_end IS NOT NULL
+                                AND newer.observation_start<=failed.observation_start
+                                AND newer.observation_end>=failed.observation_end
+                            )
+                        )
+                  )
+                ORDER BY failed.finished_at, failed.task_execution_id
+                LIMIT %s
+                FOR UPDATE OF failed SKIP LOCKED
+                """,
+                (cooldown_seconds, max_recovery_rounds, limit),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                recovery_round = int(candidate["recovery_rounds"]) + 1
+                previous_category = candidate.get("final_error_category")
+                previous_message = candidate.get("final_error_message")
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET status='retrying', eligible_at=NOW(), finished_at=NULL,
+                        max_attempts=GREATEST(max_attempts,attempt_count+1),
+                        final_error_category=NULL, final_error_message=NULL,
+                        final_error_detail=final_error_detail ||
+                            jsonb_build_object(
+                                'auto_recovery_round', %s,
+                                'last_transient_error_category', %s,
+                                'last_transient_error_message', %s
+                            ),
+                        lease_owner=NULL, lease_token=NULL,
+                        lease_expires_at=NULL, updated_at=NOW()
+                    WHERE task_execution_id=%s AND status='attention'
+                    RETURNING *
+                    """,
+                    (
+                        recovery_round,
+                        previous_category,
+                        (previous_message or "")[:4000],
+                        execution_id,
+                    ),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    continue
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.auto_retry_transient",
+                    node_key=candidate.get("current_node_key"),
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        f"execution.auto_retry_transient:{execution_id}:"
+                        f"{recovery_round}"
+                    ),
+                    payload={
+                        "recovery_round": recovery_round,
+                        "max_recovery_rounds": max_recovery_rounds,
+                        "cooldown_seconds": cooldown_seconds,
+                        "previous_error_category": previous_category,
+                    },
+                    evidence_references=[],
+                )
+                recovered.append(dict(row))
+        return recovered
+
     def checkpoint_execution(
         self,
         execution_id: int,
@@ -1964,15 +2461,57 @@ class OrchestrationV2Repository:
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute(
                 """
-                WITH candidate AS (
-                    SELECT task_execution_id
+                WITH task_recency AS (
+                    SELECT task_key, MAX(started_at) AS last_started_at
                     FROM orchestration_v2.task_execution
-                    WHERE status IN ('queued','retrying')
-                      AND eligible_at <= NOW()
-                      AND attempt_count < max_attempts
-                      AND resource_class = ANY(%s)
-                    ORDER BY priority DESC, eligible_at, task_execution_id
-                    FOR UPDATE SKIP LOCKED
+                    WHERE resource_class = ANY(%s)
+                    GROUP BY task_key
+                ), candidate AS (
+                    SELECT queued.task_execution_id
+                    FROM orchestration_v2.task_execution AS queued
+                    LEFT JOIN task_recency AS recency
+                      ON recency.task_key=queued.task_key
+                    WHERE queued.status IN ('queued','retrying')
+                      AND queued.eligible_at <= NOW()
+                      AND queued.attempt_count < queued.max_attempts
+                      AND queued.resource_class = ANY(%s)
+                      AND NOT (
+                        queued.task_key = ANY(%s)
+                        AND EXISTS (
+                          SELECT 1
+                          FROM orchestration_v2.task_execution AS active
+                          WHERE active.task_key=queued.task_key
+                            AND active.task_execution_id<>queued.task_execution_id
+                            AND active.status IN (
+                              'running','validating','publishing'
+                            )
+                        )
+                      )
+                      AND NOT (
+                        queued.task_key = ANY(%s)
+                        AND EXISTS (
+                          SELECT 1
+                          FROM orchestration_v2.task_execution AS covering
+                          WHERE covering.task_key=queued.task_key
+                            AND covering.task_execution_id>
+                                queued.task_execution_id
+                            AND covering.status IN (
+                              'created','queued','running',
+                              'waiting_dependency','retrying','validating',
+                              'publishing','success'
+                            )
+                            AND covering.observation_start<=
+                                queued.observation_start
+                            AND covering.observation_end>=
+                                queued.observation_end
+                        )
+                      )
+                    ORDER BY queued.priority DESC,
+                             CASE WHEN queued.status='retrying' THEN 0 ELSE 1 END,
+                             recency.last_started_at NULLS FIRST,
+                             queued.eligible_at,
+                             queued.task_execution_id
+                    FOR UPDATE OF queued SKIP LOCKED
                     LIMIT 1
                 )
                 UPDATE orchestration_v2.task_execution AS execution
@@ -1984,7 +2523,15 @@ class OrchestrationV2Repository:
                 WHERE execution.task_execution_id=candidate.task_execution_id
                 RETURNING execution.*
                 """,
-                (list(classes), worker_id, lease_token, lease_seconds),
+                (
+                    list(classes),
+                    list(classes),
+                    list(sorted(QUOTA_GUARDED_DATASETS)),
+                    list(sorted(QUOTA_GUARDED_DATASETS)),
+                    worker_id,
+                    lease_token,
+                    lease_seconds,
+                ),
             )
             row = cursor.fetchone()
             return dict(row) if row else None
@@ -2500,12 +3047,23 @@ class OrchestrationV2Repository:
             if not row:
                 raise RuntimeError("execution deferral lost its running lease")
             updated = dict(row)
+            # Claiming an execution increments ``attempt_count``.  A pure
+            # resource/quota deferral deliberately gives that retry budget
+            # back before this event is appended, so the persisted counter
+            # may be zero here.  Event attempts are historical facts about
+            # the claim that just ran and the database contract requires a
+            # positive number; reconstruct the claimed attempt instead of
+            # copying the post-refund counter.
+            deferred_attempt_number = max(
+                1,
+                int(updated["attempt_count"]) + 1,
+            )
             self._append_event(
                 cursor,
                 execution_id,
                 event_type="execution.deferred",
                 node_key=updated.get("current_node_key"),
-                attempt_number=int(updated["attempt_count"]),
+                attempt_number=deferred_attempt_number,
                 event_key=None,
                 payload={
                     "reason": reason[:4000],

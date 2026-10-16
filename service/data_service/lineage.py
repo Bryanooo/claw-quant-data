@@ -29,8 +29,8 @@ def _lineage(
         "derivation": derivation,
         "read_strategy": read_strategy,
         "dependency_scope": dependency_scope,
-        # Financial Data has a quota. Research services never silently query
-        # it; only reviewed canonical adapters may perform bounded fallback.
+        # External access is declared explicitly so callers can distinguish
+        # local-only services from reviewed fallback/evidence queries.
         "runtime_external_query": bool(fallback_routes),
     }
 
@@ -136,6 +136,7 @@ CANONICAL_ENDPOINT_LINEAGE: dict[str, dict[str, Any]] = {
 
 
 _RESEARCH_FIXED_DATASETS: dict[str, tuple[str, ...]] = {
+    "/api/v1/research/stocks/search": ("stock_basic",),
     "/api/v1/research/macro/{theme}": (
         "cn_gdp", "cn_pmi", "cn_cpi", "cn_ppi", "cn_m", "sf_month",
         "shibor", "cn_lpr",
@@ -197,6 +198,17 @@ def _contract_datasets() -> dict[str, set[str]]:
     return result
 
 
+def _contract_external_routes() -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {}
+    for contract in RESEARCH_DATA_CONTRACTS:
+        path = contract["path"]
+        if contract["id"].startswith("instrument-technicals-"):
+            path = "/api/v1/research/instruments/{asset_type}/{code}/technicals"
+        for evidence in contract.get("external_evidence", ()):
+            result.setdefault(path, set()).update(evidence["routes"])
+    return result
+
+
 def research_endpoint_lineage(path: str) -> dict[str, Any]:
     if path in _SYSTEM_RESEARCH_ENDPOINTS:
         return _lineage(
@@ -204,13 +216,37 @@ def research_endpoint_lineage(path: str) -> dict[str, Any]:
             origin="system_metadata",
             read_strategy="metadata_only",
         )
+    if path == "/api/v1/research/stocks/search":
+        return _lineage(
+            ["stock_basic"],
+            derivation="rank exact, prefix and fuzzy security-master matches",
+            origin="canonical_db",
+            read_strategy="local_db_first",
+        )
     datasets = set(_RESEARCH_FIXED_DATASETS.get(path, ()))
     datasets.update(_contract_datasets().get(path, ()))
+    fallback_routes = set(_contract_external_routes().get(path, ()))
+    if path == "/api/v1/research/stocks/{ts_code}/research-pack":
+        fallback_routes.update(
+            route
+            for values in _contract_external_routes().values()
+            for route in values
+            if route.startswith(("/api/v1/stock/", "/api/v1/stock_fnd/", "/api/v1/quote/"))
+        )
     return _lineage(
         datasets,
-        derivation="Claw Quant deterministic research calculation over canonical local datasets",
+        fallback_routes=fallback_routes,
+        derivation=(
+            "Claw Quant deterministic research calculation over canonical local datasets, "
+            "with quota-aware 蚂蚁数据源 evidence"
+            if fallback_routes
+            else "Claw Quant deterministic research calculation over canonical local datasets"
+        ),
         origin="claw_derived",
-        read_strategy="derive_from_local_db",
+        read_strategy=(
+            "derive_from_local_db_plus_quota_evidence"
+            if fallback_routes else "derive_from_local_db"
+        ),
     )
 
 

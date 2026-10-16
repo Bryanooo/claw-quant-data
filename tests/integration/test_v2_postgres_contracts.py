@@ -1,5 +1,6 @@
 import os
-from datetime import date
+from datetime import date, timedelta
+from uuid import uuid4
 
 import psycopg2
 import pytest
@@ -7,12 +8,85 @@ import pytest
 from service.config import DB_CONFIG
 from service.data_coverage.registry import COVERAGE_RULES
 from service.data_coverage.repository import CoverageRepository
+from service.orchestration_v2.repository import OrchestrationV2Repository
 
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_DB_INTEGRATION") != "1",
     reason="set RUN_DB_INTEGRATION=1 for PostgreSQL integration tests",
 )
+
+
+def test_resource_deferral_refunds_retry_budget_but_records_positive_event_attempt():
+    execution_id = None
+    lease_token = f"integration-{uuid4()}"
+    try:
+        with psycopg2.connect(**DB_CONFIG) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO orchestration_v2.task_execution (
+                    task_definition_id, task_key, definition_version,
+                    definition_digest, purpose, trigger_source, status,
+                    idempotency_key, observation_key, observation_start,
+                    observation_end, observation_period, scope_digest,
+                    attempt_count, max_attempts, lease_owner, lease_token,
+                    lease_expires_at, current_node_key
+                )
+                SELECT task_definition_id, task_key, version,
+                       definition_digest, 'repair', 'recovery', 'running',
+                       %s, '2026-10-10', DATE '2026-10-10', DATE '2026-10-10',
+                       '2026-10-10', repeat('0', 64), 1, 3,
+                       'integration-worker', %s, now() + interval '5 minutes',
+                       'acquire'
+                FROM orchestration_v2.task_definition
+                WHERE task_key='trade_cal' AND lifecycle_status='active'
+                RETURNING task_execution_id
+                """,
+                (f"integration:deferral:{uuid4()}", lease_token),
+            )
+            execution_id = cursor.fetchone()[0]
+
+        row = OrchestrationV2Repository().defer_execution(
+            execution_id,
+            delay=timedelta(minutes=5),
+            worker_id="integration-worker",
+            lease_token=lease_token,
+            reason="integration quota deferral",
+        )
+
+        assert row["status"] == "retrying"
+        assert row["attempt_count"] == 0
+        with psycopg2.connect(**DB_CONFIG) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT attempt_number, payload->>'attempt_consumed'
+                FROM orchestration_v2.task_execution_event
+                WHERE task_execution_id=%s AND event_type='execution.deferred'
+                """,
+                (execution_id,),
+            )
+            assert cursor.fetchone() == (1, "false")
+    finally:
+        if execution_id is not None:
+            with psycopg2.connect(**DB_CONFIG) as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    "ALTER TABLE orchestration_v2.task_execution_event "
+                    "DISABLE TRIGGER trg_orchestration_v2_execution_event_append_only"
+                )
+                cursor.execute(
+                    "DELETE FROM orchestration_v2.task_execution_event "
+                    "WHERE task_execution_id=%s",
+                    (execution_id,),
+                )
+                cursor.execute(
+                    "ALTER TABLE orchestration_v2.task_execution_event "
+                    "ENABLE TRIGGER trg_orchestration_v2_execution_event_append_only"
+                )
+                cursor.execute(
+                    "DELETE FROM orchestration_v2.task_execution "
+                    "WHERE task_execution_id=%s",
+                    (execution_id,),
+                )
 
 
 def test_v2_control_plane_is_complete_and_v1_tables_are_absent():

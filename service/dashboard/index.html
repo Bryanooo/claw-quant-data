@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Claw Quant · 数据控制台</title>
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261002-cn-lpr" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261013-data-console-v4" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -15,6 +15,7 @@
       <p class="nav-group">工作台</p>
       <button class="nav active" data-view="overview"><span>⌂</span><b>运营总览</b></button>
       <button class="nav" data-view="today"><span>◷</span><b>今日交付</b></button>
+      <button class="nav" data-view="stock"><span>⌁</span><b>个股研究</b></button>
       <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
       <button class="nav" data-view="calendar"><span>▦</span><b>数据日历</b></button>
       <p class="nav-group">治理</p>
@@ -35,7 +36,76 @@
     </header>
     <div id="notice" class="notice hidden"></div>
 
+    <section class="view hidden" data-panel="stock">
+      <section class="card stock-search-card">
+        <div class="stock-search-copy"><p class="eyebrow">EQUITY LAB</p><h2>股票 K 线与技术因子</h2><p>输入股票代码、名称或拼音简码，从本地已校验行情中生成统一复权口径的日 / 周 / 月 K 线。</p></div>
+        <div class="stock-search-area">
+          <div class="stock-search-box"><input id="stockSearch" autocomplete="off" placeholder="例如：宁德时代、300750、NDSD" aria-label="搜索股票"/><button id="stockSearchButton" class="primary">搜索</button><div id="stockSuggestions" class="stock-suggestions hidden"></div></div>
+          <div class="stock-examples"><span>快速查看</span><button data-stock-example="300750.SZ">宁德时代</button><button data-stock-example="600519.SH">贵州茅台</button><button data-stock-example="000001.SZ">平安银行</button></div>
+        </div>
+      </section>
+
+      <section class="card stock-watchlist-card">
+        <div class="stock-watchlist-head"><div><p class="eyebrow">MY WATCHLIST</p><h3>我的自选</h3></div><span id="stockWatchlistCount" class="count-badge">0 只</span></div>
+        <div id="stockWatchlist" class="stock-watchlist"><div class="stock-watchlist-empty">还没有自选股票。搜索并打开股票后，点击“加入自选”。</div></div>
+      </section>
+
+      <section id="stockEmpty" class="stock-empty"><div class="stock-empty-mark">⌁</div><h2>选择一只股票开始分析</h2><p>K 线、成交量、MACD、均线、成本线和牛门突破体系会在同一数据日期下联动展示。</p></section>
+
+      <div id="stockWorkspace" class="hidden">
+        <section class="card stock-identity-card">
+          <div class="stock-identity"><div class="stock-avatar" id="stockAvatar">—</div><div><div class="stock-name-line"><h2 id="stockName">—</h2><code id="stockCode">—</code><span id="stockQuality" class="pill pending">核验中</span></div><p id="stockMeta">—</p></div></div>
+          <div class="stock-identity-actions"><button id="stockWatchToggle" class="stock-watch-toggle">☆ 加入自选</button><div class="stock-quote"><strong id="stockClose">—</strong><span id="stockChange">—</span><small id="stockDate">—</small></div></div>
+        </section>
+
+        <section class="card stock-chart-card">
+          <div class="stock-chart-toolbar">
+            <div class="timeframe-switch" role="group" aria-label="K线周期"><button class="active" data-stock-timeframe="1d">日 K</button><button data-stock-timeframe="1w">周 K</button><button data-stock-timeframe="1mo">月 K</button></div>
+            <div class="stock-chart-controls"><label>初始窗口 <select id="stockPoints"><option value="90">90 根</option><option value="180" selected>180 根</option><option value="250">250 根</option></select></label><div class="stock-zoom-controls" role="group" aria-label="K线缩放"><button id="stockZoomOut" title="缩小，显示更多K线">−</button><button id="stockZoomIn" title="放大，显示更少K线">＋</button><button id="stockZoomReset" title="回到最新区间">最新</button></div><span id="stockZoomStatus" class="stock-zoom-status">—</span><button id="stockReload">刷新行情</button></div>
+          </div>
+          <div class="stock-overlay-legend" id="stockOverlayLegend">
+            <button data-stock-overlay="ma_5"><i style="--line-color:#9b7bd4"></i>MA5</button><button data-stock-overlay="ma_10"><i style="--line-color:#d19b3f"></i>MA10</button><button class="active" data-stock-overlay="ma_20"><i style="--line-color:#348fcb"></i>MA20</button><button class="active" data-stock-overlay="ma_60"><i style="--line-color:#7b8794"></i>MA60</button><button data-stock-overlay="ma_120"><i style="--line-color:#4d8d7c"></i>MA120</button><button data-stock-overlay="ma_250"><i style="--line-color:#6a7480"></i>MA250</button><button data-stock-overlay="ema_12"><i style="--line-color:#35a78a"></i>EMA12</button><button data-stock-overlay="ema_26"><i style="--line-color:#2f6f9f"></i>EMA26</button><button data-stock-overlay="bollinger"><i style="--line-color:#8795a1"></i>BOLL</button><button class="active daily-only" data-stock-overlay="cost_20"><i style="--line-color:#b96a93"></i>成本20</button><button class="active daily-only" data-stock-overlay="cost_60"><i style="--line-color:#8753a6"></i>成本60</button><button class="active daily-only" data-stock-overlay="niumen_line"><i style="--line-color:#e07a35"></i>牛门线</button><button class="active daily-only" data-stock-overlay="niumen_confirmation_line"><i style="--line-color:#c94848"></i>确认线</button><button class="daily-only" data-stock-overlay="niumen_signal_ma_10"><i style="--line-color:#e7a85c"></i>信号MA10</button>
+          </div>
+          <div id="stockDailyNote" class="stock-method-note">牛门线与确认线按交易日定义，仅在日 K 展示；成本线使用成交额 / 成交量的严格滚动口径。</div>
+          <div class="stock-pan-row"><span>历史浏览</span><button id="stockPanPrev" title="向前浏览更早K线">←</button><input id="stockPan" type="range" min="0" max="0" value="0" aria-label="平移K线可视区间"/><button id="stockPanNext" title="向后浏览更新K线">→</button><small id="stockHistoryRange">可直接左右拖动 K 线；滚轮缩放</small></div>
+          <div id="stockChartStage" class="stock-chart-stage"><svg id="stockPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" aria-label="股票K线图"></svg><div id="stockTooltip" class="stock-tooltip hidden"></div></div>
+          <div class="stock-subchart"><div><strong id="stockVolumeTitle">成交量（手）</strong><small id="stockVolumeLabel">—</small></div><svg id="stockVolumeChart" viewBox="0 0 1200 128" preserveAspectRatio="none" aria-label="成交量图"></svg></div>
+          <div class="stock-subchart macd-pane"><div><strong>MACD (12, 26, 9)</strong><small id="stockMacdLabel">DIF — · DEA —</small></div><svg id="stockMacdChart" viewBox="0 0 1200 150" preserveAspectRatio="none" aria-label="MACD图"></svg></div>
+        </section>
+
+        <section class="stock-factor-grid">
+          <article><span>趋势状态</span><strong id="stockTrend">—</strong><small id="stockTrendDetail">—</small></article>
+          <article><span>MACD</span><strong id="stockMacd">—</strong><small id="stockMacdDetail">—</small></article>
+          <article><span>RSI / KDJ</span><strong id="stockRsi">—</strong><small id="stockKdj">—</small></article>
+          <article><span>20 / 60 日成本线</span><strong id="stockCost">—</strong><small id="stockCostDistance">—</small></article>
+          <article><span>牛门突破体系</span><strong id="stockNiumen">—</strong><small id="stockNiumenDetail">—</small></article>
+          <article><span>量价状态</span><strong id="stockVolumeState">—</strong><small id="stockVolumeDetail">—</small></article>
+          <article><span>波动率 / ATR</span><strong id="stockVolatility">—</strong><small id="stockVolatilityDetail">—</small></article>
+          <article><span>ADX / DMI 趋势强度</span><strong id="stockStrength">—</strong><small id="stockStrengthDetail">—</small></article>
+          <article><span>资金动量</span><strong id="stockMoneyFlow">—</strong><small id="stockMoneyFlowDetail">—</small></article>
+        </section>
+      </div>
+    </section>
+
     <section class="view" data-panel="overview">
+      <section class="card system-overview-card">
+        <div class="system-overview-head">
+          <div><p class="eyebrow">SYSTEM OF RECORD</p><h2>系统全貌与唯一口径</h2><p id="systemStatement">正在读取系统能力清单…</p></div>
+          <span id="systemContractVersion" class="count-badge">v1</span>
+        </div>
+        <div class="metrics compact system-inventory">
+          <article><span>Tushare 可采接口</span><strong id="systemTushareCount">—</strong><small>批量历史与日常主数据源</small></article>
+          <article><span>规范数据集</span><strong id="systemDatasetCount">—</strong><small>本地稳定业务模型</small></article>
+          <article><span>对外研究接口</span><strong id="systemResearchCount">—</strong><small>用户与 Agent 的稳定入口</small></article>
+          <article><span>研究证据路由</span><strong id="systemEvidenceCount">—</strong><small>已治理的 蚂蚁数据源 路由</small></article>
+        </div>
+        <div id="systemArchitecture" class="system-architecture"></div>
+        <div class="system-scope-grid">
+          <div><strong>数字为什么不同</strong><div id="systemNumberDefinitions" class="definition-list"></div></div>
+          <div><strong>当前边界</strong><ul id="systemBoundaries" class="boundary-list"></ul></div>
+        </div>
+        <div class="system-links"><span>明细唯一入口：</span><button data-view-target="services">对外服务</button><button data-view-target="sources">数据来源与映射</button><button data-view-target="coverage">数据完整性</button></div>
+      </section>
       <div id="healthBanner" class="health-banner loading">
         <div class="health-copy"><span id="healthKicker" class="status-kicker">正在核验</span><strong id="healthTitle">正在加载数据控制面</strong><p id="healthSummary">任务状态和数据状态分别核验。</p><div class="hero-actions"><button data-view-target="today">查看今日交付</button><button data-view-target="coverage">查看覆盖审计</button></div></div>
         <div class="readiness-gauge"><span id="readinessRate">—</span><small>最新状态就绪率</small></div>
@@ -46,12 +116,12 @@
         <article class="flow-step"><span class="flow-index">3</span><div><small>服务供给</small><strong id="flowDelivery">正在读取</strong><p id="flowDeliveryHint">只有校验通过才就绪</p></div></article>
       </div>
       <div class="metrics overview-metrics">
-        <article><span>当前活动</span><strong id="metricActive">—</strong><small>正在运行的逻辑范围</small></article>
-        <article><span>当前问题</span><strong id="metricAttention">—</strong><small>按数据集与日期去重</small></article>
-        <article><span>严格就绪</span><strong id="metricReady">—</strong><small>最新数据状态</small></article>
-        <article><span>历史缺口</span><strong id="metricMissing">—</strong><small>缺失周期 / 不完整周期</small></article>
+        <article><span>当前活动</span><strong id="metricActive">—</strong><small>自动执行范围（含延后重试）</small></article>
+        <article><span>当前问题</span><strong id="metricAttention">—</strong><small>需处理的数据或执行问题</small></article>
+        <article><span>严格就绪</span><strong id="metricReady">—</strong><small id="metricReadyHint">只统计当前应产出的数据</small></article>
+        <article><span>历史审计缺口</span><strong id="metricMissing">—</strong><small>累计缺失周期 / 不完整周期</small></article>
       </div>
-      <section class="card action-center"><div class="card-head"><div><p class="eyebrow">OPEN ISSUES</p><h2>问题与恢复动作</h2><p>这里只展示当前数据问题；重复重试记录请到“执行历史”查看。</p></div><span id="issueCount" class="count-badge">—</span></div><div id="issueList" class="issue-list"></div></section>
+      <section class="card action-center"><div class="card-head"><div><p class="eyebrow">OPEN ISSUES</p><h2>问题与恢复动作</h2><p>展示当前数据缺口和仍需处理的执行异常；重复或已被后续成功替代的历史尝试不计入问题数。</p></div><span id="issueCount" class="count-badge">—</span></div><div id="issueList" class="issue-list"></div></section>
     </section>
 
     <section class="view hidden" data-panel="today">
@@ -81,7 +151,8 @@
 
     <section class="view hidden" data-panel="sources">
       <section class="card source-overview"><div class="source-overview-head"><div><p class="eyebrow">UPSTREAM REGISTRY</p><h2>上游数据源</h2><p>这里只展示内部依赖。系统优先读取已落库且通过校验的数据，确实缺失时才查询外部数据源。</p></div><div class="source-kpis"><span><b id="sourceProviderCount">—</b> 个数据源</span><span><b id="sourceCapabilityCount">—</b> 项登记能力</span><span><b id="sourcePersistCount">—</b> 个可持久化</span></div></div><div id="sourceCards" class="provider-grid"></div></section>
-      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">SUPPLY STRATEGY</p><h2>数据能力供给策略</h2><p>每个能力都明确本地数据、Tushare 与 Financial Data 的职责，避免同一请求在不同来源间产生口径漂移。</p></div><span id="sourceDependencyTotal" class="count-badge">—</span></div><div class="strategy-grid"><button class="strategy-filter direct" data-source-class="tushare_direct"><span>01</span><div><strong id="sourceRouteCount">—</strong><b>Tushare 直接等价</b><small>本地数据可直接供给</small></div></button><button class="strategy-filter derived" data-source-class="tushare_derived"><span>02</span><div><strong id="sourceRequiredCount">—</strong><b>确定性派生</b><small>基于本地数据计算得到</small></div></button><button class="strategy-filter parsing" data-source-class="tushare_announcement_parse"><span>03</span><div><strong id="sourceRealtimeCount">—</strong><b>公告解析</b><small>从公告证据提取字段</small></div></button><button class="strategy-filter external" data-source-class="financial_data_only"><span>04</span><div><strong id="sourceNoLocalCount">—</strong><b>Financial Data 必需</b><small>本地暂不具备完整口径</small></div></button></div><div class="mapping-toolbar"><div><strong>能力映射明细</strong><small id="sourceDependencyResult">读取中…</small></div><div class="filters"><select id="sourceDependencyClass"><option value="">全部供给策略</option><option value="tushare_direct">Tushare 直接等价</option><option value="tushare_derived">Tushare 确定性派生</option><option value="tushare_announcement_parse">Tushare 公告解析</option><option value="financial_data_only">Financial Data 必需</option></select><input id="sourceDependencySearch" placeholder="搜索能力、接口或数据集"/><button id="sourceDependencyQuery">筛选</button></div></div><div class="table-wrap"><table class="source-mapping-table"><thead><tr><th>数据能力</th><th>供给策略</th><th>本地规范数据</th><th>上游参考</th><th>判定说明</th></tr></thead><tbody id="sourceDependencyRows"></tbody></table></div><footer><button id="sourceDependencyPrev">上一页</button><span id="sourceDependencyPage">第 1 页</span><button id="sourceDependencyNext">下一页</button></footer></section>
+      <section class="card provider-usage"><div class="card-head"><div><p class="eyebrow">QUERY-THROUGH AUDIT</p><h2>蚂蚁数据源 实际调用</h2><p id="financialUsageSummary">读取按需查询审计中…</p></div><span id="financialUsageState" class="pill pending">读取中</span></div><div class="metrics compact provider-usage-metrics"><article><span>真实上游请求</span><strong id="financialRequestCount">—</strong><small>缓存命中不重复计费</small></article><article><span>成功批次</span><strong id="financialSuccessCount">—</strong><small>按批次状态统计</small></article><article><span>失败批次</span><strong id="financialFailureCount">—</strong><small>需要检查上游或契约</small></article><article><span>研究层已接入</span><strong id="financialResearchCount">—</strong><small>供应商路由</small></article></div><div class="table-wrap"><table class="provider-usage-table"><thead><tr><th>供应商路由</th><th>所在批次</th><th>完成批次</th><th>失败批次</th><th>最近真实请求</th></tr></thead><tbody id="financialUsageRows"></tbody></table></div><p class="provider-usage-note">状态按批次统计；某一路由在成功批次中仍可能合法返回空数据，研究响应会单独标记每条路由状态和口径核对结果。</p></section>
+      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">SUPPLY STRATEGY</p><h2>数据能力供给策略</h2><p>每个能力都明确本地数据、Tushare 与 蚂蚁数据源 的职责，避免同一请求在不同来源间产生口径漂移。</p></div><span id="sourceDependencyTotal" class="count-badge">—</span></div><div class="strategy-grid"><button class="strategy-filter direct" data-source-class="tushare_direct"><span>01</span><div><strong id="sourceRouteCount">—</strong><b>Tushare 直接等价</b><small>本地数据可直接供给</small></div></button><button class="strategy-filter derived" data-source-class="tushare_derived"><span>02</span><div><strong id="sourceRequiredCount">—</strong><b>确定性派生</b><small>基于本地数据计算得到</small></div></button><button class="strategy-filter parsing" data-source-class="tushare_announcement_parse"><span>03</span><div><strong id="sourceRealtimeCount">—</strong><b>公告解析</b><small>从公告证据提取字段</small></div></button><button class="strategy-filter external" data-source-class="financial_data_only"><span>04</span><div><strong id="sourceNoLocalCount">—</strong><b>蚂蚁数据源 必需</b><small>本地暂不具备完整口径</small></div></button></div><div class="mapping-toolbar"><div><strong>能力映射明细</strong><small id="sourceDependencyResult">读取中…</small></div><div class="filters"><select id="sourceDependencyClass"><option value="">全部供给策略</option><option value="tushare_direct">Tushare 直接等价</option><option value="tushare_derived">Tushare 确定性派生</option><option value="tushare_announcement_parse">Tushare 公告解析</option><option value="financial_data_only">蚂蚁数据源 必需</option></select><input id="sourceDependencySearch" placeholder="搜索能力、接口或数据集"/><button id="sourceDependencyQuery">筛选</button></div></div><div class="table-wrap"><table class="source-mapping-table"><thead><tr><th>数据能力</th><th>供给策略</th><th>本地规范数据</th><th>上游参考</th><th>判定说明</th></tr></thead><tbody id="sourceDependencyRows"></tbody></table></div><footer><button id="sourceDependencyPrev">上一页</button><span id="sourceDependencyPage">第 1 页</span><button id="sourceDependencyNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="services">
@@ -94,6 +165,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261002-cn-lpr" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261013-data-console-v4" defer></script>
 </body>
 </html>

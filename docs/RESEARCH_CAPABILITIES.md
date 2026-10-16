@@ -18,11 +18,11 @@
 
 ## 已实现的派生服务
 
-19 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、1 个研究验证集和
-16 个聚合研究服务。它们不是“19 种分析”，
+23 个 Agent REST 入口中有 1 个能力目录、1 个研究就绪检查、1 个研究验证集、
+1 个股票搜索入口和 19 个聚合研究服务。它们不是“23 种分析”，
 也不表示已经覆盖所有可能的投研方法；投研方法本身没有封闭全集。项目定义了一份
-可验收的 v1 基线：73 项核心能力中，当前 62 项已由研究接口直接服务，3 项可由
-已有数据补采或派生契约后增加服务，另 8 项仍受外部数据源或额度约束。其中新增的
+可验收的 v1 基线：75 项核心能力中，当前 67 项已由研究接口直接服务，没有尚待实现的
+已有数据派生项，另 8 项仍受外部数据源或额度约束。其中新增的
 全市场技术筛选现已提供受治理的候选列表、稳定排序、覆盖率和底层分区审计证据，
 Skill 不需要也不允许绕过研究层临时扫描原始表。能力目录会
 返回逐项 `techniques.served` 和 `techniques.gaps`，不再只给一个容易误解的总数。
@@ -34,6 +34,9 @@ Skill 不需要也不允许绕过研究层临时扫描原始表。能力目录�
 | `GET /api/v1/research/validation-set` | 股票、指数、ETF、黄金、宏观和行业的可重复验收案例 |
 | `GET /api/v1/research/stocks/{ts_code}/fundamentals` | 财务趋势、盈利、成长、现金质量、偿债、效率、杜邦与主营构成 |
 | `GET /api/v1/research/stocks/{ts_code}/valuation` | PE/PB/PS/股息率历史分位、同行中位数、DCF/DDM 输入 |
+| `GET /api/v1/research/stocks/{ts_code}/analyst-revisions` | 券商去重的一致预期、EPS/盈利/收入/目标价修正与覆盖质量 |
+| `GET /api/v1/research/stocks/{ts_code}/ownership` | 十大股东、基金、北向、股东户数及增减持的时点行为证据 |
+| `GET /api/v1/research/stocks/{ts_code}/shareholder-return` | 复权总回报、分红、回购和未来解禁；分红不与复权收益重复相加 |
 | `GET /api/v1/research/stocks/{ts_code}/technicals` | K线与缺口、MA/MACD/ADX/Aroon/PSAR、RSI/KDJ/CCI/Williams/MFI/StochRSI、量能异常/价量四象限/突破确认/背离/换手率/日线VWAP代理、ATR/布林/下行风险、Ichimoku、Donchian、Supertrend、六类枢轴、斐波那契回撤、缠论候选结构、基准风险和绘图序列 |
 | `GET /api/v1/research/instruments/{asset_type}/{code}/technicals` | 股票、指数、ETF、THS板块、SGE现货的日/周/月同口径技术体系、斐波那契回撤、缠论候选结构和长期趋势 |
 | `GET /api/v1/research/stocks/{ts_code}/capital-flow` | 个股资金流、两融、北向、大宗和筹码状态 |
@@ -49,13 +52,16 @@ Skill 不需要也不允许绕过研究层临时扫描原始表。能力目录�
 | `GET /api/v1/research/sectors/{provider}/{sector_code}/fundamentals` | 时点成员财务聚合、同比、估值覆盖和主要贡献公司 |
 | `GET /api/v1/research/sectors/{provider}/{sector_code}/breadth` | 时点成员涨跌比例、均线扩散和行情覆盖 |
 
-当前 62 项服务能力按聚合入口分布为：基本面 8 项、估值 3 项、技术与风险 32 项、
+当前 67 项服务能力按聚合入口分布为：基本面 11 项、估值 3 项、技术与风险 34 项、
 资金与筹码 5 项、回购进展 1 项、事件研究 1 项、市场宽度 1 项、板块轮动 1 项、
-ETF资金与证据信号 2 项、宏观 4 项、行业 4 项。仍有 11 项缺口：
-一致预期修正、股东与机构行为、总股东回报可以用现有接口补齐；公告证据、治理风险、
-新闻事件、新闻情绪、ETF持有人身份归因、微观结构、宏观外部/财政数据和行业经营
-驱动需要派生能力或新数据源。逐项机器
+ETF资金与证据信号 2 项、总股东回报 1 项、宏观 4 项、行业 4 项。仍有 8 项缺口：
+公告证据、治理风险、新闻事件、新闻情绪、ETF持有人身份归因、微观结构、
+宏观外部/财政数据和行业经营驱动需要新数据源或更完整的外部证据。逐项机器
 可读状态以能力目录为准。
+
+一致预期、股东机构行为和总股东回报已经可以调用；对应历史补采工作流仍保留，原因是
+“接口可计算”不等于“全历史严格就绪”。接口会根据当前可用数据返回 `ready` 或
+`warning`，能力目录中的 backfill 状态继续显示历史完整性，而不会把局部覆盖包装成完整。
 
 这些接口只输出可复现的研究事实和指标，不输出买卖建议。估值模型不会在缺少增长、
 折现率等显式假设时伪造“合理价格”。
@@ -79,7 +85,9 @@ ETF资金与证据信号 2 项、宏观 4 项、行业 4 项。仍有 11 项缺�
 当传入基准时，`relative_strength.risk_metrics` 还会按 20/60/120/250 个共同交易日返回
 Beta、相关性、零无风险利率 Alpha、年化跟踪误差和信息比率；不传基准时不会猜测。
 股票和基金类资产必须先通过 `adj_factor` 或 `fund_adj` 转为最新因子基准；因子覆盖不全
-时缩短分析范围并告警，不允许混用原始与复权价格制造虚假收益或缺口。
+时图表保留连续的原始 K 线并明确标记 `partial_history / raw`，但复权收益、相对强弱和
+依赖复权口径的派生指标会关闭；不得通过删掉无因子日期制造连续性假象，也不允许混用
+原始与复权价格。
 
 量价契约位于 `volume_price.analysis`：返回量能 Z-Score/历史分位、价量四象限、20周期
 突破量能确认、OBV/A-D 背离、PVT、A/D、Force Index、Ease of Movement、换手率归一化
@@ -159,6 +167,9 @@ CLI 与 REST 对应，例如：
 ./clawq research readiness
 ./clawq research capabilities
 ./clawq research fundamentals 000001.SZ --periods 8 --as-of 2026-09-18
+./clawq research analyst-revisions 300750.SZ --window-days 90 --target-periods 4
+./clawq research ownership 300750.SZ --lookback-days 1825
+./clawq research shareholder-return 300750.SZ --lookback-days 1825
 ./clawq research technicals 000001.SZ --benchmark 399006.SZ --chart-points 120
 ./clawq research instrument-technicals index 000688.SH --benchmark 000300.SH
 ./clawq research instrument-technicals etf 512480.SH --benchmark 000300.SH

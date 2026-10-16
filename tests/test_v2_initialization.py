@@ -25,7 +25,7 @@ class InitRepository:
 
 class OrchestrationRepository:
     def control_plane_summary(self):
-        return {"status":"installed","definitions":{"acquisition:active":191}}
+        return {"status":"installed","definitions":{"acquisition:active":192}}
 
 
 class Coverage:

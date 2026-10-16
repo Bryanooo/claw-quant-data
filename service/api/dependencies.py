@@ -25,13 +25,18 @@ from service.investment_calendar import (
 )
 from service.orchestration_v2.repository import OrchestrationV2Repository
 from service.research.repository import ResearchRepository
+from service.research.external_provider import FinancialResearchEvidenceService
 from service.research.service import ResearchService
 from service.source_connectors.query_runtime import QUERY_BROKER
 
 
 def get_data_service(request: Request) -> DataService:
     repository = DatasetRepository(request.app.state.database)
-    return DataService(repository, DATASETS)
+    return DataService(
+        repository,
+        DATASETS,
+        external_research=FinancialResearchEvidenceService(QUERY_BROKER),
+    )
 
 
 DataServiceDependency = Annotated[DataService, Depends(get_data_service)]
@@ -101,6 +106,7 @@ def get_research_service(request: Request) -> ResearchService:
     return ResearchService(
         get_data_service(request),
         ResearchRepository(request.app.state.database),
+        FinancialResearchEvidenceService(QUERY_BROKER),
     )
 
 

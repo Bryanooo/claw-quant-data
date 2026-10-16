@@ -16,7 +16,9 @@ from service.config import APP_REVISION
 from service.orchestration_v2.gap_repair import (
     create_repair_executions,
     plan_current_repairs,
+    plan_quota_guarded_history_repairs,
 )
+from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
 from service.orchestration_v2.repository import OrchestrationV2Repository
 
 
@@ -31,7 +33,12 @@ def main() -> int:
         parser.error("--limit must be positive")
 
     repository = OrchestrationV2Repository()
-    proposals = plan_current_repairs(repository)
+    regular_proposals = plan_current_repairs(
+        repository,
+        excluded_datasets=QUOTA_GUARDED_DATASETS,
+    )
+    guarded_proposals = plan_quota_guarded_history_repairs(repository)
+    proposals = (*regular_proposals, *guarded_proposals)
     if args.task_key:
         allowed = set(args.task_key)
         proposals = tuple(item for item in proposals if item.task_key in allowed)
@@ -61,11 +68,30 @@ def main() -> int:
             summary["by_task"].get(item.task_key, 0) + 1
         )
     if args.apply:
+        selected_regular = tuple(
+            item for item in selected
+            if item.task_key not in QUOTA_GUARDED_DATASETS
+        )
+        selected_guarded = tuple(
+            item for item in selected
+            if item.task_key in QUOTA_GUARDED_DATASETS
+        )
         summary["result"] = create_repair_executions(
             repository,
-            proposals=selected,
+            proposals=selected_regular,
             actor_revision=APP_REVISION,
             image_digest=os.getenv("IMAGE_DIGEST", "runtime-local"),
+        )
+        summary["guarded_result"] = create_repair_executions(
+            repository,
+            proposals=selected_guarded,
+            actor_revision=APP_REVISION,
+            image_digest=os.getenv("IMAGE_DIGEST", "runtime-local"),
+            purpose="backfill",
+            trigger_source="recovery",
+            frozen_scope_extra={
+                "recovery_scope": "quota_guarded_history",
+            },
         )
     print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
     return 0

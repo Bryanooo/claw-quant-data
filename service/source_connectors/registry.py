@@ -57,12 +57,14 @@ class SourceRegistry:
         self._endpoints[key] = endpoint
 
     def get_source(self, source_id: str) -> SourceSpec:
+        source_id = "financial_data" if source_id == "ant_data" else source_id
         try:
             return self._sources[source_id]
         except KeyError as exc:
             raise SourceNotFoundError(f"unknown data source: {source_id}") from exc
 
     def get_endpoint(self, source_id: str, endpoint_key: str) -> EndpointSpec:
+        source_id = "financial_data" if source_id == "ant_data" else source_id
         try:
             return self._endpoints[(source_id, endpoint_key)]
         except KeyError as exc:
@@ -75,7 +77,7 @@ class SourceRegistry:
 
     def list_endpoints(self, source_id: str | None = None) -> tuple[EndpointSpec, ...]:
         if source_id is not None:
-            self.get_source(source_id)
+            source_id = self.get_source(source_id).source_id
         return tuple(sorted(
             (
                 item for item in self._endpoints.values()
@@ -131,7 +133,7 @@ CHINAMONEY_SOURCE = SourceSpec(
     source_id="chinamoney",
     display_name="中国货币网（全国银行间同业拆借中心）",
     kind=SourceKind.API,
-    acquisition_modes=(AcquisitionMode.SCHEDULED_PULL,),
+    acquisition_modes=(AcquisitionMode.SCHEDULED_PULL, AcquisitionMode.QUERY_THROUGH),
     base_url="https://www.chinamoney.com.cn/ags/ms/",
     timezone="Asia/Shanghai",
     license_policy={
@@ -140,7 +142,7 @@ CHINAMONEY_SOURCE = SourceSpec(
     },
     configuration={
         "adapter": "chinamoney",
-        "business_scope": "中国贷款市场报价利率（LPR）历史",
+        "business_scope": "中国贷款市场报价利率（LPR）历史及 FR/FDR 定盘利率",
         "canonical_datasets": ["cn_lpr"],
     },
 )
@@ -148,10 +150,10 @@ CHINAMONEY_SOURCE = SourceSpec(
 
 FINANCIAL_DATA_SOURCE = SourceSpec(
     source_id="financial_data",
-    display_name="Financial Data Query",
+    display_name="蚂蚁数据源",
     kind=SourceKind.API,
     acquisition_modes=(AcquisitionMode.QUERY_THROUGH,),
-    credential_ref="env:FINANCIAL_DATA_API_KEY",
+    credential_ref="env:ANT_DATA_API_KEY",
     base_url=(
         "https://dfdatamcpnexus-prod.antgroup-inc.cn/api/v1/common_query"
     ),
@@ -162,6 +164,9 @@ FINANCIAL_DATA_SOURCE = SourceSpec(
     },
     configuration={
         "adapter": "financial_data",
+        "preferred_api_alias": "ant_data",
+        "credential_env": "ANT_DATA_API_KEY",
+        "legacy_source_id": "financial_data",
         "api_version": "1.6.0",
         "catalog_discovered_routes": 163,
         "business_scope": "本地规范数据无法覆盖时的限额按需补充",
@@ -189,6 +194,13 @@ def build_source_registry() -> SourceRegistry:
             ],
             "catalog_discovered_routes": 163,
             "catalog_is_lower_bound": True,
+        },
+        capabilities={
+            "fields": [], "route_dependent_fields": True,
+            "field_contracts_url": "/api/v1/data/sources/ant_data/route-contracts",
+            "point_in_time": False, "history_verified": None,
+            "permission": "credential_and_route_dependent", "failure_domain": "ant_data",
+            "fallback_equivalence": "not_asserted",
         },
         completeness_policy={
             "query_through": True,
@@ -236,6 +248,15 @@ def build_source_registry() -> SourceRegistry:
             acquisition_mode=AcquisitionMode.SCHEDULED_PULL,
             resource_class="generic",
             cadence=policy.cadence,
+            capabilities={
+                "fields": [field["name"] for field in contract.output_parameters],
+                "field_contracts": list(contract.output_parameters),
+                "permission": dict(contract.permission),
+                "implementation": dict(contract.implementation),
+                "history_verified": None, "point_in_time": False,
+                "failure_domain": "tushare", "fallback_equivalence": "not_asserted",
+                "units": "see_field_contracts",
+            },
             request_contract={
                 "document_ids": list(contract.document_ids),
                 "implementation_mode": contract.implementation.get(
@@ -251,6 +272,11 @@ def build_source_registry() -> SourceRegistry:
                 "automatic_reason": policy.automatic_reason,
             },
         ))
+    from service.source_connectors.public_catalog import PUBLIC_SOURCES, PUBLIC_ENDPOINTS
+    for source in PUBLIC_SOURCES:
+        registry.register_source(source)
+    for endpoint in PUBLIC_ENDPOINTS:
+        registry.register_endpoint(endpoint)
     return registry
 
 

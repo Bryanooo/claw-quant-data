@@ -246,6 +246,40 @@ def _curated_datasets() -> list[DatasetSpec]:
             freshness_policy="max_age",
         ),
         _market_dataset("stock_daily", "A股日线行情", table="daily"),
+        DatasetSpec(
+            name="technical_factor_snapshot",
+            table="technical_factor_snapshot",
+            description=(
+                "全市场日频技术派生快照：牛门线、确认/突破线及严格的"
+                "20/60交易日成交成本线"
+            ),
+            category="derived",
+            primary_keys=("snapshot_date", "ts_code"),
+            exact_filters={
+                "ts_code": "ts_code",
+                "calculation_status": "calculation_status",
+                "niumen_state": "niumen_state",
+                "cost_20_status": "cost_20_status",
+                "cost_60_status": "cost_60_status",
+            },
+            standard_filters=(
+                "ts_code",
+                "calculation_status",
+                "niumen_state",
+                "cost_20_status",
+                "cost_60_status",
+            ),
+            date_column="snapshot_date",
+            availability_column="snapshot_date",
+            default_order=("snapshot_date", "ts_code"),
+            freshness_sla_hours=72,
+            freshness_policy="dependency_derived",
+            source="Claw Quant Derived",
+            source_ids=("tushare",),
+            merge_policy="deterministic_transformation",
+            storage_semantics="materialized_snapshot",
+            business_identity_fields=("snapshot_date", "ts_code"),
+        ),
         _market_dataset(
             "stock_daily_basic",
             "A股每日基本面",

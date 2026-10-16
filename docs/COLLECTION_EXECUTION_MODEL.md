@@ -16,6 +16,13 @@
 
 任务成功与数据就绪是两个不同事实。采集请求完成但验证发现缺口时，执行进入 `attention`，数据状态保持 `gaps` 或 `partial`。
 
+派生任务使用同一控制面，但固定为六个节点：`condition → dependencies →
+scope_plan → transform → validate → publish`。它只读取已经发布为 ready 的同一
+`observation_key` 输入状态，不访问上游；输入状态 ID/版本会冻结到实例范围中。
+当前已投产的 `technical_factor_snapshot` 依赖 `stock_daily` 与 `adj_factor`，按交易日
+为当日上市股票全集物化牛门线、确认/突破线和20/60交易日成本线。不可计算的证券也
+必须写入状态与原因，因此“没有快照行”不会被误认为“历史不足”。
+
 ## 三类运行
 
 | 用途 | 触发 | 资源池 | 范围 |
@@ -23,6 +30,7 @@
 | 日常采集 | Scheduler | `v2-routine` | 当前应发布周期 |
 | 初始化 | 安装/API | `v2-backfill` | 全历史审计确认的缺口 |
 | 修复/补采 | 审计/人工 | `v2-backfill` | 一个已确认缺失或不完整周期 |
+| 日频派生 | 输入数据 ready 事件轮询 | `derived` | 与输入相同的逻辑数据日期 |
 
 初始化不维护第二套采集器。流程是：严格审计 → 生成 V2 repair 实例 → 同一任务采集与验证 → 再审计。历史资源池在 SSE 交易日 08:30–16:00 不领取新实例，已开始的实例不会被强制中断。
 
@@ -49,5 +57,9 @@ V2 只使用 `orchestration_v2` schema 的五张表：
 ## 调度与依赖
 
 Scheduler 只创建实例，不直接调用上游。下游应依赖 `dataset.ready` 事件，而不是采集函数返回或执行状态。日、周、月、季度的业务日期均写入 `observation_*` 字段；创建日期仅用于运维排序。
+
+派生任务调度每两分钟检查一次共同 ready 的输入日期；幂等身份包含输入
+`dataset_state_id` 与 revision。因此普通轮询不会重复计算，而上游数据经修复重新发布
+后会产生一个新的、可追溯的派生实例。
 
 运行状态通过 `/api/v1/ops/orchestration-v2/*` 和 Dashboard 查看。

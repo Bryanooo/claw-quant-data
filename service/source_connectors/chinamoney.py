@@ -82,6 +82,13 @@ def parse_lpr_payload(content: bytes) -> tuple[dict[str, Any], ...]:
 class ChinaMoneyConnector:
     source = CHINAMONEY_SOURCE
 
+    def query(self, request: ConnectorRequest) -> ConnectorResult:
+        from service.source_connectors.public_web import PublicWebConnector
+        return PublicWebConnector(self.source, archive=SourceRawArchive(
+            source_id=self.source.source_id,
+            acquisition_mode=AcquisitionMode.QUERY_THROUGH,
+        )).query(request)
+
     def __init__(
         self,
         *,

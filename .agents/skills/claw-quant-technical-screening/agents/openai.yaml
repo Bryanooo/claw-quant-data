@@ -1,4 +1,0 @@
-interface:
-  display_name: "Claw Quant Technical Screening"
-  short_description: "Screen audited A-share candidates with governed presets"
-  default_prompt: "Screen the A-share market using governed technical presets, verify coverage and audit evidence, then explain and drill down into the strongest candidates."

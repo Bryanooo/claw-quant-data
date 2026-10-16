@@ -4,9 +4,45 @@ from service.research.technical_indicators import (
     aroon,
     downside_risk,
     gap_analysis,
+    niumen_breakout_lines,
+    niumen_breakout_series,
     parabolic_sar,
     relative_risk_metrics,
 )
+
+
+def test_niumen_uses_prior_20_trading_days_and_simple_14_day_atrv():
+    highs = [100.0 + index for index in range(20)] + [500.0]
+    lows = [value - 2.0 for value in highs]
+    closes = [value - 1.0 for value in highs]
+
+    series = niumen_breakout_series(highs, lows, closes)
+    result = niumen_breakout_lines(highs, lows, closes)
+
+    # The current 500 high cannot raise REF(HHV(H,20),1).
+    assert series["prior_high_20"][-1] == 119.0
+    # Current completed-day gap is part of the screenshot formula's MA(TR,14).
+    expected_atrv = (13 * 2.0 + 382.0) / 14
+    assert series["atrv_sma_14"][-1] == expected_atrv
+    assert series["niumen_line"][-1] == 119.0 + 0.5 * expected_atrv
+    assert series["confirmation_line"][-1] == 119.0 + expected_atrv
+    assert result["status"] == "ready"
+    assert result["state"] == "confirmed_breakout"
+    assert result["parameters"]["atr_window_trading_days"] == 14
+    assert result["current_bar_policy"]["rolling_high_excludes_current_trading_day"] is True
+
+
+def test_niumen_requires_20_prior_trading_days_without_future_fill():
+    highs = [10.0 + index for index in range(20)]
+    lows = [value - 1.0 for value in highs]
+    closes = [value - 0.5 for value in highs]
+
+    result = niumen_breakout_lines(highs, lows, closes)
+    series = niumen_breakout_series(highs, lows, closes)
+
+    assert result["status"] == "insufficient_history"
+    assert result["values"]["niumen_line"] is None
+    assert all(value is None for value in series["niumen_line"])
 
 
 def test_aroon_and_parabolic_sar_expose_auditable_trend_state():

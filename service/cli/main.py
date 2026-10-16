@@ -122,6 +122,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--financial-periods", type=_bounded_integer(1, 12), default=8
     )
     stock_research.add_argument("--as-of")
+    stock_research.add_argument(
+        "--no-external", dest="include_external", action="store_false",
+        help="skip quota-backed 蚂蚁数据源 evidence",
+    )
+    stock_research.add_argument(
+        "--no-realtime", dest="include_realtime", action="store_false",
+        help="skip real-time quote evidence while keeping other external evidence",
+    )
     stock_research.set_defaults(handler=_stock_research_pack)
     stock_sectors = stock_commands.add_parser(
         "sectors", help="show point-in-time sector memberships"
@@ -196,6 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--periods", type=_bounded_integer(2, 20), default=12
     )
     research_fundamentals.add_argument("--as-of")
+    research_fundamentals.add_argument(
+        "--no-external", dest="include_external", action="store_false"
+    )
     research_fundamentals.set_defaults(handler=_research_fundamentals)
     research_valuation = research_commands.add_parser(
         "valuation", help="derive valuation history and peer comparison"
@@ -209,6 +220,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_valuation.add_argument("--as-of")
     research_valuation.set_defaults(handler=_research_valuation)
+    research_revisions = research_commands.add_parser(
+        "analyst-revisions",
+        help="compare broker consensus across equal publication windows",
+    )
+    research_revisions.add_argument("ts_code", type=_ts_code)
+    research_revisions.add_argument(
+        "--window-days", type=_bounded_integer(30, 365), default=90
+    )
+    research_revisions.add_argument(
+        "--target-periods", type=_bounded_integer(1, 8), default=4
+    )
+    research_revisions.add_argument("--as-of")
+    research_revisions.set_defaults(handler=_research_analyst_revisions)
+    research_ownership = research_commands.add_parser(
+        "ownership", help="summarize shareholder and institutional behavior"
+    )
+    research_ownership.add_argument("ts_code", type=_ts_code)
+    research_ownership.add_argument(
+        "--lookback-days", type=_bounded_integer(365, 3650), default=1825
+    )
+    research_ownership.add_argument("--as-of")
+    research_ownership.set_defaults(handler=_research_ownership)
+    research_shareholder_return = research_commands.add_parser(
+        "shareholder-return",
+        help="calculate adjusted total return and corporate-action evidence",
+    )
+    research_shareholder_return.add_argument("ts_code", type=_ts_code)
+    research_shareholder_return.add_argument(
+        "--lookback-days", type=_bounded_integer(365, 5000), default=1825
+    )
+    research_shareholder_return.add_argument("--as-of")
+    research_shareholder_return.set_defaults(handler=_research_shareholder_return)
     research_technicals = research_commands.add_parser(
         "technicals", help="derive technical indicators from governed daily data"
     )
@@ -221,6 +264,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_technicals.add_argument("--benchmark", type=_ts_code, default="399006.SZ")
     research_technicals.add_argument("--as-of")
+    research_technicals.add_argument(
+        "--no-external", dest="include_external", action="store_false"
+    )
+    research_technicals.add_argument(
+        "--no-realtime", dest="include_realtime", action="store_false"
+    )
     research_technicals.set_defaults(handler=_research_technicals)
     research_instrument = research_commands.add_parser(
         "instrument-technicals",
@@ -609,6 +658,10 @@ def _stock_research_pack(client: ApiClient, args: argparse.Namespace) -> Any:
         "benchmark": args.benchmark.upper(),
         "financial_periods": args.financial_periods,
     }
+    if not args.include_external:
+        params["include_external"] = False
+    if not args.include_realtime:
+        params["include_realtime"] = False
     if args.as_of:
         params["as_of"] = args.as_of
     return _research_get(
@@ -710,6 +763,8 @@ def _research_readiness(client: ApiClient, _args: argparse.Namespace) -> Any:
 
 def _research_fundamentals(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {"periods": args.periods}
+    if not args.include_external:
+        params["include_external"] = False
     if args.as_of:
         params["as_of"] = args.as_of
     return _research_get(
@@ -730,12 +785,56 @@ def _research_valuation(client: ApiClient, args: argparse.Namespace) -> Any:
     )
 
 
+def _research_analyst_revisions(
+    client: ApiClient, args: argparse.Namespace
+) -> Any:
+    params = {
+        "window_days": args.window_days,
+        "target_periods": args.target_periods,
+    }
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client,
+        f"/v1/research/stocks/{args.ts_code.upper()}/analyst-revisions",
+        params=params,
+    )
+
+
+def _research_ownership(client: ApiClient, args: argparse.Namespace) -> Any:
+    params = {"lookback_days": args.lookback_days}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client,
+        f"/v1/research/stocks/{args.ts_code.upper()}/ownership",
+        params=params,
+    )
+
+
+def _research_shareholder_return(
+    client: ApiClient, args: argparse.Namespace
+) -> Any:
+    params = {"lookback_days": args.lookback_days}
+    if args.as_of:
+        params["as_of"] = args.as_of
+    return _research_get(
+        client,
+        f"/v1/research/stocks/{args.ts_code.upper()}/shareholder-return",
+        params=params,
+    )
+
+
 def _research_technicals(client: ApiClient, args: argparse.Namespace) -> Any:
     params = {
         "lookback_days": args.lookback_days,
         "chart_points": args.chart_points,
         "benchmark": args.benchmark.upper(),
     }
+    if not args.include_external:
+        params["include_external"] = False
+    if not args.include_realtime:
+        params["include_realtime"] = False
     if args.as_of:
         params["as_of"] = args.as_of
     return _research_get(

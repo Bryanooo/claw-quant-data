@@ -17,6 +17,11 @@ x-app-service: &app-service
     TUSHARE_CONNECT_TIMEOUT_SECONDS: ${TUSHARE_CONNECT_TIMEOUT_SECONDS:-5}
     TUSHARE_READ_TIMEOUT_SECONDS: ${TUSHARE_READ_TIMEOUT_SECONDS:-60}
     TUSHARE_RAW_RECORD_CAPTURE_MODE: ${TUSHARE_RAW_RECORD_CAPTURE_MODE:-anomalies_only}
+    ANT_DATA_API_KEY: ${ANT_DATA_API_KEY:-}
+    ANT_DATA_BASE_URL: ${ANT_DATA_BASE_URL:-}
+    ANT_DATA_API_VERSION: ${ANT_DATA_API_VERSION:-}
+    ANT_DATA_CONNECT_TIMEOUT_SECONDS: ${ANT_DATA_CONNECT_TIMEOUT_SECONDS:-${FINANCIAL_DATA_CONNECT_TIMEOUT_SECONDS:-20}}
+    ANT_DATA_READ_TIMEOUT_SECONDS: ${ANT_DATA_READ_TIMEOUT_SECONDS:-${FINANCIAL_DATA_READ_TIMEOUT_SECONDS:-300}}
     FINANCIAL_DATA_API_KEY: ${FINANCIAL_DATA_API_KEY:-}
     FINANCIAL_DATA_BASE_URL: ${FINANCIAL_DATA_BASE_URL:-https://dfdatamcpnexus-prod.antgroup-inc.cn/api/v1/common_query}
     FINANCIAL_DATA_API_VERSION: ${FINANCIAL_DATA_API_VERSION:-1.6.0}
@@ -41,6 +46,9 @@ x-app-service: &app-service
     INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS: ${INITIALIZATION_AUTO_RECOVERY_COOLDOWN_SECONDS:-300}
     INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS: ${INITIALIZATION_AUTO_RECOVERY_MAX_ROUNDS:-3}
     INITIALIZATION_RECOVERY_BATCH_LIMIT: ${INITIALIZATION_RECOVERY_BATCH_LIMIT:-100}
+    V2_TRANSIENT_RECOVERY_COOLDOWN_SECONDS: ${V2_TRANSIENT_RECOVERY_COOLDOWN_SECONDS:-300}
+    V2_TRANSIENT_RECOVERY_MAX_ROUNDS: ${V2_TRANSIENT_RECOVERY_MAX_ROUNDS:-6}
+    V2_TRANSIENT_RECOVERY_BATCH_LIMIT: ${V2_TRANSIENT_RECOVERY_BATCH_LIMIT:-100}
     SCHEDULE_RECONCILE_LOOKBACK_DAYS: ${SCHEDULE_RECONCILE_LOOKBACK_DAYS:-8}
     COVERAGE_POLL_INTERVAL_SECONDS: ${COVERAGE_POLL_INTERVAL_SECONDS:-5}
     COVERAGE_STALE_AFTER_SECONDS: ${COVERAGE_STALE_AFTER_SECONDS:-3600}
@@ -154,6 +162,24 @@ services:
     command: ["python", "-m", "service.orchestration_v2.worker"]
     healthcheck:
       test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-routine", "--resource-class", "generic"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker-v2-derived:
+    <<: *app-service
+    deploy:
+      replicas: ${V2_DERIVED_WORKER_REPLICAS:-1}
+    environment:
+      <<: *app-environment
+      V2_JOB_POLL_INTERVAL_SECONDS: ${V2_JOB_POLL_INTERVAL_SECONDS:-2}
+      V2_JOB_LEASE_SECONDS: ${V2_DERIVED_JOB_LEASE_SECONDS:-600}
+      V2_JOB_RESOURCE_CLASSES: derived
+      V2_WORKER_COMPONENT: worker-v2-derived
+    command: ["python", "-m", "service.orchestration_v2.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-derived", "--resource-class", "derived"]
       interval: 30s
       timeout: 10s
       retries: 3

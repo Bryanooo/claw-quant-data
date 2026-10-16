@@ -140,6 +140,128 @@ def _weighted_typical_price(rows: list[dict]) -> float | None:
     return numerator / denominator if denominator else None
 
 
+def transaction_cost_series(
+    rows: list[dict],
+    window: int,
+    *,
+    amount_to_price_factor: float,
+) -> list[float | None]:
+    """Return a strict rolling transaction-cost series aligned to ``rows``.
+
+    ``amount_to_price_factor`` converts the provider's amount/volume units into
+    price units. Tushare A-share daily bars use amount in thousand CNY and
+    volume in lots of 100 shares, so their factor is 10. A window containing an
+    invalid amount or volume is unavailable instead of silently falling back to
+    an OHLC approximation.
+
+    ``_price_adjustment_scale`` is attached by the governed adjustment layer.
+    Applying it to each day's implied average price keeps the cost line on the
+    same as-of price basis as the adjusted OHLC series.
+    """
+
+    if window <= 0:
+        raise ValueError("window must be positive")
+
+    ordered = sorted(rows, key=lambda row: _day(row.get("trade_date")) or date.min)
+    components: list[tuple[float, float] | None] = []
+    for row in ordered:
+        amount = _number(row.get("amount"))
+        volume = _number(row.get("vol"))
+        scale = _number(row.get("_price_adjustment_scale"))
+        if amount is None or amount <= 0 or volume is None or volume <= 0:
+            components.append(None)
+            continue
+        components.append(
+            (
+                amount
+                * amount_to_price_factor
+                * (scale if scale is not None else 1.0),
+                volume,
+            )
+        )
+
+    values: list[float | None] = []
+    for index in range(len(ordered)):
+        if index + 1 < window:
+            values.append(None)
+            continue
+        selected = components[index - window + 1:index + 1]
+        if any(component is None for component in selected):
+            values.append(None)
+            continue
+        numerator = sum(
+            component[0] for component in selected if component is not None
+        )
+        denominator = sum(
+            component[1] for component in selected if component is not None
+        )
+        values.append(numerator / denominator if denominator else None)
+    return values
+
+
+def transaction_cost_lines(
+    rows: list[dict],
+    latest_close: float,
+    *,
+    amount_to_price_factor: float,
+    windows: tuple[int, ...] = (20, 60),
+) -> dict[str, Any]:
+    """Summarize strict rolling transaction costs for requested windows."""
+
+    ordered = sorted(rows, key=lambda row: _day(row.get("trade_date")) or date.min)
+    results: dict[str, Any] = {}
+    statuses: list[str] = []
+    for window in windows:
+        series = transaction_cost_series(
+            ordered, window, amount_to_price_factor=amount_to_price_factor
+        )
+        selected = ordered[-window:]
+        usable = sum(
+            1
+            for row in selected
+            if (_number(row.get("amount")) or 0) > 0
+            and (_number(row.get("vol")) or 0) > 0
+        )
+        if len(ordered) < window:
+            status = "insufficient_history"
+            value = None
+        elif not series or series[-1] is None:
+            status = "missing_input"
+            value = None
+        else:
+            status = "ready"
+            value = series[-1]
+        statuses.append(status)
+        results[f"{window}_day"] = {
+            "status": status,
+            "value": _round(value),
+            "required_observations": window,
+            "available_observations": len(selected),
+            "usable_observations": usable,
+            "distance_from_close_pct": _round(
+                (latest_close / value - 1) * 100 if value else None
+            ),
+        }
+
+    overall = (
+        "ready"
+        if statuses and all(status == "ready" for status in statuses)
+        else "missing_input"
+        if "missing_input" in statuses
+        else "limited_history"
+    )
+    adjusted = any("_price_adjustment_scale" in row for row in ordered)
+    return {
+        "status": overall,
+        "windows": results,
+        "basis": "rolling actual turnover value divided by rolling traded volume",
+        "price_basis": "latest-factor-adjusted" if adjusted else "raw",
+        "formula": "SUM(amount × unit_factor × price_adjustment_scale, N) / SUM(volume, N)",
+        "amount_to_price_factor": amount_to_price_factor,
+        "strictness": "a window with any missing/non-positive amount or volume is unavailable; no OHLC fallback",
+    }
+
+
 def _anchored_vwap_proxies(rows: list[dict], latest_close: float) -> dict[str, Any]:
     latest_day = _day(rows[-1].get("trade_date")) if rows else None
     year_rows = (
@@ -203,6 +325,7 @@ def _turnover_analysis(rows: list[dict]) -> dict[str, Any]:
 
 def volume_price_analysis(
     rows: list[dict], *, turnover_rows: list[dict] | None = None,
+    transaction_cost_amount_factor: float | None = None,
 ) -> dict[str, Any]:
     """Return auditable daily/weekly/monthly bar volume-price evidence."""
 
@@ -296,6 +419,17 @@ def volume_price_analysis(
             "ad_60": _divergence(closes, values["ad"], 60),
         },
         "anchored_vwap_proxy": _anchored_vwap_proxies(valid, closes[-1]),
+        **(
+            {
+                "transaction_cost_lines": transaction_cost_lines(
+                    valid,
+                    closes[-1],
+                    amount_to_price_factor=transaction_cost_amount_factor,
+                )
+            }
+            if transaction_cost_amount_factor is not None
+            else {}
+        ),
         "turnover": _turnover_analysis(turnover_rows or []),
         "limitations": [
             "volume is actual traded quantity and is not adjustment-factor normalized",

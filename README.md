@@ -1,5 +1,7 @@
 # claw-quant-data
 
+分析 Agent、Skill 与报告工具独立维护在 [claw-quant-agents](https://github.com/Bryanooo/claw-quant-agents)，本仓库负责数据与研究 API。
+
 `claw-quant-data` 是面向个人与研究 Agent 的金融数据底座。系统负责多数据源接入、业务表落库、严格完整性审计、缺口恢复和研究层 REST/CLI 服务；因子组合、策略回测与投研工作流应建立在它之上，而不是混入采集控制面。
 
 自 **2026-09-29** 起，Tushare 的日常采集、初始化、历史补采、数据校验和 Dashboard 全部由 V2 编排执行。V1 控制表、运行服务、路由和测试已经退出。
@@ -11,10 +13,11 @@
 - Scheduler：只负责按日、周、月、季度创建 V2 执行实例，不直接访问上游。
 - V2 routine workers：执行实时/例行任务。
 - V2 backfill workers：执行初始化、补采和修复；A 股交易时段自动暂停历史负载。
+- V2 derived worker：在输入数据通过同日期审计后，执行确定性派生和独立输出审计。
 - Auditor：对业务数据独立审计，任务成功不等于数据就绪。
 - Backup：定时产生 PostgreSQL custom-format 备份及校验侧车文件。
 
-系统当前收录 244 个 Tushare 接口契约，其中 201 个是当前 Token 可安全执行的只读采集接口。可采集接口映射为 191 个原生采集任务和 194 个可审计数据集；数字不相等是因为一个任务可以组合多个上游接口，也可以产出多个数据集。另有 14 个派生任务定义，其中已具备业务实现的版本才允许发布为 active。
+系统当前收录 244 个 Tushare 接口契约，其中 202 个是当前 Token 可执行的只读采集接口（`us_daily` 为每小时 1 次的严格限频接口）。可采集接口映射为 192 个原生采集任务；加上当前已物化的派生结果，共有 196 个可审计数据集。数字不相等是因为一个任务可以组合多个上游接口，也可以产出多个数据集。另有 14 个派生任务定义，其中已具备业务实现的版本才允许发布为 active。
 
 ## V2 执行模型
 
@@ -27,6 +30,10 @@
 3. `acquire`：穷举分页、分区和依赖实体并落库。
 4. `validate`：使用独立审计代码核验业务表及传输证据。
 5. `publish`：只有严格验证通过才发布 ready 状态。
+
+派生任务增加 `dependencies` 与 `transform` 节点，不包含 `acquire`。当前投产的
+`technical_factor_snapshot` 按交易日一次计算全市场牛门线、确认/突破线和20/60日
+成交成本线；结果通过通用数据接口查询，逐股研究接口仍可按任意历史时点即时计算。
 
 V2 只有五张控制表：
 
@@ -49,7 +56,7 @@ V2 只有五张控制表：
 
 Tushare 是当前批量历史和例行行情的主数据源。Token 只通过环境变量 `TUSHARE_TOKEN` 注入，不写入任务定义、日志或仓库。
 
-### Financial Data MCP
+### 蚂蚁数据源 MCP
 
 系统已新增 `financial_data` connector，对接财跃星辰金融数据 MCP 的 `common_query` 接口：
 
@@ -63,6 +70,7 @@ FINANCIAL_DATA_API_VERSION=1.6.0
 
 ```text
 POST /api/v1/data/sources/financial_data/query
+GET  /api/v1/data/sources/financial_data/usage
 ```
 
 `data` 模式只允许 2026-09-29 盘点并复核过的 163 条精确业务路由（包括两条
@@ -76,7 +84,7 @@ API Key 为空时 connector 会失败关闭，不会匿名请求或回退到伪�
 是源诊断/按需穿透入口，返回供应商原生模型；Agent 不应在这里随机切换数据源。
 对 Agent 稳定承诺的是数据集层和 `/api/v1/research/*` 的规范模型：上游字段、
 代码体系、单位、复权方式和时间语义必须先经 provider adapter 映射，审计通过后
-才能进入规范模型。163 条 Financial Data 路由已经完成与 Tushare 244 条契约的
+才能进入规范模型。163 条 蚂蚁数据源 路由已经完成与 Tushare 244 条契约的
 逐项语义映射，但这不等于 163 条规范适配器均已实现；供应商能力、当前 Token 权限、
 本地规范落地是三个独立维度。目前已通过契约测试的有限回退包括 A 股日线/交易日历、证券身份/日度估值、
 累计利润表/现金流量表/资产负债表、财务指标、滚动十二月财务、业绩预告/快报、分红、回购、股东户数、
@@ -84,17 +92,17 @@ API Key 为空时 connector 会失败关闭，不会匿名请求或回退到伪�
 以及基金档案、基金净值、基金股票持仓、基金分红、基金经理、指数档案和指数成分权重；
 其余路由仍需逐项完成字段、日期、单位与代码适配。
 
-当前 163 条 Financial Data 业务路由的操作口径如下；完整逐条清单由
+当前 163 条 蚂蚁数据源 业务路由的操作口径如下；完整逐条清单由
 `GET /api/v1/data/source-priorities` 提供，并可在 Dashboard“数据源”页面筛选：
 
 | 分类 | 数量 | 当前含义 |
 |---|---:|---|
-| 实时必须依赖 Financial Data | 4 | 交易状态、集合竞价快照、基础快照、派生快照；本地批量库无法替代实时查询 |
-| Financial Data 优先、无本地规范等价 | 102 | 当前只能通过显式供应商网关获取，尚未进入统一规范模型 |
-| 本地优先、Financial Data 受控回退已就绪 | 29 | 正常读 Tushare/本地 DB，仅目标切片缺失且允许回退时消耗额度 |
-| 本地已有重叠数据、Financial Data 适配待完成 | 28 | 当前应使用本地数据；不能把供应商原生字段混入规范接口 |
+| 实时必须依赖 蚂蚁数据源 | 4 | 交易状态、集合竞价快照、基础快照、派生快照；本地批量库无法替代实时查询 |
+| 蚂蚁数据源 优先、无本地规范等价 | 102 | 当前只能通过显式供应商网关获取，尚未进入统一规范模型 |
+| 本地优先、蚂蚁数据源 受控回退已就绪 | 29 | 正常读 Tushare/本地 DB，仅目标切片缺失且允许回退时消耗额度 |
+| 本地已有重叠数据、蚂蚁数据源 适配待完成 | 28 | 当前应使用本地数据；不能把供应商原生字段混入规范接口 |
 
-所以当前**实际依赖 Financial Data 的路由是 106 条**（4 条实时 + 102 条无本地规范
+所以当前**实际依赖 蚂蚁数据源 的路由是 106 条**（4 条实时 + 102 条无本地规范
 等价）。这里“无本地规范等价”只描述当前系统状态，不代表已经逐条证明 Tushare
 完全没有语义相近接口，其中也可能包含尚未完成映射和标准化的缺口。
 
@@ -102,13 +110,14 @@ API Key 为空时 connector 会失败关闭，不会匿名请求或回退到伪�
 
 | 供应商语义分类 | 数量 | 判定标准 |
 |---|---:|---|
-| Tushare 直接等价 | 26 | Tushare 结构化接口能覆盖 Financial Data 的完整业务合同 |
+| Tushare 直接等价 | 26 | Tushare 结构化接口能覆盖 蚂蚁数据源 的完整业务合同 |
 | Tushare 确定性派生 | 34 | 可由所列 Tushare 数据确定性计算，公式、权重和 as-of 规则必须版本化 |
 | Tushare 公告原文解析 | 22 | 无结构化表，但 A 股事实可从 `anns_d` PDF 解析并保留证据链 |
-| Financial Data 必需 | 81 | Tushare 没有完整等价能力；其中 52 条存在局部市场或字段重叠，但不能冒充完整覆盖 |
+| 蚂蚁数据源 必需 | 81 | Tushare 没有完整等价能力；其中 52 条存在局部市场或字段重叠，但不能冒充完整覆盖 |
 
-当前 Tushare 目录共 244 条契约：202 条有权限、1 条限频可用、39 条无权限、
-1 条继承底层权限、1 条已下线。每个映射项同时显示所需 Tushare 接口和 Token
+当前 Tushare 目录共 244 条契约：202 条可自动采集（200 条常规接口，另有
+`hk_daily`/`us_daily` 2 条严格限频接口）、2 条虽有权限但不属于安全定时采集、
+38 条无权限、1 条继承底层权限、1 条已下线。每个映射项同时显示所需 Tushare 接口和 Token
 权限，因此“供应商存在”不会再被误报为“当前可调用”。反向逐条查询使用
 `GET /api/v1/data/source-priorities/tushare-endpoints`，可按 `mapping_status`、
 `permission` 和 `query` 筛选 244 条 Tushare 契约。
@@ -168,19 +177,37 @@ GET  /api/v1/ops/initialization/{id}/steps
 | `/api/v1/ops/initialization/*` | V2 初始化与恢复进度 |
 | `/api/v1/investment-calendar/*` | 宏观发布、交割日、公告等投资事件 |
 | `/api/docs` | OpenAPI 文档 |
+| `/api/v1/system/overview` | 系统全貌、统一数字定义与当前运行摘要 |
 
 Dashboard 的“服务目录”直接读取 `/api/v1/catalog`，可按原始审计层、标准层和研究层
-筛选并分页查看来源。研究层只基于本地规范数据集计算；Financial Data 仅由已经完成
-字段、代码、日期和单位契约测试的规范接口，在本地目标切片缺失时受控回退。
+筛选并分页查看来源。研究层的确定性指标只基于本地规范数据集计算；蚂蚁数据源
+仅由已经完成字段、代码、日期和单位契约测试的规范接口，在本地目标切片缺失时受控
+回退。个股 `fundamentals`、`technicals` 和 `research-pack` 还会在本地确定性计算之后，
+按需补充
+蚂蚁数据源 的一致预期、评级、目标价、供应商技术指标/形态和实时快照。响应在
+`data.provider_evidence` 中保持来源隔离，并通过 `normalized` 提供带版本的稳定研究
+契约，不能覆盖本地财务事实或技术计算；单条供应商路由失败只降级该路由，不会丢弃
+同批次其他有效证据。历史查询会跳过无法执行 `as_of` 的供应商路由。可用
+`include_external=false` 禁用，技术面还可
+用 `include_realtime=false` 单独禁用实时快照。
 
 研究 Agent 的外部供给统一放在 `/api/v1/research/*`。通用数据查询不会伪装成研究结论。
-Hibro 交付按研究角色拆成独立的基本面 Agent 与技术面 Agent；两者共享受治理的数据
-获取和图表 Skill，但分别装配自己的研究方法。具体见
-[`docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md`](docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md)。
+研究 Agent 与 Skill 已独立到 claw-quant-agents，包含统一股票研究、基本面和技术面三个
+Agent 包；本仓库只维护数据和研究 API。部署与方法规范见
+[Agent 与 Skill 架构](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md)。
 
 ## Dashboard
 
 控制台地址：`http://127.0.0.1:8000/dashboard`
+
+“个股研究”支持按股票代码、名称或拼音简码检索，并在同一页面展示日 / 周 / 月 K 线、
+成交量、MACD、MA5/10/20/60/120/250、EMA12/26 和布林带；日线额外展示20/60日
+实际成交成本线、牛门线、确认线与信号 MA10。K 线可用按钮或鼠标滚轮缩放，并通过
+区间滑块平移；悬浮会列出当日 OHLC、动态单位成交量及所有已勾选指标值，点击可锁定
+该交易日。摘要区同时给出 ATR/波动率、ADX/DMI、Supertrend、MFI/CMF/StochRSI。
+打开股票后可加入持久化自选，自选存储在 PostgreSQL 中；点击自选卡片即可快速切换 K 线，
+移出自选需要二次确认。
+所有图表读取 `/api/v1/research/*` 的统一复权与质量口径，不绕过研究服务直接拼接业务表。
 
 Dashboard 只读取 V2：
 
@@ -243,6 +270,7 @@ docker run --rm \
 - [数据审计](docs/DATA_ASSURANCE.md)
 - [最新全量数据审计报告](reports/dataset_audit_latest.md)
 - [多数据源架构](docs/MULTI_SOURCE_ARCHITECTURE.md)
+- [系统全貌与唯一口径](docs/SYSTEM_STATUS.md)
 - [研究 API](docs/RESEARCH_API.md)
 - [CLI](docs/CLI.md)
 - [文档导航](docs/README.md)
@@ -253,3 +281,5 @@ docker run --rm \
 - Endpoint 表只保存 `env:VARIABLE_NAME` 形式的凭据引用，不保存密钥值。
 - V2 handler 必须来自代码白名单；数据库不会动态执行 Python 源码。
 - 审计事件追加不可变；纠错通过 supersede 与新实例完成，不删除历史证据。
+
+公开数据扩展与蚂蚁数据源配置、8 个新增查询接口及验证记录：见 [公开数据 connector](docs/PUBLIC_SOURCE_CONNECTORS.md)。

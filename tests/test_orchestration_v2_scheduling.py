@@ -35,6 +35,7 @@ def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
 
     result = scheduling.dispatch_daily_acquisitions(
         date(2026, 9, 28),
+        us_target_date=date(2026, 9, 25),
         repository=repository,
     )
 
@@ -47,6 +48,7 @@ def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
     assert result == {
         "target_date": "2026-09-28",
         "delayed_target_date": "2026-09-28",
+        "us_target_date": "2026-09-25",
         "trade_day": True,
         "eligible": len(expected),
         "created": len(expected),
@@ -56,9 +58,17 @@ def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
     }
     assert {item.task_key for item in repository.requests} == expected
     assert all(item.purpose.value == "daily" for item in repository.requests)
+    by_task = {item.task_key: item for item in repository.requests}
+    assert all(
+        by_task[task_key].observation_start
+        == by_task[task_key].observation_end
+        == date(2026, 9, 25)
+        for task_key in scheduling.US_COMPLETED_SESSION_TASKS
+    )
     assert all(
         item.observation_start == item.observation_end == date(2026, 9, 28)
         for item in repository.requests
+        if item.task_key not in scheduling.US_COMPLETED_SESSION_TASKS
     )
     assert len({item.idempotency_key for item in repository.requests}) == len(expected)
 
@@ -69,6 +79,7 @@ def test_daily_dispatch_does_not_create_weekend_work(monkeypatch):
 
     result = scheduling.dispatch_daily_acquisitions(
         date(2026, 9, 27),
+        us_target_date=date(2026, 9, 25),
         repository=repository,
     )
 
@@ -78,15 +89,16 @@ def test_daily_dispatch_does_not_create_weekend_work(monkeypatch):
 
 def test_closed_day_keeps_next_morning_tasks_on_prior_open_day(monkeypatch):
     repository = _Repository()
-    monkeypatch.setattr(
-        scheduling,
-        "query",
-        lambda *_args, **_kwargs: [
+    def calendar_query(statement, _params):
+        if "us_tradecal" in statement:
+            return [{"cal_date": date(2026, 10, 9)}]
+        return [
             {"cal_date": date(2026, 10, 9)},
             {"cal_date": date(2026, 10, 8)},
             {"cal_date": date(2026, 9, 30)},
-        ],
-    )
+        ]
+
+    monkeypatch.setattr(scheduling, "query", calendar_query)
     monkeypatch.setattr(scheduling, "is_trade_day", lambda _value: True)
 
     result = scheduling.dispatch_latest_daily_acquisitions(
@@ -104,21 +116,23 @@ def test_closed_day_keeps_next_morning_tasks_on_prior_open_day(monkeypatch):
         "ccass_hold", "etf_share_size", "margin", "margin_detail"
     }
     by_task = {item.task_key: item for item in repository.requests}
+    assert by_task["us_daily"].observation_key == "2026-10-09"
     assert by_task["margin"].observation_key == "2026-10-08"
     assert by_task["margin_detail"].observation_key == "2026-10-08"
 
 
 def test_open_day_dispatches_previous_day_after_next_morning_release(monkeypatch):
     repository = _Repository()
-    monkeypatch.setattr(
-        scheduling,
-        "query",
-        lambda *_args, **_kwargs: [
+    def calendar_query(statement, _params):
+        if "us_tradecal" in statement:
+            return [{"cal_date": date(2026, 10, 12)}]
+        return [
             {"cal_date": date(2026, 10, 12)},
             {"cal_date": date(2026, 10, 9)},
             {"cal_date": date(2026, 10, 8)},
-        ],
-    )
+        ]
+
+    monkeypatch.setattr(scheduling, "query", calendar_query)
     monkeypatch.setattr(scheduling, "is_trade_day", lambda _value: True)
 
     result = scheduling.dispatch_latest_daily_acquisitions(
@@ -129,6 +143,7 @@ def test_open_day_dispatches_previous_day_after_next_morning_release(monkeypatch
     )
 
     by_task = {item.task_key: item for item in repository.requests}
+    assert by_task["us_daily"].observation_key == "2026-10-12"
     assert by_task["margin"].observation_key == "2026-10-09"
     assert by_task["margin_detail"].observation_key == "2026-10-09"
     assert result["superseded_not_due"] == 0

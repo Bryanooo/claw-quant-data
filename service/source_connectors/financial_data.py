@@ -1,4 +1,4 @@
-"""Read-through connector for the Financial Data Query unified API.
+"""Read-through connector for the 蚂蚁数据源 Query unified API.
 
 The provider exposes one authenticated HTTP endpoint.  The business URLs
 returned by tool recall are nested request data, not independently callable
@@ -26,6 +26,7 @@ from service.source_connectors.contracts import (
     ConnectorResult,
 )
 from service.source_connectors.financial_data_catalog import FINANCIAL_DATA_ROUTES
+from service.source_connectors.raw_archive import SourceRawArchive
 from service.source_connectors.registry import FINANCIAL_DATA_SOURCE
 
 
@@ -91,14 +92,16 @@ class FinancialDataConnector:
         *,
         api_key: str | None = None,
         transport: Callable[[dict[str, Any]], Mapping[str, Any]] | None = None,
+        archive: SourceRawArchive | None = None,
     ):
         self._api_key = api_key if api_key is not None else FINANCIAL_DATA_API_KEY
         self._transport = transport or self._post
+        self._archive = archive
 
     def _post(self, payload: dict[str, Any]) -> Mapping[str, Any]:
         if not self._api_key:
             raise FinancialDataConfigurationError(
-                "FINANCIAL_DATA_API_KEY is not configured"
+                "ANT_DATA_API_KEY is not configured (legacy FINANCIAL_DATA_API_KEY is also supported)"
             )
         response = requests.post(
             FINANCIAL_DATA_BASE_URL,
@@ -138,13 +141,56 @@ class FinancialDataConnector:
             raise ValueError("financial-data connector requires query_through mode")
 
         payload = validate_common_query(request.parameters)
-        response = dict(self._transport(payload))
+        requested_at = datetime.now(timezone.utc)
+        try:
+            response = dict(self._transport(payload))
+        except Exception as exc:
+            if self._archive is not None:
+                try:
+                    self._archive.archive_failure(
+                        endpoint_key="common_query",
+                        parameters=payload,
+                        collector_name="financial_data_query_through",
+                        error=exc,
+                        requested_at=requested_at,
+                    )
+                except Exception:
+                    # Provider availability must not depend on audit-storage
+                    # availability. The original provider error remains the
+                    # actionable failure.
+                    pass
+            raise
         status = response.get("status")
         if status not in {"SUCCESS", "FAILED"}:
             raise FinancialDataProtocolError(
                 "financial-data response has an invalid status"
             )
         fetched_rows = _result_row_count(payload["mode"], response)
+        audit_warning = None
+        if self._archive is not None:
+            try:
+                if status == "FAILED":
+                    self._archive.archive_failure(
+                        endpoint_key="common_query",
+                        parameters=payload,
+                        collector_name="financial_data_query_through",
+                        error=FinancialDataProtocolError(
+                            "provider reported FAILED"
+                        ),
+                        requested_at=requested_at,
+                    )
+                else:
+                    self._archive.archive_response(
+                        endpoint_key="common_query",
+                        parameters=payload,
+                        collector_name="financial_data_query_through",
+                        records=(response,),
+                        persist_records=False,
+                        row_count_override=fetched_rows,
+                        requested_at=requested_at,
+                    )
+            except Exception as exc:
+                audit_warning = f"query audit unavailable: {type(exc).__name__}"
         return ConnectorResult(
             source_id=request.source_id,
             endpoint_key=request.endpoint_key,
@@ -165,7 +211,7 @@ class FinancialDataConnector:
                 str(item.get("message") or item.get("code") or item)
                 for item in response.get("issues", ())
                 if isinstance(item, Mapping)
-            ),
+            ) + ((audit_warning,) if audit_warning else ()),
         )
 
 

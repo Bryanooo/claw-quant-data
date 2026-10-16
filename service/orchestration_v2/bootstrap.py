@@ -87,6 +87,9 @@ def task_documents(
                 "acquire",
                 "builtin.acquire.v1",
                 retry=(
+                    {"max_attempts": 100}
+                    if task.task_key in {"cyq_perf", "us_daily"}
+                    else
                     {"max_attempts": 50}
                     if task.task_key == "share_float"
                     else None
@@ -117,7 +120,10 @@ def task_documents(
             "validation_contract": validation,
             "resource": {
                 "resource_class": task.resource_class or "default",
-                "priority": 50,
+                # Adjustment factors are a hard dependency of every adjusted
+                # price, return and technical-factor service. Let confirmed
+                # factor repairs drain ahead of ordinary generic backfill.
+                "priority": 90 if task.task_key == "adj_factor" else 50,
                 "source_quota_key": task.endpoints[0].source_id,
             },
         })
@@ -154,6 +160,7 @@ def task_documents(
             "scope_contract": {
                 "inherits_dependency_observation_scope": True,
                 "cadence": "dependency",
+                "implementation_version": task.implementation_version,
                 "execution_period_granularity": observation_granularity(validation),
                 "one_execution_per_logical_period": True,
             },
@@ -167,8 +174,8 @@ def task_documents(
         producer_outputs[task.task_key] = task.output_datasets
 
     result = tuple(documents)
-    if len(result) != 205:
-        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 205")
+    if len(result) != 206:
+        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 206")
     return result
 
 

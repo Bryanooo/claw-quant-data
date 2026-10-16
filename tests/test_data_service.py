@@ -149,9 +149,10 @@ def test_registry_exposes_every_collector_table():
     }
 
     assert collector_tables | normalized_tables | {
-        "tushare_current_daily_basic"
+        "tushare_current_daily_basic",
+        "technical_factor_snapshot",
     } == registered_tables
-    assert len(DATASETS.list()) == 194
+    assert len(DATASETS.list()) == 196
 
 
 def test_normalized_dataset_exposes_versioned_storage_semantics():
@@ -247,7 +248,7 @@ def test_all_collectable_interfaces_have_a_public_data_path():
     service = InterfaceDataService(FakeRawRepository(), DATASETS)
     interfaces = service.list_interfaces()
 
-    assert len(interfaces) == 201
+    assert len(interfaces) == 202
     assert all(item["datasets"] for item in interfaces)
     assert all(
         item["records_url"]
@@ -538,6 +539,46 @@ def test_stock_research_pack_aggregates_governed_datasets_without_advice():
     assert "earliest_value_in_pack" in provenance["stock_daily"]
     assert result["meta"]["external_data_needed"][0]["topic"] == "official_company_announcements"
     assert "advice" not in result
+
+
+def test_stock_research_pack_derives_target_price_upside_from_local_close():
+    class MarketRepository(FakeRepository):
+        def records(self, dataset, query):
+            if dataset.name == "stock_daily":
+                return [{
+                    "ts_code": query.exact_filters.get("ts_code"),
+                    "trade_date": date(2026, 9, 8),
+                    "close": 100,
+                }]
+            return super().records(dataset, query)
+
+    class ExternalResearch:
+        def fundamentals(self, _symbol, *, as_of):
+            return {
+                "status": "ready",
+                "normalized": {"target_price": {"average": 125.0}},
+                "provenance": [],
+            }
+
+        def technicals(self, _symbol, *, as_of, include_realtime=True):
+            return {"status": "ready", "provenance": []}
+
+    result = DataService(
+        MarketRepository(), DATASETS, external_research=ExternalResearch()
+    ).stock_research_pack(
+        "300750.SZ",
+        lookback_days=90,
+        benchmark="399006.SZ",
+        financial_periods=4,
+        as_of=date(2026, 9, 8),
+    )
+
+    target = result["data"]["provider_evidence"]["fundamentals"][
+        "normalized"
+    ]["target_price"]
+    assert target["reference_price"] == 100.0
+    assert target["reference_price_date"] == date(2026, 9, 8)
+    assert target["implied_upside_pct"] == 25.0
 
 
 def test_stock_research_pack_enforces_announcement_cutoff_for_historical_view():

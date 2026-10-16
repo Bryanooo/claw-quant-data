@@ -17,10 +17,15 @@ from service.research.technical_indicators import (
     aroon as _aroon,
     downside_risk as _downside_risk,
     gap_analysis as _gap_analysis,
+    niumen_breakout_lines as _niumen_breakout_lines,
+    niumen_breakout_series as _niumen_breakout_series,
     parabolic_sar as _parabolic_sar,
     relative_risk_metrics as _relative_risk_metrics,
 )
-from service.research.volume_price import volume_price_analysis as _volume_price_analysis
+from service.research.volume_price import (
+    transaction_cost_series as _transaction_cost_series,
+    volume_price_analysis as _volume_price_analysis,
+)
 
 
 def _number(value: Any) -> float | None:
@@ -79,6 +84,108 @@ def _day(value: Any) -> date | None:
     except ValueError:
         return None
     return None
+
+
+def _reconcile_provider_technicals(
+    evidence: dict[str, Any] | None,
+    *,
+    observation_date: date | None,
+    latest_close: float,
+    moving_averages: dict[str, float | None],
+    local_price_basis: str,
+) -> dict[str, Any]:
+    """Compare vendor evidence with same-date governed local observations.
+
+    Provider indicator price bases are not part of the 蚂蚁数据源 contract.
+    Large same-date differences therefore stay visible as evidence, but must not
+    be blended into locally adjusted signals without an explicit warning.
+    """
+
+    if not evidence or evidence.get("status") == "unavailable":
+        return {
+            "status": "not_available",
+            "local_price_basis": local_price_basis,
+            "provider_price_basis": "undocumented",
+            "comparisons": [],
+            "warnings": [],
+        }
+    data = evidence.get("data")
+    if not isinstance(data, dict):
+        data = {}
+
+    def latest(name: str) -> dict[str, Any]:
+        item = data.get(name)
+        row = item.get("latest") if isinstance(item, dict) else None
+        return row if isinstance(row, dict) else {}
+
+    indicators = latest("provider_indicators")
+    quote = latest("quote_snapshot")
+    comparisons: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    def compare(
+        metric: str,
+        local_value: Any,
+        provider_value: Any,
+        provider_day: date | None,
+        *,
+        warning_threshold_pct: float,
+    ) -> None:
+        local_number = _number(local_value)
+        provider_number = _number(provider_value)
+        if local_number is None or provider_number is None:
+            return
+        same_date = bool(observation_date and provider_day == observation_date)
+        difference_pct = (
+            abs(provider_number / local_number - 1) * 100
+            if local_number != 0 else None
+        )
+        state = (
+            "not_same_date" if not same_date
+            else "mismatch" if difference_pct is not None
+            and difference_pct > warning_threshold_pct
+            else "consistent"
+        )
+        comparisons.append({
+            "metric": metric,
+            "local": _round(local_number),
+            "provider": _round(provider_number),
+            "difference_pct": _round(difference_pct),
+            "same_observation_date": same_date,
+            "state": state,
+        })
+
+    quote_day = _day(quote.get("latest_trade_time") or quote.get("date"))
+    compare(
+        "close", latest_close, quote.get("close") or quote.get("last"), quote_day,
+        warning_threshold_pct=2.0,
+    )
+    indicator_day = _day(indicators.get("end_date") or indicators.get("date"))
+    for window in (5, 10, 20, 60):
+        compare(
+            f"ma_{window}", moving_averages.get(str(window)),
+            indicators.get(f"close_ma_{window}d"), indicator_day,
+            warning_threshold_pct=15.0,
+        )
+
+    mismatches = [item["metric"] for item in comparisons if item["state"] == "mismatch"]
+    if any(metric.startswith("ma_") for metric in mismatches):
+        warnings.append(
+            "provider moving averages materially differ from locally adjusted "
+            "same-date values; a provider price-basis mismatch is suspected"
+        )
+    if "close" in mismatches:
+        warnings.append(
+            "provider quote materially differs from the governed local same-date close"
+        )
+    return {
+        "status": "warning" if warnings else "consistent" if comparisons else "insufficient_evidence",
+        "local_price_basis": local_price_basis,
+        "provider_price_basis": "undocumented",
+        "observation_date": observation_date,
+        "comparisons": comparisons,
+        "warnings": warnings,
+    }
 
 
 def _percentile_rank(values: Iterable[Any], current: Any) -> float | None:
@@ -997,21 +1104,42 @@ def _adjust_ohlcv(
         factor = factors[observed]
         scale = factor / latest_factor
         item = dict(row)
+        item["_price_adjustment_scale"] = scale
         for field in ("open", "high", "low", "close", "pre_close"):
             value = _number(row.get(field))
             if value is not None:
                 item[field] = value * scale
         adjusted.append(item)
     complete = len(adjusted) == len(ordered)
+    if not complete:
+        # Never manufacture a discontinuous chart by silently discarding the
+        # dates whose factors are missing.  Serving the complete raw series
+        # with adjusted analytics disabled is honest and operationally useful;
+        # callers can see both the prices and the data-quality incident.
+        return ordered, {
+            "dataset": dataset,
+            "status": "partial_history",
+            "matched": len(adjusted),
+            "source_rows": len(ordered),
+            "coverage_pct": _round(
+                len(adjusted) / len(ordered) * 100 if ordered else None
+            ),
+            "price_basis": "raw",
+            "latest_factor": latest_factor,
+            "warning": (
+                "adjustment-factor history is incomplete; the continuous raw "
+                "price series is returned and adjusted returns/levels are disabled"
+            ),
+        }
     return adjusted, {
         "dataset": dataset,
-        "status": "applied" if complete else "partial_history",
+        "status": "applied",
         "matched": len(adjusted),
         "source_rows": len(ordered),
         "coverage_pct": _round(len(adjusted) / len(ordered) * 100 if ordered else None),
         "price_basis": "latest-factor-adjusted",
         "latest_factor": latest_factor,
-        "warning": None if complete else "analysis is limited to dates with factors; raw and adjusted prices were not mixed",
+        "warning": None,
     }
 
 
@@ -1100,6 +1228,7 @@ def _timeframe_analysis(
     timeframe: str,
     chart_points: int,
     turnover_rows: list[dict] | None = None,
+    transaction_cost_amount_factor: float | None = None,
 ) -> dict[str, Any]:
     """Calculate one consistent technical contract for any OHLCV instrument."""
 
@@ -1130,7 +1259,10 @@ def _timeframe_analysis(
     returns = [current / previous - 1 for previous, current in pairwise(closes) if previous]
     latest_close = closes[-1]
     ma = {str(window): _round(_moving_average(closes, window)) for window in (5, 10, 20, 60, 120, 250)}
-    ma_series = {window: _sma_series(closes, window) for window in (5, 10, 20, 60)}
+    ma_series = {
+        window: _sma_series(closes, window)
+        for window in (5, 10, 20, 60, 120, 250)
+    }
     trend_score = sum(latest_close > value for value in (ma["20"], ma["60"], ma["120"]) if value is not None)
     atr14 = mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None
     kdj_k, kdj_d, kdj_j = _stochastic(highs, lows, closes)
@@ -1165,6 +1297,30 @@ def _timeframe_analysis(
     boll_std = pstdev(window20) if len(window20) > 1 else None
     periods_per_year = {"1d": 252, "1w": 52, "1mo": 12}[timeframe]
     pivot_systems = _pivot_systems(prices[-2] if len(prices) >= 2 else prices[-1])
+    cost_20_series = (
+        _transaction_cost_series(
+            prices, 20, amount_to_price_factor=transaction_cost_amount_factor
+        )
+        if transaction_cost_amount_factor is not None else [None] * len(prices)
+    )
+    cost_60_series = (
+        _transaction_cost_series(
+            prices, 60, amount_to_price_factor=transaction_cost_amount_factor
+        )
+        if transaction_cost_amount_factor is not None else [None] * len(prices)
+    )
+    niumen_series = (
+        _niumen_breakout_series(highs, lows, closes)
+        if timeframe == "1d" else None
+    )
+    niumen_summary = (
+        _niumen_breakout_lines(highs, lows, closes)
+        if timeframe == "1d"
+        else {
+            "status": "not_applicable",
+            "reason": "Niumen windows are defined in trading days and are only calculated from daily bars",
+        }
+    )
     chart_start = max(0, len(prices) - chart_points)
     chart = []
     for index in range(chart_start, len(prices)):
@@ -1176,8 +1332,33 @@ def _timeframe_analysis(
             "open": _round(opens[index]), "high": _round(highs[index]),
             "low": _round(lows[index]), "close": _round(closes[index]),
             "volume": _round(volumes[index]),
+            "macd": _round(macd_line[index]),
+            "macd_signal": _round(signal_line[index]),
+            "macd_histogram": _round(macd_line[index] - signal_line[index]),
             "ma_5": _round(ma_series[5][index]), "ma_10": _round(ma_series[10][index]),
             "ma_20": _round(ma_series[20][index]), "ma_60": _round(ma_series[60][index]),
+            "ma_120": _round(ma_series[120][index]), "ma_250": _round(ma_series[250][index]),
+            "ema_12": _round(ema12[index]), "ema_26": _round(ema26[index]),
+            **(
+                {
+                    "cost_20": _round(cost_20_series[index]),
+                    "cost_60": _round(cost_60_series[index]),
+                }
+                if transaction_cost_amount_factor is not None else {}
+            ),
+            **(
+                {
+                    "niumen_line": _round(niumen_series["niumen_line"][index]),
+                    "niumen_confirmation_line": _round(
+                        niumen_series["confirmation_line"][index]
+                    ),
+                    "niumen_signal_ma_10": _round(
+                        niumen_series["signal_ma_10"][index]
+                    ),
+                }
+                if niumen_series is not None else {}
+            ),
+            "bollinger_middle": _round(average),
             "bollinger_upper": _round(average + 2 * deviation) if average is not None and deviation is not None else None,
             "bollinger_lower": _round(average - 2 * deviation) if average is not None and deviation is not None else None,
         })
@@ -1207,6 +1388,7 @@ def _timeframe_analysis(
                 "formula": "bull=20-period LWMA((3C+L+O+H)/6); bear=SMA6(bull)",
             },
             "systems": {
+                "niumen_breakout": niumen_summary,
                 "ichimoku": _ichimoku(highs, lows, latest_close),
                 "donchian_20": _donchian(highs, lows, latest_close, 20),
                 "donchian_55": _donchian(highs, lows, latest_close, 55),
@@ -1256,7 +1438,9 @@ def _timeframe_analysis(
                 # Weekly and monthly aggregates include the current open
                 # period for charting, but an incomplete bar must not drive a
                 # completed-period volume regime or breakout conclusion.
-                structure_prices, turnover_rows=turnover_rows
+                structure_prices,
+                turnover_rows=turnover_rows,
+                transaction_cost_amount_factor=transaction_cost_amount_factor,
             ),
         },
         "levels": {
@@ -1332,9 +1516,10 @@ def _prior_year(value: date) -> date:
 class ResearchService:
     """High-level calculations whose formulas remain stable across clients."""
 
-    def __init__(self, data_service, repository):
+    def __init__(self, data_service, repository, external_research=None):
         self._data = data_service
         self._repository = repository
+        self._external_research = external_research
 
     def capabilities(
         self, readiness: dict[str, Any] | None = None
@@ -1342,6 +1527,47 @@ class ResearchService:
         return capability_catalog(
             self._repository.backfill_statuses(), readiness=readiness
         )
+
+    def search_stocks(self, query: str, *, limit: int = 20) -> dict[str, Any]:
+        """Return a bounded security-master lookup for human-facing clients."""
+
+        normalized = query.strip()
+        if not normalized:
+            raise InvalidQueryError("stock search query must not be empty")
+        rows = self._repository.search_stocks(normalized, limit=limit)
+        return {
+            "data": rows,
+            "meta": {
+                "query": normalized,
+                "limit": limit,
+                "returned": len(rows),
+                "dataset": "stock_basic",
+            },
+        }
+
+    def stock_watchlist(self) -> dict[str, Any]:
+        rows = self._repository.stock_watchlist()
+        return {
+            "data": rows,
+            "meta": {"count": len(rows), "storage": "postgresql"},
+        }
+
+    def add_stock_watchlist(self, ts_code: str) -> dict[str, Any]:
+        normalized = ts_code.strip().upper()
+        if not normalized:
+            raise InvalidQueryError("stock code must not be empty")
+        row = self._repository.add_stock_watchlist(normalized)
+        if not row:
+            raise RecordNotFoundError(f"stock not found: {normalized}")
+        return {"data": row, "meta": {"saved": True}}
+
+    def remove_stock_watchlist(self, ts_code: str) -> dict[str, Any]:
+        normalized = ts_code.strip().upper()
+        row = self._repository.remove_stock_watchlist(normalized)
+        return {
+            "data": {"ts_code": normalized, "removed": bool(row)},
+            "meta": {"idempotent": True},
+        }
 
     def _load(
         self,
@@ -1427,6 +1653,7 @@ class ResearchService:
         *,
         periods: int = 12,
         as_of: date | None = None,
+        include_external: bool = True,
     ) -> dict[str, Any]:
         effective_as_of = as_of or business_now().date()
         basic = self._ensure_stock(ts_code)
@@ -1571,16 +1798,52 @@ class ResearchService:
         ]
         missing = [item["dataset"] for item in self._provenance(loaded) if item["state"] == "missing"]
         historical_view = effective_as_of < business_now().date()
+        provider_evidence = (
+            self._external_research.fundamentals(
+                ts_code, as_of=effective_as_of
+            )
+            if include_external and self._external_research is not None
+            else None
+        )
+        provider_degraded = bool(
+            provider_evidence
+            and provider_evidence["status"]
+            in {"partial", "empty", "unavailable"}
+        )
+        provider_warnings = []
+        if provider_evidence:
+            unavailable_routes = [
+                item["source_dataset"]
+                for item in provider_evidence.get("provenance", [])
+                if item.get("state") == "unavailable"
+            ]
+            empty_routes = [
+                item["source_dataset"]
+                for item in provider_evidence.get("provenance", [])
+                if item.get("state") == "empty"
+            ]
+            if unavailable_routes:
+                provider_warnings.append(
+                    "蚂蚁数据源 routes failed validation: "
+                    + ", ".join(unavailable_routes)
+                )
+            if empty_routes:
+                provider_warnings.append(
+                    "蚂蚁数据源 returned no evidence for: "
+                    + ", ".join(empty_routes)
+                )
         return {
             "data": {
                 "profile": basic,
                 "periods": series,
                 "latest": series[-1] if series else None,
                 "segments": {"period": latest_segment_period, "items": segments},
+                "provider_evidence": provider_evidence,
             },
             "meta": {
                 "ts_code": ts_code,
                 "as_of": effective_as_of,
+                "include_external": include_external,
                 "generated_at": datetime.now(timezone.utc),
                 "methodology": {
                     "growth": "same fiscal period one year earlier",
@@ -1589,12 +1852,20 @@ class ResearchService:
                 },
                 "provenance": self._provenance(loaded),
                 "quality": {
-                    "status": "warning" if missing or historical_view else "ready",
+                    "status": (
+                        "warning"
+                        if missing or historical_view or provider_degraded
+                        else "ready"
+                    ),
                     "missing_datasets": missing,
+                    "provider_status": (
+                        provider_evidence["status"]
+                        if provider_evidence else "not_requested"
+                    ),
                     "point_in_time_safe": not historical_view,
                     "warnings": ([
                         "fina_mainbz has no announcement-date contract; segment data is current-only in historical views"
-                    ] if historical_view else []),
+                    ] if historical_view else []) + provider_warnings,
                 },
             },
         }
@@ -1608,7 +1879,7 @@ class ResearchService:
         as_of: date | None = None,
     ) -> dict[str, Any]:
         effective_as_of = as_of or business_now().date()
-        self._ensure_stock(ts_code)
+        basic = self._ensure_stock(ts_code)
         start = effective_as_of - timedelta(days=lookback_days - 1)
         valuations = self._load(
             "stock_daily_basic", filters={"ts_code": ts_code}, start=start,
@@ -1715,25 +1986,22 @@ class ResearchService:
         chart_points: int = 120,
         benchmark: str = "399006.SZ",
         as_of: date | None = None,
+        include_external: bool = True,
+        include_realtime: bool = True,
     ) -> dict[str, Any]:
         effective_as_of = as_of or business_now().date()
-        self._ensure_stock(ts_code)
+        basic = self._ensure_stock(ts_code)
         start = effective_as_of - timedelta(days=max(lookback_days * 2, 500))
+        history_limit = min(lookback_days, 10000)
         prices = self._load_many(
             "stock_daily", filters={"ts_code": ts_code}, start=start,
-            end=effective_as_of, as_of=effective_as_of, max_records=min(lookback_days, 5000),
+            end=effective_as_of, as_of=effective_as_of,
+            max_records=history_limit,
         )
         benchmark_rows = self._load_many(
             "index_daily", filters={"ts_code": benchmark}, start=start,
-            end=effective_as_of, as_of=effective_as_of, max_records=min(lookback_days, 5000),
-        )
-        adjustments = self._load_many(
-            "adj_factor", filters={"ts_code": ts_code}, start=start,
-            end=effective_as_of, max_records=min(lookback_days, 5000),
-        )
-        turnover_rows = self._load_many(
-            "stock_daily_basic", filters={"ts_code": ts_code}, start=start,
-            end=effective_as_of, max_records=min(lookback_days, 5000),
+            end=effective_as_of, as_of=effective_as_of,
+            max_records=history_limit,
         )
         prices.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
         prices = [
@@ -1741,6 +2009,25 @@ class ResearchService:
             if all(_number(row.get(field)) is not None for field in ("open", "high", "low", "close"))
         ]
         source_price_count = len(prices)
+        # Related datasets can contain observations on exchange-open suspension
+        # dates while the price table correctly has no bar.  Loading each input
+        # with the same row cap therefore creates an artificial leading-edge
+        # mismatch.  Anchor related history to the first returned price date and
+        # leave enough headroom for those non-price observations.
+        price_window_start = (
+            _day(prices[0].get("trade_date")) if prices else start
+        )
+        related_history_limit = min(history_limit + 1000, 11000)
+        adjustments = self._load_many(
+            "adj_factor", filters={"ts_code": ts_code},
+            start=price_window_start, end=effective_as_of,
+            max_records=related_history_limit,
+        )
+        turnover_rows = self._load_many(
+            "stock_daily_basic", filters={"ts_code": ts_code},
+            start=price_window_start, end=effective_as_of,
+            max_records=related_history_limit,
+        )
         benchmark_rows.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
         prices, adjustment_meta = _adjust_ohlcv(
             prices, adjustments, dataset="adj_factor"
@@ -1771,7 +2058,10 @@ class ResearchService:
         ]
         latest_close = closes[-1]
         ma = {str(window): _round(_moving_average(closes, window)) for window in (5, 10, 20, 60, 120, 250)}
-        ma_series = {window: _sma_series(closes, window) for window in (5, 10, 20, 60)}
+        ma_series = {
+            window: _sma_series(closes, window)
+            for window in (5, 10, 20, 60, 120, 250)
+        }
         window20 = closes[-20:] if len(closes) >= 20 else closes
         boll_mid = mean(window20) if window20 else None
         boll_std = pstdev(window20) if len(window20) > 1 else None
@@ -1779,7 +2069,7 @@ class ResearchService:
             f"return_{window}d_pct": _round(_pct_change(latest_close, closes[-window - 1]) if len(closes) > window else None)
             for window in (20, 60, 120, 250)
         }
-        adjustment_safe = adjustment_meta["status"] in {"applied", "partial_history"}
+        adjustment_safe = adjustment_meta["status"] == "applied"
         relative: dict[str, Any]
         if adjustment_safe:
             benchmark_by_day = {
@@ -1858,6 +2148,14 @@ class ResearchService:
         weekly_prices = _resample_ohlcv(prices, "1w")
         monthly_prices = _resample_ohlcv(prices, "1mo")
         chart_start = max(0, len(prices) - chart_points)
+        cost_20_series = _transaction_cost_series(
+            prices, 20, amount_to_price_factor=10.0
+        )
+        cost_60_series = _transaction_cost_series(
+            prices, 60, amount_to_price_factor=10.0
+        )
+        niumen_series = _niumen_breakout_series(highs, lows, closes)
+        niumen_summary = _niumen_breakout_lines(highs, lows, closes)
         chart_rows = []
         for index in range(chart_start, len(prices)):
             boll_window = closes[max(0, index - 19):index + 1]
@@ -1874,11 +2172,75 @@ class ResearchService:
                 "ma_10": _round(ma_series[10][index]),
                 "ma_20": _round(ma_series[20][index]),
                 "ma_60": _round(ma_series[60][index]),
+                "ma_120": _round(ma_series[120][index]),
+                "ma_250": _round(ma_series[250][index]),
+                "ema_12": _round(ema12[index]),
+                "ema_26": _round(ema26[index]),
+                "macd": _round(macd_line[index]),
+                "macd_signal": _round(signal_line[index]),
+                "macd_histogram": _round(
+                    macd_line[index] - signal_line[index]
+                ),
+                "cost_20": _round(cost_20_series[index]),
+                "cost_60": _round(cost_60_series[index]),
+                "niumen_line": _round(niumen_series["niumen_line"][index]),
+                "niumen_confirmation_line": _round(
+                    niumen_series["confirmation_line"][index]
+                ),
+                "niumen_signal_ma_10": _round(
+                    niumen_series["signal_ma_10"][index]
+                ),
+                "bollinger_middle": _round(boll_average),
                 "bollinger_upper": _round(boll_average + 2 * boll_deviation) if boll_average is not None and boll_deviation is not None else None,
                 "bollinger_lower": _round(boll_average - 2 * boll_deviation) if boll_average is not None and boll_deviation is not None else None,
             })
+        provider_evidence = (
+            self._external_research.technicals(
+                ts_code,
+                as_of=effective_as_of,
+                include_realtime=include_realtime,
+            )
+            if include_external and self._external_research is not None
+            else None
+        )
+        provider_reconciliation = _reconcile_provider_technicals(
+            provider_evidence,
+            observation_date=_day(prices[-1].get("trade_date")),
+            latest_close=latest_close,
+            moving_averages=ma,
+            local_price_basis=str(adjustment_meta.get("price_basis") or "unknown"),
+        )
+        if provider_evidence is not None:
+            provider_evidence["reconciliation"] = provider_reconciliation
+        provider_status_degraded = bool(
+            provider_evidence
+            and provider_evidence["status"]
+            in {"partial", "empty", "unavailable"}
+        )
+        provider_degraded = (
+            provider_status_degraded
+            or provider_reconciliation["status"] == "warning"
+        )
+        local_warnings = (
+            ([] if len(prices) >= 250 else ["fewer than 250 daily observations"])
+            + ([str(adjustment_meta["warning"])] if adjustment_meta.get("warning") else [])
+        )
+        if provider_status_degraded:
+            local_warnings.append(
+                "蚂蚁数据源 technical corroboration is incomplete; local deterministic indicators remain available"
+            )
+        local_warnings.extend(provider_reconciliation["warnings"])
         return {
             "data": {
+                "instrument": {
+                    "ts_code": ts_code,
+                    "symbol": basic.get("symbol"),
+                    "name": basic.get("name"),
+                    "industry": basic.get("industry"),
+                    "market": basic.get("market"),
+                    "exchange": basic.get("exchange"),
+                    "list_status": basic.get("list_status"),
+                },
                 "observation": {"trade_date": prices[-1].get("trade_date"), "close": latest_close},
                 "trend": {
                     "moving_averages": ma,
@@ -1900,6 +2262,7 @@ class ResearchService:
                         "terminology": "民间常称牛线/熊线；不把含义不统一的‘牛门线’当作标准名称",
                     },
                     "systems": {
+                        "niumen_breakout": niumen_summary,
                         "ichimoku": _ichimoku(highs, lows, latest_close),
                         "donchian_20": _donchian(highs, lows, latest_close, 20),
                         "donchian_55": _donchian(highs, lows, latest_close, 55),
@@ -1939,7 +2302,9 @@ class ResearchService:
                         _chaikin_money_flow(highs, lows, closes, volumes)
                     ),
                     "analysis": _volume_price_analysis(
-                        prices, turnover_rows=turnover_rows
+                        prices,
+                        turnover_rows=turnover_rows,
+                        transaction_cost_amount_factor=10.0,
                     ),
                 },
                 "levels": {
@@ -1990,6 +2355,7 @@ class ResearchService:
                     "1d": _timeframe_analysis(
                         prices, timeframe="1d", chart_points=chart_points,
                         turnover_rows=turnover_rows,
+                        transaction_cost_amount_factor=10.0,
                     ),
                     "1w": _timeframe_analysis(
                         weekly_prices, timeframe="1w", chart_points=chart_points
@@ -1999,12 +2365,26 @@ class ResearchService:
                     ),
                 },
                 "long_horizon": _long_horizon_summary(prices),
+                "provider_evidence": provider_evidence,
             },
             "meta": {
                 "ts_code": ts_code,
                 "as_of": effective_as_of,
                 "benchmark": benchmark,
                 "chart_points": chart_points,
+                "history": {
+                    "loaded_observations": source_price_count,
+                    "first_date": (
+                        prices[0].get("trade_date") if prices else None
+                    ),
+                    "last_date": (
+                        prices[-1].get("trade_date") if prices else None
+                    ),
+                    "requested_max_observations": history_limit,
+                    "truncated": source_price_count >= history_limit,
+                },
+                "include_external": include_external,
+                "include_realtime": include_realtime,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": [
                     {"dataset": "stock_daily", "returned": source_price_count},
@@ -2014,11 +2394,18 @@ class ResearchService:
                 ],
                 "price_adjustment": adjustment_meta,
                 "quality": {
-                    "status": "ready" if len(prices) >= 250 and not adjustment_meta.get("warning") else "warning",
-                    "warnings": (
-                        ([] if len(prices) >= 250 else ["fewer than 250 daily observations"])
-                        + ([str(adjustment_meta["warning"])] if adjustment_meta.get("warning") else [])
+                    "status": (
+                        "ready"
+                        if len(prices) >= 250
+                        and not adjustment_meta.get("warning")
+                        and not provider_degraded
+                        else "warning"
                     ),
+                    "provider_status": (
+                        provider_evidence["status"]
+                        if provider_evidence else "not_requested"
+                    ),
+                    "warnings": local_warnings,
                 },
             },
         }
@@ -2105,6 +2492,9 @@ class ResearchService:
             "1d": _timeframe_analysis(
                 prices, timeframe="1d", chart_points=chart_points,
                 turnover_rows=turnover_rows,
+                transaction_cost_amount_factor=(
+                    10.0 if normalized_type == "stock" else None
+                ),
             ),
             "1w": _timeframe_analysis(weekly, timeframe="1w", chart_points=chart_points),
             "1mo": _timeframe_analysis(monthly, timeframe="1mo", chart_points=chart_points),
@@ -2113,7 +2503,7 @@ class ResearchService:
         relative: dict[str, Any] = {"benchmark": benchmark, "status": "not_requested"}
         adjustment_safe = (
             adjustment_dataset is None
-            or adjustment_meta["status"] in {"applied", "partial_history"}
+            or adjustment_meta["status"] == "applied"
         )
         if benchmark and adjustment_safe:
             benchmark_rows = self._load_many(
@@ -2300,6 +2690,621 @@ class ResearchService:
                     "status": "ready" if rows else "warning",
                     "warnings": [] if rows else ["no local repurchase disclosures"],
                     "publication_finality": "late-arrival refresh enabled for the announcement date partition",
+                },
+            },
+        }
+
+    def analyst_revisions(
+        self,
+        ts_code: str,
+        *,
+        window_days: int = 90,
+        target_periods: int = 4,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Compare broker-level consensus across equal publication windows.
+
+        One broker contributes at most its latest view for a target period in
+        each window.  This prevents prolific publishers from receiving more
+        weight than other institutions and keeps revisions point-in-time safe.
+        """
+
+        effective_as_of = as_of or business_now().date()
+        security = self._ensure_stock(ts_code)
+        history_start = effective_as_of - timedelta(days=window_days * 2 - 1)
+        rows = self._load_many(
+            "report_rc",
+            filters={"ts_code": ts_code},
+            start=history_start,
+            end=effective_as_of,
+            max_records=10000,
+        )
+        rows = [
+            row for row in rows
+            if (observed := _day(row.get("report_date"))) is not None
+            and history_start <= observed <= effective_as_of
+        ]
+        rows.sort(key=lambda row: _day(row.get("report_date")) or date.min)
+        current_start = effective_as_of - timedelta(days=window_days - 1)
+        prior_start = current_start - timedelta(days=window_days)
+        prior_end = current_start - timedelta(days=1)
+        periods = sorted(
+            {str(row.get("quarter") or "").strip() for row in rows if row.get("quarter")},
+            reverse=True,
+        )[:target_periods]
+
+        def broker_snapshot(
+            period: str, start_day: date, end_day: date
+        ) -> list[dict[str, Any]]:
+            selected: dict[str, dict[str, Any]] = {}
+            for row in rows:
+                observed = _day(row.get("report_date"))
+                if row.get("quarter") != period or not observed:
+                    continue
+                if not start_day <= observed <= end_day:
+                    continue
+                broker = str(row.get("org_name") or "unknown").strip() or "unknown"
+                previous = selected.get(broker)
+                if previous is None or observed >= (
+                    _day(previous.get("report_date")) or date.min
+                ):
+                    selected[broker] = row
+            return list(selected.values())
+
+        def consensus(snapshot: list[dict[str, Any]]) -> dict[str, Any]:
+            def values(field: str) -> list[float]:
+                return [
+                    value for row in snapshot
+                    if (value := _number(row.get(field))) is not None
+                ]
+
+            eps_values = values("eps")
+            profit_values = values("np")
+            revenue_values = values("op_rt")
+            target_values = [
+                value
+                for row in snapshot
+                for field in ("min_price", "max_price")
+                if (value := _number(row.get(field))) is not None
+            ]
+            ratings: dict[str, int] = defaultdict(int)
+            for row in snapshot:
+                rating = str(row.get("rating") or "").strip()
+                if rating:
+                    ratings[rating] += 1
+            return {
+                "institution_count": len(snapshot),
+                "eps_median": _round(median(eps_values)) if eps_values else None,
+                "net_profit_median": _round(median(profit_values)) if profit_values else None,
+                "revenue_median": _round(median(revenue_values)) if revenue_values else None,
+                "target_price_median": _round(median(target_values)) if target_values else None,
+                "ratings": dict(sorted(ratings.items())),
+            }
+
+        comparisons: list[dict[str, Any]] = []
+        for period in periods:
+            current_rows = broker_snapshot(period, current_start, effective_as_of)
+            prior_rows = broker_snapshot(period, prior_start, prior_end)
+            current = consensus(current_rows)
+            prior = consensus(prior_rows)
+            revisions = {
+                field: _round(_pct_change(current.get(field), prior.get(field)))
+                for field in (
+                    "eps_median", "net_profit_median", "revenue_median",
+                    "target_price_median",
+                )
+            }
+            directional = [
+                value for value in revisions.values() if value is not None
+            ]
+            direction = (
+                "raised" if directional and median(directional) > 1
+                else "cut" if directional and median(directional) < -1
+                else "flat" if directional
+                else "insufficient_history"
+            )
+            comparisons.append({
+                "target_period": period,
+                "current": current,
+                "prior": prior,
+                "revision_pct": revisions,
+                "direction": direction,
+                "consensus_ready": current["institution_count"] >= 3,
+            })
+
+        ready_periods = [
+            item for item in comparisons if item["consensus_ready"]
+        ]
+        comparable_periods = [
+            item for item in ready_periods
+            if item["direction"] != "insufficient_history"
+        ]
+        warnings: list[str] = []
+        if not rows:
+            warnings.append("no local analyst reports in the requested two-window history")
+        if comparisons and not ready_periods:
+            warnings.append("fewer than three institutions cover every target period")
+        if ready_periods and not comparable_periods:
+            warnings.append("current consensus exists but the prior equal window is insufficient for revision direction")
+        recent_reports = [
+            _numeric_row(row) for row in reversed(rows[-20:])
+        ]
+        return {
+            "data": {
+                "security": {
+                    "ts_code": ts_code,
+                    "name": security.get("name"),
+                    "industry": security.get("industry"),
+                },
+                "windows": {
+                    "current": {"start": current_start, "end": effective_as_of},
+                    "prior": {"start": prior_start, "end": prior_end},
+                    "days": window_days,
+                },
+                "periods": comparisons,
+                "recent_reports": recent_reports,
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": {
+                    "aggregation": "latest report per broker and target period in each equal publication window; median across brokers",
+                    "minimum_consensus_institutions": 3,
+                    "direction_threshold_pct": 1,
+                    "point_in_time": "report_date is both observation and publication date; future reports are excluded",
+                },
+                "provenance": [{"dataset": "report_rc", "returned": len(rows)}],
+                "quality": {
+                    "status": "ready" if ready_periods and comparable_periods else "warning",
+                    "warnings": warnings,
+                    "ready_periods": len(ready_periods),
+                    "comparable_periods": len(comparable_periods),
+                },
+            },
+        }
+
+    def ownership_behavior(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 1825,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Reconcile disclosed holders, funds, northbound and insider activity."""
+
+        effective_as_of = as_of or business_now().date()
+        security = self._ensure_stock(ts_code)
+        start = effective_as_of - timedelta(days=lookback_days)
+        aggregate_funds = getattr(self._repository, "fund_ownership_history", None)
+        fund_history = (
+            aggregate_funds(
+                ts_code, start_date=start, as_of=effective_as_of, periods=8
+            )
+            if callable(aggregate_funds)
+            else None
+        )
+        loaded = {
+            "top10_holders": self._load_many(
+                "top10_holders", filters={"ts_code": ts_code}, start=start,
+                end=effective_as_of, as_of=effective_as_of, max_records=5000,
+            ),
+            "top10_floatholders": self._load_many(
+                "top10_floatholders", filters={"ts_code": ts_code}, start=start,
+                end=effective_as_of, as_of=effective_as_of, max_records=5000,
+            ),
+            "fund_portfolio": [] if fund_history is not None else self._load_many(
+                "fund_portfolio", filters={"symbol": ts_code}, start=start,
+                end=effective_as_of, as_of=effective_as_of, max_records=10000,
+            ),
+            "hk_hold": self._load_many(
+                "hk_hold", filters={"ts_code": ts_code}, start=start,
+                end=effective_as_of, max_records=5000,
+            ),
+            "stk_holdertrade": self._load_many(
+                "stk_holdertrade", filters={"ts_code": ts_code}, start=start,
+                end=effective_as_of, as_of=effective_as_of, max_records=5000,
+            ),
+            "stk_holdernumber": self._load_many(
+                "stk_holdernumber", filters={"ts_code": ts_code}, start=start,
+                end=effective_as_of, as_of=effective_as_of, max_records=5000,
+            ),
+        }
+
+        def latest_revision_rows(
+            rows: list[dict[str, Any]],
+            *,
+            period_field: str,
+            identity_fields: tuple[str, ...],
+        ) -> list[dict[str, Any]]:
+            selected: dict[tuple[Any, ...], dict[str, Any]] = {}
+            for row in rows:
+                period = _day(row.get(period_field))
+                announced = _day(row.get("ann_date")) or period
+                if not period or not announced or announced > effective_as_of:
+                    continue
+                key = (period, *(str(row.get(field) or "") for field in identity_fields))
+                prior = selected.get(key)
+                if prior is None or announced >= (
+                    _day(prior.get("ann_date")) or date.min
+                ):
+                    selected[key] = row
+            return list(selected.values())
+
+        def concentration(
+            rows: list[dict[str, Any]], ratio_field: str
+        ) -> dict[str, Any]:
+            clean = latest_revision_rows(
+                rows, period_field="end_date", identity_fields=("holder_name",)
+            )
+            by_period: dict[date, list[dict[str, Any]]] = defaultdict(list)
+            for row in clean:
+                if period := _day(row.get("end_date")):
+                    by_period[period].append(row)
+            periods = sorted(by_period)
+            snapshots = []
+            for period in periods[-8:]:
+                members = by_period[period]
+                ratios = [
+                    value for row in members
+                    if (value := _number(row.get(ratio_field))) is not None
+                ]
+                snapshots.append({
+                    "period": period,
+                    "holder_count": len(members),
+                    "concentration_pct": _round(sum(ratios)) if ratios else None,
+                })
+            latest = snapshots[-1] if snapshots else None
+            prior = snapshots[-2] if len(snapshots) > 1 else None
+            return {
+                "latest": latest,
+                "prior": prior,
+                "change_pct_points": _round(
+                    latest["concentration_pct"] - prior["concentration_pct"]
+                    if latest and prior
+                    and latest["concentration_pct"] is not None
+                    and prior["concentration_pct"] is not None
+                    else None
+                ),
+                "history": snapshots,
+            }
+
+        if fund_history is None:
+            fund_rows = latest_revision_rows(
+                loaded["fund_portfolio"],
+                period_field="end_date", identity_fields=("ts_code",),
+            )
+            funds_by_period: dict[date, list[dict[str, Any]]] = defaultdict(list)
+            for row in fund_rows:
+                if period := _day(row.get("end_date")):
+                    funds_by_period[period].append(row)
+            fund_history = []
+            for period in sorted(funds_by_period)[-8:]:
+                members = funds_by_period[period]
+                fund_history.append({
+                    "period": period,
+                    "fund_count": len({row.get("ts_code") for row in members}),
+                    "market_value": _round(sum(_number(row.get("mkv")) or 0 for row in members)),
+                    "shares": _round(sum(_number(row.get("amount")) or 0 for row in members)),
+                    "reported_float_ratio_sum_pct": _round(sum(
+                        _number(row.get("stk_float_ratio")) or 0 for row in members
+                    )),
+                })
+        else:
+            fund_history = [
+                {
+                    "period": _day(row.get("period")),
+                    "fund_count": int(row.get("fund_count") or 0),
+                    "market_value": _round(_number(row.get("market_value"))),
+                    "shares": _round(_number(row.get("shares"))),
+                    "reported_float_ratio_sum_pct": _round(
+                        _number(row.get("reported_float_ratio_sum_pct"))
+                    ),
+                }
+                for row in reversed(fund_history)
+            ]
+
+        northbound_rows = sorted(
+            loaded["hk_hold"], key=lambda row: _day(row.get("trade_date")) or date.min
+        )
+        northbound = {"latest": None, "baseline": None, "change": None}
+        if northbound_rows:
+            latest = northbound_rows[-1]
+            baseline = northbound_rows[max(0, len(northbound_rows) - 21)]
+            northbound = {
+                "latest": _numeric_row(latest),
+                "baseline": _numeric_row(baseline),
+                "change": {
+                    "volume": _round((_number(latest.get("vol")) or 0) - (_number(baseline.get("vol")) or 0)),
+                    "ratio_pct_points": _round(
+                        (_number(latest.get("ratio")) or 0)
+                        - (_number(baseline.get("ratio")) or 0)
+                    ),
+                    "observation_span": min(20, len(northbound_rows) - 1),
+                },
+            }
+
+        holder_numbers = latest_revision_rows(
+            loaded["stk_holdernumber"],
+            period_field="end_date", identity_fields=(),
+        )
+        holder_numbers.sort(key=lambda row: _day(row.get("end_date")) or date.min)
+        latest_number = holder_numbers[-1] if holder_numbers else None
+        prior_number = holder_numbers[-2] if len(holder_numbers) > 1 else None
+        holder_count = {
+            "latest": _numeric_row(latest_number) if latest_number else None,
+            "prior": _numeric_row(prior_number) if prior_number else None,
+            "change_pct": _round(_pct_change(
+                latest_number.get("holder_num") if latest_number else None,
+                prior_number.get("holder_num") if prior_number else None,
+            )),
+        }
+
+        trades = [
+            row for row in loaded["stk_holdertrade"]
+            if (_day(row.get("ann_date")) or date.min) <= effective_as_of
+        ]
+        signed_volume = 0.0
+        volume_observations = 0
+        increases = decreases = 0
+        for row in trades:
+            direction = str(row.get("in_de") or "").upper()
+            value = _number(row.get("change_vol"))
+            if direction == "IN":
+                increases += 1
+            elif direction == "DE":
+                decreases += 1
+            if value is not None and direction in {"IN", "DE"}:
+                signed_volume += abs(value) * (1 if direction == "IN" else -1)
+                volume_observations += 1
+
+        components = {
+            "top10_holders": concentration(loaded["top10_holders"], "hold_ratio"),
+            "top10_floating_holders": concentration(
+                loaded["top10_floatholders"], "hold_float_ratio"
+            ),
+            "fund_holdings": {
+                "latest": fund_history[-1] if fund_history else None,
+                "prior": fund_history[-2] if len(fund_history) > 1 else None,
+                "history": fund_history,
+            },
+            "northbound": northbound,
+            "shareholder_count": holder_count,
+            "holder_trades": {
+                "events": len(trades),
+                "increase_events": increases,
+                "decrease_events": decreases,
+                "net_change_volume": _round(signed_volume) if volume_observations else None,
+                "latest": _numeric_row(max(
+                    trades, key=lambda row: _day(row.get("ann_date")) or date.min
+                )) if trades else None,
+            },
+        }
+        component_presence = {
+            "top10_holders": bool(components["top10_holders"]["latest"]),
+            "top10_floating_holders": bool(
+                components["top10_floating_holders"]["latest"]
+            ),
+            "fund_holdings": bool(components["fund_holdings"]["latest"]),
+            "northbound": bool(components["northbound"]["latest"]),
+            "shareholder_count": bool(components["shareholder_count"]["latest"]),
+            "holder_trades": bool(components["holder_trades"]["latest"]),
+        }
+        available_components = sum(component_presence.values())
+        missing_components = [
+            name for name, present in component_presence.items() if not present
+        ]
+        warnings = (
+            [
+                f"only {available_components}/6 ownership evidence components are locally available: "
+                + ", ".join(missing_components)
+            ]
+            if missing_components else []
+        )
+        return {
+            "data": {
+                "security": {
+                    "ts_code": ts_code,
+                    "name": security.get("name"),
+                    "industry": security.get("industry"),
+                },
+                **components,
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "lookback_days": lookback_days,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": {
+                    "point_in_time": "revised disclosures use the latest announcement available by as_of",
+                    "concentration": "sum of disclosed top-holder ratios per report period",
+                    "funds": "latest disclosed position per fund and report period",
+                    "northbound": "latest versus up to 20 prior observations",
+                    "empty_semantics": "missing event-like disclosures are unknown/no disclosure, never inferred as zero",
+                },
+                "provenance": [
+                    *self._provenance({
+                        name: rows for name, rows in loaded.items()
+                        if name != "fund_portfolio"
+                    }),
+                    {
+                        "dataset": "fund_portfolio",
+                        "returned": len(fund_history),
+                        "state": "available" if fund_history else "missing",
+                        "query_mode": (
+                            "point_in_time_database_aggregate"
+                            if callable(aggregate_funds)
+                            else "governed_dataset_rows"
+                        ),
+                    },
+                ],
+                "quality": {
+                    "status": "ready" if not missing_components else "warning",
+                    "warnings": warnings,
+                    "available_components": available_components,
+                    "expected_components": 6,
+                    "components": component_presence,
+                },
+            },
+        }
+
+    def shareholder_return(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 1825,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Return adjusted shareholder performance and corporate-action context.
+
+        The adjusted price return is the total-return measure.  Cash dividends
+        are disclosed separately and are never added again, which would double
+        count distributions already represented by the adjustment factor.
+        """
+
+        effective_as_of = as_of or business_now().date()
+        security = self._ensure_stock(ts_code)
+        start = effective_as_of - timedelta(days=lookback_days)
+        prices = self._load_many(
+            "stock_daily", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, as_of=effective_as_of, max_records=5000,
+        )
+        factors = self._load_many(
+            "adj_factor", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, max_records=5000,
+        )
+        adjusted, adjustment = _adjust_ohlcv(
+            prices, factors, dataset="adj_factor"
+        )
+        adjusted.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+        adjustment_safe = adjustment["status"] == "applied"
+        first = adjusted[0] if adjusted and adjustment_safe else None
+        last = adjusted[-1] if adjusted and adjustment_safe else None
+        first_day = _day(first.get("trade_date")) if first else None
+        last_day = _day(last.get("trade_date")) if last else None
+        total_return = _pct_change(
+            last.get("close") if last else None,
+            first.get("close") if first else None,
+        )
+        elapsed_days = (last_day - first_day).days if first_day and last_day else 0
+        annualized = None
+        if total_return is not None and elapsed_days > 0 and total_return > -100:
+            annualized = ((1 + total_return / 100) ** (365.25 / elapsed_days) - 1) * 100
+
+        dividends = self._load_many(
+            "dividend", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, as_of=effective_as_of, max_records=5000,
+        )
+        dividend_latest: dict[date, dict[str, Any]] = {}
+        for row in dividends:
+            period = _day(row.get("end_date"))
+            announced = _day(row.get("ann_date")) or period
+            if not period or not announced or announced > effective_as_of:
+                continue
+            prior = dividend_latest.get(period)
+            if prior is None or announced >= (_day(prior.get("ann_date")) or date.min):
+                dividend_latest[period] = row
+        dividend_rows = sorted(
+            dividend_latest.values(), key=lambda row: _day(row.get("end_date")) or date.min
+        )
+        implemented_dividends = [
+            row for row in dividend_rows
+            if any(marker in str(row.get("div_proc") or "") for marker in ("实施", "完成"))
+        ]
+        cash_values = [
+            value for row in implemented_dividends
+            if (value := _number(row.get("cash_div_tax"))) is not None
+        ]
+
+        repurchases = self._load_many(
+            "repurchase", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, max_records=5000,
+        )
+        repurchases = [
+            row for row in repurchases
+            if (_day(row.get("ann_date")) or date.min) <= effective_as_of
+        ]
+        repurchases.sort(key=lambda row: _day(row.get("ann_date")) or date.min)
+        latest_repurchase = repurchases[-1] if repurchases else None
+
+        release_rows = self._load_many(
+            "share_float", filters={"ts_code": ts_code}, start=effective_as_of,
+            end=effective_as_of + timedelta(days=365), max_records=5000,
+        )
+        known_releases = [
+            row for row in release_rows
+            if (_day(row.get("ann_date")) or date.max) <= effective_as_of
+        ]
+        known_releases.sort(key=lambda row: _day(row.get("float_date")) or date.max)
+
+        warnings: list[str] = []
+        if len(adjusted) < 252:
+            warnings.append(f"only {len(adjusted)} adjusted daily observations; annualized return is fragile")
+        if adjustment.get("warning"):
+            warnings.append(str(adjustment["warning"]))
+        if not dividends:
+            warnings.append("no local dividend disclosures in the requested window; this is not interpreted as zero dividends")
+        return {
+            "data": {
+                "security": {
+                    "ts_code": ts_code,
+                    "name": security.get("name"),
+                    "industry": security.get("industry"),
+                },
+                "performance": {
+                    "start_date": first_day,
+                    "end_date": last_day,
+                    "observations": len(adjusted) if adjustment_safe else 0,
+                    "adjusted_total_return_pct": _round(total_return),
+                    "annualized_total_return_pct": _round(annualized),
+                    "elapsed_days": elapsed_days,
+                },
+                "dividends": {
+                    "implemented_events": len(implemented_dividends),
+                    "cumulative_after_tax_cash_per_share": _round(sum(cash_values)) if cash_values else None,
+                    "latest": _numeric_row(implemented_dividends[-1]) if implemented_dividends else None,
+                    "timeline": [
+                        _numeric_row(row) for row in reversed(dividend_rows[-20:])
+                    ],
+                },
+                "repurchases": {
+                    "disclosures": len(repurchases),
+                    "latest": _numeric_row(latest_repurchase) if latest_repurchase else None,
+                    "amount_note": "repurchase disclosures are cumulative snapshots; they are not summed across announcements",
+                },
+                "known_upcoming_share_releases": {
+                    "events_within_365_days": len(known_releases),
+                    "shares": _round(sum(_number(row.get("float_share")) or 0 for row in known_releases)) if known_releases else None,
+                    "timeline": [_numeric_row(row) for row in known_releases[:20]],
+                    "interpretation": "supply/dilution context only; not included in total return",
+                },
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "lookback_days": lookback_days,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": {
+                    "total_return": "latest-factor-adjusted close-to-close return using stock_daily plus adj_factor",
+                    "no_double_counting": "cash dividends are evidence only and are not added to the adjusted return",
+                    "point_in_time": "announcement dates after as_of are excluded from corporate-action evidence",
+                },
+                "provenance": [
+                    {"dataset": "stock_daily", "returned": len(prices)},
+                    {"dataset": "adj_factor", "returned": len(factors)},
+                    {"dataset": "dividend", "returned": len(dividends)},
+                    {"dataset": "repurchase", "returned": len(repurchases)},
+                    {"dataset": "share_float", "returned": len(known_releases)},
+                ],
+                "price_adjustment": adjustment,
+                "quality": {
+                    "status": (
+                        "ready"
+                        if not warnings and len(adjusted) >= 252
+                        and adjustment_safe
+                        else "warning"
+                    ),
+                    "warnings": warnings,
                 },
             },
         }

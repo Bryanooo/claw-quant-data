@@ -96,6 +96,7 @@
 | `sz_daily_info` | `tushare_norm_sz_daily_info` | 9 | `trade_date` |
 | `top10_cb_holders` | `tushare_norm_top10_cb_holders` | 6 | `end_date` |
 | `us_basic` | `tushare_norm_us_basic` | 6 | `-` |
+| `us_daily` | `tushare_norm_us_daily` | 16 | `trade_date` |
 | `us_tbr` | `tushare_norm_us_tbr` | 13 | `date` |
 | `us_tltr` | `tushare_norm_us_tltr` | 4 | `date` |
 | `us_tradecal` | `tushare_norm_us_tradecal` | 3 | `cal_date` |

@@ -19,7 +19,12 @@ from service.data_coverage.reconciliation import CoverageRuleReconciler
 from service.data_coverage.service import submit_scheduled_coverage_audits
 from service.heartbeat import Heartbeat
 from service.initialization.service import InitializationService
-from service.config import APP_REVISION
+from service.config import (
+    APP_REVISION,
+    V2_TRANSIENT_RECOVERY_BATCH_LIMIT,
+    V2_TRANSIENT_RECOVERY_COOLDOWN_SECONDS,
+    V2_TRANSIENT_RECOVERY_MAX_ROUNDS,
+)
 from service.orchestration_v2.gap_repair import (
     create_repair_executions,
     plan_current_repairs,
@@ -32,6 +37,7 @@ from service.orchestration_v2.late_repair import (
 )
 from service.orchestration_v2.scheduling import (
     dispatch_due_acquisitions,
+    dispatch_ready_transformations,
     is_trade_day,
 )
 
@@ -79,18 +85,71 @@ def run_data_coverage_dispatch() -> int:
     return int(result["created"])
 
 
+def run_v2_transformation_dispatch() -> int:
+    result = dispatch_ready_transformations()
+    if result["errors"]:
+        raise RuntimeError(
+            "V2 transformation dispatch was incomplete: "
+            + ", ".join(sorted(result["errors"]))
+        )
+    logger.info(
+        "V2 transformation dispatch eligible=%s created=%s existing=%s waiting=%s",
+        result["eligible"], result["created"], result["existing"],
+        len(result["waiting"]),
+    )
+    return int(result["created"])
+
+
 def run_coverage_rule_reconciler() -> int:
-    count = CoverageRuleReconciler().reconcile()
+    requeued = CoverageRuleReconciler().reconcile()
+    count = sum(requeued.values())
     repository = OrchestrationV2Repository()
     resolved = repository.reconcile_resolved_attention_executions()
     duplicates = repository.reconcile_duplicate_attention_executions()
+    redundant = repository.reconcile_redundant_pending_executions()
+    stale_contracts = repository.reconcile_stale_audit_contract_executions()
+    normalized_priorities = repository.promote_quota_guarded_history_executions()
     if count:
-        logger.warning("requeued %s stale-rule audits", count)
+        logger.warning(
+            "requeued %s stale-rule audits across %s datasets",
+            count,
+            len(requeued),
+        )
     if resolved:
         logger.info("superseded %s stale resolved attention executions", resolved)
     if duplicates:
         logger.info("superseded %s duplicate attention attempts", duplicates)
-    return count + resolved + duplicates
+    if redundant:
+        logger.info("superseded %s redundant pending executions", redundant)
+    if stale_contracts:
+        logger.warning(
+            "superseded %s executions with stale audit contracts",
+            stale_contracts,
+        )
+    if normalized_priorities:
+        logger.info(
+            "normalized %s quota-guarded history priorities",
+            normalized_priorities,
+        )
+    return (
+        count + resolved + duplicates + redundant + stale_contracts
+        + normalized_priorities
+    )
+
+
+def run_transient_failure_reconciler() -> int:
+    """Resume bounded transient failures after connectivity can recover."""
+
+    recovered = OrchestrationV2Repository().recover_transient_attention_executions(
+        cooldown_seconds=V2_TRANSIENT_RECOVERY_COOLDOWN_SECONDS,
+        max_recovery_rounds=V2_TRANSIENT_RECOVERY_MAX_ROUNDS,
+        limit=V2_TRANSIENT_RECOVERY_BATCH_LIMIT,
+    )
+    if recovered:
+        logger.warning(
+            "automatically requeued %s transient V2 failures", len(recovered)
+        )
+    return len(recovered)
 
 
 def run_v2_late_repair_dispatch() -> int:
@@ -164,6 +223,12 @@ def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundSchedu
         next_run_time=business_now() + timedelta(seconds=5),
     )
     scheduler.add_job(
+        run_v2_transformation_dispatch, "interval", minutes=2,
+        id="v2_transformation_dispatch", name="V2 派生任务依赖派发",
+        replace_existing=True, coalesce=True, max_instances=1,
+        next_run_time=business_now() + timedelta(seconds=30),
+    )
+    scheduler.add_job(
         run_data_coverage_dispatch, "cron", hour="9,20", minute=30,
         id="v2_coverage_dispatch", name="V2 全数据集严格审计",
         replace_existing=True, coalesce=True, max_instances=1,
@@ -172,6 +237,12 @@ def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundSchedu
     scheduler.add_job(
         run_coverage_rule_reconciler, "interval", minutes=15,
         id="v2_coverage_rule_reconciler", name="V2 审计规则版本对账",
+        replace_existing=True, coalesce=True, max_instances=1,
+    )
+    scheduler.add_job(
+        run_transient_failure_reconciler, "interval", minutes=2,
+        id="v2_transient_failure_reconciler",
+        name="V2 瞬时故障自动恢复",
         replace_existing=True, coalesce=True, max_instances=1,
     )
     scheduler.add_job(

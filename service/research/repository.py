@@ -25,6 +25,138 @@ class ResearchRepository:
     def __init__(self, database):
         self._database = database
 
+    def search_stocks(self, query: str, *, limit: int = 20) -> list[dict]:
+        """Search the security master by code, name, full name or pinyin."""
+
+        normalized = query.strip()
+        pattern = f"%{normalized}%"
+        prefix = f"{normalized}%"
+        return self._database.fetch_all(
+            """
+            SELECT ts_code, symbol, name, fullname, area, industry, market,
+                   exchange, list_status, list_date, delist_date
+            FROM stock_basic
+            WHERE ts_code ILIKE %s
+               OR symbol ILIKE %s
+               OR name ILIKE %s
+               OR fullname ILIKE %s
+               OR cnspell ILIKE %s
+            ORDER BY
+                CASE
+                    WHEN upper(ts_code)=upper(%s) OR symbol=%s OR name=%s THEN 0
+                    WHEN ts_code ILIKE %s OR symbol ILIKE %s
+                      OR name ILIKE %s OR cnspell ILIKE %s THEN 1
+                    ELSE 2
+                END,
+                CASE WHEN list_status='L' THEN 0 ELSE 1 END,
+                ts_code
+            LIMIT %s
+            """,
+            (
+                pattern, pattern, pattern, pattern, pattern,
+                normalized, normalized, normalized,
+                prefix, prefix, prefix, prefix,
+                limit,
+            ),
+        )
+
+    def stock_watchlist(self) -> list[dict]:
+        """Return durable dashboard favourites with security-master metadata."""
+
+        return self._database.fetch_all(
+            """
+            SELECT watchlist.ts_code, basic.symbol, basic.name, basic.fullname,
+                   basic.area, basic.industry, basic.market, basic.exchange,
+                   basic.list_status, basic.list_date, basic.delist_date,
+                   watchlist.sort_order, watchlist.added_at
+            FROM sys_stock_watchlist AS watchlist
+            JOIN stock_basic AS basic USING (ts_code)
+            ORDER BY watchlist.sort_order, watchlist.added_at, watchlist.ts_code
+            """
+        )
+
+    def add_stock_watchlist(self, ts_code: str) -> dict | None:
+        """Idempotently add one known stock and return its display metadata."""
+
+        return self._database.execute_one(
+            """
+            WITH saved AS (
+                INSERT INTO sys_stock_watchlist (ts_code, sort_order)
+                SELECT basic.ts_code,
+                       COALESCE((SELECT max(sort_order) + 1
+                                 FROM sys_stock_watchlist), 0)
+                FROM stock_basic AS basic
+                WHERE basic.ts_code=%s
+                ON CONFLICT (ts_code) DO UPDATE
+                SET updated_at=NOW()
+                RETURNING ts_code, sort_order, added_at
+            )
+            SELECT saved.ts_code, basic.symbol, basic.name, basic.fullname,
+                   basic.area, basic.industry, basic.market, basic.exchange,
+                   basic.list_status, basic.list_date, basic.delist_date,
+                   saved.sort_order, saved.added_at
+            FROM saved
+            JOIN stock_basic AS basic USING (ts_code)
+            """,
+            (ts_code,),
+        )
+
+    def remove_stock_watchlist(self, ts_code: str) -> dict | None:
+        """Remove one favourite without touching any market data."""
+
+        return self._database.execute_one(
+            """
+            DELETE FROM sys_stock_watchlist
+            WHERE ts_code=%s
+            RETURNING ts_code
+            """,
+            (ts_code,),
+        )
+
+    def fund_ownership_history(
+        self,
+        ts_code: str,
+        *,
+        start_date: date,
+        as_of: date,
+        periods: int = 8,
+    ) -> list[dict]:
+        """Aggregate point-in-time fund ownership without a row-count cap.
+
+        ``fund_portfolio`` can contain tens of thousands of fund-position rows
+        for one widely held stock.  Performing this bounded aggregation in
+        PostgreSQL avoids treating an HTTP pagination ceiling as complete
+        institutional coverage.
+        """
+
+        return self._database.fetch_all(
+            """
+            WITH latest AS (
+                SELECT portfolio.*,
+                       row_number() OVER (
+                           PARTITION BY portfolio.end_date, portfolio.ts_code
+                           ORDER BY portfolio.ann_date DESC NULLS LAST,
+                                    portfolio._last_seen_at DESC NULLS LAST
+                       ) AS revision_rank
+                FROM tushare_norm_fund_portfolio AS portfolio
+                WHERE portfolio.symbol=%s
+                  AND portfolio.end_date BETWEEN %s AND %s
+                  AND (portfolio.ann_date IS NULL OR portfolio.ann_date <= %s)
+            )
+            SELECT end_date AS period,
+                   count(DISTINCT ts_code) AS fund_count,
+                   sum(mkv) AS market_value,
+                   sum(amount) AS shares,
+                   sum(stk_float_ratio) AS reported_float_ratio_sum_pct
+            FROM latest
+            WHERE revision_rank=1
+            GROUP BY end_date
+            ORDER BY end_date DESC
+            LIMIT %s
+            """,
+            (ts_code, start_date, as_of, as_of, periods),
+        )
+
     def market_breadth(self, as_of: date) -> dict | None:
         return self._database.fetch_one(
             """

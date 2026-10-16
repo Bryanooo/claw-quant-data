@@ -61,10 +61,23 @@ _THS_CATEGORY_NAMES = {
 }
 
 
+def _number(value: Any) -> float | None:
+    try:
+        return None if value is None or value == "" else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class DataService:
-    def __init__(self, repository, registry: DatasetRegistry):
+    def __init__(
+        self,
+        repository,
+        registry: DatasetRegistry,
+        external_research=None,
+    ):
         self._repository = repository
         self._registry = registry
+        self._external_research = external_research
 
     def list_datasets(self) -> list[dict]:
         return [self._dataset_summary(item) for item in self._registry.list()]
@@ -247,6 +260,8 @@ class DataService:
         benchmark: str = "399006.SZ",
         financial_periods: int = 8,
         as_of: date | None = None,
+        include_external: bool = True,
+        include_realtime: bool = True,
     ) -> dict:
         """Aggregate governed source records needed by a stock-research Agent.
 
@@ -513,6 +528,61 @@ class DataService:
             for item in provenance
             if item["point_in_time_status"] == "current_only"
         ]
+        provider_evidence = None
+        if include_external and self._external_research is not None:
+            provider_evidence = {
+                "fundamentals": self._external_research.fundamentals(
+                    ts_code, as_of=effective_as_of
+                ),
+                "technicals": self._external_research.technicals(
+                    ts_code,
+                    as_of=effective_as_of,
+                    include_realtime=include_realtime,
+                ),
+            }
+            for domain, evidence in provider_evidence.items():
+                provenance.extend(
+                    {
+                        **item,
+                        "dataset": item["source_dataset"],
+                        "source": "蚂蚁数据源",
+                        "domain": domain,
+                        "data_state": item["state"],
+                    }
+                    for item in evidence["provenance"]
+                )
+            daily_rows = market["daily"]
+            latest_market = max(
+                daily_rows,
+                key=lambda row: str(row.get("trade_date") or ""),
+                default={},
+            )
+            reference_price = _number(latest_market.get("close"))
+            target = (
+                provider_evidence["fundamentals"]
+                .get("normalized", {})
+                .get("target_price", {})
+            )
+            target_average = _number(target.get("average"))
+            target["reference_price"] = reference_price
+            target["reference_price_date"] = latest_market.get("trade_date")
+            target["implied_upside_pct"] = (
+                round((target_average / reference_price - 1) * 100, 4)
+                if target_average is not None and reference_price
+                else None
+            )
+        provider_statuses = (
+            {
+                domain: evidence["status"]
+                for domain, evidence in provider_evidence.items()
+            }
+            if provider_evidence
+            else {}
+        )
+        provider_degraded = any(
+            status in {"partial", "empty", "unavailable"}
+            for status in provider_statuses.values()
+        )
 
         return {
             "data": {
@@ -520,6 +590,7 @@ class DataService:
                 "market": market,
                 "fundamentals": fundamentals,
                 "ownership_and_events": ownership_and_events,
+                "provider_evidence": provider_evidence,
             },
             "meta": {
                 "ts_code": ts_code,
@@ -528,6 +599,8 @@ class DataService:
                 "start_date": start_date,
                 "lookback_days": lookback_days,
                 "financial_periods": financial_periods,
+                "include_external": include_external,
+                "include_realtime": include_realtime,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": provenance,
                 "gaps": gaps,
@@ -536,6 +609,7 @@ class DataService:
                     "status": (
                         "warning"
                         if gaps or unknown_empty or point_in_time_warnings
+                        or provider_degraded
                         else "ready"
                     ),
                     "point_in_time_safe": not point_in_time_warnings,
@@ -544,6 +618,7 @@ class DataService:
                     "unknown_empty_datasets": [
                         item["dataset"] for item in unknown_empty
                     ],
+                    "provider_status": provider_statuses,
                 },
                 "external_data_needed": [
                     {

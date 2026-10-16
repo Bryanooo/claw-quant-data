@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.gzip import GZipMiddleware
 
 from service.api.routers import (
     catalog,
@@ -28,6 +29,7 @@ from service.api.routers import (
     sectors,
     sources,
     stocks,
+    system,
 )
 from service.api.schemas import ErrorResponse
 from service.acquisition_runtime.models import (
@@ -78,6 +80,10 @@ def create_app(
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
     )
+    # Long-history chart responses are highly compressible.  Compressing them
+    # keeps the stock lab responsive without weakening the research contract
+    # or silently truncating the available observations.
+    application.add_middleware(GZipMiddleware, minimum_size=1000)
 
     @application.middleware("http")
     async def request_context(request: Request, call_next):
@@ -203,6 +209,7 @@ def create_app(
     application.include_router(raw_archive.router, prefix="/api")
     application.include_router(research.router, prefix="/api")
     application.include_router(stocks.router, prefix="/api")
+    application.include_router(system.router, prefix="/api")
     application.include_router(sectors.router, prefix="/api")
     application.include_router(coverage.router, prefix="/api")
     application.include_router(data_health.router, prefix="/api")

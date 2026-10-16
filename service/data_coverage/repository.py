@@ -337,6 +337,56 @@ class CoverageRepository:
                 for row in cursor.fetchall()
                 if row["partition_date"] is not None
             ]
+            if rule.entity_reference == "stock_daily":
+                # Adjustment-like datasets are complete only for the exact
+                # lifecycle-valid security universe that has a daily bar on
+                # the same date.  Comparing independent row counts is not
+                # enough: factor-only symbols once masked a missing factor for
+                # another symbol, while predecessor history before a reused
+                # code's current list_date created false obligations.
+                cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT daily.trade_date::date AS partition_date,
+                               count(DISTINCT daily.ts_code)::bigint
+                                   AS matched_entities
+                        FROM daily
+                        JOIN stock_basic AS stock USING (ts_code)
+                        JOIN {source} AS source
+                          ON source.{entity}=daily.ts_code
+                         AND source.{source_date}=daily.trade_date
+                        WHERE daily.trade_date BETWEEN %s AND %s
+                          AND NULLIF(stock.list_date, '') IS NOT NULL
+                          AND daily.trade_date >=
+                              to_date(stock.list_date, 'YYYYMMDD')
+                          AND (
+                              NULLIF(stock.delist_date, '') IS NULL
+                              OR daily.trade_date <=
+                                 to_date(stock.delist_date, 'YYYYMMDD')
+                          )
+                        GROUP BY daily.trade_date
+                        """
+                    ).format(
+                        source=sql.Identifier(rule.table),
+                        entity=sql.Identifier(rule.entity_column or "ts_code"),
+                        source_date=sql.Identifier(rule.date_column),
+                    ),
+                    (start_date, end_date),
+                )
+                matched_entities = {
+                    row["partition_date"]: int(row["matched_entities"])
+                    for row in cursor.fetchall()
+                }
+                partitions = [
+                    ActualPartition(
+                        partition_date=item.partition_date,
+                        row_count=item.row_count,
+                        entity_count=matched_entities.get(item.partition_date, 0),
+                        verified_empty=item.verified_empty,
+                        known_incomplete=item.known_incomplete,
+                    )
+                    for item in partitions
+                ]
             # V2 dataset state is the authoritative data fact.  A current
             # gaps/partial state keeps physical rows fail-closed until a later
             # V2 validation publishes a complete state for the same period.
@@ -344,14 +394,23 @@ class CoverageRepository:
                 """
                 SELECT observation_start AS partition_date
                 FROM (
-                    SELECT DISTINCT ON (dataset_name, observation_key)
-                           dataset_name, observation_key, observation_start,
-                           data_status
-                    FROM orchestration_v2.dataset_state
-                    WHERE dataset_name=%s
-                      AND observation_start BETWEEN %s AND %s
-                    ORDER BY dataset_name, observation_key, revision DESC,
-                             updated_at DESC, dataset_state_id DESC
+                    SELECT DISTINCT ON (state.dataset_name, state.observation_key)
+                           state.dataset_name, state.observation_key,
+                           state.observation_start, state.data_status
+                    FROM orchestration_v2.dataset_state AS state
+                    JOIN orchestration_v2.task_execution AS execution
+                      ON execution.task_execution_id=state.source_execution_id
+                    WHERE state.dataset_name=%s
+                      AND state.observation_start BETWEEN %s AND %s
+                      -- Superseding/cancelling an invalid execution retires
+                      -- the state it published from the *current* data fact.
+                      -- Keep both rows for audit history, but do not let an
+                      -- obsolete partial validation poison later independent
+                      -- database audits forever.
+                      AND execution.status NOT IN ('superseded','cancelled')
+                    ORDER BY state.dataset_name, state.observation_key,
+                             state.revision DESC, state.updated_at DESC,
+                             state.dataset_state_id DESC
                 ) AS current_state
                 WHERE data_status IN ('gaps','partial','indeterminate')
                 """,
@@ -655,15 +714,46 @@ class CoverageRepository:
     ) -> list[date]:
         if start_date > cutoff_date:
             return []
-        if rule.strategy == CoverageStrategy.TRADING_DAILY:
+        if rule.entity_reference == "stock_daily":
+            # Adjustment factors are required for every lifecycle-valid price
+            # row, including a handful of early-market sessions that the
+            # modern exchange calendar reports as closed (for example Sunday
+            # trading in 1993).  The stock-price table is therefore the
+            # authoritative partition calendar for this dependent dataset.
             statement = """
-                SELECT cal_date AS partition_date
-                FROM trade_cal
-                WHERE exchange = %s AND is_open = 1
-                  AND cal_date BETWEEN %s AND %s
-                ORDER BY cal_date
+                SELECT DISTINCT daily.trade_date AS partition_date
+                FROM daily
+                JOIN stock_basic AS stock USING (ts_code)
+                WHERE daily.trade_date BETWEEN %s AND %s
+                  AND daily.trade_date >=
+                      to_date(NULLIF(stock.list_date,''),'YYYYMMDD')
+                  AND (
+                    NULLIF(stock.delist_date,'') IS NULL
+                    OR daily.trade_date <=
+                       to_date(stock.delist_date,'YYYYMMDD')
+                  )
+                ORDER BY partition_date
             """
-            params = (rule.calendar_exchange, start_date, cutoff_date)
+            params = (start_date, cutoff_date)
+        elif rule.strategy == CoverageStrategy.TRADING_DAILY:
+            if rule.calendar_exchange == "US":
+                statement = """
+                    SELECT DISTINCT cal_date AS partition_date
+                    FROM tushare_norm_us_tradecal
+                    WHERE is_open = 1
+                      AND cal_date BETWEEN %s AND %s
+                    ORDER BY cal_date
+                """
+                params = (start_date, cutoff_date)
+            else:
+                statement = """
+                    SELECT cal_date AS partition_date
+                    FROM trade_cal
+                    WHERE exchange = %s AND is_open = 1
+                      AND cal_date BETWEEN %s AND %s
+                    ORDER BY cal_date
+                """
+                params = (rule.calendar_exchange, start_date, cutoff_date)
         elif rule.strategy == CoverageStrategy.TRADING_WEEKLY:
             statement = """
                 SELECT max(cal_date) AS partition_date
@@ -768,6 +858,17 @@ class CoverageRepository:
                 SELECT count(DISTINCT ts_code) FROM margin_secs
                 WHERE trade_date=to_char(%s::date, 'YYYYMMDD')
             """,
+            "stock_daily": """
+                SELECT count(DISTINCT daily.ts_code)
+                FROM daily
+                JOIN stock_basic AS stock USING (ts_code)
+                WHERE daily.trade_date=%s
+                  AND NULLIF(stock.list_date, '') IS NOT NULL
+                  AND daily.trade_date >= to_date(stock.list_date, 'YYYYMMDD')
+                  AND (NULLIF(stock.delist_date, '') IS NULL
+                       OR daily.trade_date <=
+                          to_date(stock.delist_date, 'YYYYMMDD'))
+            """,
         }
         statement = statements.get(rule.entity_reference)
         if not statement:
@@ -856,6 +957,23 @@ class CoverageRepository:
                   ON universe.trade_date=to_char(target.partition_date, 'YYYYMMDD')
                 GROUP BY target.partition_date
             """,
+            "stock_daily": """
+                SELECT target.partition_date,
+                       count(DISTINCT universe.ts_code)::bigint
+                FROM unnest(%s::date[]) AS target(partition_date)
+                LEFT JOIN daily AS universe
+                  ON universe.trade_date=target.partition_date
+                LEFT JOIN stock_basic AS stock
+                  ON stock.ts_code=universe.ts_code
+                 AND NULLIF(stock.list_date, '') IS NOT NULL
+                 AND target.partition_date >=
+                     to_date(stock.list_date, 'YYYYMMDD')
+                 AND (NULLIF(stock.delist_date, '') IS NULL
+                      OR target.partition_date <=
+                         to_date(stock.delist_date, 'YYYYMMDD'))
+                WHERE universe.ts_code IS NULL OR stock.ts_code IS NOT NULL
+                GROUP BY target.partition_date
+            """,
         }
         statement = statements.get(rule.entity_reference)
         if not statement:
@@ -876,17 +994,29 @@ class CoverageRepository:
         end_date: date,
     ) -> tuple[date | None, date | None, int]:
         with self._connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT min(cal_date), max(cal_date),
-                       count(DISTINCT cal_date) FILTER (
-                           WHERE cal_date BETWEEN %s AND %s
-                       )
-                FROM trade_cal
-                WHERE exchange = %s
-                """,
-                (start_date, end_date, exchange),
-            )
+            if exchange == "US":
+                cursor.execute(
+                    """
+                    SELECT min(cal_date), max(cal_date),
+                           count(DISTINCT cal_date) FILTER (
+                               WHERE cal_date BETWEEN %s AND %s
+                           )
+                    FROM tushare_norm_us_tradecal
+                    """,
+                    (start_date, end_date),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT min(cal_date), max(cal_date),
+                           count(DISTINCT cal_date) FILTER (
+                               WHERE cal_date BETWEEN %s AND %s
+                           )
+                    FROM trade_cal
+                    WHERE exchange = %s
+                    """,
+                    (start_date, end_date, exchange),
+                )
             row = cursor.fetchone()
             return row[0], row[1], int(row[2])
 
@@ -899,16 +1029,26 @@ class CoverageRepository:
         """Return the first open market date after one observation date."""
 
         with self._connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT cal_date FROM trade_cal
-                WHERE exchange=%s AND is_open=1
-                  AND cal_date>%s AND cal_date<=%s
-                ORDER BY cal_date
-                LIMIT 1
-                """,
-                (exchange, after_date, no_later_than),
-            )
+            if exchange == "US":
+                cursor.execute(
+                    """
+                    SELECT DISTINCT cal_date FROM tushare_norm_us_tradecal
+                    WHERE is_open=1 AND cal_date>%s AND cal_date<=%s
+                    ORDER BY cal_date LIMIT 1
+                    """,
+                    (after_date, no_later_than),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT cal_date FROM trade_cal
+                    WHERE exchange=%s AND is_open=1
+                      AND cal_date>%s AND cal_date<=%s
+                    ORDER BY cal_date
+                    LIMIT 1
+                    """,
+                    (exchange, after_date, no_later_than),
+                )
             row = cursor.fetchone()
         return row[0] if row else None
 
@@ -1092,7 +1232,13 @@ class CoverageRepository:
                                ORDER BY start_date, end_date
                            ) AS span_id
                     FROM marked_ranges
-                ), verified_spans AS (
+                -- PostgreSQL otherwise inlines this CTE into the lateral join
+                -- below and recomputes every trusted span once per dataset.
+                -- The audit table is intentionally append-only, so that turns
+                -- a small 196-dataset summary into millions of temporary-row
+                -- reads.  Materializing preserves the exact range semantics
+                -- while calculating the span ledger only once.
+                ), verified_spans AS MATERIALIZED (
                     SELECT dataset_name, span_id,
                            min(start_date) AS verified_start_date,
                            max(end_date) AS verified_end_date

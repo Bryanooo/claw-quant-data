@@ -1,20 +1,8 @@
-# Hibro Node Agent packages
+# Hibro 研究 Agent
 
-This directory contains two versionable Hibro `Agent as Code` source packages:
+分析 Skill、Agent 定义、报告工具和部署包已迁移到独立仓库 [claw-quant-agents](https://github.com/Bryanooo/claw-quant-agents)。
 
-- `agents/claw-quant-fundamental-research`: macro, industry, company quality, valuation,
-  shareholder return, disclosure/governance, event evidence, and thesis synthesis;
-- `agents/claw-quant-technical-research`: price/trend, volume/flow, levels/risk, wave/Chan,
-  cross-asset, ETF flow, charting, and technical synthesis.
+- [权威 Skill](https://github.com/Bryanooo/claw-quant-agents/tree/main/.agents/skills)
+- [部署与更新](https://github.com/Bryanooo/claw-quant-agents/blob/main/deploy/hibro/README.md)
 
-Both agents share the logical `claw-quant-data` and `market-charting` Skills and consume only
-`/api/v1/research/*`. The packaged copy keeps each imported Agent revision self-contained; the
-authoritative Skill definitions live under `.agents/skills/`.
-
-Set `CLAW_QUANT_API_URL` in the Hibro Node runtime (normally
-`http://127.0.0.1:8000/api` on the same host), then import the package directory from Hibro's
-“Agent 源码” console or `POST /v1/agent-packages/import`. Hibro compiles the package into an
-immutable Revision; updates activate atomically and earlier Revisions remain rollback targets.
-
-Neither package contains a Tushare token, database credential, or write-capable operations tool.
-Their workspaces are read-only. Data access and research interpretation remain separate Skills.
+claw-quant-data 继续提供 `/api/v1/research/*` 数据契约；已有 Node 部署不会自动变更。请从新仓库导入、发布和部署后续 Agent Revision。

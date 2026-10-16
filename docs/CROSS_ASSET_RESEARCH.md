@@ -16,8 +16,8 @@
 标准日线确定性聚合，避免独立周期表缺历史造成口径漂移；年度只计算日线可支持的
 日历收益、CAGR、52 周位置和最大回撤，不伪造样本不足的年线振荡指标。
 股票和 ETF 会先使用 `adj_factor` / `fund_adj` 统一到最新复权因子基准。因子历史不全
-时只分析同时具备价格和因子的覆盖范围，并返回 `meta.price_adjustment` 警告；绝不把
-复权与未复权价格拼接后计算收益、缺口、均线或 Beta。
+时保留连续的原始 K 线并返回 `meta.price_adjustment` 警告，同时停用复权收益、Beta
+和依赖复权口径的派生指标；绝不静默删除无因子日期，也不把复权与未复权价格拼接。
 
 枢轴包括 Classic、Fibonacci、Woodie、Camarilla、DeMark 与 CPR，并为每组保留前一
 完成周期的 `basis_date`。重复摆动形成的支撑/压力与公式枢轴分开表达。
@@ -50,5 +50,5 @@ v7 已将 `adj_factor`、`fund_daily`、`fund_adj`、`sge_daily`、`ths_daily` �
 - `Au99.99` 是人民币计价国内黄金。归因全球金价与汇率贡献需要稳定的国际黄金和
   USD/CNH 历史；当前接口只对国内现货本身给出技术结论。
 
-Hibro Node 部署包见 `deploy/hibro/agents/claw-quant-technical-research`。该包以不可变 Revision
+Hibro Node 部署包见 [claw-quant-agents 技术面 Agent](https://github.com/Bryanooo/claw-quant-agents/tree/main/deploy/hibro/agents/claw-quant-technical-research)。该包以不可变 Revision
 承载研究 Agent 与八个只读 Skill，不包含 Token、数据库凭据或管理接口。

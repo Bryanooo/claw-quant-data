@@ -29,6 +29,13 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     },
     {
         "method": "GET",
+        "path": "/api/v1/research/stocks/search",
+        "name": "股票搜索",
+        "domain": "关系发现",
+        "description": "按股票代码、名称、全称或拼音简码检索证券主数据。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/stocks/{ts_code}/fundamentals",
         "name": "基本面分析",
         "domain": "个股研究",
@@ -40,6 +47,27 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
         "name": "估值分析",
         "domain": "个股研究",
         "description": "历史估值分位、同行对比及 DCF/DDM 输入数据。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/stocks/{ts_code}/analyst-revisions",
+        "name": "一致预期与盈利修正",
+        "domain": "个股研究",
+        "description": "按券商去重，对比等长窗口内的盈利、收入、EPS、目标价一致预期及修正方向。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/stocks/{ts_code}/ownership",
+        "name": "股东与机构行为",
+        "domain": "个股研究",
+        "description": "汇总十大股东、基金、北向、股东户数及增减持的时点行为证据。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/stocks/{ts_code}/shareholder-return",
+        "name": "总股东回报",
+        "domain": "股东回报",
+        "description": "用复权价格计算总回报，并单列分红、回购及未来解禁证据，避免重复计息。",
     },
     {
         "method": "GET",
@@ -161,6 +189,9 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "valuation-history", "name": "历史估值分位", "domain": "估值", "endpoint": "valuation"},
     {"id": "peer-valuation", "name": "同行估值对比", "domain": "估值", "endpoint": "valuation"},
     {"id": "valuation-inputs", "name": "DCF/DDM 输入事实", "domain": "估值", "endpoint": "valuation"},
+    {"id": "analyst-revisions", "name": "一致预期与盈利修正", "domain": "基本面", "endpoint": "analyst-revisions"},
+    {"id": "ownership-behavior", "name": "股东与机构行为", "domain": "基本面", "endpoint": "ownership"},
+    {"id": "shareholder-return", "name": "总股东回报", "domain": "基本面", "endpoint": "shareholder-return"},
     # Technical and risk (31)
     {"id": "candlestick-chart", "name": "K线与图表序列", "domain": "技术面", "endpoint": "technicals"},
     {"id": "candlestick-patterns", "name": "K线形态识别", "domain": "技术面", "endpoint": "technicals"},
@@ -193,6 +224,8 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "volume-regime", "name": "量能异常与价量四象限", "domain": "技术面", "endpoint": "technicals"},
     {"id": "volume-confirmation", "name": "突破量能确认与价量背离", "domain": "技术面", "endpoint": "technicals"},
     {"id": "turnover-vwap", "name": "换手率归一化与日线锚定VWAP代理", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "rolling-cost-lines", "name": "20/60日实际成交成本线", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "niumen-breakout-lines", "name": "牛门线与突破确认线", "domain": "技术面", "endpoint": "technicals"},
     # Capital, event and market (8)
     {"id": "main-money-flow", "name": "主力资金流", "domain": "资金", "endpoint": "capital-flow"},
     {"id": "margin-financing", "name": "两融行为", "domain": "资金", "endpoint": "capital-flow"},
@@ -219,9 +252,6 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
 
 
 GAP_TECHNIQUES: tuple[dict[str, Any], ...] = (
-    {"id": "analyst-revisions", "name": "一致预期与盈利修正", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "analyst"},
-    {"id": "ownership-behavior", "name": "股东与机构行为", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "ownership"},
-    {"id": "shareholder-return", "name": "总股东回报", "domain": "基本面", "status": "planned", "action": "backfill", "workstream": "shareholder-return"},
     {"id": "announcement-evidence", "name": "公告原文证据", "domain": "事件", "status": "missing", "action": "new_source", "source_todo": "official-announcements"},
     {"id": "governance-risk", "name": "治理、诉讼与监管风险", "domain": "基本面", "status": "missing", "action": "new_source", "source_todo": "official-announcements"},
     {"id": "news-events", "name": "新闻事件检测", "domain": "事件", "status": "partial", "action": "derive_and_source", "source_todo": "news-and-sentiment"},
@@ -426,6 +456,7 @@ def capability_catalog(
                     "/api/v1/research/capabilities",
                     "/api/v1/research/readiness",
                     "/api/v1/research/validation-set",
+                    "/api/v1/research/stocks/search",
                 }
                 for item in DERIVED_ENDPOINTS
             ),

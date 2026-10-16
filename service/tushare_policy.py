@@ -51,6 +51,11 @@ class TushareCollectionPolicy:
 _RATE_LIMIT_SECONDS = {
     "hk_daily": 3600.0,
     "stk_mins": 3600.0,
+    # Current token was live-verified on 2026-10-12. A second request inside
+    # the hour is rejected explicitly as "1次/小时". Keep this endpoint on the
+    # durable distributed limiter so retries and multiple workers cannot burn
+    # the single shared slot.
+    "us_daily": 3600.0,
     # Current token contract: 20 calls/minute. Keep a safety margin.
     "major_news": 3.2,
 }
@@ -65,6 +70,16 @@ _PAGE_SIZE_OVERRIDES = {
     # current market-wide requests from 6/10 pages to 2 pages respectively.
     "stk_limit": 5000,
     "index_daily": 5000,
+    # Live exact-date probes established that the gateway honors 6,000-row
+    # pages for adj_factor.  A current whole-market partition (5,573 rows) is
+    # returned in one page and offset=6,000 is empty, so the exhaustion check
+    # costs two calls instead of three at the old 5,000-row setting (or six at
+    # the original 1,000-row default).
+    "adj_factor": 6000,
+    # The upstream daily market scope can be larger than the generic 1,000-row
+    # default. Offset exhaustion is still mandatory; a round page is never a
+    # completeness proof.
+    "us_daily": 6000,
     # Live gateway verification: requests above 3,000 are capped to 3,000,
     # while 3,000 + matching offsets exhaust the endpoint without gaps.
     "kpl_concept_cons": 3000,
@@ -230,6 +245,11 @@ _OFFSET_PAGINATION_OVERRIDES = {
     # a legitimate 1,000-row historical cross-section from being mistaken for
     # a transport cap and remains safe if the market grows beyond 6,000 rows.
     "daily",
+    # The endpoint accepts the standard limit/offset arguments. Because this
+    # token is limited to one call per hour, checkpoints are essential: every
+    # page is committed independently and a retry resumes instead of starting
+    # the expensive partition over.
+    "us_daily",
     # Live verification on 2026-09-08 proved that the historical 2023-07-04
     # partition contains exactly 5,000 rows and that offset=5,000 returns an
     # empty page.  Exhausting the next page distinguishes a legitimate round
@@ -307,7 +327,7 @@ _OFFSET_PAGINATION_OVERRIDES = {
 # These low-frequency interfaces have dedicated bounded orchestration plus a
 # distributed limiter. hk_daily uses one exact-date request; major_news uses
 # source windows with durable adaptive-split checkpoints and a daily quota.
-_SAFE_LOW_FREQUENCY_APIS = {"hk_daily", "major_news"}
+_SAFE_LOW_FREQUENCY_APIS = {"hk_daily", "major_news", "us_daily"}
 
 
 def _parameter_names(contract: TushareInterfaceContract) -> set[str]:

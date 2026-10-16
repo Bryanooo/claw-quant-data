@@ -19,9 +19,9 @@ class FakeOrchestrationV2Repository:
         return {
             "status": "installed",
             "missing_tables": [],
-            "endpoints": {"active": 202},
+            "endpoints": {"active": 203},
             "definitions": {
-                "acquisition:active": 191,
+                "acquisition:active": 192,
                 "transformation:active": 1,
                 "transformation:draft": 13,
             },
@@ -132,9 +132,9 @@ def test_summary_separates_baseline_observation_and_activation():
     assert response.status_code == 200
     payload = response.json()
     assert payload["baseline"] == {
-        "acquisition": 191,
+        "acquisition": 192,
         "transformation": 14,
-        "total": 205,
+        "total": 206,
     }
     assert payload["control_plane"]["status"] == "installed"
     assert payload["activation"] == "active"

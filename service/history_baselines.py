@@ -82,6 +82,21 @@ UPSTREAM_HISTORY_STARTS = {
     # Exact-date probes return no CITIC industry bars through 2009-12-31 and
     # the complete cross-section on the first 2010 trading day.
     "ci_daily": date(2010, 1, 4),
+    # Official contract says 2020; adjacent exact-date probes are empty on the
+    # last 2019 trading day and populated on the first 2020 trading day.
+    "dc_daily": date(2020, 1, 2),
+    # Market-wide exact-date probes locate the first listed-fund bars and
+    # adjustment factors on 1998-04-07; the preceding open day is empty.
+    "fund_daily": date(1998, 4, 7),
+    "fund_adj": date(1998, 4, 7),
+    # The exchange calendar begins on 1990-12-19 and exact probes contain
+    # factor observations on that first open day.
+    "idx_factor_pro": date(1990, 12, 19),
+    "stk_factor": date(1990, 12, 19),
+    "stk_factor_pro": date(1990, 12, 19),
+    # Adjacent exact-date probes are empty on 2024-10-11 and return the first
+    # KPL concept constituent snapshot on 2024-10-14.
+    "kpl_concept_cons": date(2024, 10, 14),
     # The official contract states January 2004; exact probes confirm the
     # first 2004 trading day and an empty preceding calendar partition.
     "index_dailybasic": date(2004, 1, 2),
@@ -89,6 +104,11 @@ UPSTREAM_HISTORY_STARTS = {
     # trading-day probes establish the first non-empty partition boundaries.
     "moneyflow_cnt_ths": date(2024, 9, 10),
     "moneyflow_ind_dc": date(2023, 9, 12),
+    # Adjacent exact-date probes are empty immediately before these first
+    # populated dense partitions.  They are provider availability boundaries,
+    # not local retention dates.
+    "moneyflow_ind_ths": date(2024, 9, 10),
+    "moneyflow_mkt_dc": date(2023, 4, 17),
     "moneyflow_ths": date(2024, 12, 19),
     # Exact probes are empty through 1999-12-30 and populated on 2000-01-04.
     "sw_daily": date(2000, 1, 4),
@@ -100,6 +120,12 @@ UPSTREAM_HISTORY_STARTS = {
     "cn_pmi": date(2005, 1, 1),
     "sf_month": date(2002, 1, 1),
     "stock_st": date(2000, 1, 1),
+    # The contract says January 2025; exact daily probes are empty through
+    # 2025-01-15 and populated from 2025-01-16.
+    "stk_auction": date(2025, 1, 16),
+    # Shenzhen market summary is authoritatively empty on 2007-12-28 and
+    # populated on the first 2008 trading day.
+    "sz_daily_info": date(2008, 1, 2),
     # Live provider probes return empty on 2023-08-18 and the first final
     # hot-list snapshot on 2023-08-21.  Planning older trading days would only
     # manufacture thousands of authoritative-empty calls.

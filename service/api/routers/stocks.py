@@ -29,6 +29,8 @@ def stock_research_pack(
     benchmark: str = Query(default="399006.SZ", pattern=r"^[0-9A-Za-z.]{4,16}$"),
     financial_periods: int = Query(default=8, ge=1, le=12),
     as_of: date | None = None,
+    include_external: bool = True,
+    include_realtime: bool = True,
 ) -> dict:
     return service.stock_research_pack(
         ts_code.upper(),
@@ -36,6 +38,8 @@ def stock_research_pack(
         benchmark=benchmark.upper(),
         financial_periods=financial_periods,
         as_of=as_of,
+        include_external=include_external,
+        include_realtime=include_realtime,
     )
 
 

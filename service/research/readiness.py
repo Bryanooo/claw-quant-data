@@ -12,6 +12,18 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from service.research.external_provider import (
+    FUNDAMENTAL_ROUTES,
+    REALTIME_ROUTES,
+    TECHNICAL_ROUTES,
+)
+
+
+FUNDAMENTAL_EXTERNAL_ROUTES = tuple(FUNDAMENTAL_ROUTES.values())
+TECHNICAL_EXTERNAL_ROUTES = tuple(
+    (*TECHNICAL_ROUTES.values(), *REALTIME_ROUTES.values())
+)
+
 
 def _dependency(
     dataset: str,
@@ -49,6 +61,15 @@ RESEARCH_DATA_CONTRACTS: tuple[dict[str, Any], ...] = (
             _dependency("cashflow", "cash conversion and free cash flow", history_days=1825),
             _dependency("fina_mainbz", "business-segment composition", required=False, history_days=1825),
         ),
+        "external_evidence": (
+            {
+                "source_id": "financial_data",
+                "routes": tuple(FUNDAMENTAL_EXTERNAL_ROUTES),
+                "role": "consensus, rating and target-price corroboration",
+                "required": False,
+                "query_policy": "quota_aware_on_demand",
+            },
+        ),
     },
     {
         "id": "valuation",
@@ -63,6 +84,46 @@ RESEARCH_DATA_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "id": "analyst-revisions",
+        "path": "/api/v1/research/stocks/{ts_code}/analyst-revisions",
+        "domain": "stock_fundamental",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency(
+                "report_rc", "point-in-time broker forecasts",
+                full_history_start="2010-01-01",
+            ),
+        ),
+    },
+    {
+        "id": "ownership",
+        "path": "/api/v1/research/stocks/{ts_code}/ownership",
+        "domain": "stock_fundamental",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency("top10_holders", "top shareholder concentration", required=False, history_days=1825),
+            _dependency("top10_floatholders", "floating shareholder concentration", required=False, history_days=1825),
+            _dependency("fund_portfolio", "fund institutional positions", required=False, history_days=1825),
+            _dependency("hk_hold", "northbound positions", required=False, history_days=1825),
+            _dependency("stk_holdertrade", "insider and major-holder trades", required=False, history_days=1825),
+            _dependency("stk_holdernumber", "shareholder-count dispersion", required=False, history_days=1825),
+        ),
+        "minimum_optional_ready": 3,
+    },
+    {
+        "id": "shareholder-return",
+        "path": "/api/v1/research/stocks/{ts_code}/shareholder-return",
+        "domain": "shareholder_return",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency("stock_daily", "issuer price history", history_days=1825),
+            _dependency("adj_factor", "distribution-adjusted total return", history_days=1825),
+            _dependency("dividend", "cash and stock distributions", required=False, full_history_start="1990-01-01"),
+            _dependency("repurchase", "repurchase evidence", required=False, full_history_start="2015-01-01"),
+            _dependency("share_float", "known future share releases", required=False, history_days=1825),
+        ),
+    },
+    {
         "id": "technicals",
         "path": "/api/v1/research/stocks/{ts_code}/technicals",
         "domain": "stock_technical",
@@ -72,6 +133,15 @@ RESEARCH_DATA_CONTRACTS: tuple[dict[str, Any], ...] = (
             _dependency("adj_factor", "corporate-action adjustment", history_days=1825),
             _dependency("stock_daily_basic", "turnover and market value", history_days=1825),
             _dependency("index_daily", "benchmark and relative risk", history_days=1825),
+        ),
+        "external_evidence": (
+            {
+                "source_id": "financial_data",
+                "routes": tuple(TECHNICAL_EXTERNAL_ROUTES),
+                "role": "provider indicator cross-check and real-time snapshot",
+                "required": False,
+                "query_policy": "quota_aware_on_demand",
+            },
         ),
     },
     {
@@ -475,10 +545,21 @@ def lineage_catalog() -> list[dict[str, Any]]:
 
     return [
         {
-            **{key: value for key, value in contract.items() if key != "dependencies"},
+            **{
+                key: value
+                for key, value in contract.items()
+                if key not in {"dependencies", "external_evidence"}
+            },
             "dependencies": [
                 public_dependency(item) for item in contract["dependencies"]
             ],
+            "external_evidence": [
+                {**item, "routes": list(item["routes"])}
+                for item in contract.get("external_evidence", ())
+            ],
+            "runtime_external_query": bool(
+                contract.get("external_evidence")
+            ),
         }
         for contract in RESEARCH_DATA_CONTRACTS
     ]

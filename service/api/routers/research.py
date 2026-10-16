@@ -12,6 +12,13 @@ from service.research.validation import validation_catalog
 router = APIRouter(prefix="/v1/research", tags=["research"])
 
 
+@router.get("/calendar")
+def research_calendar(day: date, exchange: str = Query(default="SSE", pattern="^(SSE|SZSE)$")) -> dict:
+    from service.tools.trade_cal import get_trade_calendar
+    from service.research.calendar import session_from_rows
+    return session_from_rows(day, exchange, get_trade_calendar(day.year, exchange=exchange))
+
+
 @router.get("/validation-set")
 def research_validation_set() -> dict:
     return validation_catalog()
@@ -34,14 +41,52 @@ def research_readiness(
     return service.research_readiness()
 
 
+@router.get("/stocks/search")
+def search_stocks(
+    service: ResearchServiceDependency,
+    q: str = Query(min_length=1, max_length=80),
+    limit: int = Query(default=20, ge=1, le=30),
+) -> dict:
+    """Search stocks by exchange code, short name, full name or pinyin initials."""
+
+    return service.search_stocks(q, limit=limit)
+
+
+@router.get("/watchlist")
+def stock_watchlist(service: ResearchServiceDependency) -> dict:
+    """List durable stocks selected in the local research dashboard."""
+
+    return service.stock_watchlist()
+
+
+@router.post("/watchlist/{ts_code}")
+def add_stock_watchlist(
+    ts_code: str,
+    service: ResearchServiceDependency,
+) -> dict:
+    return service.add_stock_watchlist(ts_code)
+
+
+@router.delete("/watchlist/{ts_code}")
+def remove_stock_watchlist(
+    ts_code: str,
+    service: ResearchServiceDependency,
+) -> dict:
+    return service.remove_stock_watchlist(ts_code)
+
+
 @router.get("/stocks/{ts_code}/fundamentals")
 def stock_fundamentals(
     ts_code: str,
     service: ResearchServiceDependency,
     periods: int = Query(default=12, ge=2, le=20),
     as_of: date | None = None,
+    include_external: bool = True,
 ) -> dict:
-    return service.fundamentals(ts_code.upper(), periods=periods, as_of=as_of)
+    return service.fundamentals(
+        ts_code.upper(), periods=periods, as_of=as_of,
+        include_external=include_external,
+    )
 
 
 @router.get("/stocks/{ts_code}/valuation")
@@ -58,18 +103,60 @@ def stock_valuation(
     )
 
 
+@router.get("/stocks/{ts_code}/analyst-revisions")
+def stock_analyst_revisions(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    window_days: int = Query(default=90, ge=30, le=365),
+    target_periods: int = Query(default=4, ge=1, le=8),
+    as_of: date | None = None,
+) -> dict:
+    return service.analyst_revisions(
+        ts_code.upper(), window_days=window_days,
+        target_periods=target_periods, as_of=as_of,
+    )
+
+
+@router.get("/stocks/{ts_code}/ownership")
+def stock_ownership_behavior(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=1825, ge=365, le=3650),
+    as_of: date | None = None,
+) -> dict:
+    return service.ownership_behavior(
+        ts_code.upper(), lookback_days=lookback_days, as_of=as_of,
+    )
+
+
+@router.get("/stocks/{ts_code}/shareholder-return")
+def stock_shareholder_return(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=1825, ge=365, le=5000),
+    as_of: date | None = None,
+) -> dict:
+    return service.shareholder_return(
+        ts_code.upper(), lookback_days=lookback_days, as_of=as_of,
+    )
+
+
 @router.get("/stocks/{ts_code}/technicals")
 def stock_technicals(
     ts_code: str,
     service: ResearchServiceDependency,
-    lookback_days: int = Query(default=3000, ge=60, le=5000),
-    chart_points: int = Query(default=120, ge=30, le=250),
+    lookback_days: int = Query(default=3000, ge=60, le=10000),
+    chart_points: int = Query(default=120, ge=30, le=10000),
     benchmark: str = Query(default="399006.SZ", pattern=r"^[0-9A-Za-z.]{4,16}$"),
     as_of: date | None = None,
+    include_external: bool = True,
+    include_realtime: bool = True,
 ) -> dict:
     return service.technicals(
         ts_code.upper(), lookback_days=lookback_days, chart_points=chart_points,
         benchmark=benchmark.upper(), as_of=as_of,
+        include_external=include_external,
+        include_realtime=include_realtime,
     )
 
 
@@ -79,7 +166,7 @@ def instrument_technicals(
     code: str,
     service: ResearchServiceDependency,
     lookback_days: int = Query(default=3000, ge=60, le=5000),
-    chart_points: int = Query(default=120, ge=30, le=250),
+    chart_points: int = Query(default=120, ge=30, le=1500),
     benchmark: str | None = Query(
         default=None, pattern=r"^[0-9A-Za-z.]{4,16}$"
     ),
@@ -239,3 +326,22 @@ def sector_rotation(
         provider.lower(), lookback_days=lookback_days,
         limit=limit, as_of=as_of,
     )
+
+
+# Supplemental public evidence shares the connector validation/cache boundary.
+# It is intentionally separate from deterministic canonical research datasets.
+from service.api.routers.sources import PublicQueryPayload, query_public_source, _endpoint_dict
+from service.source_connectors.public_catalog import PUBLIC_ENDPOINTS
+
+
+@router.get("/public-evidence/capabilities")
+def public_evidence_capabilities() -> dict:
+    return {"items": [_endpoint_dict(endpoint) for endpoint in PUBLIC_ENDPOINTS],
+            "total": len(PUBLIC_ENDPOINTS), "evidence_only": True,
+            "canonical": False, "point_in_time": False}
+
+
+@router.post("/public-evidence/{source_id}/{endpoint_key}")
+def public_research_evidence(source_id: str, endpoint_key: str, payload: PublicQueryPayload) -> dict:
+    result = query_public_source(source_id, endpoint_key, payload)
+    return {**result, "evidence_only": True, "canonical": False, "point_in_time": False}

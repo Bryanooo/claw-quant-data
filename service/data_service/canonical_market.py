@@ -163,7 +163,7 @@ class CanonicalMarketDataService:
                 if close is not None and previous_close is not None else None
             ),
             "return_pct": _pct_change(close, previous_close),
-            # The Financial Data contract returns shares and CNY for A shares.
+            # The 蚂蚁数据源 contract returns shares and CNY for A shares.
             "volume": _number(row.get("volume")),
             "volume_unit": "share",
             "amount": _number(row.get("amount")),

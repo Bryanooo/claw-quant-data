@@ -50,6 +50,17 @@ API 地址不接受嵌入式用户名、密码、查询字符串或 URL fragment
 `readiness` 在研究命名空间内返回有界的时效、覆盖、失败和历史初始化证据，不暴露
 运营接口链接；`capabilities` 返回已服务的研究方法、补采工作流和新增数据源缺口。
 
+已有数据派生的个股研究能力也可以直接从 CLI 调用：
+
+```bash
+./clawq research analyst-revisions 300750.SZ --window-days 90 --target-periods 4
+./clawq research ownership 300750.SZ --lookback-days 1825
+./clawq research shareholder-return 300750.SZ --lookback-days 1825
+```
+
+三项命令都会返回来源和质量状态。研究能力可调用不代表全历史补采已经完成，Agent 仍须
+先检查 `research readiness` 并读取每个响应的 `meta.quality`。
+
 ### 数据集发现
 
 ```bash
@@ -104,6 +115,10 @@ CLI 拒绝重复过滤器、空过滤值、非法数据集名和使用 `--filter
   --financial-periods 8 \
   --as-of 2026-09-08
 ```
+
+默认会通过研究契约补充受额度约束的 蚂蚁数据源 证据。`--no-external` 可执行
+纯本地验证；`--no-realtime` 只关闭实时快照，保留一致预期和供应商指标等非实时证据。
+响应中的 `data.provider_evidence` 必须与本地事实分开解释。
 
 资料包面向 Agent，一次返回公司资料、行情/估值/资金流/筹码/两融/基准指数、
 财务三表与指标、股东/质押/回购/分红，以及 `major_news` 的公司名称/代码关键词
@@ -220,7 +235,7 @@ Agent 只能按研究层契约访问：
 1. `clawq research readiness` 检查研究数据是否可用；
 2. `clawq research capabilities` 确认能力与已声明缺口；
 3. `clawq stock ...` 或 `clawq sector ...` 获取研究资料包；
-4. `clawq research fundamentals|valuation|technicals|instrument-technicals|capital-flow|repurchase-progress|event-study`；
+4. `clawq research fundamentals|valuation|analyst-revisions|ownership|shareholder-return|technicals|instrument-technicals|capital-flow|repurchase-progress|event-study`；
 5. `clawq research macro-regime|macro-theme|industry-fundamentals|industry-breadth`；
 6. `clawq research market-breadth|technical-screen|sector-rotation|etf-flows|state-team-signals`；
 7. `clawq research calendar|calendar-day` 查询投资事件；

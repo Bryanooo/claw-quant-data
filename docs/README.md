@@ -18,6 +18,7 @@
 - [V2 切换与运维](V2_CUTOVER_2026-09-29.md)：切换口径、发布、恢复演练和回滚边界。
 - [数据就绪与审计](DATA_ASSURANCE.md)：任务状态、数据状态、历史义务和研究验收口径。
 - [多数据源基础层](MULTI_SOURCE_ARCHITECTURE.md)：来源、Connector、原始证据和扩展边界。
+- [系统全貌与唯一口径](SYSTEM_STATUS.md)：系统定位、五层架构、数字定义和唯一状态入口。
 - [数据查询治理](DATA_API_QUERY_GOVERNANCE.md)：过滤、游标分页和索引发布规则。
 - [Tushare 接口目录](tushare/README.md)：接口、权限、实现和代码链接；完整输入输出契约保存在同目录 JSON。
 
@@ -27,7 +28,8 @@
 - [跨资产研究](CROSS_ASSET_RESEARCH.md)
 - [ETF 资金流与证据分级](ETF_STATE_TEAM_RESEARCH.md)
 - [投资日历](INVESTMENT_CALENDAR.md)
-- [Agent 与 Skill 架构](AGENT_RESEARCH_SKILL_ARCHITECTURE.md)
+- [Agent 与 Skill 架构](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md)
+- [研究方法、证据与数据依赖对照](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/RESEARCH_METHOD_EVIDENCE.md)
 - [免费替代数据源评估](FREE_DATA_SOURCE_ALTERNATIVES.md)
 
 ## 可重复生成的报告
@@ -46,3 +48,13 @@
 3. 删除或重命名文档时必须执行 `python scripts/check_documentation.py`；CI 会检查相对链接，
    并拒绝在 `reports/` 新增按日期命名的快照。
 4. 批量接口和表契约使用统一目录加机器 JSON，不再生成“一接口/一表一 Markdown”。
+
+- [研究框架与写入流程审计](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/RESEARCH_WORKFLOW_AUDIT.md)
+- [股票每日、每周、每月研究分工](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/STOCK_RESEARCH_CADENCE.md)
+- [单只股票入队、讨论、研究与报告全流程](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/STOCK_RESEARCH_LIFECYCLE.md)
+
+- [Unified stock research Agent](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/STOCK_RESEARCH_AGENT.md): concise fundamental conclusions, candlestick-first technical delivery and Node acceptance.
+
+- [公开数据 connector 与蚂蚁数据源](PUBLIC_SOURCE_CONNECTORS.md)：能力契约、8 个查询接口、更名兼容和验证记录。
+
+数据源选型结论：当前以 A 股、ETF 日频研究为目标，暂不接入 Panda；优先完善现有数据的完整性、时点语义和统一口径。仅在具体策略存在明确数据缺口时重新评估。

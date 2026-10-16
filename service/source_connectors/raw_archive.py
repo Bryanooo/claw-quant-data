@@ -106,6 +106,7 @@ class SourceRawArchive:
         frame: pd.DataFrame | None = None,
         records: Iterable[Mapping[str, Any]] | None = None,
         persist_records: bool = True,
+        row_count_override: int | None = None,
         requested_at: datetime | None = None,
     ) -> dict[str, Any]:
         safe = safe_parameters(parameters)
@@ -113,9 +114,14 @@ class SourceRawArchive:
         request_hash = sha256_json(safe)
         logical_hash = sha256_json(logical)
         values = self._records(frame, records)
+        if row_count_override is not None and row_count_override < 0:
+            raise ValueError("row_count_override cannot be negative")
+        row_count = (
+            len(values) if row_count_override is None else row_count_override
+        )
         response_hash = sha256_json(values)
         unique_records = {sha256_json(record): record for record in values}
-        status = "empty" if not values else "success"
+        status = "empty" if row_count == 0 else "success"
         source_doc_id = self._source_doc_resolver(endpoint_key)
         connection = self._connection_factory()
         try:
@@ -135,7 +141,7 @@ class SourceRawArchive:
                         endpoint_key, request_hash, logical_hash,
                         psycopg2.extras.Json(safe, dumps=canonical_json),
                         psycopg2.extras.Json(logical, dumps=canonical_json),
-                        collector_name, status, len(values), response_hash,
+                        collector_name, status, row_count, response_hash,
                         source_doc_id, requested_at or datetime.now().astimezone(),
                     )
                 else:
@@ -156,7 +162,7 @@ class SourceRawArchive:
                         request_hash, logical_hash,
                         psycopg2.extras.Json(safe, dumps=canonical_json),
                         psycopg2.extras.Json(logical, dumps=canonical_json),
-                        collector_name, status, len(values), response_hash,
+                        collector_name, status, row_count, response_hash,
                         source_doc_id, requested_at or datetime.now().astimezone(),
                     )
                 cursor.execute(request_statement, request_values)
@@ -184,7 +190,7 @@ class SourceRawArchive:
                 "request_hash": request_hash,
                 "logical_request_hash": logical_hash,
                 "status": status,
-                "row_count": len(values),
+                "row_count": row_count,
                 "unique_record_count": len(unique_records),
                 "records_persisted": bool(persist_records and unique_records),
                 "response_hash": response_hash,

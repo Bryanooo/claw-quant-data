@@ -29,6 +29,7 @@ class TransformationTaskBlueprint:
     output_datasets: tuple[str, ...]
     dependency_task_keys: tuple[str, ...]
     priority: int
+    implementation_version: str = "planned-v1"
 
 
 # Equivalent upstream endpoints are alternatives or frequency variants of one
@@ -82,10 +83,11 @@ _DERIVED_TASKS = (
     ),
     TransformationTaskBlueprint(
         "technical_factor_snapshot",
-        ("canonical_period_bars",),
+        ("stock_daily", "adj_factor"),
         ("technical_factor_snapshot",),
-        ("canonical_period_bars",),
-        80,
+        ("daily", "adj_factor"),
+        90,
+        "technical-factor-snapshot-v1",
     ),
     TransformationTaskBlueprint(
         "valuation_percentile_snapshot",
@@ -202,8 +204,8 @@ def acquisition_task_blueprints() -> tuple[AcquisitionTaskBlueprint, ...]:
         ))
 
     result = tuple(sorted(tasks, key=lambda item: item.task_key))
-    if len(result) != 191:
-        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 191")
+    if len(result) != 192:
+        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 192")
     return result
 
 

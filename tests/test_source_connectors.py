@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -78,7 +79,7 @@ def test_chinamoney_official_lpr_endpoint_is_registered():
 def test_financial_data_query_through_source_is_registered_without_secret():
     source = SOURCE_REGISTRY.get_source("financial_data")
     endpoint = SOURCE_REGISTRY.get_endpoint("financial_data", "common_query")
-    assert source.credential_ref == "env:FINANCIAL_DATA_API_KEY"
+    assert source.credential_ref == "env:ANT_DATA_API_KEY"
     assert source.license_policy["persist_raw_records"] is False
     assert endpoint.acquisition_mode == AcquisitionMode.QUERY_THROUGH
     assert endpoint.request_contract["catalog_discovered_routes"] == 163
@@ -94,12 +95,52 @@ def test_financial_data_gateway_is_registered_in_openapi():
 
     paths = create_app(database_factory=FakeDatabase).openapi()["paths"]
     assert "post" in paths["/api/v1/data/sources/financial_data/query"]
+    assert "get" in paths["/api/v1/data/sources/financial_data/usage"]
+
+
+def test_financial_data_usage_discloses_audited_research_scope():
+    class FakeDatabase:
+        def fetch_one(self, *_args):
+            return {
+                "requests": 4,
+                "successful": 3,
+                "empty": 0,
+                "failed": 1,
+                "failed_last_24h": 0,
+                "latest_status": "success",
+            }
+
+        def fetch_all(self, *_args):
+            return [{
+                "route": "/api/v1/quote/basic-snapshot",
+                "batches": 2,
+                "completed_batches": 2,
+                "failed_batches": 0,
+            }]
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(database=FakeDatabase()))
+    )
+    result = source_routes.financial_data_usage(request, limit=20)
+
+    assert result["persistence"] == "request_metadata_only"
+    assert result["summary"]["latest_status"] == "success"
+    assert result["research_integration"]["route_count"] == 7
+    assert len(result["research_integration"]["contracts"]) == 3
+    assert result["routes"][0]["batches"] == 2
 
 
 def test_financial_data_connector_validates_and_returns_protocol_payload():
     calls = []
+    audit_calls = []
+
+    class Audit:
+        def archive_response(self, **kwargs):
+            audit_calls.append(kwargs)
+
     connector = FinancialDataConnector(
         api_key="test-only",
+        archive=Audit(),
         transport=lambda payload: calls.append(payload) or {
             "status": "SUCCESS",
             "results": [{
@@ -126,6 +167,8 @@ def test_financial_data_connector_validates_and_returns_protocol_payload():
     assert result.fetched_rows == 1
     assert result.evidence["api_version"] == "1.6.0"
     assert result.records[0]["status"] == "SUCCESS"
+    assert audit_calls[0]["persist_records"] is False
+    assert audit_calls[0]["row_count_override"] == 1
 
 
 def test_financial_data_connector_rejects_absolute_or_uncatalogued_urls():
@@ -328,6 +371,29 @@ def test_query_broker_caches_and_falls_back_to_stale_after_failure():
     assert broker.query(request).evidence["cache"] == "stale"
     with pytest.raises(QueryCircuitOpenError):
         broker.query(request, allow_stale=False)
+
+
+def test_query_broker_accepts_a_longer_research_cache_ttl():
+    now = datetime(2026, 9, 21, tzinfo=timezone.utc)
+    clock = [now]
+    registry = _registry(AcquisitionMode.QUERY_THROUGH, ttl=10)
+    connector = _QueryConnector(registry.get_source("sample"))
+    broker = QueryBroker(
+        registry=registry,
+        connector_resolver=lambda _source_id: connector,
+        clock=lambda: clock[0],
+    )
+    request = ConnectorRequest(
+        source_id="sample",
+        endpoint_key="prices",
+        acquisition_mode=AcquisitionMode.QUERY_THROUGH,
+        parameters={"symbol": "A"},
+    )
+
+    assert broker.query(request, cache_ttl_seconds=3600).evidence["cache"] == "miss"
+    clock[0] += timedelta(minutes=30)
+    assert broker.query(request, cache_ttl_seconds=3600).evidence["cache"] == "hit"
+    assert connector.calls == 1
 
 
 class _Archive:

@@ -19,12 +19,12 @@
 - `data_origin`：原始审计、规范数据、Claw 派生或系统元数据；
 - `local_datasets`：该服务实际读取的本地数据集；
 - `upstream_sources`：这些数据集的上游来源（如 Tushare、ChinaMoney），以及规范层
-  已启用的 Financial Data 回退；
+  已启用的 蚂蚁数据源 回退；
 - `read_strategy` 与 `dependency_scope`：本地优先/派生方式，以及依赖是固定还是随
   请求选择；
 - `fallback_routes` 与 `runtime_external_query`：只有通过契约测试的规范接口才能按
-  缺失切片受控回退。研究接口始终为 `runtime_external_query=false`，不会隐式消耗
-  Financial Data 额度；
+  缺失切片受控回退。个股基本面、技术面和研究资料包可执行受额度约束的 Financial
+  Data 研究证据查询，并在响应中独立披露来源；其他研究接口仍仅使用本地规范数据；
 - `derivation` 与 `lineage_status`：派生说明和血缘是否完整。
 
 `GET /api/v1/research/capabilities` 的 `data_lineage.dependencies` 同时公开每个核心研究
@@ -34,7 +34,8 @@
 ## 1. 原始审计层
 
 原始层保存每一次 Tushare SDK 请求的参数、状态、响应行数和响应摘要；生产默认只为
-异常响应保存逐行无损原文。
+异常响应保存逐行无损原文。蚂蚁数据源 遵守查询穿透许可，仅保存脱敏请求元数据、
+状态、行数和响应哈希，不保存供应商响应记录。
 采集发生在 `query()` 传输边界，因此即使后续字段转换或标准表写入失败，仍可检查
 当时上游到底返回了什么。
 
@@ -68,8 +69,8 @@
 
 | 接口 | 当前规范范围 | 来源策略 |
 |---|---|---|
-| `GET /api/v1/data/canonical/market-bars` | A 股、日频、不复权、最多 10 个代码/366 天 | 本地 `stock_daily` 优先，整段零行时可回退 Financial Data |
-| `GET /api/v1/data/canonical/trading-sessions` | A 股开市日、最多 366 天 | 本地 SSE `trade_calendar` 优先，零行时可回退 Financial Data |
+| `GET /api/v1/data/canonical/market-bars` | A 股、日频、不复权、最多 10 个代码/366 天 | 本地 `stock_daily` 优先，整段零行时可回退 蚂蚁数据源 |
+| `GET /api/v1/data/canonical/trading-sessions` | A 股开市日、最多 366 天 | 本地 SSE `trade_calendar` 优先，零行时可回退 蚂蚁数据源 |
 | `GET /api/v1/data/canonical/fund-profiles` | 最多 10 只 OF/SH/SZ 基金 | 本地 `fund_basic` 优先，单只基金零行时回退 |
 | `GET /api/v1/data/canonical/fund-nav` | 最多 10 只基金、最多 366 天 | 本地 `fund_nav` 优先，仅整段零行时回退，不按股票日历误判缺日 |
 | `GET /api/v1/data/canonical/fund-stock-holdings` | 最多 10 只基金、8 个季度末 | 本地 `fund_portfolio` 分区优先，仅空基金/报告期分区回退 |
@@ -94,7 +95,7 @@
 | `GET /api/v1/data/canonical/equity-suspensions` | 最多 10 只 A 股、最长 10 年 | 本地停牌记录优先，代码区间为空才回退 |
 
 规范日线固定使用 `instrument_id`、ISO 日期、`volume_unit=share`、
-`amount_unit=CNY`，解决 Tushare“手/千元”与 Financial Data“股/元”的单位差异。每行
+`amount_unit=CNY`，解决 Tushare“手/千元”与 蚂蚁数据源“股/元”的单位差异。每行
 保留 `source_id` 与 `source_dataset`，响应元数据明确是否消耗了额度回退。
 基金档案的费率统一为小数比率、金额统一为 CNY；基金持仓数量统一为股、市值统一为
 CNY、权重统一为百分点。供应商协议或代码/日期/单位不符合契约时返回 502，不把异常

@@ -294,6 +294,38 @@ def test_technical_research_cli_forwards_chart_scope(capsys):
     )]
 
 
+def test_research_cli_exposes_consensus_ownership_and_shareholder_return(capsys):
+    revisions_path = "/v1/research/stocks/300750.SZ/analyst-revisions"
+    paths = {
+        revisions_path: {"data": {}, "meta": {}},
+        "/v1/research/stocks/300750.SZ/ownership": {"data": {}, "meta": {}},
+        "/v1/research/stocks/300750.SZ/shareholder-return": {"data": {}, "meta": {}},
+    }
+    client = FakeClient(paths)
+
+    assert run_cli([
+        "research", "analyst-revisions", "300750.sz",
+        "--window-days", "120", "--target-periods", "3",
+        "--as-of", "2026-09-18",
+    ], client, capsys)[0] == 0
+    assert run_cli([
+        "research", "ownership", "300750.sz", "--lookback-days", "1095",
+    ], client, capsys)[0] == 0
+    assert run_cli([
+        "research", "shareholder-return", "300750.sz",
+        "--lookback-days", "1825",
+    ], client, capsys)[0] == 0
+
+    assert client.calls == [
+        (revisions_path, {
+            "window_days": 120, "target_periods": 3,
+            "as_of": "2026-09-18",
+        }),
+        ("/v1/research/stocks/300750.SZ/ownership", {"lookback_days": 1095}),
+        ("/v1/research/stocks/300750.SZ/shareholder-return", {"lookback_days": 1825}),
+    ]
+
+
 def test_macro_and_industry_research_cli_use_governed_routes(capsys):
     paths = {
         "/v1/research/macro/regime": {"data": {}, "meta": {}},

@@ -68,6 +68,7 @@ def _rule(
     verified_empty_min_age_days: int | None = None,
     revision: int = 1,
     entity_reference_max_age_days: int | None = None,
+    calendar_exchange: str = "SSE",
 ) -> CoverageRule:
     dataset = DATASETS.get(dataset_name)
     if not dataset.date_column:
@@ -94,6 +95,7 @@ def _rule(
         verified_empty_min_age_days=verified_empty_min_age_days,
         revision=revision,
         entity_reference_max_age_days=entity_reference_max_age_days,
+        calendar_exchange=calendar_exchange,
     )
 
 
@@ -130,7 +132,6 @@ def _classified_rule(dataset_name: str) -> CoverageRule:
 
 
 SSE_TRADING_DAILY_DATASETS = (
-    "adj_factor",
     "bak_daily",
     "cb_daily",
     "ci_daily",
@@ -176,6 +177,49 @@ SAME_DAY_RELEASE_DATASETS = {
 
 _EXPLICIT_RULES = [
         _rule(
+            "adj_factor",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name="adj_factor",
+            entity_column="ts_code",
+            # An adjustment factor is required for every security that has a
+            # daily bar on the same date.  Checking only that the date exists
+            # allowed a nearly eight-year cross-sectional hole to look
+            # complete as soon as one symbol was present.
+            entity_reference="stock_daily",
+            min_entity_ratio=1.0,
+            availability_start=date(1991, 1, 3),
+            revision=3,
+            description=(
+                "自上游可用边界起按 stock_daily 的生命周期有效日期审计（包含"
+                "早期交易日历未标开的真实行情日），并要求当日实际成交证券"
+                "全集一一覆盖；任一证券缺复权因子即判为部分"
+            ),
+        ),
+        _rule(
+            "technical_factor_snapshot",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name=None,
+            entity_reference="stock_basic",
+            min_entity_ratio=1.0,
+            # This is a forward-maintained research snapshot introduced with
+            # the V2 derived workflow, not a historical price table.  The
+            # chart/research APIs reproduce historical factors directly from
+            # daily bars; manufacturing one persisted snapshot for every day
+            # since 1990 would duplicate that data and turn pre-launch dates
+            # into false coverage incidents.
+            availability_start=date(2026, 10, 9),
+            grace_days=1,
+            default_lookback_days=120,
+            scheduled=False,
+            require_transport_proof=False,
+            revision=2,
+            description=(
+                "自派生快照功能启用日开始，由 stock_daily 与 adj_factor 的同一"
+                "交易日就绪状态触发；"
+                "必须为当日上市股票全集写入一行，不可计算也必须记录明确原因"
+            ),
+        ),
+        _rule(
             "fund_share",
             CoverageStrategy.OBSERVED_ONLY,
             collection_api_name="fund_share",
@@ -198,6 +242,21 @@ _EXPLICIT_RULES = [
             description=(
                 "近五年按交易日及当期上市股票截面检查；更早历史无法从"
                 "现存基础表还原停牌/分市场交易状态，按精确日期传输穷尽验证"
+            ),
+        ),
+        _rule(
+            "us_daily",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name="us_daily",
+            entity_column="ts_code",
+            calendar_exchange="US",
+            availability_start=date(1980, 1, 2),
+            default_lookback_days=120,
+            require_transport_proof=True,
+            revision=1,
+            description=(
+                "按独立的美股交易日历审计每个行情日期；完整状态必须同时具备"
+                "物理数据和 us_daily 限频分页穷尽证据"
             ),
         ),
         _rule(
@@ -228,10 +287,12 @@ _EXPLICIT_RULES = [
             CoverageStrategy.TRADING_DAILY,
             entity_reference="stock_basic",
             min_entity_ratio=0.85,
+            availability_start=date(2007, 1, 4),
             entity_reference_max_age_days=1825,
-            revision=2,
+            revision=3,
             description=(
-                "近五年按交易日及当期上市股票截面检查；更早历史使用"
+                "自相邻探针确认的 2007-01-04 起，近五年按交易日及当期"
+                "上市股票截面检查；更早历史使用"
                 "精确日期传输穷尽证据，避免用当前股票全集制造假缺口"
             ),
         ),
@@ -299,17 +360,21 @@ _EXPLICIT_RULES = [
             "cyq_perf",
             CoverageStrategy.TRADING_DAILY,
             entity_column="ts_code",
-            entity_reference="stock_basic",
+            # A chip-distribution observation exists only for a security with
+            # a market bar on that date. Using every lifecycle-listed symbol
+            # as the denominator incorrectly classifies suspended/non-trading
+            # securities as missing provider rows.
+            entity_reference="stock_daily",
             min_entity_ratio=0.90,
             grace_days=1,
             default_lookback_days=365,
             availability_start=date(2018, 1, 1),
             scheduled=False,
             description=(
-                "2018 年起按 SSE 交易日和当期上市股票截面审计筹码胜率；"
-                "低于九成覆盖即判为部分采集"
+                "2018 年起按 SSE 交易日和当日实际有行情的证券截面审计筹码胜率；"
+                "低于九成覆盖即判为部分采集，停牌及无成交证券不制造假缺口"
             ),
-            revision=2,
+            revision=3,
         ),
         _rule(
             "fina_mainbz",
@@ -379,8 +444,23 @@ _EXPLICIT_RULES = [
             ),
             revision=2,
         ),
-        _rule("index_weekly", CoverageStrategy.TRADING_WEEKLY, grace_days=2, description="检查每个完整交易周；指数研究池尚未配置"),
-        _rule("index_monthly", CoverageStrategy.TRADING_MONTHLY, grace_days=2, default_lookback_days=730, description="检查每个完整月份；指数研究池尚未配置"),
+        _rule(
+            "index_weekly",
+            CoverageStrategy.TRADING_WEEKLY,
+            grace_days=2,
+            availability_start=date(1991, 7, 5),
+            description="从相邻探针确认的首个指数周线周期开始检查完整交易周",
+            revision=2,
+        ),
+        _rule(
+            "index_monthly",
+            CoverageStrategy.TRADING_MONTHLY,
+            grace_days=2,
+            default_lookback_days=730,
+            availability_start=date(1991, 7, 31),
+            description="从相邻探针确认的首个指数月线周期开始检查完整月份",
+            revision=2,
+        ),
         _rule(
             "ggt_monthly",
             CoverageStrategy.CALENDAR_MONTHLY,
@@ -504,19 +584,26 @@ _EXPLICIT_RULES = [
             CoverageStrategy.TRADING_DAILY,
             entity_column=None,
             default_lookback_days=1825,
+            availability_start=date(2002, 10, 31),
+            accept_verified_empty=True,
             description=(
-                "SGE 现货日行情以 SSE 开市日作为可验证的最小发布日历；"
-                "额外发布日保留为观察分区"
+                "SGE 现货日行情以 SSE 开市日作为候选发布日历；"
+                "SGE 独立休市日只有在 V2 对精确日期完成有界请求、"
+                "分页穷尽并返回 0 行时，才认定为经验证为空"
             ),
-            revision=2,
+            revision=4,
         ),
         _rule(
             "shibor",
             CoverageStrategy.TRADING_DAILY,
             entity_column=None,
             default_lookback_days=1095,
-            description="按 SSE 开市日检查 SHIBOR 日度利率分区",
-            revision=2,
+            availability_start=date(2006, 10, 8),
+            description=(
+                "从相邻探针确认的 2006-10-08 起按 SSE 开市日检查 "
+                "SHIBOR 日度利率分区"
+            ),
+            revision=3,
         ),
         _rule(
             "cn_lpr",
@@ -606,6 +693,8 @@ _EXPLICIT_RULES = [
                 revision=(
                     4
                     if dataset_name == "etf_share_size"
+                    else 4
+                    if dataset_name in {"moneyflow_ind_ths", "sz_daily_info"}
                     else 3
                     if dataset_name in {"bak_daily", "cb_daily"}
                     else 3

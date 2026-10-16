@@ -7,10 +7,26 @@ from typing import Any
 
 from service.config import APP_REVISION
 from service.db import query
-from service.orchestration_v2.catalog import acquisition_task_blueprints
+from service.orchestration_v2.catalog import (
+    acquisition_task_blueprints,
+    transformation_task_blueprints,
+)
 from service.orchestration_v2.contracts import ExecutionRequest
 from service.orchestration_v2.contracts import NEXT_MORNING_TASKS
 from service.orchestration_v2.repository import OrchestrationV2Repository
+from service.orchestration_v2.transformations import (
+    SUPPORTED_TRANSFORMATION_TASK_KEYS,
+)
+
+
+US_COMPLETED_SESSION_TASKS = frozenset({
+    "us_daily",
+    "us_tbr",
+    "us_tltr",
+    "us_trltr",
+    "us_trycr",
+    "us_tycr",
+})
 
 
 def _routine_scope(cadence: str, as_of_date: date) -> tuple[str, date, date, date]:
@@ -54,10 +70,94 @@ def is_trade_day(value: date) -> bool:
     return bool(rows and int(rows[0]["is_open"]) == 1)
 
 
+def dispatch_ready_transformations(
+    *,
+    repository: OrchestrationV2Repository | None = None,
+) -> dict[str, Any]:
+    """Create derived executions only for a common, certified input scope."""
+
+    store = repository or OrchestrationV2Repository()
+    active = store.active_task_keys()
+    created = existing = 0
+    eligible = 0
+    waiting: dict[str, list[str]] = {}
+    errors: dict[str, str] = {}
+    for blueprint in transformation_task_blueprints():
+        if (
+            blueprint.task_key not in active
+            or blueprint.task_key not in SUPPORTED_TRANSFORMATION_TASK_KEYS
+        ):
+            continue
+        eligible += 1
+        try:
+            states = store.latest_common_ready_input_states(
+                blueprint.input_datasets
+            )
+            missing = sorted(set(blueprint.input_datasets) - set(states))
+            if missing:
+                waiting[blueprint.task_key] = missing
+                continue
+            representative = next(iter(states.values()))
+            observation_key = str(representative["observation_key"])
+            start = min(
+                state["observation_start"]
+                for state in states.values()
+                if state.get("observation_start") is not None
+            )
+            end = max(
+                state["observation_end"]
+                for state in states.values()
+                if state.get("observation_end") is not None
+            )
+            input_identity = ",".join(
+                f"{name}:{state['dataset_state_id']}:{state['revision']}"
+                for name, state in sorted(states.items())
+            )
+            _row, was_created = store.create_execution(ExecutionRequest(
+                task_key=blueprint.task_key,
+                purpose="daily",
+                trigger_source="dependency",
+                idempotency_key=(
+                    f"v2:derived:{blueprint.task_key}:"
+                    f"{blueprint.implementation_version}:{observation_key}:"
+                    f"{input_identity}"
+                ),
+                observation_key=observation_key,
+                observation_start=start,
+                observation_end=end,
+                observation_period=observation_key,
+                publication_date=end,
+                frozen_scope={
+                    "dispatch": "v2_dependency_transformation",
+                    "implementation_version": blueprint.implementation_version,
+                    "input_dataset_states": {
+                        name: {
+                            "dataset_state_id": state["dataset_state_id"],
+                            "revision": state["revision"],
+                        }
+                        for name, state in states.items()
+                    },
+                },
+                app_revision=APP_REVISION,
+            ))
+            created += int(was_created)
+            existing += int(not was_created)
+        except Exception as exc:
+            errors[blueprint.task_key] = f"{type(exc).__name__}: {exc}"
+    return {
+        "eligible": eligible,
+        "created": created,
+        "existing": existing,
+        "waiting": waiting,
+        "errors": errors,
+    }
+
+
 def dispatch_daily_acquisitions(
     target_date: date,
     *,
     delayed_target_date: date | None = None,
+    us_target_date: date,
     repository: OrchestrationV2Repository | None = None,
 ) -> dict[str, Any]:
     """Create one V2 execution per due daily acquisition task.
@@ -90,7 +190,11 @@ def dispatch_daily_acquisitions(
     delayed_date = delayed_target_date or target_date
     for task_key in task_keys:
         observation_date = (
-            delayed_date if task_key in NEXT_MORNING_TASKS else target_date
+            us_target_date
+            if task_key in US_COMPLETED_SESSION_TASKS
+            else delayed_date
+            if task_key in NEXT_MORNING_TASKS
+            else target_date
         )
         observation_key = observation_date.isoformat()
         try:
@@ -118,6 +222,7 @@ def dispatch_daily_acquisitions(
     return {
         "target_date": target_date.isoformat(),
         "delayed_target_date": delayed_date.isoformat(),
+        "us_target_date": us_target_date.isoformat(),
         "trade_day": True,
         "eligible": len(task_keys),
         "created": created,
@@ -253,6 +358,24 @@ def dispatch_latest_daily_acquisitions(
         # published during a weekend/holiday. Keep those tasks on the prior
         # closed trading day until the next business publication morning.
         delayed = next((item for item in dates if item < target), target)
+    us_rows = query(
+        "SELECT cal_date FROM tushare_norm_us_tradecal WHERE is_open=1 "
+        "AND cal_date < %s ORDER BY cal_date DESC LIMIT 1",
+        (as_of_date,),
+    )
+    if not us_rows:
+        return {
+            "target_date": target.isoformat(),
+            "delayed_target_date": delayed.isoformat(),
+            "us_target_date": None,
+            "trade_day": True,
+            "eligible": 0,
+            "created": 0,
+            "existing": 0,
+            "skipped": "us_trade_calendar_has_no_completed_open_day",
+            "errors": {"us_daily": "US trade calendar has no completed open day"},
+        }
+    us_target = us_rows[0]["cal_date"]
     store = repository or OrchestrationV2Repository()
     superseded = []
     requeued = []
@@ -278,6 +401,7 @@ def dispatch_latest_daily_acquisitions(
     result = dispatch_daily_acquisitions(
         target,
         delayed_target_date=delayed,
+        us_target_date=us_target,
         repository=store,
     )
     result["superseded_not_due"] = len(superseded)

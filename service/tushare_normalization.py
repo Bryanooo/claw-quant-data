@@ -213,6 +213,7 @@ _REVIEWED_BUSINESS_IDENTITIES: dict[str, tuple[str, ...]] = {
     "shibor_quote": ("date", "bank"),
     "slb_sec_detail": ("trade_date", "ts_code", "tenor"),
     "us_basic": ("ts_code",),
+    "us_daily": ("trade_date", "ts_code"),
 }
 
 
@@ -230,6 +231,7 @@ _REQUIRED_IDENTITY_OVERRIDES: dict[str, tuple[str, ...]] = {
     "index_weight": ("trade_date", "index_code", "con_code"),
     "major_news": ("src", "pub_time", "title"),
     "slb_sec_detail": ("trade_date", "ts_code", "tenor"),
+    "us_daily": ("trade_date", "ts_code"),
 }
 
 

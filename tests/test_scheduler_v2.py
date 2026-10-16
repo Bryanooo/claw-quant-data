@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 import collectors.scheduler as scheduler_module
 from collectors.scheduler import create_scheduler
+from service.orchestration_v2.scheduling import dispatch_ready_transformations
 
 
 def test_scheduler_contains_only_v2_control_jobs():
@@ -11,11 +12,112 @@ def test_scheduler_contains_only_v2_control_jobs():
     assert ids == {
         "service_heartbeat",
         "v2_policy_dispatch",
+        "v2_transformation_dispatch",
         "v2_coverage_dispatch",
         "v2_coverage_rule_reconciler",
+        "v2_transient_failure_reconciler",
         "v2_late_repair_dispatch",
         "v2_initialization_reconciler",
     }
+
+
+def test_ready_transformation_dispatch_freezes_exact_input_states():
+    class Repository:
+        def active_task_keys(self):
+            return {"technical_factor_snapshot"}
+
+        def latest_common_ready_input_states(self, names):
+            assert names == ("stock_daily", "adj_factor")
+            return {
+                "stock_daily": {
+                    "dataset_state_id": 101,
+                    "revision": 2,
+                    "observation_key": "2026-10-09",
+                    "observation_start": datetime(2026, 10, 9).date(),
+                    "observation_end": datetime(2026, 10, 9).date(),
+                },
+                "adj_factor": {
+                    "dataset_state_id": 102,
+                    "revision": 3,
+                    "observation_key": "2026-10-09",
+                    "observation_start": datetime(2026, 10, 9).date(),
+                    "observation_end": datetime(2026, 10, 9).date(),
+                },
+            }
+
+        def create_execution(self, request):
+            self.request = request
+            return ({"task_execution_id": 5}, True)
+
+    repository = Repository()
+    result = dispatch_ready_transformations(repository=repository)
+
+    assert result == {
+        "eligible": 1,
+        "created": 1,
+        "existing": 0,
+        "waiting": {},
+        "errors": {},
+    }
+    assert repository.request.task_key == "technical_factor_snapshot"
+    assert repository.request.observation_key == "2026-10-09"
+    assert repository.request.trigger_source.value == "dependency"
+    assert "technical-factor-snapshot-v1" in repository.request.idempotency_key
+    assert repository.request.frozen_scope["input_dataset_states"] == {
+        "stock_daily": {"dataset_state_id": 101, "revision": 2},
+        "adj_factor": {"dataset_state_id": 102, "revision": 3},
+    }
+
+
+def test_transient_failure_reconciler_uses_bounded_policy(monkeypatch):
+    captured = {}
+
+    class Repository:
+        def recover_transient_attention_executions(self, **kwargs):
+            captured.update(kwargs)
+            return [{"task_execution_id": 7}]
+
+    monkeypatch.setattr(
+        scheduler_module, "OrchestrationV2Repository", Repository
+    )
+
+    assert scheduler_module.run_transient_failure_reconciler() == 1
+    assert captured == {
+        "cooldown_seconds": scheduler_module.V2_TRANSIENT_RECOVERY_COOLDOWN_SECONDS,
+        "max_recovery_rounds": scheduler_module.V2_TRANSIENT_RECOVERY_MAX_ROUNDS,
+        "limit": scheduler_module.V2_TRANSIENT_RECOVERY_BATCH_LIMIT,
+    }
+
+
+def test_coverage_reconciler_sums_dataset_counts(monkeypatch):
+    class RuleReconciler:
+        def reconcile(self):
+            return {"first": 2, "second": 3}
+
+    class Repository:
+        def reconcile_resolved_attention_executions(self):
+            return 4
+
+        def reconcile_duplicate_attention_executions(self):
+            return 1
+
+        def reconcile_redundant_pending_executions(self):
+            return 2
+
+        def reconcile_stale_audit_contract_executions(self):
+            return 3
+
+        def promote_quota_guarded_history_executions(self):
+            return 4
+
+    monkeypatch.setattr(
+        scheduler_module, "CoverageRuleReconciler", RuleReconciler
+    )
+    monkeypatch.setattr(
+        scheduler_module, "OrchestrationV2Repository", Repository
+    )
+
+    assert scheduler_module.run_coverage_rule_reconciler() == 19
 
 
 def test_scheduler_never_registers_v1_fanout_or_leaf_jobs():

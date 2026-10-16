@@ -9,6 +9,7 @@ from service.research.service import (
     _chan_analysis,
     _fibonacci_retracement,
     _pivot_systems,
+    _reconcile_provider_technicals,
     _zigzag,
 )
 from service.research.catalog import capability_catalog
@@ -52,9 +53,88 @@ class FakeDataService:
         }
 
 
+class FakeExternalResearch:
+    def fundamentals(self, symbol, *, as_of):
+        return {
+            "status": "ready",
+            "source_id": "financial_data",
+            "as_of": as_of,
+            "data": {"consensus_statistics": {"latest": {"symbol": symbol}}},
+            "provenance": [],
+        }
+
+    def technicals(self, symbol, *, as_of, include_realtime=True):
+        return {
+            "status": "ready",
+            "source_id": "financial_data",
+            "as_of": as_of,
+            "data": {
+                "provider_indicators": {"latest": {"symbol": symbol}},
+                "realtime_included": include_realtime,
+            },
+            "provenance": [],
+        }
+
+
+def test_provider_technical_reconciliation_flags_price_basis_mismatch():
+    evidence = {
+        "status": "ready",
+        "data": {
+            "provider_indicators": {
+                "latest": {
+                    "end_date": "2026-10-09 00:00:00",
+                    "close_ma_5d": 570,
+                    "close_ma_10d": 580,
+                }
+            },
+            "quote_snapshot": {
+                "latest": {
+                    "latest_trade_time": "2026-10-09 15:00:00",
+                    "close": 297.75,
+                }
+            },
+        },
+    }
+
+    result = _reconcile_provider_technicals(
+        evidence,
+        observation_date=date(2026, 10, 9),
+        latest_close=297.75,
+        moving_averages={"5": 290.88, "10": 295.258},
+        local_price_basis="latest-factor-adjusted",
+    )
+
+    assert result["status"] == "warning"
+    assert result["provider_price_basis"] == "undocumented"
+    assert next(
+        item for item in result["comparisons"] if item["metric"] == "close"
+    )["state"] == "consistent"
+    assert next(
+        item for item in result["comparisons"] if item["metric"] == "ma_5"
+    )["state"] == "mismatch"
+    assert "price-basis mismatch" in result["warnings"][0]
+
+
 class FakeRepository:
+    def __init__(self):
+        self.watchlist = []
+
     def backfill_statuses(self):
         return {"analyst": {"status": "running", "active": 2}}
+
+    def stock_watchlist(self):
+        return list(self.watchlist)
+
+    def add_stock_watchlist(self, ts_code):
+        row = {"ts_code": ts_code, "name": "宁德时代"}
+        if not any(item["ts_code"] == ts_code for item in self.watchlist):
+            self.watchlist.append(row)
+        return row
+
+    def remove_stock_watchlist(self, ts_code):
+        found = next((item for item in self.watchlist if item["ts_code"] == ts_code), None)
+        self.watchlist = [item for item in self.watchlist if item["ts_code"] != ts_code]
+        return found
 
     def latest_stock_valuations(self, ts_codes, **_kwargs):
         return {
@@ -290,6 +370,21 @@ def _daily_rows(ts_code, count=300, start=date(2025, 7, 1), base=10):
     return list(reversed(rows))
 
 
+def test_stock_watchlist_service_is_idempotent_and_reports_storage_state():
+    repository = FakeRepository()
+    service = ResearchService(FakeDataService({}), repository)
+
+    saved = service.add_stock_watchlist("300750.sz")
+    listed = service.stock_watchlist()
+    removed = service.remove_stock_watchlist("300750.sz")
+    removed_again = service.remove_stock_watchlist("300750.sz")
+
+    assert saved["data"]["ts_code"] == "300750.SZ"
+    assert listed["meta"] == {"count": 1, "storage": "postgresql"}
+    assert removed["data"] == {"ts_code": "300750.SZ", "removed": True}
+    assert removed_again["data"] == {"ts_code": "300750.SZ", "removed": False}
+
+
 def test_fundamentals_derives_growth_quality_and_dupont():
     datasets = {
         "stock_basic": [{"ts_code": "000001.SZ", "name": "平安银行"}],
@@ -322,7 +417,9 @@ def test_fundamentals_derives_growth_quality_and_dupont():
             {"ts_code": "000001.SZ", "end_date": date(2025, 12, 31), "bz_item": "对公", "bz_sales": 20},
         ],
     }
-    result = ResearchService(FakeDataService(datasets), FakeRepository()).fundamentals(
+    result = ResearchService(
+        FakeDataService(datasets), FakeRepository(), FakeExternalResearch()
+    ).fundamentals(
         "000001.SZ", periods=8, as_of=date(2026, 9, 18)
     )
     latest = result["data"]["latest"]
@@ -330,6 +427,124 @@ def test_fundamentals_derives_growth_quality_and_dupont():
     assert latest["quality"]["operating_cash_to_net_income"] == 1.25
     assert latest["dupont"]["derived_roe_pct"] == 16.0
     assert result["data"]["segments"]["items"][0]["sales_share_pct"] == 80.0
+    assert result["data"]["provider_evidence"]["source_id"] == "financial_data"
+    assert result["meta"]["quality"]["provider_status"] == "ready"
+
+
+def test_analyst_revisions_deduplicates_brokers_and_compares_equal_windows():
+    reports = []
+    for broker, current_eps, prior_eps in (
+        ("甲券商", 2.2, 2.0), ("乙券商", 2.4, 2.0), ("丙券商", 2.6, 2.0),
+    ):
+        reports.extend([
+            {
+                "ts_code": "300750.SZ", "quarter": "2026Q4",
+                "org_name": broker, "report_date": date(2026, 8, 20),
+                "eps": current_eps, "np": current_eps * 100,
+                "op_rt": current_eps * 1000, "rating": "买入",
+            },
+            {
+                "ts_code": "300750.SZ", "quarter": "2026Q4",
+                "org_name": broker, "report_date": date(2026, 5, 20),
+                "eps": prior_eps, "np": prior_eps * 100,
+                "op_rt": prior_eps * 1000, "rating": "买入",
+            },
+        ])
+    # An older current-window report from the same broker must not double weight it.
+    reports.append({
+        "ts_code": "300750.SZ", "quarter": "2026Q4", "org_name": "甲券商",
+        "report_date": date(2026, 7, 20), "eps": 99, "np": 9999,
+    })
+    result = ResearchService(
+        FakeDataService({
+            "stock_basic": [{"ts_code": "300750.SZ", "name": "宁德时代"}],
+            "report_rc": reports,
+        }),
+        FakeRepository(),
+    ).analyst_revisions(
+        "300750.SZ", window_days=90, as_of=date(2026, 9, 18)
+    )
+
+    period = result["data"]["periods"][0]
+    assert period["current"]["institution_count"] == 3
+    assert period["current"]["eps_median"] == 2.4
+    assert period["revision_pct"]["eps_median"] == 20.0
+    assert period["direction"] == "raised"
+    assert result["meta"]["quality"]["status"] == "ready"
+
+
+def test_ownership_behavior_keeps_disclosure_components_separate():
+    datasets = {
+        "stock_basic": [{"ts_code": "300750.SZ", "name": "宁德时代"}],
+        "top10_holders": [
+            {"ts_code": "300750.SZ", "end_date": date(2026, 6, 30), "ann_date": date(2026, 8, 1), "holder_name": "A", "hold_ratio": 20},
+            {"ts_code": "300750.SZ", "end_date": date(2026, 3, 31), "ann_date": date(2026, 4, 30), "holder_name": "A", "hold_ratio": 18},
+        ],
+        "top10_floatholders": [
+            {"ts_code": "300750.SZ", "end_date": date(2026, 6, 30), "ann_date": date(2026, 8, 1), "holder_name": "A", "hold_float_ratio": 19},
+        ],
+        "fund_portfolio": [
+            {"ts_code": "FUND1", "symbol": "300750.SZ", "end_date": date(2026, 6, 30), "ann_date": date(2026, 8, 20), "mkv": 100, "amount": 10, "stk_float_ratio": 1},
+            {"ts_code": "FUND2", "symbol": "300750.SZ", "end_date": date(2026, 6, 30), "ann_date": date(2026, 8, 21), "mkv": 200, "amount": 20, "stk_float_ratio": 2},
+        ],
+        "hk_hold": [
+            {"ts_code": "300750.SZ", "trade_date": date(2026, 8, 1), "vol": 100, "ratio": 5},
+            {"ts_code": "300750.SZ", "trade_date": date(2026, 9, 18), "vol": 120, "ratio": 5.5},
+        ],
+        "stk_holdertrade": [
+            {"ts_code": "300750.SZ", "ann_date": date(2026, 9, 1), "holder_name": "高管A", "in_de": "IN", "change_vol": 10},
+            {"ts_code": "300750.SZ", "ann_date": date(2026, 9, 2), "holder_name": "高管B", "in_de": "DE", "change_vol": 4},
+        ],
+        "stk_holdernumber": [
+            {"ts_code": "300750.SZ", "end_date": date(2026, 6, 30), "ann_date": date(2026, 7, 10), "holder_num": 90},
+            {"ts_code": "300750.SZ", "end_date": date(2026, 3, 31), "ann_date": date(2026, 4, 10), "holder_num": 100},
+        ],
+    }
+    result = ResearchService(
+        FakeDataService(datasets), FakeRepository()
+    ).ownership_behavior("300750.SZ", as_of=date(2026, 9, 18))
+
+    assert result["data"]["top10_holders"]["change_pct_points"] == 2.0
+    assert result["data"]["fund_holdings"]["latest"]["fund_count"] == 2
+    assert result["data"]["northbound"]["change"]["volume"] == 20.0
+    assert result["data"]["shareholder_count"]["change_pct"] == -10.0
+    assert result["data"]["holder_trades"]["net_change_volume"] == 6.0
+    assert result["meta"]["quality"]["status"] == "ready"
+
+
+def test_shareholder_return_uses_adjusted_price_without_double_counting_dividend():
+    prices = _daily_rows("300750.SZ", count=300)
+    factors = [
+        {"ts_code": "300750.SZ", "trade_date": row["trade_date"], "adj_factor": 1}
+        for row in prices
+    ]
+    result = ResearchService(
+        FakeDataService({
+            "stock_basic": [{"ts_code": "300750.SZ", "name": "宁德时代"}],
+            "stock_daily": prices,
+            "adj_factor": factors,
+            "dividend": [{
+                "ts_code": "300750.SZ", "end_date": date(2025, 12, 31),
+                "ann_date": date(2026, 4, 1), "div_proc": "实施",
+                "cash_div_tax": 1.2,
+            }],
+            "repurchase": [{
+                "ts_code": "300750.SZ", "ann_date": date(2026, 3, 1),
+                "proc": "实施", "amount": 100,
+            }],
+            "share_float": [{
+                "ts_code": "300750.SZ", "ann_date": date(2026, 9, 1),
+                "float_date": date(2026, 12, 1), "float_share": 50,
+            }],
+        }),
+        FakeRepository(),
+    ).shareholder_return("300750.SZ", as_of=date(2026, 9, 18))
+
+    assert result["data"]["performance"]["adjusted_total_return_pct"] is not None
+    assert result["data"]["dividends"]["cumulative_after_tax_cash_per_share"] == 1.2
+    assert result["data"]["known_upcoming_share_releases"]["events_within_365_days"] == 1
+    assert result["meta"]["methodology"]["no_double_counting"]
+    assert result["meta"]["quality"]["status"] == "ready"
 
 
 def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
@@ -354,7 +569,9 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
             for index, row in enumerate(stock)
         ],
     }
-    result = ResearchService(FakeDataService(datasets), FakeRepository()).technicals(
+    result = ResearchService(
+        FakeDataService(datasets), FakeRepository(), FakeExternalResearch()
+    ).technicals(
         "000001.SZ", as_of=date(2026, 9, 18)
     )
     assert result["meta"]["quality"]["status"] == "ready"
@@ -378,15 +595,45 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     assert result["data"]["long_horizon"]["calendar_year_returns"]
     assert result["data"]["wave_analysis"]["status"] == "candidate_only"
     assert result["data"]["chan_analysis"]["variant"].startswith("deterministic")
+    assert result["data"]["provider_evidence"]["source_id"] == "financial_data"
+    assert result["meta"]["quality"]["provider_status"] == "ready"
     assert result["data"]["trend"]["systems"]["ichimoku"]["state"] != "unavailable"
     assert result["data"]["trend"]["systems"]["supertrend_10_3"]["status"] == "ready"
     assert result["data"]["trend"]["systems"]["aroon_25"]["status"] == "ready"
     assert result["data"]["trend"]["systems"]["parabolic_sar"]["status"] == "ready"
+    niumen = result["data"]["trend"]["systems"]["niumen_breakout"]
+    assert niumen["status"] == "ready"
+    assert niumen["parameters"]["atr_window_trading_days"] == 14
+    assert result["data"]["chart"]["points"][-1]["niumen_line"] is not None
+    assert result["data"]["chart"]["points"][-1]["niumen_confirmation_line"] is not None
+    assert result["data"]["timeframes"]["1d"]["trend"]["systems"]["niumen_breakout"]["status"] == "ready"
+    assert result["data"]["timeframes"]["1w"]["trend"]["systems"]["niumen_breakout"]["status"] == "not_applicable"
+    chart_points = [
+        result["data"]["chart"]["points"][-1],
+        result["data"]["timeframes"]["1d"]["chart"]["points"][-1],
+    ]
+    for daily_chart_point in chart_points:
+        assert daily_chart_point["ma_120"] is not None
+        assert daily_chart_point["ma_250"] is not None
+        assert daily_chart_point["ema_12"] is not None
+        assert daily_chart_point["ema_26"] is not None
+        assert daily_chart_point["bollinger_middle"] is not None
+        assert daily_chart_point["macd"] is not None
+        assert daily_chart_point["macd_signal"] is not None
+        assert daily_chart_point["macd_histogram"] == pytest.approx(
+            daily_chart_point["macd"] - daily_chart_point["macd_signal"], abs=1e-4
+        )
+    assert result["data"]["instrument"]["ts_code"] == "000001.SZ"
     assert result["data"]["momentum"]["stochastic_rsi_14"] is not None
     assert result["data"]["volume_price"]["chaikin_money_flow_20"] is not None
     volume_analysis = result["data"]["volume_price"]["analysis"]
     assert volume_analysis["price_volume_regime"]["classification"]
     assert volume_analysis["anchored_vwap_proxy"]["anchors"]["60_period"]["value"] is not None
+    assert volume_analysis["transaction_cost_lines"]["status"] == "ready"
+    assert volume_analysis["transaction_cost_lines"]["windows"]["20_day"]["value"] is not None
+    assert volume_analysis["transaction_cost_lines"]["windows"]["60_day"]["value"] is not None
+    assert result["data"]["chart"]["points"][-1]["cost_20"] is not None
+    assert result["data"]["chart"]["points"][-1]["cost_60"] is not None
     assert volume_analysis["turnover"]["status"] == "ready"
     assert result["data"]["volatility"]["downside_risk"]["status"] == "ready"
     assert result["data"]["levels"]["gaps"]["status"] == "ready"
@@ -432,7 +679,7 @@ def test_common_pivot_families_have_auditable_prior_bar_basis():
     assert systems["demark"]["method"].startswith("DeMark")
 
 
-def test_adjusted_ohlcv_never_mixes_factor_covered_and_raw_history():
+def test_adjusted_ohlcv_returns_continuous_raw_history_when_factors_are_partial():
     rows = [
         {"trade_date": date(2026, 1, 1), "open": 100, "high": 102, "low": 98, "close": 100},
         {"trade_date": date(2026, 1, 2), "open": 50, "high": 51, "low": 49, "close": 50},
@@ -455,8 +702,13 @@ def test_adjusted_ohlcv_never_mixes_factor_covered_and_raw_history():
     assert complete[0]["close"] == pytest.approx(50)
     assert complete[1]["close"] == pytest.approx(50)
     assert partial_meta["status"] == "partial_history"
-    assert len(partial) == 1
-    assert partial[0]["trade_date"] == date(2026, 1, 2)
+    assert partial_meta["price_basis"] == "raw"
+    assert len(partial) == 2
+    assert [item["trade_date"] for item in partial] == [
+        date(2026, 1, 1),
+        date(2026, 1, 2),
+    ]
+    assert partial[0]["close"] == 100
 
 
 def test_fibonacci_retracement_uses_only_last_confirmed_swing():
@@ -534,6 +786,16 @@ def test_instrument_technicals_supports_non_stock_assets(
 
     assert result["data"]["instrument"]["code"] == code
     assert result["data"]["timeframes"]["1d"]["status"] == "ready"
+    assert (
+        result["data"]["timeframes"]["1d"]["trend"]["systems"]
+        ["niumen_breakout"]["status"]
+        == "ready"
+    )
+    assert (
+        result["data"]["timeframes"]["1w"]["trend"]["systems"]
+        ["niumen_breakout"]["status"]
+        == "not_applicable"
+    )
     assert result["data"]["timeframes"]["1w"]["levels"]["pivot_systems"]["classic"]
     assert result["meta"]["provenance"][0] == {
         "dataset": dataset, "returned": 300
@@ -685,16 +947,16 @@ def test_etf_flow_and_state_team_views_keep_identity_evidence_explicit():
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 19
-    assert catalog["summary"]["derived_endpoints"] == 16
+    assert catalog["summary"]["agent_endpoints"] == 23
+    assert catalog["summary"]["derived_endpoints"] == 19
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 6
-    assert catalog["summary"]["baseline_techniques"] == 73
-    assert catalog["summary"]["currently_served"] == 62
-    assert catalog["summary"]["planned_from_existing_sources"] == 3
+    assert catalog["summary"]["baseline_techniques"] == 75
+    assert catalog["summary"]["currently_served"] == 67
+    assert catalog["summary"]["planned_from_existing_sources"] == 0
     assert catalog["summary"]["external_or_constrained"] == 8
-    assert len(catalog["techniques"]["served"]) == 62
-    assert len(catalog["techniques"]["gaps"]) == 11
+    assert len(catalog["techniques"]["served"]) == 67
+    assert len(catalog["techniques"]["gaps"]) == 8
     screening = next(
         item for item in catalog["techniques"]["served"]
         if item["id"] == "technical-screening"

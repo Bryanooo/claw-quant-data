@@ -348,11 +348,71 @@ def test_duplicate_attention_reconciler_rejects_unbounded_limit():
         repository.reconcile_duplicate_attention_executions(limit=5001)
 
 
+def test_transient_recovery_rejects_unbounded_policy_before_database_access():
+    repository = OrchestrationV2Repository()
+
+    with pytest.raises(ValueError, match="cooldown_seconds"):
+        repository.recover_transient_attention_executions(cooldown_seconds=-1)
+    with pytest.raises(ValueError, match="max_recovery_rounds"):
+        repository.recover_transient_attention_executions(max_recovery_rounds=101)
+    with pytest.raises(ValueError, match="limit"):
+        repository.recover_transient_attention_executions(limit=5001)
+
+
+def test_quota_guarded_recovery_policy_is_explicit():
+    from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+
+    assert QUOTA_GUARDED_DATASETS == frozenset({"cyq_perf"})
+
+
+def test_resource_deferral_records_the_claimed_attempt_after_refunding_budget():
+    source = Path(
+        PROJECT_ROOT / "service/orchestration_v2/repository.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'int(updated["attempt_count"]) + 1' in source
+    assert "attempt_number=deferred_attempt_number" in source
+
+
+def test_worker_claims_are_fair_across_task_keys():
+    source = Path(
+        PROJECT_ROOT / "service/orchestration_v2/repository.py"
+    ).read_text(encoding="utf-8")
+
+    assert "MAX(started_at) AS last_started_at" in source
+    assert "CASE WHEN queued.status='retrying' THEN 0 ELSE 1 END" in source
+    assert "recency.last_started_at NULLS FIRST" in source
+    assert "FOR UPDATE OF queued SKIP LOCKED" in source
+    assert "covering.task_execution_id>" in source
+    assert "covering.observation_start<=" in source
+
+
 def test_covered_attention_reader_rejects_unbounded_limit():
     repository = OrchestrationV2Repository()
 
     with pytest.raises(ValueError, match="between 1 and 5000"):
         repository.attention_covered_by_active_execution_ids(limit=5001)
+
+
+def test_redundant_pending_reconciler_rejects_unbounded_limit():
+    repository = OrchestrationV2Repository()
+
+    with pytest.raises(ValueError, match="between 1 and 5000"):
+        repository.reconcile_redundant_pending_executions(limit=5001)
+
+
+def test_stale_contract_reconciler_rejects_unbounded_limit():
+    repository = OrchestrationV2Repository()
+
+    with pytest.raises(ValueError, match="between 1 and 5000"):
+        repository.reconcile_stale_audit_contract_executions(limit=5001)
+
+
+def test_guarded_history_promotion_rejects_unbounded_limit():
+    repository = OrchestrationV2Repository()
+
+    with pytest.raises(ValueError, match="between 1 and 5000"):
+        repository.promote_quota_guarded_history_executions(limit=5001)
 
 
 def test_operator_supersede_invalid_scope_empty_selection_never_opens_database():
@@ -392,11 +452,11 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
     transformations = transformation_task_blueprints()
 
     assert task_baseline_summary() == {
-        "acquisition": 191,
+        "acquisition": 192,
         "transformation": 14,
-        "total": 205,
+        "total": 206,
     }
-    assert len({item.task_key for item in acquisitions}) == 191
+    assert len({item.task_key for item in acquisitions}) == 192
     assert len({item.task_key for item in transformations}) == 14
     assert not (
         {item.task_key for item in acquisitions}
@@ -413,7 +473,7 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
         item.endpoint_key
         for item in SOURCE_REGISTRY.list_endpoints("tushare")
     }
-    assert len(covered_tushare_endpoints) == len(expected_tushare_endpoints) == 201
+    assert len(covered_tushare_endpoints) == len(expected_tushare_endpoints) == 202
     assert set(covered_tushare_endpoints) == expected_tushare_endpoints
     for task in acquisitions:
         for endpoint in task.endpoints:
@@ -443,8 +503,8 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     }
     documents = task_documents(endpoint_ids)
 
-    assert len(endpoint_contracts()) == len(references) == 202
-    assert len(documents) == 205
+    assert len(endpoint_contracts()) == len(references) == 203
+    assert len(documents) == 206
     by_key = {document.task_key: document for document in documents}
     assert [node.kind.value for node in by_key["daily"].nodes] == [
         "condition", "scope_plan", "acquire", "validate", "publish"
@@ -459,6 +519,14 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
         node for node in by_key["share_float"].nodes if node.key == "acquire"
     )
     assert share_float_acquire.retry.max_attempts == 50
+    cyq_acquire = next(
+        node for node in by_key["cyq_perf"].nodes if node.key == "acquire"
+    )
+    assert cyq_acquire.retry.max_attempts == 100
+    us_daily_acquire = next(
+        node for node in by_key["us_daily"].nodes if node.key == "acquire"
+    )
+    assert us_daily_acquire.retry.max_attempts == 100
     assert EndpointRef("chinamoney", "lpr_history") in references
 
     known_datasets = {item.name for item in DATASETS.list()}
@@ -468,7 +536,13 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
         for output in document.output_datasets
         if output not in known_datasets
     }
-    assert len(planned_outputs) == 13
+    assert len(planned_outputs) == 12
+    technical_snapshot = by_key["technical_factor_snapshot"]
+    assert technical_snapshot.input_datasets == ("stock_daily", "adj_factor")
+    assert [item.task_key for item in technical_snapshot.dependencies] == [
+        "daily", "adj_factor"
+    ]
+    assert by_key["adj_factor"].resource.priority == 90
     assert "macro_regime" in planned_outputs
     assert "ggt_monthly" not in planned_outputs
     for document in documents:

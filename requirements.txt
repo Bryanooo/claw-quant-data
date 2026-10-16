@@ -8,3 +8,7 @@ requests>=2.31,<3
 tushare>=1.4,<2
 tzdata>=2024.1
 uvicorn[standard]>=0.30,<1
+
+# PBOC official .xls/.xlsx social-financing attachments
+xlrd>=2.0,<3
+openpyxl>=3.1,<4

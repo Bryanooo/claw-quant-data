@@ -84,7 +84,8 @@ def sync_source_registry(connection, registry: SourceRegistry = SOURCE_REGISTRY)
                     endpoint.parser_version,
                     endpoint.cache_ttl_seconds,
                     psycopg2.extras.Json(
-                        dict(endpoint.request_contract),
+                        {**dict(endpoint.request_contract),
+                         "x-capabilities": dict(endpoint.capabilities)},
                         dumps=lambda value: json.dumps(value, ensure_ascii=False),
                     ),
                     psycopg2.extras.Json(

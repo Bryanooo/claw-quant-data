@@ -97,5 +97,35 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def execute_one(self, statement: Any, params: tuple[Any, ...] = ()) -> dict | None:
+        """Execute one bounded mutation and return its optional result row.
+
+        Read connections remain explicitly read-only. Mutations use a separate
+        short transaction so a failed dashboard preference update cannot leak a
+        writable session back into the pool.
+        """
+
+        connection = self._pool.getconn()
+        discard = False
+        try:
+            connection.rollback()
+            connection.set_session(readonly=False, autocommit=False)
+            with connection.cursor(
+                cursor_factory=psycopg2.extras.RealDictCursor
+            ) as cursor:
+                cursor.execute(statement, params)
+                row = cursor.fetchone()
+            connection.commit()
+            return dict(row) if row else None
+        except BaseException:
+            discard = bool(connection.closed)
+            try:
+                connection.rollback()
+            except Exception:
+                discard = True
+            raise
+        finally:
+            self._pool.putconn(connection, close=discard or bool(connection.closed))
+
     def close(self) -> None:
         self._pool.closeall()

@@ -71,7 +71,7 @@ def test_every_referenced_tushare_api_exists_in_the_244_contract_catalog():
     }
 
     assert len(payload["interfaces"]) == 244
-    assert sum(item["collectable"] for item in payload["interfaces"]) == 201
+    assert sum(item["collectable"] for item in payload["interfaces"]) == 202
     assert referenced <= contracts
 
 

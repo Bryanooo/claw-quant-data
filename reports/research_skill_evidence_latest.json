@@ -1,0 +1,920 @@
+{
+  "review_date": "2026-10-12",
+  "timezone": "Asia/Shanghai",
+  "scope": "Read-only local research API dependency checks; representative samples, not full coverage or strategy validation. Canonical source may change during concurrent data repair.",
+  "initial_request_correction": "The initial spot sample used chart_points=5 and returned HTTP 422; schema minimum is 30. Corrected request succeeded. This was a request validation error, not missing gold data.",
+  "checks": [
+    {
+      "name": "readiness",
+      "request": "/api/v1/research/readiness",
+      "http_status": 200,
+      "captured_response_sha256": "b36a25a6de825d5c9bcfe4477f171bd2baca1c7685b9f6f10aacc0ccd0164fe0",
+      "generated_at": "2026-10-12T23:48:27.912062+08:00",
+      "status": "degraded",
+      "summary": {
+        "capabilities": 20,
+        "ready_capabilities": 14,
+        "degraded_capabilities": 6,
+        "unavailable_capabilities": 0,
+        "datasets": 47,
+        "ready_datasets": 37,
+        "unverified_datasets": 9,
+        "stale_datasets": 1,
+        "missing_datasets": 0,
+        "unknown_datasets": 0
+      },
+      "dependencies": [
+        {
+          "capability": "fundamentals",
+          "status": "degraded",
+          "datasets": [
+            {
+              "dataset": "stock_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "financial_indicator",
+              "state": "ready"
+            },
+            {
+              "dataset": "income",
+              "state": "ready"
+            },
+            {
+              "dataset": "balancesheet",
+              "state": "ready"
+            },
+            {
+              "dataset": "cashflow",
+              "state": "unverified"
+            },
+            {
+              "dataset": "fina_mainbz",
+              "state": "unverified"
+            }
+          ]
+        },
+        {
+          "capability": "valuation",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "stock_daily_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "financial_indicator",
+              "state": "ready"
+            },
+            {
+              "dataset": "ths_member",
+              "state": "ready"
+            },
+            {
+              "dataset": "dc_member",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "analyst-revisions",
+          "status": "degraded",
+          "datasets": [
+            {
+              "dataset": "stock_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "report_rc",
+              "state": "unverified"
+            }
+          ]
+        },
+        {
+          "capability": "ownership",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "top10_holders",
+              "state": "ready"
+            },
+            {
+              "dataset": "top10_floatholders",
+              "state": "ready"
+            },
+            {
+              "dataset": "fund_portfolio",
+              "state": "ready"
+            },
+            {
+              "dataset": "hk_hold",
+              "state": "stale"
+            },
+            {
+              "dataset": "stk_holdertrade",
+              "state": "unverified"
+            },
+            {
+              "dataset": "stk_holdernumber",
+              "state": "unverified"
+            }
+          ]
+        },
+        {
+          "capability": "shareholder-return",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "stock_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "adj_factor",
+              "state": "ready"
+            },
+            {
+              "dataset": "dividend",
+              "state": "unverified"
+            },
+            {
+              "dataset": "repurchase",
+              "state": "ready"
+            },
+            {
+              "dataset": "share_float",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "technicals",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "stock_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "adj_factor",
+              "state": "ready"
+            },
+            {
+              "dataset": "stock_daily_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "instrument-technicals-index",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "index_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "instrument-technicals-etf",
+          "status": "degraded",
+          "datasets": [
+            {
+              "dataset": "fund_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "fund_daily",
+              "state": "unverified"
+            },
+            {
+              "dataset": "fund_adj",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "instrument-technicals-sector",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "industry_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "dc_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "tdx_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "instrument-technicals-spot",
+          "status": "degraded",
+          "datasets": [
+            {
+              "dataset": "sge_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "sge_daily",
+              "state": "unverified"
+            }
+          ]
+        },
+        {
+          "capability": "capital-flow",
+          "status": "degraded",
+          "datasets": [
+            {
+              "dataset": "moneyflow",
+              "state": "unverified"
+            },
+            {
+              "dataset": "margin_detail",
+              "state": "ready"
+            },
+            {
+              "dataset": "hk_hold",
+              "state": "stale"
+            },
+            {
+              "dataset": "block_trade",
+              "state": "ready"
+            },
+            {
+              "dataset": "cyq_perf",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "repurchase-progress",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "repurchase",
+              "state": "ready"
+            },
+            {
+              "dataset": "stock_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "event-study",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "market-breadth",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "limit_list_d",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "macro-regime",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "cn_gdp",
+              "state": "ready"
+            },
+            {
+              "dataset": "cn_pmi",
+              "state": "ready"
+            },
+            {
+              "dataset": "cn_cpi",
+              "state": "ready"
+            },
+            {
+              "dataset": "cn_ppi",
+              "state": "ready"
+            },
+            {
+              "dataset": "cn_m",
+              "state": "ready"
+            },
+            {
+              "dataset": "sf_month",
+              "state": "ready"
+            },
+            {
+              "dataset": "shibor",
+              "state": "ready"
+            },
+            {
+              "dataset": "cn_lpr",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "etf-flows",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "etf_share_size",
+              "state": "ready"
+            },
+            {
+              "dataset": "etf_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "fund_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "state-team-signals",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "etf_share_size",
+              "state": "ready"
+            },
+            {
+              "dataset": "etf_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "fund_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "index_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "sector-rotation",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "industry_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "dc_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "tdx_daily",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "industry-fundamentals",
+          "status": "degraded",
+          "datasets": [
+            {
+              "dataset": "income",
+              "state": "ready"
+            },
+            {
+              "dataset": "cashflow",
+              "state": "unverified"
+            },
+            {
+              "dataset": "financial_indicator",
+              "state": "ready"
+            },
+            {
+              "dataset": "stock_daily_basic",
+              "state": "ready"
+            },
+            {
+              "dataset": "ths_member",
+              "state": "ready"
+            },
+            {
+              "dataset": "dc_member",
+              "state": "ready"
+            },
+            {
+              "dataset": "tdx_member",
+              "state": "ready"
+            }
+          ]
+        },
+        {
+          "capability": "industry-breadth",
+          "status": "ready",
+          "datasets": [
+            {
+              "dataset": "stock_daily",
+              "state": "ready"
+            },
+            {
+              "dataset": "ths_member",
+              "state": "ready"
+            },
+            {
+              "dataset": "dc_member",
+              "state": "ready"
+            },
+            {
+              "dataset": "tdx_member",
+              "state": "ready"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "capabilities",
+      "request": "/api/v1/research/capabilities",
+      "http_status": 200,
+      "captured_response_sha256": "8d2f26a9ba1e8df1488e1b8178b52cb28278979ee53f34b77295406ea727fdfb",
+      "summary": {
+        "baseline_techniques": 75,
+        "currently_served": 67,
+        "planned_from_existing_sources": 0,
+        "external_or_constrained": 8,
+        "core_techniques": 75,
+        "available_or_derivable": 67,
+        "backfill_workstreams": 6,
+        "new_source_todos": 6,
+        "agent_endpoints": 23,
+        "derived_endpoints": 19
+      },
+      "gaps": [
+        {
+          "id": "announcement-evidence",
+          "name": "公告原文证据",
+          "domain": "事件",
+          "status": "missing",
+          "action": "new_source",
+          "source_todo": "official-announcements"
+        },
+        {
+          "id": "governance-risk",
+          "name": "治理、诉讼与监管风险",
+          "domain": "基本面",
+          "status": "missing",
+          "action": "new_source",
+          "source_todo": "official-announcements"
+        },
+        {
+          "id": "news-events",
+          "name": "新闻事件检测",
+          "domain": "事件",
+          "status": "partial",
+          "action": "derive_and_source",
+          "source_todo": "news-and-sentiment"
+        },
+        {
+          "id": "news-sentiment",
+          "name": "情绪与新闻冲击",
+          "domain": "事件",
+          "status": "partial",
+          "action": "derive_and_source",
+          "source_todo": "news-and-sentiment"
+        },
+        {
+          "id": "etf-holder-attribution",
+          "name": "ETF持有人身份归因",
+          "domain": "ETF",
+          "status": "missing",
+          "action": "new_source",
+          "source_todo": "official-etf-holder-reports"
+        },
+        {
+          "id": "market-microstructure",
+          "name": "订单失衡与冲击成本",
+          "domain": "微观结构",
+          "status": "constrained",
+          "action": "new_source",
+          "source_todo": "level2-microstructure"
+        },
+        {
+          "id": "macro-external-fiscal",
+          "name": "海外政策、外部平衡与财政脉冲",
+          "domain": "宏观",
+          "status": "partial",
+          "action": "new_source",
+          "source_todo": "macro-external-fiscal"
+        },
+        {
+          "id": "industry-operating-drivers",
+          "name": "行业产能、库存、价格与供需",
+          "domain": "行业",
+          "status": "missing",
+          "action": "new_source",
+          "source_todo": "industry-operating-data"
+        }
+      ]
+    },
+    {
+      "name": "stock-technicals",
+      "request": "/api/v1/research/stocks/002420.SZ/technicals?lookback_days=500&chart_points=70&as_of=2026-10-12&include_external=false&include_realtime=false",
+      "http_status": 200,
+      "captured_response_sha256": "39c862e4e57ba0521a36b5edfb5faf26ea0e32bc187984d7f7ae5cadd55c82c4",
+      "meta": {
+        "ts_code": "002420.SZ",
+        "as_of": "2026-10-12",
+        "benchmark": "399006.SZ",
+        "chart_points": 70,
+        "include_external": false,
+        "include_realtime": false,
+        "generated_at": "2026-10-12T15:48:59.427764Z",
+        "provenance": [
+          {
+            "dataset": "stock_daily",
+            "returned": 500
+          },
+          {
+            "dataset": "index_daily",
+            "returned": 500
+          },
+          {
+            "dataset": "adj_factor",
+            "returned": 500
+          },
+          {
+            "dataset": "stock_daily_basic",
+            "returned": 500
+          }
+        ],
+        "price_adjustment": {
+          "dataset": "adj_factor",
+          "status": "partial_history",
+          "matched": 497,
+          "source_rows": 500,
+          "coverage_pct": 99.4,
+          "price_basis": "raw",
+          "latest_factor": 1.018,
+          "warning": "adjustment-factor history is incomplete; the continuous raw price series is returned and adjusted returns/levels are disabled"
+        },
+        "quality": {
+          "status": "warning",
+          "provider_status": "not_requested",
+          "warnings": [
+            "adjustment-factor history is incomplete; the continuous raw price series is returned and adjusted returns/levels are disabled"
+          ]
+        }
+      },
+      "data_keys": [
+        "instrument",
+        "observation",
+        "trend",
+        "momentum",
+        "volatility",
+        "volume_price",
+        "levels",
+        "trend_strength",
+        "candlesticks",
+        "wave_analysis",
+        "chan_analysis",
+        "relative_strength",
+        "total_return",
+        "chart",
+        "timeframes",
+        "long_horizon",
+        "provider_evidence"
+      ],
+      "nested_niumen_status": "ready",
+      "nested_cost_status": "ready"
+    },
+    {
+      "name": "stock-technicals-long",
+      "request": "/api/v1/research/stocks/002420.SZ/technicals?lookback_days=3000&chart_points=70&as_of=2026-10-12&include_external=false&include_realtime=false",
+      "http_status": 200,
+      "captured_response_sha256": "73812e858bf61359e0af510c7c18bc5ed17f60bf5c141e743dc2026a900843e9",
+      "meta": {
+        "ts_code": "002420.SZ",
+        "as_of": "2026-10-12",
+        "benchmark": "399006.SZ",
+        "chart_points": 70,
+        "include_external": false,
+        "include_realtime": false,
+        "generated_at": "2026-10-12T15:50:10.198171Z",
+        "provenance": [
+          {
+            "dataset": "stock_daily",
+            "returned": 3000
+          },
+          {
+            "dataset": "index_daily",
+            "returned": 3000
+          },
+          {
+            "dataset": "adj_factor",
+            "returned": 3000
+          },
+          {
+            "dataset": "stock_daily_basic",
+            "returned": 3000
+          }
+        ],
+        "price_adjustment": {
+          "dataset": "adj_factor",
+          "status": "partial_history",
+          "matched": 2993,
+          "source_rows": 3000,
+          "coverage_pct": 99.7667,
+          "price_basis": "raw",
+          "latest_factor": 1.018,
+          "warning": "adjustment-factor history is incomplete; the continuous raw price series is returned and adjusted returns/levels are disabled"
+        },
+        "quality": {
+          "status": "warning",
+          "provider_status": "not_requested",
+          "warnings": [
+            "adjustment-factor history is incomplete; the continuous raw price series is returned and adjusted returns/levels are disabled"
+          ]
+        }
+      },
+      "data_keys": [
+        "instrument",
+        "observation",
+        "trend",
+        "momentum",
+        "volatility",
+        "volume_price",
+        "levels",
+        "trend_strength",
+        "candlesticks",
+        "wave_analysis",
+        "chan_analysis",
+        "relative_strength",
+        "total_return",
+        "chart",
+        "timeframes",
+        "long_horizon",
+        "provider_evidence"
+      ],
+      "nested_niumen_status": "ready",
+      "nested_cost_status": "ready"
+    },
+    {
+      "name": "valuation",
+      "request": "/api/v1/research/stocks/600519.SH/valuation?lookback_days=730&as_of=2026-10-12&include_external=false",
+      "http_status": 200,
+      "captured_response_sha256": "2b79747f2f5605048c7e141c5018298d5341bc41c408cb4723b12fc932b6a36d",
+      "meta": {
+        "ts_code": "600519.SH",
+        "as_of": "2026-10-12",
+        "lookback_days": 730,
+        "generated_at": "2026-10-12T15:49:18.052486Z",
+        "provenance": [
+          {
+            "dataset": "stock_daily_basic",
+            "returned": 484
+          },
+          {
+            "dataset": "financial_indicator",
+            "returned": 8
+          },
+          {
+            "dataset": "stock peers",
+            "returned": 20
+          }
+        ],
+        "quality": {
+          "status": "ready",
+          "warnings": []
+        }
+      },
+      "data_keys": [
+        "latest",
+        "historical_distribution",
+        "peers",
+        "intrinsic_value_inputs"
+      ],
+      "fair_value": null,
+      "required_assumptions": [
+        "forecast horizon",
+        "terminal growth",
+        "discount rate"
+      ]
+    },
+    {
+      "name": "spot-technicals",
+      "request": "/api/v1/research/instruments/spot/Au99.99/technicals?lookback_days=400&chart_points=30&as_of=2026-10-12",
+      "http_status": 200,
+      "captured_response_sha256": "cb9d96e5f1fbf9e7e7d259f19af7adcc5769a93407bf46352ba8bb3d50793458",
+      "meta": {
+        "asset_type": "spot",
+        "code": "Au99.99",
+        "as_of": "2026-10-12",
+        "generated_at": "2026-10-12T15:49:46.349590Z",
+        "provenance": [
+          {
+            "dataset": "sge_daily",
+            "returned": 400
+          },
+          {
+            "dataset": "index_daily",
+            "returned": 0
+          }
+        ],
+        "price_adjustment": {
+          "status": "not_applicable",
+          "price_basis": "raw"
+        },
+        "quality": {
+          "status": "warning",
+          "warnings": [
+            "fewer than 24 monthly bars"
+          ]
+        }
+      },
+      "data_keys": [
+        "instrument",
+        "timeframes",
+        "long_horizon",
+        "relative_strength"
+      ]
+    },
+    {
+      "name": "etf-technicals",
+      "request": "/api/v1/research/instruments/etf/512480.SH/technicals?lookback_days=400&chart_points=30&as_of=2026-10-12",
+      "http_status": 200,
+      "captured_response_sha256": "3ecb9ea705d207604f95b5642dc5957aef87f533fb61f5d7182fbf1179502d7d",
+      "meta": {
+        "asset_type": "etf",
+        "code": "512480.SH",
+        "as_of": "2026-10-12",
+        "generated_at": "2026-10-12T15:49:46.884553Z",
+        "provenance": [
+          {
+            "dataset": "fund_daily",
+            "returned": 400
+          },
+          {
+            "dataset": "fund_adj",
+            "returned": 400
+          },
+          {
+            "dataset": "index_daily",
+            "returned": 0
+          }
+        ],
+        "price_adjustment": {
+          "dataset": "fund_adj",
+          "status": "applied",
+          "matched": 400,
+          "source_rows": 400,
+          "coverage_pct": 100.0,
+          "price_basis": "latest-factor-adjusted",
+          "latest_factor": 3.9276,
+          "warning": null
+        },
+        "quality": {
+          "status": "warning",
+          "warnings": [
+            "fewer than 24 monthly bars"
+          ]
+        }
+      },
+      "data_keys": [
+        "instrument",
+        "timeframes",
+        "long_horizon",
+        "relative_strength"
+      ]
+    },
+    {
+      "name": "etf-flows",
+      "request": "/api/v1/research/etfs/flows?lookback_observations=5&as_of=2026-10-12",
+      "http_status": 200,
+      "captured_response_sha256": "d7e8f810c2e204fdc8e5bec61c2e5cc64cafff8b4d3715ed4939d7d2284c0648",
+      "meta": {
+        "as_of": "2026-10-12",
+        "lookback_observations": 5,
+        "latest_data_date": null,
+        "baseline_data_date": null,
+        "generated_at": "2026-10-12T15:48:57.616646Z",
+        "methodology": "delta total_share (10k shares) multiplied by latest NAV and divided by 10k gives RMB 100m; grouped by tracked index",
+        "provenance": [
+          "etf_share_size",
+          "etf_basic",
+          "index_daily"
+        ],
+        "quality": {
+          "status": "warning",
+          "funds_analyzed": 0,
+          "exposures_analyzed": 0,
+          "warnings": [
+            "no ETF has enough observations for the requested window",
+            "estimated_flow_yi is a creation/redemption proxy, not an exchange cash-flow ledger",
+            "rotation pairs do not prove that the same investor moved between the two exposures",
+            "investor identity requires official announcements or periodic holder disclosures",
+            "QDII and some cross-border ETF observations may be published later than domestic ETFs"
+          ]
+        }
+      },
+      "data_keys": [
+        "exposures",
+        "funds",
+        "rotation_pairs"
+      ]
+    },
+    {
+      "name": "breadth",
+      "request": "/api/v1/research/market/breadth?as_of=2026-10-12",
+      "http_status": 200,
+      "captured_response_sha256": "ecddf482aad2f60617e09341e22cfce0cedf4baebccde502deb6a1900da639af",
+      "meta": {
+        "as_of": "2026-10-12",
+        "generated_at": "2026-10-12T15:48:59.452883Z",
+        "methodology": "latest market date not later than as_of; moving averages use the latest 20/60 observations",
+        "provenance": [
+          "stock_daily",
+          "limit_list_d"
+        ]
+      },
+      "data_keys": [
+        "trade_date",
+        "securities",
+        "advancing",
+        "declining",
+        "unchanged",
+        "average_return_pct",
+        "median_return_pct",
+        "amount",
+        "above_ma20",
+        "above_ma60",
+        "limit_up",
+        "limit_down",
+        "opened_limits",
+        "advance_decline_ratio",
+        "advance_share_pct",
+        "above_ma20_share_pct",
+        "above_ma60_share_pct"
+      ],
+      "actual_trade_date": "2026-10-12",
+      "securities": 5561
+    }
+  ],
+  "findings": [
+    "Catalog/readiness ready does not certify a particular symbol and window.",
+    "Stock samples returned partial_history/raw despite nested ready indicators; cost/breakout interpretation must stop at the outer adjustment gate. No repair was performed by this skill task.",
+    "ETF-flow readiness was ready but the 5-observation sample returned no analyzed funds; do not infer zero creations/redemptions.",
+    "Spot and ETF price samples succeeded with limited monthly history warnings; global gold fundamentals and ETF product quality still require external official data.",
+    "Valuation returns inputs and null fair_value; no completed DCF or reverse-DCF engine was verified.",
+    "Market breadth returned observations but no meta.quality; inspect date, universe and readiness without fabricating complete coverage."
+  ]
+}

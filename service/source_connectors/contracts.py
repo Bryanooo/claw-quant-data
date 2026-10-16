@@ -67,6 +67,7 @@ class EndpointSpec:
     cache_ttl_seconds: int | None = None
     request_contract: Mapping[str, Any] = field(default_factory=dict)
     completeness_policy: Mapping[str, Any] = field(default_factory=dict)
+    capabilities: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]*", self.endpoint_key):
@@ -76,6 +77,7 @@ class EndpointSpec:
         object.__setattr__(self, "request_contract", MappingProxyType(dict(
             self.request_contract
         )))
+        object.__setattr__(self, "capabilities", MappingProxyType(dict(self.capabilities)))
         object.__setattr__(self, "completeness_policy", MappingProxyType(dict(
             self.completeness_policy
         )))

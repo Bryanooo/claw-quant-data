@@ -65,7 +65,7 @@ def test_catalog_distinguishes_registration_from_observed_raw_coverage():
         "direct_interface_queries": 1,
         "canonical_endpoints": 24,
     }
-    assert research["metrics"]["endpoints"] == 29
+    assert research["metrics"]["endpoints"] == 33
     assert all(item["status"] == "available" for item in research["items"])
 
 
@@ -77,7 +77,7 @@ def test_every_advertised_data_service_endpoint_exists_in_openapi():
         (endpoint["method"], endpoint["path"])
         for endpoint in endpoints
     ]
-    assert len(endpoints) == 64
+    assert len(endpoints) == 68
     assert len(identities) == len(set(identities))
     for endpoint in endpoints:
         assert endpoint["path"] in paths, endpoint["path"]
@@ -86,7 +86,7 @@ def test_every_advertised_data_service_endpoint_exists_in_openapi():
 
 def test_canonical_and_research_catalog_counts_are_stable():
     assert len(CANONICAL_ENDPOINTS) == 24
-    assert len(RESEARCH_ENDPOINTS) == 29
+    assert len(RESEARCH_ENDPOINTS) == 33
 
 
 def test_every_canonical_and_research_service_exposes_complete_lineage():
@@ -105,7 +105,13 @@ def test_every_canonical_and_research_service_exposes_complete_lineage():
         if lineage["data_origin"] == "claw_derived":
             assert lineage["local_datasets"], endpoint["path"]
             assert set(lineage["local_datasets"]) <= registered
-        assert lineage["runtime_external_query"] is False
+        if lineage["runtime_external_query"]:
+            assert endpoint["path"] in {
+                "/api/v1/research/stocks/{ts_code}/fundamentals",
+                "/api/v1/research/stocks/{ts_code}/technicals",
+                "/api/v1/research/stocks/{ts_code}/research-pack",
+            }
+            assert set(lineage["fallback_routes"]) <= set(FINANCIAL_DATA_ROUTES)
 
 
 def test_catalog_endpoint_contract_keeps_sources_and_fallbacks():
@@ -123,7 +129,7 @@ def test_catalog_endpoint_contract_keeps_sources_and_fallbacks():
         for endpoint in layer["endpoints"]
     ]
     validated = [DataServiceEndpoint.model_validate(item) for item in endpoints]
-    assert len(validated) == 64
+    assert len(validated) == 68
     market_bars = next(item for item in validated if item.path.endswith("/market-bars"))
     assert market_bars.upstream_sources == ["tushare", "financial_data"]
     assert market_bars.local_datasets == ["stock_daily"]
@@ -131,4 +137,5 @@ def test_catalog_endpoint_contract_keeps_sources_and_fallbacks():
     fundamentals = next(item for item in validated if item.path.endswith("/fundamentals"))
     assert fundamentals.data_origin == "claw_derived"
     assert "financial_indicator" in fundamentals.local_datasets
-    assert fundamentals.runtime_external_query is False
+    assert fundamentals.runtime_external_query is True
+    assert fundamentals.upstream_sources == ["tushare", "financial_data"]

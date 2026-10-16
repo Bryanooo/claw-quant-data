@@ -1,6 +1,10 @@
 from datetime import date, timedelta
 
-from service.research.volume_price import volume_price_analysis
+from service.research.volume_price import (
+    transaction_cost_lines,
+    transaction_cost_series,
+    volume_price_analysis,
+)
 
 
 def _row(index, close, volume):
@@ -68,3 +72,61 @@ def test_volume_price_analysis_reports_daily_bar_limitations():
     assert result["status"] == "ready"
     assert result["anchored_vwap_proxy"]["status"] == "missing_volume"
     assert "Level-2" in result["limitations"][1]
+
+
+def test_transaction_cost_lines_use_actual_amount_volume_and_adjustment_scale():
+    rows = []
+    for index in range(60):
+        price = 10 + index / 10
+        volume = 100 + index
+        rows.append({
+            "trade_date": date(2026, 1, 1) + timedelta(days=index),
+            "close": price,
+            "vol": volume,
+            # Tushare stock daily: thousand CNY / lots of 100 shares.
+            "amount": price * volume / 10,
+            "_price_adjustment_scale": 0.5 if index < 30 else 1.0,
+        })
+
+    series = transaction_cost_series(
+        rows, 20, amount_to_price_factor=10.0
+    )
+    result = transaction_cost_lines(
+        rows, rows[-1]["close"], amount_to_price_factor=10.0
+    )
+    expected_20 = sum(
+        (10 + index / 10) * (100 + index) for index in range(40, 60)
+    ) / sum(100 + index for index in range(40, 60))
+    expected_60 = sum(
+        (10 + index / 10)
+        * (0.5 if index < 30 else 1.0)
+        * (100 + index)
+        for index in range(60)
+    ) / sum(100 + index for index in range(60))
+
+    assert series[-1] == expected_20
+    assert result["status"] == "ready"
+    assert result["price_basis"] == "latest-factor-adjusted"
+    assert result["windows"]["20_day"]["value"] == round(expected_20, 4)
+    assert result["windows"]["60_day"]["value"] == round(expected_60, 4)
+
+
+def test_transaction_cost_lines_fail_closed_for_missing_amount():
+    rows = [
+        {
+            "trade_date": date(2026, 1, 1) + timedelta(days=index),
+            "close": 10,
+            "vol": 100,
+            "amount": None if index == 59 else 100,
+        }
+        for index in range(60)
+    ]
+
+    result = transaction_cost_lines(
+        rows, 10, amount_to_price_factor=10.0
+    )
+
+    assert result["status"] == "missing_input"
+    assert result["windows"]["20_day"]["status"] == "missing_input"
+    assert result["windows"]["20_day"]["value"] is None
+    assert result["windows"]["60_day"]["usable_observations"] == 59

@@ -16,7 +16,11 @@ def main() -> int:
     parser.add_argument(
         "--component",
         choices=(
-            "scheduler", "worker-v2-routine", "worker-v2-backfill", "auditor"
+            "scheduler",
+            "worker-v2-routine",
+            "worker-v2-backfill",
+            "worker-v2-derived",
+            "auditor",
         ),
         required=True,
     )

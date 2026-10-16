@@ -1,4 +1,6 @@
 from datetime import date, datetime, time
+import inspect
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -124,6 +126,12 @@ class CoverageOverviewRepository:
         return {"queued": 0, "running": 0}
 
 
+def test_latest_audits_materializes_verified_spans_once_per_overview():
+    source = inspect.getsource(CoverageRepository.latest_audits)
+
+    assert "verified_spans AS MATERIALIZED" in source
+
+
 def test_index_daily_rule_requires_a_market_entity_baseline():
     rule = COVERAGE_RULES.get("index_daily")
 
@@ -153,6 +161,13 @@ def test_stock_daily_rules_limit_entity_ratio_to_reconstructable_history():
         assert rule.min_entity_ratio == 0.90
         assert rule.entity_reference_max_age_days == 1825
         assert rule.revision == 2
+
+
+def test_technical_factor_snapshot_starts_at_derived_workflow_launch():
+    rule = COVERAGE_RULES.get("technical_factor_snapshot")
+
+    assert rule.availability_start == date(2026, 10, 9)
+    assert rule.revision == 2
 
 
 def test_next_morning_margin_rules_do_not_expect_same_day_data():
@@ -287,7 +302,7 @@ def test_manual_all_dataset_audit_includes_unscheduled_rules():
         include_unscheduled=True,
     )
 
-    assert result["total"] == len(COVERAGE_RULES.list()) == 194
+    assert result["total"] == len(COVERAGE_RULES.list()) == 196
     assert {item[0] for item in repository.calls} == {
         rule.dataset_name for rule in COVERAGE_RULES.list()
     }
@@ -384,9 +399,9 @@ def test_research_optional_datasets_have_strict_coverage_rules():
     northbound = COVERAGE_RULES.get("hk_hold")
 
     assert chips.strategy is CoverageStrategy.TRADING_DAILY
-    assert chips.entity_reference == "stock_basic"
+    assert chips.entity_reference == "stock_daily"
     assert chips.min_entity_ratio == 0.90
-    assert chips.revision == 2
+    assert chips.revision == 3
     assert segments.strategy is CoverageStrategy.REPORT_QUARTERLY
     assert segments.require_transport_proof is True
     assert segments.revision == 2
@@ -891,7 +906,7 @@ def test_upstream_availability_boundary_does_not_create_fake_history_gaps():
 def test_every_public_dataset_has_an_explicit_coverage_classification():
     rules = COVERAGE_RULES.list()
 
-    assert len(rules) == len(DATASETS.list()) == 194
+    assert len(rules) == len(DATASETS.list()) == 196
     assert {item.dataset_name for item in rules} == {
         item.name for item in DATASETS.list()
     }
@@ -927,10 +942,19 @@ def test_fund_share_is_event_sparse_not_daily_expected():
 def test_only_proven_rules_are_automatically_scheduled():
     scheduled = COVERAGE_RULES.scheduled()
 
-    assert len(scheduled) == 58
+    assert len(scheduled) == 59
     assert all(item.auditable for item in scheduled)
     assert COVERAGE_RULES.get("adj_factor").scheduled is True
     assert COVERAGE_RULES.get("adj_factor").coverage_level == "expected_partitions"
+    assert COVERAGE_RULES.get("adj_factor").availability_start == date(1991, 1, 3)
+    assert COVERAGE_RULES.get("adj_factor").entity_reference == "stock_daily"
+    assert COVERAGE_RULES.get("adj_factor").min_entity_ratio == 1.0
+    assert COVERAGE_RULES.get("adj_factor").revision == 3
+    repository_source = Path(
+        "service/data_coverage/repository.py"
+    ).read_text()
+    assert 'rule.entity_reference == "stock_daily"' in repository_source
+    assert "SELECT DISTINCT daily.trade_date AS partition_date" in repository_source
     assert COVERAGE_RULES.get("ccass_hold").coverage_level == "observed_scope_transport"
     assert COVERAGE_RULES.get("ccass_hold").entity_column == "ts_code"
     assert COVERAGE_RULES.get("ccass_hold_detail").scheduled is False
@@ -949,7 +973,10 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert COVERAGE_RULES.get("ggt_monthly").availability_start == date(2014, 11, 1)
     assert COVERAGE_RULES.get("shibor").strategy.value == "trading_daily"
     assert COVERAGE_RULES.get("cn_lpr").strategy.value == "calendar_monthly"
-    assert COVERAGE_RULES.get("sge_daily").strategy.value == "trading_daily"
+    sge_daily = COVERAGE_RULES.get("sge_daily")
+    assert sge_daily.strategy.value == "trading_daily"
+    assert sge_daily.accept_verified_empty is True
+    assert sge_daily.revision == 4
     etf_share = COVERAGE_RULES.get("etf_share_size")
     assert etf_share.accept_verified_empty is True
     assert etf_share.revision == 4

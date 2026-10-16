@@ -9389,6 +9389,121 @@
       ]
     },
     {
+      "api_name": "us_daily",
+      "table_name": "tushare_norm_us_daily",
+      "schema_version": 1,
+      "date_column": "trade_date",
+      "availability_column": null,
+      "identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "business_identity_fields": [
+        "trade_date",
+        "ts_code"
+      ],
+      "identity_confidence": "contract_reviewed",
+      "current_view": "tushare_current_us_daily",
+      "fields": [
+        {
+          "name": "ts_code",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "股票代码"
+        },
+        {
+          "name": "trade_date",
+          "upstream_type": "str",
+          "sql_type": "DATE",
+          "description": "交易日期"
+        },
+        {
+          "name": "close",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "收盘价"
+        },
+        {
+          "name": "open",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "开盘价"
+        },
+        {
+          "name": "high",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "最高价"
+        },
+        {
+          "name": "low",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "最低价"
+        },
+        {
+          "name": "pre_close",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "昨收价"
+        },
+        {
+          "name": "change",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "涨跌额"
+        },
+        {
+          "name": "pct_change",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "涨跌幅"
+        },
+        {
+          "name": "vol",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "成交量"
+        },
+        {
+          "name": "amount",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "成交额"
+        },
+        {
+          "name": "vwap",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "平均价"
+        },
+        {
+          "name": "turnover_ratio",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "换手率"
+        },
+        {
+          "name": "total_mv",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "总市值"
+        },
+        {
+          "name": "pe",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "PE"
+        },
+        {
+          "name": "pb",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "PB"
+        }
+      ]
+    },
+    {
       "api_name": "us_tbr",
       "table_name": "tushare_norm_us_tbr",
       "schema_version": 1,

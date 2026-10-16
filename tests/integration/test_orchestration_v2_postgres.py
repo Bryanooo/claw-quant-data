@@ -99,17 +99,23 @@ def test_orchestration_v2_read_model_handles_an_installed_control_plane():
         "status",
         "missing_tables",
         "endpoints",
-            "definitions",
-            "executions",
-            "current_executions",
-            "dataset_states",
-            "engine",
-        }
+        "definitions",
+        "executions",
+        "current_executions",
+        "current_active_tasks",
+        "dataset_states",
+        "engine",
+    }
     assert all(
         isinstance(summary[key], dict)
         for key in (
-            "endpoints", "definitions", "executions", "dataset_states",
+            "endpoints", "definitions", "executions", "current_executions",
+            "current_active_tasks", "dataset_states",
         )
+    )
+    assert all(
+        isinstance(task_key, str) and isinstance(count, int) and count > 0
+        for task_key, count in summary["current_active_tasks"].items()
     )
     definitions = repository.list_definitions(limit=51)
     assert len(definitions) <= 51

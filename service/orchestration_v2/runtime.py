@@ -57,6 +57,13 @@ class V2UnsupportedScopeError(V2RuntimeError):
     retryable = False
 
 
+class V2DependencyNotReadyError(V2RuntimeError):
+    """A dependency has not published the same logical observation yet."""
+
+    defer_without_failure = True
+    retry_after_seconds = 120
+
+
 _WHOLE_MARKET_FINANCE_APIS = frozenset({
     "balancesheet",
     "cashflow",
@@ -143,9 +150,12 @@ class OrchestrationV2Runtime:
         if not definition:
             raise V2RuntimeError("execution references a missing task definition")
         document = TaskDefinitionDocument.model_validate(definition["definition"])
-        if document.workflow_kind != WorkflowKind.ACQUISITION:
-            raise V2UnsupportedScopeError(
-                "the first production V2 runtime only executes acquisition tasks"
+        if document.workflow_kind == WorkflowKind.TRANSFORMATION:
+            return self._run_transformation_claimed(
+                execution,
+                document=document,
+                worker_id=worker_id,
+                lease_seconds=lease_seconds,
             )
 
         node_status = dict(execution.get("node_status") or {})
@@ -412,6 +422,195 @@ class OrchestrationV2Runtime:
                 exc=exc,
             )
 
+    def _run_transformation_claimed(
+        self,
+        execution: dict,
+        *,
+        document: TaskDefinitionDocument,
+        worker_id: str,
+        lease_seconds: int,
+    ) -> dict:
+        """Execute one dependency-scoped, code-owned transformation graph."""
+
+        from service.orchestration_v2.transformations import run_transformation
+
+        execution_id = int(execution["task_execution_id"])
+        lease_token = str(execution["lease_token"])
+        node_status = dict(execution.get("node_status") or {})
+        try:
+            with execution_lease_heartbeat(
+                self._repository,
+                execution_id,
+                worker_id,
+                lease_token,
+                lease_seconds,
+            ):
+                self._complete_node(
+                    execution,
+                    node_status,
+                    "condition",
+                    worker_id,
+                    lease_token,
+                    {"purpose": execution["purpose"], "eligible": True},
+                )
+                input_states = self._repository.ready_input_states(
+                    tuple(document.input_datasets),
+                    str(execution["observation_key"]),
+                )
+                missing = sorted(set(document.input_datasets) - set(input_states))
+                if missing:
+                    raise V2DependencyNotReadyError(
+                        "same-scope dependencies are not ready: " + ", ".join(missing)
+                    )
+                self._complete_node(
+                    execution,
+                    node_status,
+                    "dependencies",
+                    worker_id,
+                    lease_token,
+                    {
+                        "ready": True,
+                        "inputs": {
+                            name: {
+                                "dataset_state_id": state["dataset_state_id"],
+                                "revision": state["revision"],
+                            }
+                            for name, state in input_states.items()
+                        },
+                    },
+                )
+                frozen_scope = merge_frozen_scope(
+                    dict(execution.get("frozen_scope") or {}),
+                    {
+                        "observation_key": execution["observation_key"],
+                        "input_dataset_states": {
+                            name: {
+                                "dataset_state_id": state["dataset_state_id"],
+                                "revision": state["revision"],
+                            }
+                            for name, state in input_states.items()
+                        },
+                    },
+                )
+                self._complete_node(
+                    execution,
+                    node_status,
+                    "scope_plan",
+                    worker_id,
+                    lease_token,
+                    frozen_scope,
+                    frozen_scope=frozen_scope,
+                )
+                node_status["transform"] = "running"
+                self._repository.checkpoint_execution(
+                    execution_id,
+                    worker_id=worker_id,
+                    lease_token=lease_token,
+                    current_node_key="transform",
+                    node_status=node_status,
+                )
+                observation_date = execution.get("observation_end")
+                if observation_date is None:
+                    raise V2UnsupportedScopeError(
+                        "transformation requires observation_end"
+                    )
+                transform_result = run_transformation(
+                    document.task_key,
+                    observation_date,
+                    source_execution_id=execution_id,
+                )
+                self._complete_node(
+                    execution,
+                    node_status,
+                    "transform",
+                    worker_id,
+                    lease_token,
+                    transform_result,
+                    collected=True,
+                )
+                execution = self._repository.transition_execution(
+                    execution_id,
+                    expected_status=ExecutionStatus.RUNNING,
+                    target_status=ExecutionStatus.VALIDATING,
+                    worker_id=worker_id,
+                    lease_token=lease_token,
+                    current_node_key="validate",
+                    node_status=node_status,
+                )
+                audit_results = self._audit_outputs(document, execution)
+                node_status["validate"] = "success"
+                self._repository.append_event(
+                    execution_id,
+                    event_type="node.validate.completed",
+                    node_key="validate",
+                    attempt_number=int(execution["attempt_count"]),
+                    payload={
+                        "outputs": {
+                            update.dataset_name: result.status
+                            for result, update, _ in audit_results
+                        }
+                    },
+                )
+                execution = self._repository.transition_execution(
+                    execution_id,
+                    expected_status=ExecutionStatus.VALIDATING,
+                    target_status=ExecutionStatus.PUBLISHING,
+                    worker_id=worker_id,
+                    lease_token=lease_token,
+                    current_node_key="publish",
+                    node_status=node_status,
+                )
+                all_ready = True
+                for _result, update, validation in audit_results:
+                    self._repository.publish_dataset_state(
+                        execution_id,
+                        update,
+                        validation_payload=validation,
+                        evidence_references=[{
+                            "event": "node.transform.completed",
+                            "task_execution_id": execution_id,
+                        }],
+                    )
+                    all_ready = all_ready and update.ready
+                node_status["publish"] = "success"
+                return self._repository.transition_execution(
+                    execution_id,
+                    expected_status=ExecutionStatus.PUBLISHING,
+                    target_status=(
+                        ExecutionStatus.SUCCESS
+                        if all_ready else ExecutionStatus.ATTENTION
+                    ),
+                    worker_id=worker_id,
+                    lease_token=lease_token,
+                    current_node_key="publish",
+                    node_status=node_status,
+                    error_category=None if all_ready else "data_incomplete",
+                    error_message=(
+                        None
+                        if all_ready
+                        else "independent validation did not certify every output"
+                    ),
+                )
+        except Exception as exc:
+            if getattr(exc, "defer_without_failure", False):
+                return self._repository.defer_execution(
+                    execution_id,
+                    delay=timedelta(
+                        seconds=max(int(getattr(exc, "retry_after_seconds", 1)), 1)
+                    ),
+                    worker_id=worker_id,
+                    lease_token=lease_token,
+                    node_status=node_status,
+                    reason=f"{type(exc).__name__}: {exc}",
+                )
+            return self._fail_or_retry(
+                execution_id,
+                worker_id=worker_id,
+                lease_token=lease_token,
+                node_status=node_status,
+                exc=exc,
+            )
+
     def _verified_acquisition_evidence(self, execution_id: int) -> list[dict[str, Any]]:
         """Reuse verified request partitions when any later attempt resumes.
 
@@ -508,7 +707,7 @@ class OrchestrationV2Runtime:
         end = execution.get("observation_end")
         if start is None or end is None:
             raise V2UnsupportedScopeError(
-                "temporal acquisition requires observation_start and observation_end"
+                "temporal workflow requires observation_start and observation_end"
             )
         values = []
         for dataset_name in document.output_datasets:

@@ -60,6 +60,11 @@ class CapturingDatabase:
         self.params = params
         return {"total": 0}
 
+    def execute_one(self, statement, params=()):
+        self.statement = statement
+        self.params = params
+        return {"ts_code": params[0]} if params else None
+
 
 def test_as_of_query_reduces_versions_after_availability_cutoff():
     database = CapturingDatabase()
@@ -111,6 +116,56 @@ def test_research_valuation_queries_use_current_contract():
 
     assert "tushare_current_daily_basic" in database.statement
     assert "tushare_norm_daily_basic" not in database.statement
+
+
+def test_stock_search_uses_security_master_and_ranked_parameterized_matching():
+    database = CapturingDatabase()
+
+    ResearchRepository(database).search_stocks("宁德", limit=12)
+
+    assert "FROM stock_basic" in database.statement
+    assert "name ILIKE %s" in database.statement
+    assert "cnspell ILIKE %s" in database.statement
+    assert "CASE WHEN list_status='L'" in database.statement
+    assert database.params[-1] == 12
+    assert all("宁德" in value for value in database.params[:5])
+
+
+def test_stock_watchlist_uses_dedicated_preference_table_and_bounded_mutations():
+    database = CapturingDatabase()
+    repository = ResearchRepository(database)
+
+    repository.stock_watchlist()
+    assert "FROM sys_stock_watchlist" in database.statement
+    assert "JOIN stock_basic" in database.statement
+
+    repository.add_stock_watchlist("300750.SZ")
+    assert "INSERT INTO sys_stock_watchlist" in database.statement
+    assert "ON CONFLICT (ts_code) DO UPDATE" in database.statement
+    assert database.params == ("300750.SZ",)
+
+    repository.remove_stock_watchlist("300750.SZ")
+    assert "DELETE FROM sys_stock_watchlist" in database.statement
+    assert database.params == ("300750.SZ",)
+
+
+def test_fund_ownership_is_aggregated_in_database_without_row_cap():
+    database = CapturingDatabase()
+
+    ResearchRepository(database).fund_ownership_history(
+        "300750.SZ",
+        start_date=date(2021, 9, 18),
+        as_of=date(2026, 9, 18),
+        periods=8,
+    )
+
+    assert "FROM tushare_norm_fund_portfolio" in database.statement
+    assert "row_number() OVER" in database.statement
+    assert "GROUP BY end_date" in database.statement
+    assert database.params == (
+        "300750.SZ", date(2021, 9, 18), date(2026, 9, 18),
+        date(2026, 9, 18), 8,
+    )
 
 
 def test_investment_calendar_uses_reviewed_current_contract():

@@ -71,15 +71,21 @@ Tushare 存量原始表体量很大。多数据源迁移不会重建它的主键
 Connector 自身必须实施网络超时；Broker 不通过无限后台线程模拟取消。研究层接口只能
 使用已经注册的 Query Connector，不能接收任意 URL 或任意 SQL。
 
+个股基本面、技术面和研究资料包在完成本地确定性计算后，可以通过 Broker 补充
+蚂蚁数据源 研究证据。每条供应商路由独立校验并标记 `available`、`empty` 或
+`unavailable`，单路异常不会丢弃同批次其他证据。Agent 应读取版本化的
+`provider_evidence.normalized` 契约；供应商原始字段只保留在当次响应中用于诊断，
+不会写入原始记录表。历史请求会排除无法执行 `as_of` 截止的实时或当前口径路由。
+
 ## 确定性数据源优先级
 
-外部数据读取不允许在 Tushare 与 Financial Data 之间随机选择，也不允许把两套供应商
+外部数据读取不允许在 Tushare 与 蚂蚁数据源 之间随机选择，也不允许把两套供应商
 原生响应假装成同一种模型：
 
 1. 先查询 Tushare 定时采集并经过数据审计的本地规范数据集；命中且满足请求范围与
-   新鲜度 SLA 时直接返回，不消耗 Financial Data 额度。
+   新鲜度 SLA 时直接返回，不消耗 蚂蚁数据源 额度。
 2. 本地切片确实缺失或不新鲜时，只有路由已经完成代码、日期、单位、字段映射并通过
-   契约测试，才允许由 Financial Data 回退。上游错误不能伪装成空数据。
+   契约测试，才允许由 蚂蚁数据源 回退。上游错误不能伪装成空数据。
 3. 实时快照等本地没有等价数据的能力必须由调用方显式请求；它不会在普通历史查询中
    被静默调用。
 4. 对外响应携带 `served_from`、`read_strategy` 和 `fallback_used`；数据集描述公开
@@ -129,7 +135,7 @@ GET /api/v1/data/canonical/equity-suspensions
 `market-bars` 当前只接受最多 10 个 A 股标准代码、最多 366 天、日频、不复权查询。本地
 `stock_daily` 与交易日历可以覆盖请求时不调用额度源；某个代码整段零行，或存在本地
 开市日缺口时才回退，并且回退行不能覆盖同日期的本地行。
-规范模型把 Tushare 的“手/千元”转换为“股/元”，并验证 Financial Data 返回的周期、
+规范模型把 Tushare 的“手/千元”转换为“股/元”，并验证 蚂蚁数据源 返回的周期、
 复权、代码、字段宽度和日期。
 
 `trading-sessions` 当前提供 A 股开市日。本地 SSE 日历覆盖请求范围时直接返回；本地结果
@@ -139,15 +145,15 @@ GET /api/v1/data/canonical/equity-suspensions
 基金接口同样只返回版本化规范模型。档案把 Tushare 的最低申购金额从万元转换为 CNY，
 把两侧管理费/托管费转换为小数比率；净值只在某只基金的请求区间整段零行时回退，
 不会错误地用股票交易日历推断基金净值缺日；持仓按基金和季度末分区回退，把
-Financial Data 的无后缀股票代码规范为 TS 代码、净值占比从小数比率转换为百分点。
-所有本地行优先，Financial Data 只补本地空切片且不能覆盖本地记录。
-Financial Data 持仓回退只承诺其接口定义的前十大重仓范围，响应元数据以
+蚂蚁数据源 的无后缀股票代码规范为 TS 代码、净值占比从小数比率转换为百分点。
+所有本地行优先，蚂蚁数据源 只补本地空切片且不能覆盖本地记录。
+蚂蚁数据源 持仓回退只承诺其接口定义的前十大重仓范围，响应元数据以
 `fallback_scope=provider_top_10_holdings_only` 明示，不把它误报为完整持仓全集。
 
 股票身份接口保留行业分类来源，避免把 Tushare 旧行业名称与申万二级行业当成同一口径。
 日度估值明确采用 `PE_LYR`、`PE_TTM`、`PB_MRQ`、`PS_LYR`、`PS_TTM`，股息率统一为
 小数比率；Tushare 的万股/万元转换为股/CNY。流通市值没有跨来源等价定义时保持为空，
-不把 Financial Data 的 A/B 股流通市值冒充为 Tushare A 股流通市值。
+不把 蚂蚁数据源 的 A/B 股流通市值冒充为 Tushare A 股流通市值。
 
 财务期间接口要求显式季度末列表，不把尚未披露的季度误判为缺失。利润、现金流和资产
 负债三个分段分别记录 `source_id`、`source_dataset` 与 `disclosure_date`；本地分段始终
@@ -192,9 +198,14 @@ GET /api/v1/data/sources
 GET /api/v1/data/sources/tushare
 GET /api/v1/data/sources/tushare/endpoints?limit=100&offset=0
 GET /api/v1/data/sources/tushare/endpoints/daily
+GET /api/v1/data/sources/financial_data/usage
 ```
 
-Financial Data 的 163 条上游业务路由通过以下接口公开完整依赖分类，而不是只显示一个
+`financial_data/usage` 只汇总脱敏请求元数据、批次状态和实际使用的供应商路由；状态是
+批次级口径，不把成功批次中某条路由的合法空结果误报为失败。Dashboard“数据源”页
+使用同一接口展示真实上游调用、失败批次和研究层接入范围。
+
+蚂蚁数据源 的 163 条上游业务路由通过以下接口公开完整依赖分类，而不是只显示一个
 Connector 总数：
 
 ```http
@@ -211,13 +222,13 @@ GET /api/v1/data/source-priorities/tushare-endpoints?mapping_status=no_financial
 ```
 
 当前四类互斥且覆盖全部路由：29 条本地优先且规范回退已就绪、28 条本地已有重叠但
-Financial Data 适配待完成、4 条实时能力必须依赖 Financial Data、102 条当前没有本地
-规范等价数据。后两类合计 106 条，表示系统今天确实依赖 Financial Data；“无本地规范
+蚂蚁数据源 适配待完成、4 条实时能力必须依赖 蚂蚁数据源、102 条当前没有本地
+规范等价数据。后两类合计 106 条，表示系统今天确实依赖 蚂蚁数据源；“无本地规范
 等价”不应被解释为已经证明 Tushare 完全没有语义相近接口。
 
 供应商能力使用另一组四类互斥口径覆盖同一批 163 条路由：26 条 Tushare
 直接等价、34 条可确定性派生、22 条可从 Tushare A 股公告原文解析、81 条必须
-依赖 Financial Data 才能满足完整合同。81 条中有 52 条存在 Tushare 局部重叠，
+依赖 蚂蚁数据源 才能满足完整合同。81 条中有 52 条存在 Tushare 局部重叠，
 但由于市场、字段、来源口径或实时性不完整，禁止将其提升为完整等价。响应会同时
 给出每个 Tushare 接口的当前 Token 权限；能力存在、Token 可用和本地规范适配器
 就绪是三个独立状态。
@@ -251,7 +262,7 @@ Financial Data 适配待完成、4 条实时能力必须依赖 Financial Data、
 
 ## 尚未完成的边界
 
-- Financial Data 已作为受额度约束的查询穿透来源接入；免费替代源仍按
+- 蚂蚁数据源 已作为受额度约束的查询穿透来源接入；免费替代源仍按
   [免费替代源评估](FREE_DATA_SOURCE_ALTERNATIVES.md) 逐项实施。
 - `stream` 目前只有契约，尚无生产消费者、offset 与回放能力。
 - 多来源冲突解决目前只有数据集级 `merge_policy` 字段，具体优先级、时间对齐和差异审计

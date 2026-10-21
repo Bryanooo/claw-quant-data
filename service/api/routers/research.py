@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from service.api.dependencies import ResearchServiceDependency, get_data_health_service
 from service.data_health import DataHealthService
 from service.research.validation import validation_catalog
+from service.research.factor_inputs import factor_input_catalog
 
 
 router = APIRouter(prefix="/v1/research", tags=["research"])
@@ -30,6 +31,13 @@ def research_capabilities(service: ResearchServiceDependency) -> dict:
     # Strict runtime data state has its own endpoint and is intentionally not
     # hidden behind (or recomputed by) catalog discovery.
     return service.capabilities()
+
+
+@router.get("/factor-inputs")
+def factor_inputs() -> dict:
+    """Return versioned observation bundles consumable by factor-lab."""
+
+    return factor_input_catalog()
 
 
 @router.get("/readiness")
@@ -209,6 +217,53 @@ def stock_repurchase_progress(
     return service.repurchase_progress(
         ts_code.upper(), benchmark=benchmark.upper(), as_of=as_of
     )
+
+
+@router.get("/stocks/{ts_code}/chips")
+def stock_chips(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=120, ge=20, le=500),
+    as_of: date | None = None,
+) -> dict:
+    return service.stock_chips(
+        ts_code.upper(), lookback_days=lookback_days, as_of=as_of
+    )
+
+
+@router.get("/stocks/{ts_code}/events")
+def stock_events(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=365, ge=30, le=1825),
+    as_of: date | None = None,
+) -> dict:
+    return service.stock_events(
+        ts_code.upper(), lookback_days=lookback_days, as_of=as_of
+    )
+
+
+@router.get("/stocks/{ts_code}/sector-context")
+def stock_sector_context(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    provider: str = Query(default="ths", pattern=r"^(ths|dc|tdx)$"),
+    lookback_days: int = Query(default=20, ge=5, le=60),
+    as_of: date | None = None,
+) -> dict:
+    return service.stock_sector_context(
+        ts_code.upper(), provider=provider,
+        lookback_days=lookback_days, as_of=as_of,
+    )
+
+
+@router.get("/stocks/{ts_code}/industry-chain")
+def stock_industry_chain(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    as_of: date | None = None,
+) -> dict:
+    return service.stock_industry_chain(ts_code.upper(), as_of=as_of)
 
 
 @router.get("/stocks/{ts_code}/event-study")

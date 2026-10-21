@@ -64,6 +64,45 @@ class V2DependencyNotReadyError(V2RuntimeError):
     retry_after_seconds = 120
 
 
+class V2TransformationNotPublishableError(V2RuntimeError):
+    """A transform persisted diagnostics but did not produce publishable data."""
+
+    retryable = False
+
+
+def require_publishable_transformation(result: dict[str, Any]) -> None:
+    """Prevent a diagnostic output row from certifying dataset readiness."""
+
+    if result.get("publishable", True) is False:
+        raise V2TransformationNotPublishableError(
+            f"{result.get('dataset', 'transformation')} output is not publishable: "
+            f"status={result.get('status', 'unknown')}"
+        )
+
+
+def allow_transform_owned_historical_validation(
+    document: TaskDefinitionDocument,
+    execution: dict[str, Any],
+) -> bool:
+    """Allow one governed historical transform to reconcile legacy inputs.
+
+    Historical business rows predate V2 dataset-state records. This narrow
+    path still requires the transformation to reconcile its source rows and
+    pass the normal independent output audit before publication.
+    """
+
+    return (
+        document.task_key in {
+            "fama_french_daily",
+            "technical_factor_snapshot",
+        }
+        and execution.get("purpose") in {"initialization", "backfill", "repair"}
+        and (execution.get("frozen_scope") or {}).get(
+            "historical_source_validation"
+        ) == "transform_owned"
+    )
+
+
 _WHOLE_MARKET_FINANCE_APIS = frozenset({
     "balancesheet",
     "cashflow",
@@ -361,20 +400,25 @@ class OrchestrationV2Runtime:
                     current_node_key="publish",
                     node_status=node_status,
                 )
-                all_ready = True
-                for _result, update, validation in audit_results:
-                    self._repository.publish_dataset_state(
-                        execution_id,
-                        update,
-                        validation_payload=validation,
-                        evidence_references=[
-                            {
-                                "event": "node.acquire.request_completed",
-                                "task_execution_id": execution_id,
-                            }
-                        ],
-                    )
-                    all_ready = all_ready and update.ready
+                self._repository.publish_dataset_states(
+                    execution_id,
+                    [
+                        (
+                            update,
+                            validation,
+                            [
+                                {
+                                    "event": "node.acquire.request_completed",
+                                    "task_execution_id": execution_id,
+                                }
+                            ],
+                        )
+                        for _result, update, validation in audit_results
+                    ],
+                )
+                all_ready = all(
+                    update.ready for _result, update, _validation in audit_results
+                )
                 node_status["publish"] = "success"
                 target = (
                     ExecutionStatus.SUCCESS
@@ -458,7 +502,13 @@ class OrchestrationV2Runtime:
                     str(execution["observation_key"]),
                 )
                 missing = sorted(set(document.input_datasets) - set(input_states))
-                if missing:
+                transform_owned_history = bool(
+                    missing
+                    and allow_transform_owned_historical_validation(
+                        document, execution
+                    )
+                )
+                if missing and not transform_owned_history:
                     raise V2DependencyNotReadyError(
                         "same-scope dependencies are not ready: " + ", ".join(missing)
                     )
@@ -470,6 +520,12 @@ class OrchestrationV2Runtime:
                     lease_token,
                     {
                         "ready": True,
+                        "validation_mode": (
+                            "transform_owned_historical_reconciliation"
+                            if transform_owned_history
+                            else "dataset_state"
+                        ),
+                        "missing_dataset_states": missing,
                         "inputs": {
                             name: {
                                 "dataset_state_id": state["dataset_state_id"],
@@ -519,6 +575,7 @@ class OrchestrationV2Runtime:
                     observation_date,
                     source_execution_id=execution_id,
                 )
+                require_publishable_transformation(transform_result)
                 self._complete_node(
                     execution,
                     node_status,
@@ -560,18 +617,23 @@ class OrchestrationV2Runtime:
                     current_node_key="publish",
                     node_status=node_status,
                 )
-                all_ready = True
-                for _result, update, validation in audit_results:
-                    self._repository.publish_dataset_state(
-                        execution_id,
-                        update,
-                        validation_payload=validation,
-                        evidence_references=[{
-                            "event": "node.transform.completed",
-                            "task_execution_id": execution_id,
-                        }],
-                    )
-                    all_ready = all_ready and update.ready
+                self._repository.publish_dataset_states(
+                    execution_id,
+                    [
+                        (
+                            update,
+                            validation,
+                            [{
+                                "event": "node.transform.completed",
+                                "task_execution_id": execution_id,
+                            }],
+                        )
+                        for _result, update, validation in audit_results
+                    ],
+                )
+                all_ready = all(
+                    update.ready for _result, update, _validation in audit_results
+                )
                 node_status["publish"] = "success"
                 return self._repository.transition_execution(
                     execution_id,
@@ -759,6 +821,34 @@ class OrchestrationV2Runtime:
                 item["acquisition_endpoint_id"],
             ),
         )[0]
+        if selected["source_id"] == "financial_data":
+            # 蚂蚁数据源 scheduled pulls are partition-free: the acquire node
+            # resolves route parameters (market-wide ranking or local
+            # security-master symbol batches) inside the connector, so one
+            # source_endpoint job covers the whole observation period.
+            payload = {
+                "source_id": "financial_data",
+                "endpoint_key": selected["endpoint_key"],
+                "acquisition_mode": "scheduled_pull",
+                "parameters": {},
+                "complete": True,
+                "resume": True,
+            }
+            return (BatchChildSpec(
+                task_name="source_endpoint",
+                parameters=payload,
+                idempotency_key=(
+                    f"v2:financial:{selected['endpoint_key']}:"
+                    f"{execution['observation_key']}"
+                ),
+                api_name=selected["endpoint_key"],
+                cadence=selected.get("cadence") or "daily",
+                period_key=execution["observation_key"],
+                expected_for=execution["observation_end"],
+                handler=TASKS.handler_metadata("source_endpoint", payload),
+                priority=30,
+                resource_class=selected["resource_class"] or "generic",
+            ),)
         if selected["source_id"] != "tushare":
             raise V2UnsupportedScopeError(
                 f"V2 bounded history runtime is not implemented for "
@@ -767,6 +857,40 @@ class OrchestrationV2Runtime:
         start = execution["observation_start"]
         end = execution["observation_end"]
         api_name = selected["endpoint_key"]
+        policy = TusharePolicyRegistry().get(api_name)
+        if policy.parameter_strategy == "manual":
+            frozen_scope = execution.get("frozen_scope") or {}
+            if "manual_parameters" not in frozen_scope:
+                raise V2UnsupportedScopeError(
+                    f"manual task {api_name} requires frozen_scope.manual_parameters"
+                )
+            parameters = frozen_scope["manual_parameters"]
+            if not isinstance(parameters, dict):
+                raise V2UnsupportedScopeError(
+                    "frozen_scope.manual_parameters must be an object"
+                )
+            payload = {
+                "api_name": api_name,
+                "parameters": parameters,
+                "complete": True,
+                "page_size": policy.page_size,
+                "max_pages": policy.max_pages,
+                "resume": True,
+            }
+            return (BatchChildSpec(
+                task_name="tushare_interface",
+                parameters=payload,
+                idempotency_key=(
+                    f"v2:manual:{api_name}:{execution['observation_key']}"
+                ),
+                api_name=api_name,
+                cadence="manual",
+                period_key=execution["observation_key"],
+                expected_for=end,
+                handler=TASKS.handler_metadata("tushare_interface", payload),
+                priority=30,
+                resource_class="backfill",
+            ),)
         if api_name in _WHOLE_MARKET_FINANCE_APIS:
             return (
                 self._period_finance_spec(
@@ -793,14 +917,23 @@ class OrchestrationV2Runtime:
             # details inside the acquire node. They must not become separate
             # workflow executions: one logical observation day still has one
             # execution, one validation decision and one dataset state.
-            policy = TusharePolicyRegistry().get(api_name)
             return tuple(
                 self._static_fanout_spec(
                     api_name=api_name,
                     parameter_name=fanout.parameter_name,
                     parameter_value=value,
-                    scope_kind=fanout.scope,
-                    observation_date=end,
+                    scope_kind=(
+                        "date_window"
+                        if (
+                            fanout.allow_date_window
+                            and start is not None
+                            and end is not None
+                            and start != end
+                        )
+                        else fanout.scope
+                    ),
+                    observation_start=start,
+                    observation_end=end,
                     purpose=execution["purpose"],
                     policy=policy,
                 )
@@ -813,6 +946,7 @@ class OrchestrationV2Runtime:
                 observation_start=start,
                 observation_end=end,
                 purpose=execution["purpose"],
+                frozen_scope=execution.get("frozen_scope") or {},
             )
         # Routine collection uses the endpoint's current operational policy.
         # History recipes deliberately favor start/end windows and fan-outs;
@@ -929,53 +1063,111 @@ class OrchestrationV2Runtime:
         observation_start,
         observation_end,
         purpose: str,
+        frozen_scope: dict[str, Any] | None = None,
     ) -> tuple[BatchChildSpec, ...]:
         values = list_fanout_values(fanout.source, as_of=observation_end)
         if not values:
             raise V2UnsupportedScopeError(
                 f"fan-out dependency {fanout.source} has no available values"
             )
-        compact_start = observation_start.strftime("%Y%m%d")
-        compact_end = observation_end.strftime("%Y%m%d")
-        if fanout.scope == "none":
-            scope = {}
-        elif fanout.scope == "trade_date":
-            scope = {"trade_date": compact_end}
-        elif fanout.scope == "ann_date":
-            scope = {"ann_date": compact_end}
-        elif fanout.scope == "period":
-            scope = {"period": compact_end}
-        else:
-            scope = {"start_date": compact_start, "end_date": compact_end}
+        requested_values = (frozen_scope or {}).get("fanout_values")
+        if requested_values is not None:
+            if (
+                not isinstance(requested_values, list)
+                or not requested_values
+                or any(not isinstance(value, str) for value in requested_values)
+            ):
+                raise V2UnsupportedScopeError(
+                    "frozen_scope.fanout_values must be a non-empty string list"
+                )
+            unknown = sorted(set(requested_values) - set(values))
+            if unknown:
+                raise V2UnsupportedScopeError(
+                    "frozen fan-out values are outside the governed universe: "
+                    + ", ".join(unknown[:10])
+                )
+            values = list(dict.fromkeys(requested_values))
+
+        if api_name == "factor_value" and observation_start == observation_end:
+            # A provider quota can stop an execution after some factor-name
+            # requests have committed. Presence of one factor on the exact
+            # date proves that atomic child completed, so resume only missing
+            # factors instead of spending calls on already stored factors.
+            existing = {
+                str(row["factor_name"])
+                for row in query(
+                    """
+                    SELECT DISTINCT factor_name
+                    FROM tushare_norm_factor_value
+                    WHERE trade_date=%s AND factor_name IS NOT NULL
+                      AND factor_name<>''
+                    """,
+                    (observation_end,),
+                )
+            }
+            values = [value for value in values if value not in existing]
+
+        scope_kind = (
+            "date_window"
+            if (
+                fanout.allow_date_window
+                and observation_start != observation_end
+            )
+            else fanout.scope
+        )
+        windows = [(observation_start, observation_end)]
+        if scope_kind == "date_window":
+            windows = []
+            cursor = observation_start
+            while cursor <= observation_end:
+                window_end = min(
+                    observation_end,
+                    cursor + timedelta(days=fanout.max_window_days - 1),
+                )
+                windows.append((cursor, window_end))
+                cursor = window_end + timedelta(days=1)
         policy = TusharePolicyRegistry().get(api_name)
         specs: list[BatchChildSpec] = []
-        for offset in range(0, len(values), fanout.batch_size):
-            chunk = values[offset : offset + fanout.batch_size]
-            joined = ",".join(chunk)
-            parameters = {**scope, fanout.parameter_name: joined}
-            payload = {
-                "api_name": api_name,
-                "parameters": parameters,
-                "complete": True,
-                "page_size": policy.page_size,
-                "max_pages": max(policy.max_pages, 1000),
-                "resume": True,
-            }
-            specs.append(BatchChildSpec(
-                task_name="tushare_interface",
-                parameters=payload,
-                idempotency_key=(
-                    f"v2:{purpose}:{api_name}:{observation_start.isoformat()}:"
-                    f"{observation_end.isoformat()}:{fanout.parameter_name}:{joined}"
-                ),
-                api_name=api_name,
-                cadence="daily" if purpose == "daily" else "backfill",
-                period_key=observation_end.isoformat(),
-                expected_for=observation_end,
-                handler=TASKS.handler_metadata("tushare_interface", payload),
-                priority=80 if purpose == "daily" else 30,
-                resource_class="generic" if purpose == "daily" else "backfill",
-            ))
+        for window_start, window_end in windows:
+            compact_start = window_start.strftime("%Y%m%d")
+            compact_end = window_end.strftime("%Y%m%d")
+            if scope_kind == "none":
+                scope = {}
+            elif scope_kind == "trade_date":
+                scope = {"trade_date": compact_end}
+            elif scope_kind == "ann_date":
+                scope = {"ann_date": compact_end}
+            elif scope_kind == "period":
+                scope = {"period": compact_end}
+            else:
+                scope = {"start_date": compact_start, "end_date": compact_end}
+            for offset in range(0, len(values), fanout.batch_size):
+                chunk = values[offset : offset + fanout.batch_size]
+                joined = ",".join(chunk)
+                parameters = {**scope, fanout.parameter_name: joined}
+                payload = {
+                    "api_name": api_name,
+                    "parameters": parameters,
+                    "complete": True,
+                    "page_size": policy.page_size,
+                    "max_pages": max(policy.max_pages, 1000),
+                    "resume": True,
+                }
+                specs.append(BatchChildSpec(
+                    task_name="tushare_interface",
+                    parameters=payload,
+                    idempotency_key=(
+                        f"v2:{purpose}:{api_name}:{window_start.isoformat()}:"
+                        f"{window_end.isoformat()}:{fanout.parameter_name}:{joined}"
+                    ),
+                    api_name=api_name,
+                    cadence="daily" if purpose == "daily" else "backfill",
+                    period_key=observation_end.isoformat(),
+                    expected_for=observation_end,
+                    handler=TASKS.handler_metadata("tushare_interface", payload),
+                    priority=80 if purpose == "daily" else 30,
+                    resource_class="generic" if purpose == "daily" else "backfill",
+                ))
         return tuple(specs)
 
     @staticmethod
@@ -985,19 +1177,21 @@ class OrchestrationV2Runtime:
         parameter_name: str,
         parameter_value: str,
         scope_kind: str,
-        observation_date,
+        observation_start,
+        observation_end,
         purpose: str,
         policy,
     ) -> BatchChildSpec:
-        compact_date = observation_date.strftime("%Y%m%d")
+        compact_start = observation_start.strftime("%Y%m%d")
+        compact_end = observation_end.strftime("%Y%m%d")
         scope_parameters = {
             "none": {},
-            "trade_date": {"trade_date": compact_date},
-            "ann_date": {"ann_date": compact_date},
-            "period": {"period": compact_date},
+            "trade_date": {"trade_date": compact_end},
+            "ann_date": {"ann_date": compact_end},
+            "period": {"period": compact_end},
             "date_window": {
-                "start_date": compact_date,
-                "end_date": compact_date,
+                "start_date": compact_start,
+                "end_date": compact_end,
             },
         }
         parameters = {
@@ -1016,13 +1210,14 @@ class OrchestrationV2Runtime:
             task_name="tushare_interface",
             parameters=payload,
             idempotency_key=(
-                f"v2:{purpose}:{api_name}:{observation_date.isoformat()}:"
+                f"v2:{purpose}:{api_name}:{observation_start.isoformat()}:"
+                f"{observation_end.isoformat()}:"
                 f"{parameter_name}:{parameter_value}"
             ),
             api_name=api_name,
             cadence="daily" if purpose == "daily" else "backfill",
-            period_key=observation_date.isoformat(),
-            expected_for=observation_date,
+            period_key=observation_end.isoformat(),
+            expected_for=observation_end,
             handler=TASKS.handler_metadata("tushare_interface", payload),
             priority=80 if purpose == "daily" else 30,
             resource_class="generic" if purpose == "daily" else "backfill",

@@ -15,8 +15,10 @@ from service.data_service.models import InvalidQueryError, RecordNotFoundError
 from service.research.catalog import capability_catalog
 from service.research.technical_indicators import (
     aroon as _aroon,
+    common_indicator_pack as _common_indicator_pack,
     downside_risk as _downside_risk,
     gap_analysis as _gap_analysis,
+    parameterized_indicator_pack as _parameterized_indicator_pack,
     niumen_breakout_lines as _niumen_breakout_lines,
     niumen_breakout_series as _niumen_breakout_series,
     parabolic_sar as _parabolic_sar,
@@ -1244,8 +1246,15 @@ def _timeframe_analysis(
     highs = [float(_number(row.get("high"))) for row in prices]
     lows = [float(_number(row.get("low"))) for row in prices]
     volumes = [_number(row.get("vol")) or 0 for row in prices]
-    ema12 = _ema_series(closes, 12)
-    ema26 = _ema_series(closes, 26)
+    common_indicators = _common_indicator_pack(highs, lows, closes, volumes)
+    parameterized_indicators = _parameterized_indicator_pack(
+        opens, highs, lows, closes, volumes, timeframe=timeframe
+    )
+    parameterized_latest = parameterized_indicators["latest"]
+    common_series = common_indicators["series"]
+    common_latest = common_indicators["latest"]
+    ema12 = common_series["ema_12"]
+    ema26 = common_series["ema_26"]
     macd_line = [left - right for left, right in zip(ema12, ema26)]
     signal_line = _ema_series(macd_line, 9)
     true_ranges = [
@@ -1258,12 +1267,19 @@ def _timeframe_analysis(
     ]
     returns = [current / previous - 1 for previous, current in pairwise(closes) if previous]
     latest_close = closes[-1]
-    ma = {str(window): _round(_moving_average(closes, window)) for window in (5, 10, 20, 60, 120, 250)}
-    ma_series = {
-        window: _sma_series(closes, window)
-        for window in (5, 10, 20, 60, 120, 250)
+    ma = {
+        window: _round(value)
+        for window, value in parameterized_latest["sma"].items()
     }
-    trend_score = sum(latest_close > value for value in (ma["20"], ma["60"], ma["120"]) if value is not None)
+    ma_series = parameterized_indicators["series"]["sma"]
+    trend_windows = [
+        window for window in ("20", "60", "120") if window in ma
+    ]
+    trend_score = sum(
+        latest_close > ma[window]
+        for window in trend_windows if ma[window] is not None
+    )
+    available_trend_windows = sum(ma[window] is not None for window in trend_windows)
     atr14 = mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None
     kdj_k, kdj_d, kdj_j = _stochastic(highs, lows, closes)
     adx14, plus_di14, minus_di14 = _adx(highs, lows, closes)
@@ -1335,10 +1351,45 @@ def _timeframe_analysis(
             "macd": _round(macd_line[index]),
             "macd_signal": _round(signal_line[index]),
             "macd_histogram": _round(macd_line[index] - signal_line[index]),
-            "ma_5": _round(ma_series[5][index]), "ma_10": _round(ma_series[10][index]),
-            "ma_20": _round(ma_series[20][index]), "ma_60": _round(ma_series[60][index]),
-            "ma_120": _round(ma_series[120][index]), "ma_250": _round(ma_series[250][index]),
+            "ma_5": _round(ma_series.get(5, [None] * len(prices))[index]),
+            "ma_10": _round(ma_series.get(10, [None] * len(prices))[index]),
+            "ma_20": _round(ma_series.get(20, [None] * len(prices))[index]),
+            "ma_60": _round(ma_series.get(60, [None] * len(prices))[index]),
+            "ma_120": _round(ma_series.get(120, [None] * len(prices))[index]),
+            "ma_250": _round(ma_series.get(250, [None] * len(prices))[index]),
+            "sma_family": {
+                str(window): _round(values[index])
+                for window, values in ma_series.items()
+            },
+            "ema_family": {
+                str(window): _round(values[index])
+                for window, values in parameterized_indicators["series"]["ema"].items()
+            },
             "ema_12": _round(ema12[index]), "ema_26": _round(ema26[index]),
+            "ema_20": _round(common_series["ema_20"][index]),
+            "ema_50": _round(common_series["ema_50"][index]),
+            "ema_200": _round(common_series["ema_200"][index]),
+            "bbi": _round(common_series["bbi"][index]),
+            "bias_6": _round(common_series["bias_6"][index]),
+            "bias_12": _round(common_series["bias_12"][index]),
+            "bias_24": _round(common_series["bias_24"][index]),
+            "ppo": _round(common_series["ppo"][index]),
+            "ppo_signal": _round(common_series["ppo_signal"][index]),
+            "ppo_histogram": _round(common_series["ppo_histogram"][index]),
+            "natr_14": _round(common_series["natr_14"][index]),
+            "keltner_middle": _round(common_series["keltner_middle"][index]),
+            "keltner_upper": _round(common_series["keltner_upper"][index]),
+            "keltner_lower": _round(common_series["keltner_lower"][index]),
+            "ttm_squeeze_on": common_series["ttm_squeeze_on"][index],
+            "ttm_squeeze_momentum": _round(common_series["ttm_squeeze_momentum"][index]),
+            "trix_12": _round(common_series["trix_12"][index]),
+            "trix_signal_9": _round(common_series["trix_signal_9"][index]),
+            "pvt": _round(common_series["pvt"][index]),
+            "pvt_change_20": _round(common_series["pvt_change_20"][index]),
+            "vroc_12": _round(common_series["vroc_12"][index]),
+            "vroc_20": _round(common_series["vroc_20"][index]),
+            "force_index_13": _round(common_series["force_index_13"][index]),
+            "force_index_13_normalized": _round(common_series["force_index_13_normalized"][index]),
             **(
                 {
                     "cost_20": _round(cost_20_series[index]),
@@ -1361,6 +1412,29 @@ def _timeframe_analysis(
             "bollinger_middle": _round(average),
             "bollinger_upper": _round(average + 2 * deviation) if average is not None and deviation is not None else None,
             "bollinger_lower": _round(average - 2 * deviation) if average is not None and deviation is not None else None,
+            "bollinger_percent_b": _round(
+                parameterized_indicators["series"]
+                ["bollinger_percent_b_20_2"][index]
+            ),
+            "bollinger_bandwidth_pct": _round(
+                parameterized_indicators["series"]
+                ["bollinger_bandwidth_20_2_pct"][index]
+            ),
+            "rsi_family": {
+                str(window): _round(values[index])
+                for window, values in parameterized_indicators["series"]["rsi"].items()
+            },
+            "roc_family_pct": {
+                str(window): _round(values[index])
+                for window, values in parameterized_indicators["series"]["roc"].items()
+            },
+            "cci_family": {
+                str(window): _round(values[index])
+                for window, values in parameterized_indicators["series"]["cci"].items()
+            },
+            "tsi_25_13": _round(
+                parameterized_indicators["series"]["tsi_25_13"][index]
+            ),
         })
     minimum_history = {"1d": 60, "1w": 52, "1mo": 24}[timeframe]
     return {
@@ -1375,12 +1449,36 @@ def _timeframe_analysis(
         "trend": {
             "moving_averages": ma,
             "ema_12": _round(ema12[-1]), "ema_26": _round(ema26[-1]),
+            "exponential_moving_averages": {
+                window: _round(value)
+                for window, value in parameterized_latest["ema"].items()
+            },
+            "bbi": {
+                "value": _round(common_latest["bbi"]),
+                "distance_from_close_pct": _round(common_latest["bbi_distance_pct"]),
+                "windows": [3, 6, 12, 24],
+            },
+            "bias": {
+                str(window): _round(common_latest[f"bias_{window}"])
+                for window in (6, 12, 24)
+            },
+            "trix": {
+                "value": _round(common_latest["trix_12"]),
+                "signal": _round(common_latest["trix_signal_9"]),
+                "histogram": _round(common_latest["trix_histogram"]),
+                "parameters": [12, 9],
+            },
             "macd": _round(macd_line[-1]), "macd_signal": _round(signal_line[-1]),
-            "regime": "bullish" if trend_score == 3 else "bearish" if trend_score == 0 else "mixed",
+            "regime": (
+                "bullish"
+                if available_trend_windows and trend_score == available_trend_windows
+                else "bearish" if available_trend_windows and trend_score == 0
+                else "mixed"
+            ),
             "bull_bear_boundary": {
-                "value": ma["250"],
+                "value": ma.get("250"),
                 "alias": f"MA250 ({timeframe})",
-                "state": "above" if ma["250"] is not None and latest_close > ma["250"] else "below" if ma["250"] is not None else "unavailable",
+                "state": "above" if ma.get("250") is not None and latest_close > ma["250"] else "below" if ma.get("250") is not None else "not_applicable",
             },
             "weighted_trend": {
                 "bull_line": _round(bull_line), "bear_line": _round(bear_line),
@@ -1409,14 +1507,57 @@ def _timeframe_analysis(
             "williams_r_14": _round(_williams_r(highs, lows, closes)),
             "cci_20": _round(_cci(highs, lows, closes)),
             "mfi_14": _round(_mfi(highs, lows, closes, volumes)),
+            "ppo_12_26_9": {
+                "value": _round(common_latest["ppo"]),
+                "signal": _round(common_latest["ppo_signal"]),
+                "histogram": _round(common_latest["ppo_histogram"]),
+            },
+            "rsi_family": {
+                window: _round(value)
+                for window, value in parameterized_latest["rsi"].items()
+            },
+            "roc_family_pct": {
+                window: _round(value)
+                for window, value in parameterized_latest["roc"].items()
+            },
+            "cci_family": {
+                window: _round(value)
+                for window, value in parameterized_latest["cci"].items()
+            },
+            "tsi_25_13": _round(parameterized_latest["tsi_25_13"]),
         },
         "volatility": {
             "atr_14": _round(atr14),
+            "natr_14_pct": _round(common_latest["natr_14"]),
+            "keltner_20_2": {
+                "lower": _round(common_latest["keltner_lower"]),
+                "middle": _round(common_latest["keltner_middle"]),
+                "upper": _round(common_latest["keltner_upper"]),
+            },
+            "ttm_squeeze": {
+                "on": common_latest["ttm_squeeze_on"],
+                "momentum": _round(common_latest["ttm_squeeze_momentum"]),
+                "rule": "Bollinger(20,2σ) inside Keltner(EMA20,1.5×Wilder ATR20)",
+            },
             "annualized_volatility_20_period_pct": _round(pstdev(returns[-20:]) * sqrt(periods_per_year) * 100 if len(returns) >= 20 else None),
             "bollinger_20": {
                 "lower": _round(boll_mid - 2 * boll_std if boll_mid is not None and boll_std is not None else None),
                 "middle": _round(boll_mid),
                 "upper": _round(boll_mid + 2 * boll_std if boll_mid is not None and boll_std is not None else None),
+                "percent_b": _round(
+                    parameterized_latest["bollinger_20_2"]["percent_b"]
+                ),
+                "bandwidth_pct": _round(
+                    parameterized_latest["bollinger_20_2"]["bandwidth_pct"]
+                ),
+            },
+            "atr_family": {
+                window: _round(value)
+                for window, value in parameterized_latest["atr"].items()
+            },
+            "natr_family_pct": {
+                window: _round(value)
+                for window, value in parameterized_latest["natr"].items()
             },
             "max_drawdown_pct": _round(_max_drawdown(closes)),
             "downside_risk": _downside_risk(returns, periods_per_year),
@@ -1431,6 +1572,14 @@ def _timeframe_analysis(
                 )
             ),
             "obv": _round(obv_series[-1]),
+            "pvt": _round(common_latest["pvt"]),
+            "pvt_change_20": _round(common_latest["pvt_change_20"]),
+            "vroc_12_pct": _round(common_latest["vroc_12"]),
+            "vroc_20_pct": _round(common_latest["vroc_20"]),
+            "force_index_13": _round(common_latest["force_index_13"]),
+            "force_index_13_normalized_pct": _round(
+                common_latest["force_index_13_normalized"]
+            ),
             "chaikin_money_flow_20": _round(
                 _chaikin_money_flow(highs, lows, closes, volumes)
             ),
@@ -1449,15 +1598,26 @@ def _timeframe_analysis(
             "classic_pivots": pivot_systems.get("classic", {}),
             "fibonacci_retracement": fibonacci_retracement,
             "gaps": _gap_analysis(prices[-500:]),
+            "continuous_structure": parameterized_latest["structure"],
         },
         "trend_strength": {"adx_14": _round(adx14), "plus_di_14": _round(plus_di14), "minus_di_14": _round(minus_di14)},
-        "candlesticks": {"patterns": _candlestick_patterns(prices)},
+        "candlesticks": {
+            "patterns": _candlestick_patterns(prices),
+            "latest_geometry": parameterized_latest["candle_geometry"],
+        },
         "wave_analysis": {
             "status": "candidate_only", "method": "volatility-adjusted ZigZag",
             "threshold_pct": _round(threshold_pct), "pivots": zigzag, "legs": legs,
             "current_leg": legs[-1]["direction"] if legs else "unavailable",
         },
         "chan_analysis": chan_analysis,
+        "indicator_contract": {
+            "formula_version": common_indicators["formula_version"],
+            "parameters": common_indicators["parameters"],
+            "comparability": common_indicators["comparability"],
+            "parameter_profile": parameterized_indicators["parameters"],
+            "boundary": parameterized_indicators["boundary"],
+        },
         "chart": {"price_basis": "source OHLCV", "points": chart},
     }
 
@@ -1879,7 +2039,8 @@ class ResearchService:
         as_of: date | None = None,
     ) -> dict[str, Any]:
         effective_as_of = as_of or business_now().date()
-        basic = self._ensure_stock(ts_code)
+        # Side-effect only: raises if the symbol is unknown; profile unused.
+        self._ensure_stock(ts_code)
         start = effective_as_of - timedelta(days=lookback_days - 1)
         valuations = self._load(
             "stock_daily_basic", filters={"ts_code": ts_code}, start=start,
@@ -2040,8 +2201,15 @@ class ResearchService:
         if not closes:
             raise RecordNotFoundError(f"no daily prices found for {ts_code}")
 
-        ema12 = _ema_series(closes, 12)
-        ema26 = _ema_series(closes, 26)
+        common_indicators = _common_indicator_pack(highs, lows, closes, volumes)
+        parameterized_indicators = _parameterized_indicator_pack(
+            opens, highs, lows, closes, volumes, timeframe="1d"
+        )
+        parameterized_latest = parameterized_indicators["latest"]
+        common_series = common_indicators["series"]
+        common_latest = common_indicators["latest"]
+        ema12 = common_series["ema_12"]
+        ema26 = common_series["ema_26"]
         macd_line = [left - right for left, right in zip(ema12, ema26)]
         signal_line = _ema_series(macd_line, 9)
         true_ranges: list[float] = []
@@ -2057,10 +2225,13 @@ class ResearchService:
             for previous, current in pairwise(closes) if previous
         ]
         latest_close = closes[-1]
-        ma = {str(window): _round(_moving_average(closes, window)) for window in (5, 10, 20, 60, 120, 250)}
+        ma = {
+            window: _round(value)
+            for window, value in parameterized_latest["sma"].items()
+        }
         ma_series = {
-            window: _sma_series(closes, window)
-            for window in (5, 10, 20, 60, 120, 250)
+            window: values for window, values
+            in parameterized_indicators["series"]["sma"].items()
         }
         window20 = closes[-20:] if len(closes) >= 20 else closes
         boll_mid = mean(window20) if window20 else None
@@ -2174,8 +2345,41 @@ class ResearchService:
                 "ma_60": _round(ma_series[60][index]),
                 "ma_120": _round(ma_series[120][index]),
                 "ma_250": _round(ma_series[250][index]),
+                "sma_family": {
+                    str(window): _round(values[index])
+                    for window, values in ma_series.items()
+                },
+                "ema_family": {
+                    str(window): _round(values[index])
+                    for window, values
+                    in parameterized_indicators["series"]["ema"].items()
+                },
                 "ema_12": _round(ema12[index]),
                 "ema_26": _round(ema26[index]),
+                "ema_20": _round(common_series["ema_20"][index]),
+                "ema_50": _round(common_series["ema_50"][index]),
+                "ema_200": _round(common_series["ema_200"][index]),
+                "bbi": _round(common_series["bbi"][index]),
+                "bias_6": _round(common_series["bias_6"][index]),
+                "bias_12": _round(common_series["bias_12"][index]),
+                "bias_24": _round(common_series["bias_24"][index]),
+                "ppo": _round(common_series["ppo"][index]),
+                "ppo_signal": _round(common_series["ppo_signal"][index]),
+                "ppo_histogram": _round(common_series["ppo_histogram"][index]),
+                "natr_14": _round(common_series["natr_14"][index]),
+                "keltner_middle": _round(common_series["keltner_middle"][index]),
+                "keltner_upper": _round(common_series["keltner_upper"][index]),
+                "keltner_lower": _round(common_series["keltner_lower"][index]),
+                "ttm_squeeze_on": common_series["ttm_squeeze_on"][index],
+                "ttm_squeeze_momentum": _round(common_series["ttm_squeeze_momentum"][index]),
+                "trix_12": _round(common_series["trix_12"][index]),
+                "trix_signal_9": _round(common_series["trix_signal_9"][index]),
+                "pvt": _round(common_series["pvt"][index]),
+                "pvt_change_20": _round(common_series["pvt_change_20"][index]),
+                "vroc_12": _round(common_series["vroc_12"][index]),
+                "vroc_20": _round(common_series["vroc_20"][index]),
+                "force_index_13": _round(common_series["force_index_13"][index]),
+                "force_index_13_normalized": _round(common_series["force_index_13_normalized"][index]),
                 "macd": _round(macd_line[index]),
                 "macd_signal": _round(signal_line[index]),
                 "macd_histogram": _round(
@@ -2193,6 +2397,32 @@ class ResearchService:
                 "bollinger_middle": _round(boll_average),
                 "bollinger_upper": _round(boll_average + 2 * boll_deviation) if boll_average is not None and boll_deviation is not None else None,
                 "bollinger_lower": _round(boll_average - 2 * boll_deviation) if boll_average is not None and boll_deviation is not None else None,
+                "bollinger_percent_b": _round(
+                    parameterized_indicators["series"]
+                    ["bollinger_percent_b_20_2"][index]
+                ),
+                "bollinger_bandwidth_pct": _round(
+                    parameterized_indicators["series"]
+                    ["bollinger_bandwidth_20_2_pct"][index]
+                ),
+                "rsi_family": {
+                    str(window): _round(values[index])
+                    for window, values
+                    in parameterized_indicators["series"]["rsi"].items()
+                },
+                "roc_family_pct": {
+                    str(window): _round(values[index])
+                    for window, values
+                    in parameterized_indicators["series"]["roc"].items()
+                },
+                "cci_family": {
+                    str(window): _round(values[index])
+                    for window, values
+                    in parameterized_indicators["series"]["cci"].items()
+                },
+                "tsi_25_13": _round(
+                    parameterized_indicators["series"]["tsi_25_13"][index]
+                ),
             })
         provider_evidence = (
             self._external_research.technicals(
@@ -2246,6 +2476,25 @@ class ResearchService:
                     "moving_averages": ma,
                     "ema_12": _round(ema12[-1]),
                     "ema_26": _round(ema26[-1]),
+                    "exponential_moving_averages": {
+                        window: _round(value)
+                        for window, value in parameterized_latest["ema"].items()
+                    },
+                    "bbi": {
+                        "value": _round(common_latest["bbi"]),
+                        "distance_from_close_pct": _round(common_latest["bbi_distance_pct"]),
+                        "windows": [3, 6, 12, 24],
+                    },
+                    "bias": {
+                        str(window): _round(common_latest[f"bias_{window}"])
+                        for window in (6, 12, 24)
+                    },
+                    "trix": {
+                        "value": _round(common_latest["trix_12"]),
+                        "signal": _round(common_latest["trix_signal_9"]),
+                        "histogram": _round(common_latest["trix_histogram"]),
+                        "parameters": [12, 9],
+                    },
                     "macd": _round(macd_line[-1]),
                     "macd_signal": _round(signal_line[-1]),
                     "regime": "bullish" if trend_score == 3 else "bearish" if trend_score == 0 else "mixed",
@@ -2280,14 +2529,57 @@ class ResearchService:
                     "williams_r_14": _round(_williams_r(highs, lows, closes)),
                     "cci_20": _round(_cci(highs, lows, closes)),
                     "mfi_14": _round(_mfi(highs, lows, closes, volumes)),
+                    "ppo_12_26_9": {
+                        "value": _round(common_latest["ppo"]),
+                        "signal": _round(common_latest["ppo_signal"]),
+                        "histogram": _round(common_latest["ppo_histogram"]),
+                    },
+                    "rsi_family": {
+                        window: _round(value)
+                        for window, value in parameterized_latest["rsi"].items()
+                    },
+                    "roc_family_pct": {
+                        window: _round(value)
+                        for window, value in parameterized_latest["roc"].items()
+                    },
+                    "cci_family": {
+                        window: _round(value)
+                        for window, value in parameterized_latest["cci"].items()
+                    },
+                    "tsi_25_13": _round(parameterized_latest["tsi_25_13"]),
                 },
                 "volatility": {
                     "atr_14": _round(atr14),
+                    "natr_14_pct": _round(common_latest["natr_14"]),
+                    "keltner_20_2": {
+                        "lower": _round(common_latest["keltner_lower"]),
+                        "middle": _round(common_latest["keltner_middle"]),
+                        "upper": _round(common_latest["keltner_upper"]),
+                    },
+                    "ttm_squeeze": {
+                        "on": common_latest["ttm_squeeze_on"],
+                        "momentum": _round(common_latest["ttm_squeeze_momentum"]),
+                        "rule": "Bollinger(20,2σ) inside Keltner(EMA20,1.5×Wilder ATR20)",
+                    },
                     "annualized_volatility_20d_pct": _round(pstdev(returns[-20:]) * sqrt(252) * 100 if len(returns) >= 20 else None),
                     "bollinger_20": {
                         "lower": _round(boll_mid - 2 * boll_std if boll_mid is not None and boll_std is not None else None),
                         "middle": _round(boll_mid),
                         "upper": _round(boll_mid + 2 * boll_std if boll_mid is not None and boll_std is not None else None),
+                        "percent_b": _round(
+                            parameterized_latest["bollinger_20_2"]["percent_b"]
+                        ),
+                        "bandwidth_pct": _round(
+                            parameterized_latest["bollinger_20_2"]["bandwidth_pct"]
+                        ),
+                    },
+                    "atr_family": {
+                        window: _round(value)
+                        for window, value in parameterized_latest["atr"].items()
+                    },
+                    "natr_family_pct": {
+                        window: _round(value)
+                        for window, value in parameterized_latest["natr"].items()
                     },
                     "max_drawdown_pct": _round(_max_drawdown(closes)),
                     "downside_risk": _downside_risk(returns, 252),
@@ -2298,6 +2590,14 @@ class ResearchService:
                     "volume_5_to_20_ratio": _round(_safe_div(volume_5, volume_20)),
                     "obv": _round(obv_series[-1]),
                     "obv_change_20d": _round(obv_series[-1] - obv_series[-21]) if len(obv_series) > 20 else None,
+                    "pvt": _round(common_latest["pvt"]),
+                    "pvt_change_20": _round(common_latest["pvt_change_20"]),
+                    "vroc_12_pct": _round(common_latest["vroc_12"]),
+                    "vroc_20_pct": _round(common_latest["vroc_20"]),
+                    "force_index_13": _round(common_latest["force_index_13"]),
+                    "force_index_13_normalized_pct": _round(
+                        common_latest["force_index_13_normalized"]
+                    ),
                     "chaikin_money_flow_20": _round(
                         _chaikin_money_flow(highs, lows, closes, volumes)
                     ),
@@ -2319,6 +2619,7 @@ class ResearchService:
                     "pivot_systems": pivot_systems,
                     "fibonacci_retracement": fibonacci_retracement,
                     "gaps": _gap_analysis(prices[-500:]),
+                    "continuous_structure": parameterized_latest["structure"],
                     "methodology": "rolling extrema are descriptive ranges; actionable zones require repeated swing touches or next-session pivot formulas",
                 },
                 "trend_strength": {
@@ -2328,6 +2629,7 @@ class ResearchService:
                 },
                 "candlesticks": {
                     "patterns": _candlestick_patterns(prices),
+                    "latest_geometry": parameterized_latest["candle_geometry"],
                     "methodology": "deterministic OHLC geometry; every pattern is a candidate that requires trend and volume confirmation",
                 },
                 "wave_analysis": {
@@ -2350,6 +2652,13 @@ class ResearchService:
                 "chart": {
                     "price_basis": adjustment_meta["price_basis"],
                     "points": chart_rows,
+                },
+                "indicator_contract": {
+                    "formula_version": common_indicators["formula_version"],
+                    "parameters": common_indicators["parameters"],
+                    "comparability": common_indicators["comparability"],
+                    "parameter_profile": parameterized_indicators["parameters"],
+                    "boundary": parameterized_indicators["boundary"],
                 },
                 "timeframes": {
                     "1d": _timeframe_analysis(
@@ -4279,6 +4588,314 @@ class ResearchService:
                             "provider sector data is missing or more than seven days behind as_of"
                         ]
                     ),
+                },
+            },
+        }
+
+    def stock_chips(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 120,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Chip distribution: cyq_perf trend plus the latest cyq_chips profile."""
+
+        effective_as_of = as_of or business_now().date()
+        self._ensure_stock(ts_code)
+        start = effective_as_of - timedelta(days=max(lookback_days * 2, 60))
+        perf = self._load(
+            "cyq_perf",
+            filters={"ts_code": ts_code},
+            start=start,
+            end=effective_as_of,
+            limit=lookback_days,
+        )
+        perf.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+        trend = [
+            {
+                "trade_date": row.get("trade_date"),
+                "winner_rate": _round(_number(row.get("winner_rate"))),
+                "cost_5pct": _round(_number(row.get("cost_5pct"))),
+                "cost_15pct": _round(_number(row.get("cost_15pct"))),
+                "cost_50pct": _round(_number(row.get("cost_50pct"))),
+                "cost_85pct": _round(_number(row.get("cost_85pct"))),
+                "cost_95pct": _round(_number(row.get("cost_95pct"))),
+                "weight_avg": _round(_number(row.get("weight_avg"))),
+                "his_low": _round(_number(row.get("his_low"))),
+                "his_high": _round(_number(row.get("his_high"))),
+            }
+            for row in perf[-lookback_days:]
+        ]
+        latest = trend[-1] if trend else None
+        distribution_date = latest.get("trade_date") if latest else None
+        chips: list[dict[str, Any]] = []
+        if distribution_date:
+            raw_chips = self._load(
+                "cyq_chips",
+                filters={"ts_code": ts_code},
+                start=_day(distribution_date),
+                end=_day(distribution_date),
+                limit=500,
+            )
+            chips = [
+                {
+                    "price": _round(_number(row.get("price"))),
+                    "percent": _round(_number(row.get("percent"))),
+                }
+                for row in raw_chips
+                if _number(row.get("price")) is not None
+            ]
+            chips.sort(key=lambda row: row["price"] or 0)
+        return {
+            "data": {
+                "latest": latest,
+                "trend": trend,
+                "distribution": {
+                    "trade_date": distribution_date,
+                    "bins": chips,
+                },
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "lookback_days": lookback_days,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": self._provenance({
+                    "cyq_perf": perf,
+                    "cyq_chips": chips,
+                }),
+                "quality": {
+                    "status": "ready" if trend else "empty",
+                    "warnings": [] if trend else ["chip datasets have no rows for this symbol/window"],
+                },
+            },
+        }
+
+    def stock_events(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 365,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Corporate-event bundle: express, forecast, limit lists, unlocks, pledges."""
+
+        effective_as_of = as_of or business_now().date()
+        self._ensure_stock(ts_code)
+        start = effective_as_of - timedelta(days=lookback_days)
+        loaded = {
+            "express": self._load("express", filters={"ts_code": ts_code}, limit=6),
+            "forecast": self._load("forecast", filters={"ts_code": ts_code}, limit=6),
+            "top_list": self._load(
+                "top_list", filters={"ts_code": ts_code},
+                start=start, end=effective_as_of, limit=60,
+            ),
+            "limit_list_d": self._load(
+                "limit_list_d", filters={"ts_code": ts_code},
+                start=start, end=effective_as_of, limit=60,
+            ),
+            "share_float_upcoming": self._load(
+                "share_float", filters={"ts_code": ts_code},
+                start=effective_as_of, end=effective_as_of + timedelta(days=365),
+                limit=30,
+            ),
+            "share_float_recent": self._load(
+                "share_float", filters={"ts_code": ts_code},
+                start=start, end=effective_as_of, limit=30,
+            ),
+            "pledge_stat": self._load("pledge_stat", filters={"ts_code": ts_code}, limit=4),
+            "stk_holdernumber": self._load(
+                "stk_holdernumber", filters={"ts_code": ts_code}, limit=12,
+            ),
+            "block_trade": self._load(
+                "block_trade", filters={"ts_code": ts_code},
+                start=start, end=effective_as_of, limit=60,
+            ),
+        }
+        for name in ("express", "forecast", "pledge_stat", "stk_holdernumber"):
+            loaded[name].sort(key=lambda row: _day(row.get("end_date")) or _day(row.get("ann_date")) or date.min)
+        for name in ("top_list", "limit_list_d", "share_float_recent", "block_trade"):
+            loaded[name].sort(key=lambda row: _day(row.get("trade_date")) or _day(row.get("float_date")) or date.min, reverse=True)
+        loaded["share_float_upcoming"].sort(key=lambda row: _day(row.get("float_date")) or date.max)
+        holder_trend = [
+            {
+                "ann_date": row.get("ann_date"),
+                "end_date": row.get("end_date"),
+                "holder_num": _number(row.get("holder_num")),
+            }
+            for row in loaded["stk_holdernumber"]
+        ]
+        return {
+            "data": {
+                "express": loaded["express"][-3:][::-1],
+                "forecast": loaded["forecast"][-5:][::-1],
+                "top_list": loaded["top_list"][:20],
+                "limit_list": loaded["limit_list_d"][:20],
+                "share_float": {
+                    "upcoming": loaded["share_float_upcoming"][:15],
+                    "recent": loaded["share_float_recent"][:15],
+                },
+                "pledge": loaded["pledge_stat"][-1] if loaded["pledge_stat"] else None,
+                "holder_number_trend": holder_trend[-12:][::-1],
+                "block_trade": loaded["block_trade"][:20],
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "lookback_days": lookback_days,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": self._provenance(loaded),
+                "quality": {
+                    "status": "ready",
+                    "warnings": [
+                        "event-like sources can legitimately be empty; absence is not treated as zero"
+                    ],
+                },
+            },
+        }
+
+    def stock_sector_context(
+        self,
+        ts_code: str,
+        *,
+        provider: str = "ths",
+        lookback_days: int = 20,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Board membership plus recent sector performance and money flow."""
+
+        effective_as_of = as_of or business_now().date()
+        self._ensure_stock(ts_code)
+        membership_payload = self._data.stock_sectors(
+            ts_code, provider=provider, as_of=effective_as_of
+        )
+        memberships = membership_payload.get("data") or []
+        start = effective_as_of - timedelta(days=max(lookback_days * 3, 45))
+        sectors: list[dict[str, Any]] = []
+        for row in memberships[:15]:
+            sector_code = row.get("sector_code")
+            if not sector_code:
+                continue
+            daily = self._load(
+                "industry_daily",
+                filters={"ts_code": sector_code},
+                start=start,
+                end=effective_as_of,
+                limit=lookback_days,
+            )
+            daily.sort(key=lambda item: _day(item.get("trade_date")) or date.min)
+            flow = self._load(
+                "moneyflow_cnt_ths",
+                filters={"ts_code": sector_code},
+                start=start,
+                end=effective_as_of,
+                limit=lookback_days,
+            )
+            flow.sort(key=lambda item: _day(item.get("trade_date")) or date.min)
+            closes = [_number(item.get("close")) for item in daily]
+            closes = [value for value in closes if value is not None]
+            net_flow_sum = sum(
+                _number(item.get("net_amount")) or 0 for item in flow[-lookback_days:]
+            )
+            sectors.append({
+                **row,
+                "performance": {
+                    "observations": len(daily),
+                    "first_date": daily[0].get("trade_date") if daily else None,
+                    "last_date": daily[-1].get("trade_date") if daily else None,
+                    "window_return_pct": _round(
+                        _pct_change(closes[-1], closes[0])
+                    ) if len(closes) >= 2 else None,
+                    "recent": [
+                        {
+                            "trade_date": item.get("trade_date"),
+                            "close": _round(_number(item.get("close"))),
+                            "pct_change": _round(_number(item.get("pct_change"))),
+                        }
+                        for item in daily[-10:]
+                    ],
+                },
+                "money_flow": {
+                    "observations": len(flow),
+                    "net_amount_sum": _round(net_flow_sum) if flow else None,
+                    "recent": [
+                        {
+                            "trade_date": item.get("trade_date"),
+                            "net_amount": _round(_number(item.get("net_amount"))),
+                        }
+                        for item in flow[-10:]
+                    ],
+                },
+            })
+        sectors.sort(
+            key=lambda item: (
+                -(item["performance"]["window_return_pct"] or 0)
+                if item["performance"]["window_return_pct"] is not None
+                else 0,
+            )
+        )
+        peers = self._data.stock_peers(
+            ts_code, provider=provider, as_of=effective_as_of
+        )
+        return {
+            "data": {
+                "sectors": sectors,
+                "peers": (peers.get("data") or [])[:20],
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "provider": provider,
+                "as_of": effective_as_of,
+                "lookback_days": lookback_days,
+                "generated_at": datetime.now(timezone.utc),
+                "quality": membership_payload.get("meta", {}).get("quality", {}),
+            },
+        }
+
+    def stock_industry_chain(
+        self,
+        ts_code: str,
+        *,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """蚂蚁产业链 context (query-through, quota-bounded, broker-cached)."""
+
+        effective_as_of = as_of or business_now().date()
+        self._ensure_stock(ts_code)
+        if self._external_research is None:
+            return {
+                "data": {"membership": [], "chain_tree": None},
+                "meta": {
+                    "ts_code": ts_code,
+                    "as_of": effective_as_of,
+                    "quality": {
+                        "status": "unavailable",
+                        "warnings": ["蚂蚁数据源 evidence service is not configured"],
+                    },
+                },
+            }
+        evidence = self._external_research.industry_chain(
+            ts_code, as_of=effective_as_of
+        )
+        return {
+            "data": {
+                "membership": evidence.get("membership") or [],
+                "chain_tree": evidence.get("chain_tree"),
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "as_of": effective_as_of,
+                "provider_status": evidence.get("status"),
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": evidence.get("provenance") or [],
+                "quality": {
+                    "status": (
+                        "ready"
+                        if evidence.get("status") in {"ready", "partial"}
+                        else "warning"
+                    ),
+                    "warnings": evidence.get("warnings") or [],
                 },
             },
         }

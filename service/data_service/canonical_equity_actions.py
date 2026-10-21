@@ -59,7 +59,7 @@ class CanonicalEquityActionService(CanonicalEquityDataService):
 
     def shareholders(
         self, *, symbols: list[str], report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         normalized_dates = sorted(set(report_dates))
@@ -165,7 +165,7 @@ class CanonicalEquityActionService(CanonicalEquityDataService):
 
     def restricted_releases(
         self, *, symbols: list[str], start_date: date, end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         self._validate_long_range(start_date, end_date)
@@ -223,7 +223,7 @@ class CanonicalEquityActionService(CanonicalEquityDataService):
 
     def pledges(
         self, *, symbols: list[str], start_date: date, end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         self._validate_long_range(start_date, end_date)
@@ -294,7 +294,7 @@ class CanonicalEquityActionService(CanonicalEquityDataService):
 
     def risk_alerts(
         self, *, symbols: list[str], start_date: date, end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         self._validate_long_range(start_date, end_date)
@@ -376,7 +376,7 @@ class CanonicalEquityActionService(CanonicalEquityDataService):
 
     def suspensions(
         self, *, symbols: list[str], start_date: date, end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         self._validate_long_range(start_date, end_date)

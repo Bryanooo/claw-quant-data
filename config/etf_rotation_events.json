@@ -1,0 +1,605 @@
+{
+  "contract": "etf_reviewed_nontrading_days.v1",
+  "reviewed_at": "2026-10-20",
+  "scope": "Explains observed missing bars only; not a complete ETF suspension feed.",
+  "events": [
+    {
+      "symbol": "159915.SZ",
+      "date": "2021-02-08",
+      "kind": "full_day_suspension",
+      "reason": "Fund unitholder meeting vote counting",
+      "publisher": "易方达基金管理有限公司",
+      "announcement_date": "2021-02-08",
+      "source_url": "https://pdf.dfcfw.com/pdf/H2_AN202102081459963456_1.pdf?1612777675000.pdf="
+    },
+    {
+      "symbol": "512480.SH",
+      "date": "2021-03-26",
+      "kind": "full_day_suspension",
+      "reason": "Fund unit split",
+      "publisher": "国联安基金管理有限公司",
+      "announcement_date": "2021-03-24",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2021-03-24/1209439486.PDF"
+    },
+    {
+      "symbol": "512690.SH",
+      "date": "2021-05-14",
+      "kind": "full_day_suspension",
+      "reason": "Fund unit split",
+      "publisher": "鹏华基金管理有限公司",
+      "announcement_date": "2021-05-11",
+      "source_url": "https://finance.sina.com.cn/roll/2021-05-11/doc-ikmxzfmm1691646.shtml"
+    },
+    {
+      "symbol": "512010.SH",
+      "date": "2021-06-25",
+      "kind": "full_day_suspension",
+      "reason": "Fund unit split",
+      "publisher": "易方达基金管理有限公司",
+      "announcement_date": "2021-06-22",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2021-06-22/1210304235.PDF"
+    },
+    {
+      "symbol": "512100.SH",
+      "date": "2022-09-02",
+      "kind": "full_day_suspension",
+      "reason": "Fund unit consolidation",
+      "publisher": "南方基金管理股份有限公司",
+      "announcement_date": "2022-08-24",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2022-08-24/1214376900.PDF"
+    }
+  ],
+  "version": "etf-reviewed-events-v3",
+  "share_transformations": [
+    {
+      "symbol": "510500.SH",
+      "registration_date": "2022-08-26",
+      "price_effective_date": "2022-08-29",
+      "new_shares_per_old_share": 1.14539,
+      "announcement_date": "2022-08-23",
+      "publisher": "南方基金",
+      "source_url": "https://pdf.dfcfw.com/pdf/H2_AN202208231577485269_1.pdf"
+    },
+    {
+      "symbol": "512100.SH",
+      "registration_date": "2022-09-02",
+      "price_effective_date": "2022-09-05",
+      "new_shares_per_old_share": 0.36555,
+      "announcement_date": "2022-09-05",
+      "publisher": "南方基金",
+      "source_url": "https://pdf.dfcfw.com/pdf/H2_AN202209051578033984_1.pdf"
+    },
+    {
+      "symbol": "159928.SZ",
+      "registration_date": "2021-06-24",
+      "price_effective_date": "2021-06-25",
+      "new_shares_per_old_share": 4,
+      "announcement_date": "2021-06-25",
+      "publisher": "汇添富基金",
+      "source_url": "https://www.99fund.com/cgi-bin/news/Article?articleId=12680293&function=print"
+    },
+    {
+      "symbol": "512010.SH",
+      "registration_date": "2021-06-25",
+      "price_effective_date": "2021-06-28",
+      "new_shares_per_old_share": 4,
+      "announcement_date": "2021-06-22",
+      "publisher": "易方达基金",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2021-06-22/1210304235.PDF"
+    },
+    {
+      "symbol": "512480.SH",
+      "registration_date": "2021-03-26",
+      "price_effective_date": "2021-03-29",
+      "new_shares_per_old_share": 2,
+      "announcement_date": "2021-03-29",
+      "publisher": "国联安基金",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2021-03-29/1209471570.PDF"
+    },
+    {
+      "symbol": "512480.SH",
+      "registration_date": "2026-07-02",
+      "price_effective_date": "2026-07-03",
+      "new_shares_per_old_share": 2,
+      "announcement_date": "2026-07-03",
+      "publisher": "国联安基金",
+      "source_url": "https://data.eastmoney.com/notices/detail/512480/AN202607031826683755.html"
+    },
+    {
+      "symbol": "512690.SH",
+      "registration_date": "2021-05-14",
+      "price_effective_date": "2021-05-17",
+      "new_shares_per_old_share": 2,
+      "announcement_date": "2021-05-11",
+      "publisher": "鹏华基金",
+      "source_url": "https://finance.sina.com.cn/roll/2021-05-11/doc-ikmxzfmm1691646.shtml"
+    },
+    {
+      "symbol": "515000.SH",
+      "registration_date": "2025-09-05",
+      "price_effective_date": "2025-09-08",
+      "new_shares_per_old_share": 2,
+      "announcement_date": "2025-09-08",
+      "publisher": "华宝基金",
+      "source_url": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2025-09-08/515000_20250908_I7H8.pdf"
+    }
+  ],
+  "limitations": [
+    "Reviewed events explain identified gaps and adjustment changes only; not a complete corporate-action or intraday-suspension feed.",
+    "Registration date and first ex-rights trading day differ; vendor price factors must not be used as share multipliers.",
+    "Announcement dates are dates only, not verified intraday availability timestamps."
+  ],
+  "cash_crosscheck": {
+    "start": "2019-01-01",
+    "end": "2026-10-20",
+    "source": "Eastmoney fund dividend history (independent vendor cross-check, not issuer)",
+    "symbols": [
+      {
+        "symbol": "510050.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_510050.html",
+        "sha256": "b60005550999e5c543ebc1154c85bdb1d0e3a6caca7ff8c2f1a3800c8674696b",
+        "cash": [
+          {
+            "record_date": "2025-12-16",
+            "ex_date": "2025-12-17",
+            "div_cash": 0.08,
+            "pay_date": "2025-12-22"
+          },
+          {
+            "record_date": "2024-11-29",
+            "ex_date": "2024-12-02",
+            "div_cash": 0.05500000000000001,
+            "pay_date": "2024-12-05"
+          },
+          {
+            "record_date": "2023-11-24",
+            "ex_date": "2023-11-27",
+            "div_cash": 0.039,
+            "pay_date": "2023-11-30"
+          },
+          {
+            "record_date": "2022-11-30",
+            "ex_date": "2022-12-01",
+            "div_cash": 0.037,
+            "pay_date": "2022-12-06"
+          },
+          {
+            "record_date": "2021-11-26",
+            "ex_date": "2021-11-29",
+            "div_cash": 0.040999999999999995,
+            "pay_date": "2021-12-02"
+          },
+          {
+            "record_date": "2020-11-27",
+            "ex_date": "2020-11-30",
+            "div_cash": 0.051000000000000004,
+            "pay_date": "2020-12-03"
+          },
+          {
+            "record_date": "2019-11-29",
+            "ex_date": "2019-12-02",
+            "div_cash": 0.047,
+            "pay_date": "2019-12-05"
+          },
+          {
+            "record_date": "2018-11-30",
+            "ex_date": "2018-12-03",
+            "div_cash": 0.049,
+            "pay_date": "2018-12-06"
+          },
+          {
+            "record_date": "2017-11-27",
+            "ex_date": "2017-11-28",
+            "div_cash": 0.054000000000000006,
+            "pay_date": "2017-12-01"
+          },
+          {
+            "record_date": "2016-11-28",
+            "ex_date": "2016-11-29",
+            "div_cash": 0.053000000000000005,
+            "pay_date": "2016-12-02"
+          },
+          {
+            "record_date": "2014-11-14",
+            "ex_date": "2014-11-17",
+            "div_cash": 0.043,
+            "pay_date": "2014-11-20"
+          },
+          {
+            "record_date": "2013-11-14",
+            "ex_date": "2013-11-15",
+            "div_cash": 0.053000000000000005,
+            "pay_date": "2013-11-20"
+          },
+          {
+            "record_date": "2012-11-12",
+            "ex_date": "2012-11-13",
+            "div_cash": 0.037,
+            "pay_date": "2012-11-16"
+          },
+          {
+            "record_date": "2012-05-15",
+            "ex_date": "2012-05-16",
+            "div_cash": 0.011,
+            "pay_date": "2012-05-21"
+          },
+          {
+            "record_date": "2010-11-15",
+            "ex_date": "2010-11-16",
+            "div_cash": 0.026000000000000002,
+            "pay_date": "2010-11-19"
+          },
+          {
+            "record_date": "2008-11-18",
+            "ex_date": "2008-11-19",
+            "div_cash": 0.06,
+            "pay_date": "2008-11-24"
+          },
+          {
+            "record_date": "2006-11-15",
+            "ex_date": "2006-11-16",
+            "div_cash": 0.037,
+            "pay_date": "2006-11-21"
+          },
+          {
+            "record_date": "2006-05-18",
+            "ex_date": "2006-05-19",
+            "div_cash": 0.024,
+            "pay_date": "2006-05-24"
+          }
+        ],
+        "splits": [
+          [
+            "2005年",
+            "2005-02-04",
+            "份额折算",
+            "1:1.1838"
+          ]
+        ],
+        "no_cash_explicit": false
+      },
+      {
+        "symbol": "510300.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_510300.html",
+        "sha256": "157be0fb6f748bbb89c9c02d016198aa0156a303764848c1989c25e5364ce4dc",
+        "cash": [
+          {
+            "record_date": "2026-01-16",
+            "ex_date": "2026-01-19",
+            "div_cash": 0.123,
+            "pay_date": "2026-01-27"
+          },
+          {
+            "record_date": "2025-06-17",
+            "ex_date": "2025-06-18",
+            "div_cash": 0.088,
+            "pay_date": "2025-06-27"
+          },
+          {
+            "record_date": "2024-01-17",
+            "ex_date": "2024-01-18",
+            "div_cash": 0.06899999999999999,
+            "pay_date": "2024-01-23"
+          },
+          {
+            "record_date": "2023-01-13",
+            "ex_date": "2023-01-16",
+            "div_cash": 0.064,
+            "pay_date": "2023-01-19"
+          },
+          {
+            "record_date": "2022-01-18",
+            "ex_date": "2022-01-19",
+            "div_cash": 0.075,
+            "pay_date": "2022-01-24"
+          },
+          {
+            "record_date": "2021-01-15",
+            "ex_date": "2021-01-18",
+            "div_cash": 0.072,
+            "pay_date": "2021-01-21"
+          },
+          {
+            "record_date": "2019-12-10",
+            "ex_date": "2019-12-11",
+            "div_cash": 0.062,
+            "pay_date": "2019-12-16"
+          },
+          {
+            "record_date": "2019-01-15",
+            "ex_date": "2019-01-16",
+            "div_cash": 0.059,
+            "pay_date": "2019-01-21"
+          },
+          {
+            "record_date": "2018-01-22",
+            "ex_date": "2018-01-23",
+            "div_cash": 0.046,
+            "pay_date": "2018-01-26"
+          },
+          {
+            "record_date": "2017-01-20",
+            "ex_date": "2017-01-23",
+            "div_cash": 0.05500000000000001,
+            "pay_date": "2017-01-26"
+          },
+          {
+            "record_date": "2016-01-19",
+            "ex_date": "2016-01-20",
+            "div_cash": 0.051000000000000004,
+            "pay_date": "2016-01-25"
+          },
+          {
+            "record_date": "2015-01-19",
+            "ex_date": "2015-01-20",
+            "div_cash": 0.034999999999999996,
+            "pay_date": "2015-01-23"
+          },
+          {
+            "record_date": "2014-01-20",
+            "ex_date": "2014-01-21",
+            "div_cash": 0.048,
+            "pay_date": "2014-01-27"
+          },
+          {
+            "record_date": "2012-12-17",
+            "ex_date": "2012-12-18",
+            "div_cash": 0.033,
+            "pay_date": "2012-12-24"
+          }
+        ],
+        "splits": [
+          [
+            "2012年",
+            "2012-05-11",
+            "份额折算",
+            "1:0.3709"
+          ]
+        ],
+        "no_cash_explicit": false
+      },
+      {
+        "symbol": "510500.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_510500.html",
+        "sha256": "d41cd2b70e13c3879c4f2e64deeadf3d0e99e279a3d70af4e7a209f1893952fa",
+        "cash": [
+          {
+            "record_date": "2026-07-14",
+            "ex_date": "2026-07-15",
+            "div_cash": 0.149,
+            "pay_date": "2026-07-20"
+          },
+          {
+            "record_date": "2026-01-15",
+            "ex_date": "2026-01-16",
+            "div_cash": 0.062,
+            "pay_date": "2026-01-21"
+          },
+          {
+            "record_date": "2025-01-15",
+            "ex_date": "2025-01-16",
+            "div_cash": 0.091,
+            "pay_date": "2025-01-21"
+          },
+          {
+            "record_date": "2024-05-16",
+            "ex_date": "2024-05-17",
+            "div_cash": 0.087,
+            "pay_date": "2024-05-22"
+          }
+        ],
+        "splits": [
+          [
+            "2022年",
+            "2022-08-26",
+            "份额分拆",
+            "1:1.1454"
+          ],
+          [
+            "2015年",
+            "2015-04-14",
+            "份额折算",
+            "1:0.2803"
+          ]
+        ],
+        "no_cash_explicit": false
+      },
+      {
+        "symbol": "512100.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_512100.html",
+        "sha256": "a659568f4bc7191099f40648dee331ed6b42791a2915011567029c73df3c394a",
+        "cash": [
+          {
+            "record_date": "2026-01-16",
+            "ex_date": "2026-01-19",
+            "div_cash": 0.040999999999999995,
+            "pay_date": "2026-01-22"
+          },
+          {
+            "record_date": "2025-01-14",
+            "ex_date": "2025-01-15",
+            "div_cash": 0.037,
+            "pay_date": "2025-01-20"
+          }
+        ],
+        "splits": [
+          [
+            "2022年",
+            "2022-09-02",
+            "份额折算",
+            "1:0.3656"
+          ]
+        ],
+        "no_cash_explicit": false
+      },
+      {
+        "symbol": "159915.SZ",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_159915.html",
+        "sha256": "d78207b5e2f0a78c982d8379d97b08369b1f01804e069b44cbf4e343f4d36db4",
+        "cash": [],
+        "splits": [
+          [
+            "2011年",
+            "2011-11-30",
+            "份额折算",
+            "1:1.1456"
+          ]
+        ],
+        "no_cash_explicit": true
+      },
+      {
+        "symbol": "588000.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_588000.html",
+        "sha256": "7dcfd571335199348f2f093f9a32e091b20f2b0a1a91a89eb5b6597be8f40a4a",
+        "cash": [],
+        "splits": [
+          [
+            "2020年",
+            "2020-11-09",
+            "份额折算",
+            "1:0.6945"
+          ]
+        ],
+        "no_cash_explicit": true
+      },
+      {
+        "symbol": "159928.SZ",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_159928.html",
+        "sha256": "ebe5795223e3a468ba90cd8b8f0e94bd7c2928a831b0238354e31fd273011c65",
+        "cash": [],
+        "splits": [
+          [
+            "2021年",
+            "2021-06-24",
+            "份额分拆",
+            "1:4.0000"
+          ]
+        ],
+        "no_cash_explicit": true
+      },
+      {
+        "symbol": "512010.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_512010.html",
+        "sha256": "96b4610887a0d25940ee1bba4c308ffd5f078af046e6873866dbbc20b9a63f91",
+        "cash": [],
+        "splits": [
+          [
+            "2021年",
+            "2021-06-25",
+            "份额分拆",
+            "1:4.0000"
+          ]
+        ],
+        "no_cash_explicit": true
+      },
+      {
+        "symbol": "512480.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_512480.html",
+        "sha256": "12988e567c4e02ea45ca3a5dba4f4a4a6beda63fc8661b93c3ca232e553a459f",
+        "cash": [],
+        "splits": [
+          [
+            "2026年",
+            "2026-07-02",
+            "份额分拆",
+            "1:2.0000"
+          ],
+          [
+            "2021年",
+            "2021-03-26",
+            "份额分拆",
+            "1:2.0000"
+          ]
+        ],
+        "no_cash_explicit": true
+      },
+      {
+        "symbol": "512880.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_512880.html",
+        "sha256": "c09c826b1c3f5000451b0dc92ab201fe1e0897ce831a984e4f5229199936b6ca",
+        "cash": [],
+        "splits": [],
+        "no_cash_explicit": true
+      },
+      {
+        "symbol": "512690.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_512690.html",
+        "sha256": "92b5d8298cca281b485a776c6315bbe676f338a94e9b378586a287c9a4015792",
+        "cash": [
+          {
+            "record_date": "2021-12-30",
+            "ex_date": "2021-12-31",
+            "div_cash": 0.35,
+            "pay_date": "2022-01-06"
+          }
+        ],
+        "splits": [
+          [
+            "2021年",
+            "2021-05-14",
+            "份额分拆",
+            "1:2.0000"
+          ]
+        ],
+        "no_cash_explicit": false
+      },
+      {
+        "symbol": "515000.SH",
+        "source_url": "https://fundf10.eastmoney.com/fhsp_515000.html",
+        "sha256": "9a8e45ad6bf1ad5c657707c9cf4e426ffcc4c5299ea14b0b885c4db4557ffdd3",
+        "cash": [],
+        "splits": [
+          [
+            "2025年",
+            "2025-09-05",
+            "份额分拆",
+            "1:2.0000"
+          ]
+        ],
+        "no_cash_explicit": true
+      }
+    ]
+  },
+  "limit_rules": {
+    "start": "2019-01-01",
+    "end": "2026-10-20",
+    "tick": "0.001",
+    "default_rate": "0.10",
+    "overrides": [
+      {
+        "symbol": "159915.SZ",
+        "start": "2020-08-24",
+        "rate": "0.20",
+        "source_url": "https://docs.static.szse.cn/www/aboutus/trends/conference/W020200821767425488573.pdf"
+      },
+      {
+        "symbol": "588000.SH",
+        "start": "2020-11-16",
+        "rate": "0.20",
+        "source_url": "https://etf.sse.com.cn/ruleguide/business/c/5287913.shtml"
+      }
+    ],
+    "source_urls": [
+      "https://big5.sse.com.cn/site/cht/www.sse.com.cn/aboutus/mediacenter/hotandd/c/c_20150912_3988628.shtml",
+      "https://docs.static.szse.cn/www/fund/guide/W020210331716400647184.pdf",
+      "https://www.sse.com.cn/lawandrules/sselawsrules2025/fund/trading/c/c_20260424_10817739.shtml"
+    ],
+    "method": "Decimal ROUND_HALF_UP(pre_close*(1 +/- rate), 0.001). pre_close is the source daily reference price, including ex-rights/listing-day reference; never previous observed close."
+  },
+  "intraday_events": [
+    {
+      "symbol": "159915.SZ",
+      "date": "2021-02-09",
+      "kind": "opening_suspension",
+      "start_time": "09:30:00",
+      "resume_time": "10:30:00",
+      "timezone": "Asia/Shanghai",
+      "publisher": "易方达基金",
+      "source_url": "https://pdf.dfcfw.com/pdf/H2_AN202102081459963456_1.pdf?1612777675000.pdf=",
+      "confirmation_source_url": "https://static.cninfo.com.cn/finalpage/2021-07-29/1210591305.PDF",
+      "corroborating_source_url": "https://www.cindasc.com/osoa/views/a/20210209/42396.html",
+      "announcement_date": "2021-02-08",
+      "confirmation_date": "2021-02-09"
+    }
+  ]
+}

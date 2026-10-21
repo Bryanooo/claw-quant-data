@@ -26,10 +26,18 @@ MAX_INLINE_DURABLE_WAIT_SECONDS = 15.0
 # major_news calls per Shanghai calendar day (and 20/minute). Reserve only 35
 # so manual verification and clock skew cannot push production over quota.
 # The live provider response caps cyq_perf at 20,000 calls per Shanghai day.
-# Reserve 18,000: one routine full-market day (~5,500 calls) plus at most one
-# resumable historical sweep fit safely while leaving headroom for retries and
-# operator probes.
-INTERFACE_DAILY_QUOTAS = {"major_news": 35, "cyq_perf": 18_000}
+# Reserve 18,000: the weekly date-window sweep uses roughly 5,500 calls and a
+# separately approved resumable history sweep can share the day while leaving
+# headroom for retries and operator probes.
+INTERFACE_DAILY_QUOTAS = {
+    "major_news": 35,
+    "cyq_perf": 18_000,
+    # The provider enforces 1,000 calls per Shanghai day. One complete market
+    # date currently needs about 202 factor-name requests. Keep ten percent in
+    # reserve for operator probes and contract drift; the durable limiter will
+    # defer unfinished request checkpoints to the next day without retrying.
+    "factor_value": 900,
+}
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 

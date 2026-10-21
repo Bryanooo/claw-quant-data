@@ -100,7 +100,7 @@ def test_equity_profile_fallback_decodes_controller_payload():
     ))
 
     result = CanonicalEquityDataService(FakeDataService(), broker).profiles(
-        symbols=["300750.SZ"]
+        symbols=["300750.SZ"], allow_quota_fallback=True
     )
 
     profile = result["data"][0]
@@ -171,6 +171,7 @@ def test_valuation_fallback_uses_equivalent_pb_and_preserves_local_precedence():
         symbols=["300750.SZ"],
         start_date=date(2026, 9, 29),
         end_date=date(2026, 9, 30),
+        allow_quota_fallback=True,
     )
 
     by_date = {row["observation_date"]: row for row in result["data"]}
@@ -194,6 +195,7 @@ def test_equity_adapter_rejects_invalid_scope_and_protocol_drift():
             symbols=["300750.SZ"],
             start_date=date(2026, 9, 30),
             end_date=date(2026, 9, 30),
+            allow_quota_fallback=True,
         )
     with pytest.raises(InvalidQueryError, match="366 days"):
         service.valuations(

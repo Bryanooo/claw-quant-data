@@ -1,6 +1,6 @@
 # 数据源优先级矩阵
 
-> 生成时间：`2026-10-02T11:06:19.905188+00:00`。机器可读版本见 [`source_priority_matrix_latest.json`](source_priority_matrix_latest.json)。
+> 生成时间：`2026-10-18T12:44:24.183754+00:00`。机器可读版本见 [`source_priority_matrix_latest.json`](source_priority_matrix_latest.json)。
 
 ## 统一规则
 
@@ -29,8 +29,8 @@
 
 | Financial Data 路由 | 四类归属 | 完整等价所需 Tushare 接口 | 仅局部重叠接口 | 当前 Token 完整可用 | 判定依据 |
 |---|---|---|---|---|---|
-| `/api/v1/altdata/hot-plate-rank` | `financial_data_only` | — | `ths_hot`(有权限), `dc_hot`(有权限), `limit_cpt_list`(有权限) | 否 | Financial Data 是支付宝口径；Tushare 热榜的数据源和排名方法不同。 |
-| `/api/v1/altdata/hot-stock-rank` | `financial_data_only` | — | `ths_hot`(有权限), `dc_hot`(有权限) | 否 | Financial Data 是支付宝散户关注度；Tushare 热榜不能复现该口径。 |
+| `/api/v1/altdata/hot-plate-rank` | `financial_data_only` | — | `ths_hot`(有权限), `dc_hot`(有权限), `limit_cpt_list`(有权限) | 否 | 蚂蚁数据源 是支付宝口径；Tushare 热榜的数据源和排名方法不同。 |
+| `/api/v1/altdata/hot-stock-rank` | `financial_data_only` | — | `ths_hot`(有权限), `dc_hot`(有权限) | 否 | 蚂蚁数据源 是支付宝散户关注度；Tushare 热榜不能复现该口径。 |
 | `/api/v1/common/entity_relationship` | `financial_data_only` | — | `stk_ah_comparison`(有权限), `bse_mapping`(有权限), `namechange`(有权限) | 否 | Tushare 仅覆盖部分 AH、北交所代码及曾用名关系，缺少完整跨市场实体图谱。 |
 | `/api/v1/common/industry-chain-tree` | `financial_data_only` | — | — | 否 | 在已审计的 Tushare 契约中没有覆盖完整合同的结构化、可确定性派生或公告来源。 |
 | `/api/v1/common/stock-belong-industry-chain` | `financial_data_only` | — | — | 否 | 在已审计的 Tushare 契约中没有覆盖完整合同的结构化、可确定性派生或公告来源。 |
@@ -76,13 +76,13 @@
 | `/api/v1/index_fnd/index-fnd-financial-ratios-single` | `tushare_derived` | `index_weight`(有权限), `index_member_all`(有权限), `fina_indicator`(有权限), `income`(有权限), `balancesheet`(有权限) | — | 是 | 可由所列 Tushare 结构化数据确定性计算；公式、权重与 as-of 规则必须版本化。 |
 | `/api/v1/index_fnd/index-fnd-financial-statement` | `tushare_derived` | `index_weight`(有权限), `index_member_all`(有权限), `income`(有权限), `balancesheet`(有权限), `cashflow`(有权限) | — | 是 | 可由所列 Tushare 结构化数据确定性计算；公式、权重与 as-of 规则必须版本化。 |
 | `/api/v1/index_fnd/index-profile-basic-info` | `tushare_direct` | `index_basic`(有权限) | — | 是 | Tushare 有覆盖该完整业务事实的结构化接口；仍需统一字段、代码、日期和单位。 |
-| `/api/v1/info/announcements` | `financial_data_only` | — | `anns_d`(无权限) | 否 | anns_d 提供 A 股公告 PDF，不能完整覆盖 Financial Data 的 A 股与港股合同。 |
+| `/api/v1/info/announcements` | `financial_data_only` | — | `anns_d`(无权限) | 否 | anns_d 提供 A 股公告 PDF，不能完整覆盖 蚂蚁数据源 的 A 股与港股合同。 |
 | `/api/v1/info/news-global-search` | `financial_data_only` | — | `news`(无权限), `major_news`(有权限) | 否 | Tushare 新闻源可做局部检索，但不是全网搜索与证据抽取服务。 |
 | `/api/v1/info/research-reports` | `tushare_direct` | `research_report`(无权限) | — | 否 | Tushare 有覆盖该完整业务事实的结构化接口；仍需统一字段、代码、日期和单位。 |
 | `/api/v1/info/tag/category` | `financial_data_only` | — | `news`(无权限), `major_news`(有权限) | 否 | 在已审计的 Tushare 契约中没有覆盖完整合同的结构化、可确定性派生或公告来源。 |
 | `/api/v1/info/tag/query` | `financial_data_only` | — | `news`(无权限), `major_news`(有权限) | 否 | 在已审计的 Tushare 契约中没有覆盖完整合同的结构化、可确定性派生或公告来源。 |
 | `/api/v1/macro/data-query` | `financial_data_only` | — | `cn_gdp`(有权限), `cn_cpi`(有权限), `cn_ppi`(有权限), `cn_pmi`(有权限), `cn_m`(有权限), `sf_month`(有权限), `shibor`(有权限), `shibor_lpr`(有权限), `us_tbr`(有权限), `us_tltr`(有权限), `us_trltr`(有权限), `us_trycr`(有权限), `us_tycr`(有权限) | 否 | Tushare 有核心宏观序列，但不覆盖地区、长尾国家和细分产业指标全集。 |
-| `/api/v1/macro/meta-search` | `financial_data_only` | — | `cn_schedule`(有权限), `cn_gdp`(有权限), `cn_cpi`(有权限), `cn_ppi`(有权限), `cn_pmi`(有权限), `cn_m`(有权限) | 否 | Tushare 没有与 Financial Data 长尾宏观指标库等价的语义检索目录。 |
+| `/api/v1/macro/meta-search` | `financial_data_only` | — | `cn_schedule`(有权限), `cn_gdp`(有权限), `cn_cpi`(有权限), `cn_ppi`(有权限), `cn_pmi`(有权限), `cn_m`(有权限) | 否 | Tushare 没有与 蚂蚁数据源 长尾宏观指标库等价的语义检索目录。 |
 | `/api/v1/onecode/query` | `financial_data_only` | — | `factor_value`(有权限), `daily`(有权限), `daily_basic`(有权限), `fund_nav`(有权限), `index_daily`(有权限) | 否 | 部分指标可由 Tushare 计算，但 OneCode 动态指标全集及其口径不是公开等价物。 |
 | `/api/v1/onecode/recall` | `financial_data_only` | — | `factor_list`(无权限) | 否 | factor_list 仅覆盖 Tushare 量化因子，不能替代 OneCode 全指标语义召回。 |
 | `/api/v1/quote/auction-snapshot` | `financial_data_only` | — | `stk_auction`(有权限), `stk_auction_o`(有权限), `stk_auction_c`(有权限) | 否 | stk_auction 系列只给最终开/收盘竞价结果，不能提供指定时段内未撮合买卖量的快照序列。 |
@@ -190,7 +190,7 @@
 | `/api/v1/us_stock/ratings` | `financial_data_only` | — | — | 否 | 在已审计的 Tushare 契约中没有覆盖完整合同的结构化、可确定性派生或公告来源。 |
 | `/api/v1/us_stock/security-markings` | `financial_data_only` | — | `us_basic`(有权限) | 否 | us_basic 缺少完整 ADR 比例、首次发行和双重上市标识。 |
 | `/api/v1/us_stock/target-price` | `financial_data_only` | — | — | 否 | 在已审计的 Tushare 契约中没有覆盖完整合同的结构化、可确定性派生或公告来源。 |
-| `/api/v2/info/news/article` | `financial_data_only` | — | `news`(无权限), `major_news`(有权限) | 否 | Tushare 有正文，但不能用 Financial Data 的 feed_id 读取同一篇内容。 |
+| `/api/v2/info/news/article` | `financial_data_only` | — | `news`(无权限), `major_news`(有权限) | 否 | Tushare 有正文，但不能用 蚂蚁数据源 的 feed_id 读取同一篇内容。 |
 | `/api/v2/info/news/search_evidence` | `financial_data_only` | — | `news`(无权限), `major_news`(有权限), `anns_d`(无权限) | 否 | Tushare 有新闻/公告子集，缺少相同去重、标签和 feed_id 证据合同。 |
 
 ## Tushare 244 条契约反向映射
@@ -432,7 +432,7 @@
 | `us_balancesheet` | 美股资产负债表 | 无权限 | 否 | `full_equivalence_input` | `/api/v1/stock_fnd/balance-sheet` | — |
 | `us_basic` | 美股列表 | 有权限 | 是 | `full_equivalence_input` | `/api/v1/common/symbol-by-cond` | `/api/v1/stock_fnd/depository-receipt`, `/api/v1/stock_fnd/industry-classification`, `/api/v1/stock_fnd/stock-basic-info`, `/api/v1/us_stock/security-markings` |
 | `us_cashflow` | 美股现金流量表 | 无权限 | 否 | `full_equivalence_input` | `/api/v1/stock_fnd/growth-rates-quarter`, `/api/v1/stock_fnd/income-cashflow-acc`, `/api/v1/stock_fnd/income-cashflow-single`, `/api/v1/stock_fnd/metrics-ttm` | — |
-| `us_daily` | 美股行情 | 无权限 | 否 | `no_financial_data_counterpart` | — | — |
+| `us_daily` | 美股行情 | 有限频权限 | 是 | `no_financial_data_counterpart` | — | — |
 | `us_daily_adj` | 美股复权行情 | 无权限 | 否 | `full_equivalence_input` | `/api/v1/quote/kline-batch`, `/api/v1/stock/tech-indicators`, `/api/v1/stock_fnd/metrics-ttm` | `/api/v1/quote/derived-snapshot`, `/api/v1/us_stock/equity-structure` |
 | `us_fina_indicator` | 美股财务指标数据 | 无权限 | 否 | `full_equivalence_input` | `/api/v1/stock_fnd/growth-rates-acc`, `/api/v1/stock_fnd/growth-rates-quarter` | `/api/v1/stock_fnd/specialty-metrics-period` |
 | `us_income` | 美股利润表 | 无权限 | 否 | `full_equivalence_input` | `/api/v1/stock_fnd/growth-rates-quarter`, `/api/v1/stock_fnd/income-cashflow-acc`, `/api/v1/stock_fnd/income-cashflow-single`, `/api/v1/stock_fnd/metrics-ttm` | — |

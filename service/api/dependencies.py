@@ -163,8 +163,10 @@ CoverageServiceDependency = Annotated[
 ]
 
 
-def get_initialization_service() -> InitializationService:
-    return InitializationService()
+def get_initialization_service(request: Request) -> InitializationService:
+    return InitializationService(
+        orchestration_repository=get_orchestration_v2_repository(request)
+    )
 
 
 InitializationServiceDependency = Annotated[
@@ -177,19 +179,23 @@ def get_data_health_service(request: Request) -> DataHealthService:
     return DataHealthService(
         coverage_service=get_coverage_service(),
         data_service=get_data_service(request),
-        initialization_service=get_initialization_service(),
-        orchestration_repository=get_orchestration_v2_repository(),
+        initialization_service=get_initialization_service(request),
+        orchestration_repository=get_orchestration_v2_repository(request),
     )
 
 
-def get_orchestration_v2_repository() -> OrchestrationV2Repository:
+def get_orchestration_v2_repository(request: Request) -> OrchestrationV2Repository:
     """Return the isolated V2 control-plane repository.
 
-    V2 deliberately uses its own short transactions and remains independent
-    from the legacy application database wrapper until cutover is approved.
+    The repository keeps its own short transactions, but now shares the API
+    process connection pool instead of opening one TCP connection per method
+    call.  Workers and the scheduler keep constructing it with standalone
+    connections because they run their own long-lived processes.
     """
 
-    return OrchestrationV2Repository()
+    return OrchestrationV2Repository(
+        connection_context=request.app.state.database.writable_connection
+    )
 
 
 OrchestrationV2RepositoryDependency = Annotated[

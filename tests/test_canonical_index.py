@@ -66,7 +66,8 @@ def test_index_constituents_fallback_normalizes_weight():
     result = CanonicalIndexDataService(
         FakeDataService(), broker
     ).constituents(
-        symbols=["000300.SH"], update_dates=[date(2026, 6, 30)]
+        symbols=["000300.SH"], update_dates=[date(2026, 6, 30)],
+        allow_quota_fallback=True,
     )
 
     row = result["data"][0]

@@ -29,7 +29,6 @@ from service.source_connectors.financial_data_catalog import FINANCIAL_DATA_ROUT
 from service.source_connectors.raw_archive import SourceRawArchive
 from service.source_connectors.registry import FINANCIAL_DATA_SOURCE
 
-
 _MODES = frozenset({
     "data",
     "tool_recall",
@@ -131,6 +130,57 @@ class FinancialDataConnector:
                 "financial-data response must be a JSON object"
             )
         return value
+
+    def execute(self, request: ConnectorRequest) -> ConnectorResult:
+        """Scheduled-pull path for the reviewed ant_norm_* route allow-list.
+
+        Kept separate from ``query()`` on purpose: query-through stays
+        bounded, unauthenticated-read shaped and never persists business
+        rows, while the scheduled path enumerates partitions and writes the
+        standard tables.  Imported lazily to avoid the protocol-helper
+        import cycle.
+        """
+        if request.source_id != self.source.source_id:
+            raise ValueError("request source does not match financial-data connector")
+        if request.acquisition_mode != AcquisitionMode.SCHEDULED_PULL:
+            raise ValueError(
+                "financial-data scheduled execution requires scheduled_pull mode"
+            )
+        from service.source_connectors.ant_scheduled import (
+            SCHEDULED_ROUTES,
+            run_scheduled_pull,
+        )
+
+        spec = SCHEDULED_ROUTES.get(request.endpoint_key)
+        if spec is None:
+            raise ValueError(
+                f"financial-data route {request.endpoint_key!r} is not on the "
+                "scheduled-pull allow-list"
+            )
+        try:
+            rows, evidence = run_scheduled_pull(spec, self._transport)
+        except Exception as exc:
+            if self._archive is not None:
+                try:
+                    self._archive.archive_failure(
+                        endpoint_key=request.endpoint_key,
+                        parameters={"route": spec.route},
+                        collector_name="financial_data_scheduled_pull",
+                        error=exc,
+                    )
+                except Exception:
+                    pass
+            raise
+        return ConnectorResult(
+            source_id=request.source_id,
+            endpoint_key=request.endpoint_key,
+            acquisition_mode=request.acquisition_mode,
+            records=rows,
+            fetched_rows=evidence["fetched_rows"],
+            stored_rows=evidence["stored_rows"],
+            status="complete" if evidence["fetched_rows"] else "empty",
+            evidence=evidence,
+        )
 
     def query(self, request: ConnectorRequest) -> ConnectorResult:
         if request.source_id != self.source.source_id:

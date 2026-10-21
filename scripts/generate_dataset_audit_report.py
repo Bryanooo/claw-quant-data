@@ -23,6 +23,7 @@ from service.orchestration_v2.catalog import (
 )
 from service.orchestration_v2.audit_contracts import dataset_audit_contract
 from service.orchestration_v2.repair_planning import observation_identity
+from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
 from service.source_connectors.registry import SOURCE_REGISTRY
 
 
@@ -406,6 +407,15 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
             latest_status=latest_status,
             current_attention=int(jobs.get("current_attention") or 0),
         )
+        data_role = (
+            "collection_evidence"
+            if rule.dataset_name == "tushare_raw"
+            else "deferred_research"
+            if rule.dataset_name in DEFERRED_RESEARCH_DATASETS
+            else "business_dataset"
+        )
+        if data_role == "deferred_research":
+            repair_state = "deferred_by_research_scope"
         rows.append(
             {
                 "dataset": rule.dataset_name,
@@ -467,11 +477,7 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
                 "failure_history": int(jobs.get("failure_history") or 0),
                 "current_attention": int(jobs.get("current_attention") or 0),
                 "repair_state": repair_state,
-                "data_role": (
-                    "collection_evidence"
-                    if rule.dataset_name == "tushare_raw"
-                    else "business_dataset"
-                ),
+                "data_role": data_role,
                 "v2_task_key": v2_task_key,
                 "v2_baseline_covered": v2_task_key is not None,
                 "v2_definition_status": (
@@ -557,7 +563,12 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
             "job_end_id": job_end,
             "datasets": len(rows),
             "business_datasets": len(business_rows),
-            "evidence_datasets": len(rows) - len(business_rows),
+            "evidence_datasets": sum(
+                row["data_role"] == "collection_evidence" for row in rows
+            ),
+            "deferred_research_datasets": sum(
+                row["data_role"] == "deferred_research" for row in rows
+            ),
         },
         "semantics": {
             "task_success_is_not_data_completeness": True,

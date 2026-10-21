@@ -167,7 +167,10 @@ _STRATEGY_OVERRIDES: dict[str, ParameterStrategy] = {
     # cap. Keep these interfaces implemented, but do not automate them until
     # their dependency fan-out has an authoritative universe.
     "tdx_member": "dependency_fanout",
-    "opt_daily": "manual",
+    # Both interfaces have governed static fan-out definitions. Treating them
+    # as manual bypassed those definitions and made bounded repairs impossible.
+    "opt_daily": "dependency_fanout",
+    "dc_index": "dependency_fanout",
     "moneyflow_dc": "ts_code_fanout",
     # Live probes prove both endpoints support a complete market-wide
     # trade_date partition through standard limit/offset pagination.
@@ -199,10 +202,33 @@ _CADENCE_OVERRIDES: dict[str, Cadence] = {
     # weekly and left Monday's state stale until Friday.
     "st": "daily",
     "stock_st": "daily",
+    # Security master changes on listing and delisting days and is consumed by
+    # the daily technical snapshot. Three status-partitioned snapshot calls
+    # are cheap and give the derived workflow an exact same-day dependency.
+    "stock_basic": "daily",
+    "opt_daily": "daily",
+    "dc_index": "daily",
+    # High fan-out interfaces fetch the closed week as one range per governed
+    # entity. Every daily observation is retained with roughly one fifth of
+    # the provider calls required by a daily fan-out.
+    "cyq_chips": "weekly",
+    "etf_sh_cons": "weekly",
+    "etf_sz_cons": "weekly",
+    # One factor/day is close to the provider's 6,000-row response cap.  A
+    # weekly range is therefore unsafe even though the endpoint accepts one;
+    # keep exact-day partitions and let the governed factor-name fan-out stay
+    # below the daily request allowance.
+    "factor_value": "daily",
+    "moneyflow_dc": "weekly",
     "cn_gdp": "quarterly",
     "ggt_daily": "daily",
     "ggt_top10": "daily",
     "ths_member": "weekly",
+    # The endpoint requires exactly one ts_code, but accepts a date range.
+    # A daily fan-out therefore wastes roughly 5.5k calls per trading day.
+    # Collect the closed week in one date-window request per listed stock:
+    # all daily observations are retained while calls fall by about 80%.
+    "cyq_perf": "weekly",
 }
 
 _NO_LOOP_APIS = {

@@ -150,9 +150,9 @@ CHINAMONEY_SOURCE = SourceSpec(
 
 FINANCIAL_DATA_SOURCE = SourceSpec(
     source_id="financial_data",
-    display_name="蚂蚁数据源",
+    display_name="蚂蚁",
     kind=SourceKind.API,
-    acquisition_modes=(AcquisitionMode.QUERY_THROUGH,),
+    acquisition_modes=(AcquisitionMode.QUERY_THROUGH, AcquisitionMode.SCHEDULED_PULL),
     credential_ref="env:ANT_DATA_API_KEY",
     base_url=(
         "https://dfdatamcpnexus-prod.antgroup-inc.cn/api/v1/common_query"
@@ -160,7 +160,15 @@ FINANCIAL_DATA_SOURCE = SourceSpec(
     timezone="Asia/Shanghai",
     license_policy={
         "persist_raw_records": False,
-        "query_through_only": True,
+        "scheduled_pull_routes": [
+            "altdata.hot-stock-rank",
+            "altdata.hot-plate-rank",
+            "stock_fnd.equity-structure",
+            "stock_fnd.free-float",
+            "stock_fnd.actual-controller",
+            "stock_fnd.controlling-shareholder",
+            "stock_fnd.style-classification",
+        ],
     },
     configuration={
         "adapter": "financial_data",
@@ -169,7 +177,53 @@ FINANCIAL_DATA_SOURCE = SourceSpec(
         "legacy_source_id": "financial_data",
         "api_version": "1.6.0",
         "catalog_discovered_routes": 163,
-        "business_scope": "本地规范数据无法覆盖时的限额按需补充",
+        "business_scope": "本地规范数据无法覆盖时的限额按需补充；白名单路由按计划采集",
+    },
+)
+
+
+_FINANCIAL_SCHEDULED_ENDPOINTS: tuple[dict[str, str], ...] = (
+    {
+        "endpoint_key": "altdata.hot-stock-rank",
+        "route": "/api/v1/altdata/hot-stock-rank",
+        "title": "支付宝热门股票榜",
+        "cadence": "daily",
+    },
+    {
+        "endpoint_key": "altdata.hot-plate-rank",
+        "route": "/api/v1/altdata/hot-plate-rank",
+        "title": "支付宝热门板块榜",
+        "cadence": "daily",
+    },
+    {
+        "endpoint_key": "stock_fnd.equity-structure",
+        "route": "/api/v1/stock_fnd/equity-structure",
+        "title": "股本结构（全市场快照）",
+        "cadence": "weekly",
+    },
+    {
+        "endpoint_key": "stock_fnd.free-float",
+        "route": "/api/v1/stock_fnd/free-float",
+        "title": "自由流通股本（全市场事件史）",
+        "cadence": "weekly",
+    },
+    {
+        "endpoint_key": "stock_fnd.actual-controller",
+        "route": "/api/v1/stock_fnd/actual-controller",
+        "title": "实际控制人",
+        "cadence": "monthly",
+    },
+    {
+        "endpoint_key": "stock_fnd.controlling-shareholder",
+        "route": "/api/v1/stock_fnd/controlling-shareholder",
+        "title": "控股股东",
+        "cadence": "monthly",
+    },
+    {
+        "endpoint_key": "stock_fnd.style-classification",
+        "route": "/api/v1/stock_fnd/style-classification",
+        "title": "股票风格规模分类",
+        "cadence": "monthly",
     },
 )
 
@@ -208,6 +262,24 @@ def build_source_registry() -> SourceRegistry:
             "business_timestamp_required_for_realtime_claims": True,
         },
     ))
+    # Reviewed scheduled-pull allow-list (2026-10 product decision): routes
+    # whose facts have no Tushare equivalent and whose research value needs
+    # accumulated time series.  Params/enumeration live inside the acquire
+    # node (ant_scheduled.py); the endpoint contract stays declarative.
+    for _spec in _FINANCIAL_SCHEDULED_ENDPOINTS:
+        registry.register_endpoint(EndpointSpec(
+            source_id="financial_data",
+            endpoint_key=_spec["endpoint_key"],
+            title=_spec["title"],
+            acquisition_mode=AcquisitionMode.SCHEDULED_PULL,
+            resource_class="reference",
+            cadence=_spec["cadence"],
+            request_contract={"route": _spec["route"], "collection": "ant_norm"},
+            completeness_policy={
+                "expected_frequency": _spec["cadence"],
+                "scheduled_payload_bound": "100_requests_per_payload",
+            },
+        ))
     registry.register_endpoint(EndpointSpec(
         source_id="chinamoney",
         endpoint_key="lpr_history",

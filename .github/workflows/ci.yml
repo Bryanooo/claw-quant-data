@@ -40,6 +40,8 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check collectors service scripts tests
       - name: Validate documentation
         run: python scripts/check_documentation.py
       - name: Initialize schema

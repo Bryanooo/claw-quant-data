@@ -28,6 +28,9 @@ from service.orchestration_v2.catalog import (
 )
 from service.orchestration_v2.bootstrap import endpoint_contracts, task_documents
 from service.orchestration_v2.runtime import merge_frozen_scope
+from service.orchestration_v2.transformations import (
+    SUPPORTED_TRANSFORMATION_TASK_KEYS,
+)
 from service.source_connectors.registry import SOURCE_REGISTRY
 from service.data_service.registry import DATASETS
 
@@ -328,12 +331,6 @@ def test_operator_retry_budget_is_bounded_before_database_access():
         )
 
 
-def test_operator_supersede_empty_selection_never_opens_database():
-    repository = OrchestrationV2Repository()
-
-    assert repository.supersede_attention_executions((), reason="nothing") == []
-
-
 def test_resolved_attention_reconciler_rejects_unbounded_limit():
     repository = OrchestrationV2Repository()
 
@@ -362,7 +359,23 @@ def test_transient_recovery_rejects_unbounded_policy_before_database_access():
 def test_quota_guarded_recovery_policy_is_explicit():
     from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
 
-    assert QUOTA_GUARDED_DATASETS == frozenset({"cyq_perf"})
+    assert QUOTA_GUARDED_DATASETS == frozenset(
+        {"cyq_perf", "factor_value", "index_weight", "us_daily"}
+    )
+
+
+def test_governed_technical_history_can_reconcile_legacy_input_states():
+    from service.orchestration_v2.runtime import (
+        allow_transform_owned_historical_validation,
+    )
+
+    document = type("Document", (), {"task_key": "technical_factor_snapshot"})()
+    execution = {
+        "purpose": "repair",
+        "frozen_scope": {"historical_source_validation": "transform_owned"},
+    }
+
+    assert allow_transform_owned_historical_validation(document, execution)
 
 
 def test_resource_deferral_records_the_claimed_attempt_after_refunding_budget():
@@ -408,17 +421,27 @@ def test_stale_contract_reconciler_rejects_unbounded_limit():
         repository.reconcile_stale_audit_contract_executions(limit=5001)
 
 
+def test_obsolete_definition_reconciler_requires_explicit_safe_scope():
+    repository = OrchestrationV2Repository()
+
+    assert repository.supersede_obsolete_definition_executions(
+        (), reason="nothing selected"
+    ) == 0
+    with pytest.raises(ValueError, match="reason is required"):
+        repository.supersede_obsolete_definition_executions(
+            ("fama_french_daily",), reason=" "
+        )
+    with pytest.raises(ValueError, match="between 1 and 10000"):
+        repository.supersede_obsolete_definition_executions(
+            ("fama_french_daily",), reason="formula changed", limit=10001
+        )
+
+
 def test_guarded_history_promotion_rejects_unbounded_limit():
     repository = OrchestrationV2Repository()
 
     with pytest.raises(ValueError, match="between 1 and 5000"):
         repository.promote_quota_guarded_history_executions(limit=5001)
-
-
-def test_operator_supersede_invalid_scope_empty_selection_never_opens_database():
-    repository = OrchestrationV2Repository()
-
-    assert repository.supersede_invalid_scope_executions((), reason="nothing") == []
 
 
 def test_requeue_due_empty_selection_never_opens_database():
@@ -452,12 +475,12 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
     transformations = transformation_task_blueprints()
 
     assert task_baseline_summary() == {
-        "acquisition": 192,
-        "transformation": 14,
-        "total": 206,
+        "acquisition": 199,
+        "transformation": 15,
+        "total": 214,
     }
-    assert len({item.task_key for item in acquisitions}) == 192
-    assert len({item.task_key for item in transformations}) == 14
+    assert len({item.task_key for item in acquisitions}) == 199
+    assert len({item.task_key for item in transformations}) == 15
     assert not (
         {item.task_key for item in acquisitions}
         & {item.task_key for item in transformations}
@@ -484,8 +507,16 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
     all_task_keys = {
         item.task_key for item in (*acquisitions, *transformations)
     }
+    outputs_by_task = {
+        item.task_key: set(item.output_datasets) for item in acquisitions
+    }
     for task in transformations:
         assert set(task.dependency_task_keys) <= all_task_keys
+        if task.task_key in SUPPORTED_TRANSFORMATION_TASK_KEYS:
+            dependency_outputs = set().union(
+                *(outputs_by_task[key] for key in task.dependency_task_keys)
+            )
+            assert set(task.input_datasets) <= dependency_outputs
 
 
 def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
@@ -503,8 +534,8 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     }
     documents = task_documents(endpoint_ids)
 
-    assert len(endpoint_contracts()) == len(references) == 203
-    assert len(documents) == 206
+    assert len(endpoint_contracts()) == len(references) == 210
+    assert len(documents) == 214
     by_key = {document.task_key: document for document in documents}
     assert [node.kind.value for node in by_key["daily"].nodes] == [
         "condition", "scope_plan", "acquire", "validate", "publish"
@@ -538,9 +569,21 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     }
     assert len(planned_outputs) == 12
     technical_snapshot = by_key["technical_factor_snapshot"]
-    assert technical_snapshot.input_datasets == ("stock_daily", "adj_factor")
+    assert technical_snapshot.input_datasets == (
+        "stock_daily", "adj_factor", "stock_basic"
+    )
     assert [item.task_key for item in technical_snapshot.dependencies] == [
-        "daily", "adj_factor"
+        "daily", "adj_factor", "stock_basic"
+    ]
+    assert technical_snapshot.scope_contract["implementation_version"] == (
+        "technical-factor-snapshot-v4"
+    )
+    fama_french = by_key["fama_french_daily"]
+    assert fama_french.input_datasets == (
+        "stock_daily", "daily_basic", "stock_st"
+    )
+    assert [item.task_key for item in fama_french.dependencies] == [
+        "daily", "daily_basic", "stock_st"
     ]
     assert by_key["adj_factor"].resource.priority == 90
     assert "macro_regime" in planned_outputs
@@ -572,3 +615,13 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     assert by_key["stock_basic"].scope_contract[
         "execution_period_granularity"
     ] == "snapshot"
+
+
+def test_us_daily_claim_waits_for_shared_hourly_slot():
+    import inspect
+
+    source = inspect.getsource(OrchestrationV2Repository.claim_next)
+
+    assert "queued.task_key='us_daily'" in source
+    assert "sys_tushare_rate_limit" in source
+    assert "INTERVAL '15 seconds'" in source

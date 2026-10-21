@@ -18,7 +18,11 @@ from service.orchestration_v2.gap_repair import (
     plan_quota_guarded_history_repairs,
 )
 from service.orchestration_v2.repository import OrchestrationV2Repository
-from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+from service.orchestration_v2.recovery_policy import (
+    DEFERRED_RESEARCH_DATASETS,
+    MANUAL_SCOPE_REPAIR_DATASETS,
+    QUOTA_GUARDED_DATASETS,
+)
 
 
 _TERMINAL = frozenset({"success", "attention", "superseded", "cancelled"})
@@ -265,7 +269,12 @@ class InitializationService:
                 initialization_id
             )["latest_execution_id"]
             datasets = [
-                rule.dataset_name for rule in COVERAGE_RULES.list() if rule.auditable
+                rule.dataset_name
+                for rule in COVERAGE_RULES.list()
+                if (
+                    rule.auditable
+                    and rule.dataset_name not in DEFERRED_RESEARCH_DATASETS
+                )
             ]
             start, end = self._audit_bounds(initialization_id)
             self._coverage.submit_audits(
@@ -283,7 +292,11 @@ class InitializationService:
                 self._orchestration,
                 start_date=start,
                 end_date=end,
-                excluded_datasets=QUOTA_GUARDED_DATASETS,
+                excluded_datasets=(
+                    QUOTA_GUARDED_DATASETS
+                    | DEFERRED_RESEARCH_DATASETS
+                    | MANUAL_SCOPE_REPAIR_DATASETS
+                ),
             )
             audits = self._repository.audit_jobs(initialization_id)
             audit_round = max((int(row["job_id"]) for row in audits), default=0)
@@ -350,7 +363,9 @@ class InitializationService:
         # repairs with fresh idempotency keys.
         self._repository.supersede_legacy_quota_guarded_executions(
             initialization_id,
-            task_keys=tuple(sorted(QUOTA_GUARDED_DATASETS)),
+            task_keys=tuple(sorted(
+                QUOTA_GUARDED_DATASETS - DEFERRED_RESEARCH_DATASETS
+            )),
         )
         self._repository.set_control_status(initialization_id, "active")
         return self.reconcile(initialization_id)

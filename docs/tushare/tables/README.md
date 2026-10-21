@@ -3,7 +3,8 @@
 本目录由接口契约生成。完整字段、身份和类型契约统一保存在
 [contracts.json](contracts.json)，不再为每张表复制一份 Markdown。每个表均保留原始记录哈希、
 采集时间、契约版本和契约外字段。
-原始 JSON 仍保存在 `tushare_raw_record`，标准化失败记录进入
+生产默认只在异常时把逐行原文保存在 `tushare_raw_record`；每次请求的参数、状态、
+行数和摘要始终保存在 `tushare_raw_request`。标准化失败记录进入
 `sys_tushare_normalization_error`，字段漂移进入 `sys_tushare_schema_drift`。
 
 | 接口 | PostgreSQL 表 | 字段数 | 主日期字段 |

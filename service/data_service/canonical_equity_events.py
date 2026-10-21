@@ -237,7 +237,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
         *,
         symbols: list[str],
         report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         normalized_dates = self._validate_report_dates(report_dates)
@@ -444,7 +444,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
         *,
         symbols: list[str],
         report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         normalized_dates = self._validate_report_dates(report_dates)
@@ -583,7 +583,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
         *,
         symbols: list[str],
         report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         normalized_dates = self._validate_report_dates(report_dates)
@@ -830,7 +830,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
         symbols: list[str],
         report_dates: list[date],
         classifications: list[str],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         normalized_dates = self._validate_report_dates(report_dates)
@@ -1017,7 +1017,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
         *,
         symbols: list[str],
         report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized_symbols = self._validate_symbols(symbols)
         normalized_dates = self._validate_report_dates(report_dates)
@@ -1274,7 +1274,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
 
     def repurchases(
         self, *, symbols: list[str], start_date: date, end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         return self._range_events(
             symbols=symbols, start_date=start_date, end_date=end_date,
@@ -1299,7 +1299,7 @@ class CanonicalEquityEventService(CanonicalEquityDataService):
 
     def holder_counts(
         self, *, symbols: list[str], start_date: date, end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         return self._range_events(
             symbols=symbols, start_date=start_date, end_date=end_date,

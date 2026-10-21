@@ -33,6 +33,11 @@ REALTIME_ROUTES = {
     "valuation_snapshot": "/api/v1/quote/derived-snapshot",
 }
 
+CHAIN_ROUTES = {
+    "belong": "/api/v1/common/stock-belong-industry-chain",
+    "tree": "/api/v1/common/industry-chain-tree",
+}
+
 
 def _latest(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not rows:
@@ -403,3 +408,50 @@ class FinancialResearchEvidenceService:
         }
         result["normalized"] = _technical_summary(combined_data)
         return result
+
+    def industry_chain(self, symbol: str, *, as_of: date) -> dict[str, Any]:
+        """Resolve the provider industry-chain context for one A-share symbol.
+
+        Two sequential quota-bounded calls: first the symbol→chain membership,
+        then the chain tree rooted at the resolved node.  Both are cached at
+        the broker layer so repeated panel views do not re-consume quota.
+        """
+        belong = self._query(
+            routes={"belong": CHAIN_ROUTES["belong"]},
+            parameters={"belong": {"symbol": symbol}},
+            as_of=as_of,
+            cache_ttl_seconds=86_400,
+            point_in_time_safe=False,
+        )
+        membership = (belong["data"].get("belong") or {}).get("rows") or []
+        if not membership:
+            return {
+                "status": belong["status"],
+                "source_id": "financial_data",
+                "as_of": as_of,
+                "membership": [],
+                "chain_tree": None,
+                "provenance": belong["provenance"],
+                "warnings": belong.get("warnings", []),
+                "requested_at": belong.get("requested_at"),
+            }
+        chain_symbol = str(membership[0].get("chain_symbol") or "")
+        tree = None
+        if chain_symbol:
+            tree = self._query(
+                routes={"tree": CHAIN_ROUTES["tree"]},
+                parameters={"tree": {"symbol": chain_symbol}},
+                as_of=as_of,
+                cache_ttl_seconds=86_400,
+                point_in_time_safe=False,
+            )
+        return {
+            "status": tree["status"] if tree else belong["status"],
+            "source_id": "financial_data",
+            "as_of": as_of,
+            "membership": membership[:10],
+            "chain_tree": (tree or {}).get("data", {}).get("tree"),
+            "provenance": belong["provenance"] + (tree or {}).get("provenance", []),
+            "warnings": belong.get("warnings", []) + (tree or {}).get("warnings", []),
+            "requested_at": belong.get("requested_at"),
+        }

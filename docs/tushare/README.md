@@ -1,32 +1,25 @@
 # Tushare 全接口目录与 claw-quant 实现索引
 
-最近权限复核：2026-09-20。共收录 **244** 个唯一 `api_name`；当前 Token 可执行只读采集 **201** 个；已实现或安全封装 **203** 个。
+这是由 Tushare 契约生成的接口、字段、官方文档和实现代码索引，不是运行状态看板。
+表内权限表示最近一次真实 Token 复核快照，复核时间和探测证据见
+[权限复核报告](../../reports/tushare_permission_recheck.md)；当前权限、实现、自动编排和
+数据就绪是四种不同状态，应分别查询来源目录与运维 API。
 
-这里的 **201 是可采集 API 数量，不是采集器类数量**。其中 95 个 API 由同一个
-参数化契约通用采集器（原始审计层 + 接口专属强类型标准表）承载，106 个由专项或等价专项实现承载，两个集合无缺口、
-并集正好是 201。实现、自动编排和当前数据库已有数据是三个不同口径，详见
-[采集器架构](../COLLECTOR_ARCHITECTURE.md)；实时数据状态以
-`GET /api/v1/ops/data-health` 和[最新全量数据集审计](../../reports/dataset_audit_latest.md)为准。
-
-- 当前官方目录接口：235 个；claw-quant 有效历史/扩展接口：9 个
-- 完整目录权限：依底层接口权限 1 个、接口无效/已下线 1 个、无权限 39 个、有权限 202 个、有权限（当前限频） 1 个
 - HTTP 协议：[官方调用说明](https://tushare.pro/document/1?doc_id=40)
 - 权限规则：[官方权限说明](https://tushare.pro/document/1?doc_id=108)
 - 机器可读契约：[contracts.json](contracts.json)
 - 官方导航遗漏接口的复核契约：[official_contract_supplements.json](official_contract_supplements.json)
 - 当前权限复核：[Markdown](../../reports/tushare_permission_recheck.md) / [JSON](../../reports/tushare_permission_recheck.json)
 
-权限来自真实 Token 的安全探测。保存、删除类接口只探测空参数，不会更改用户数据；它们仅做安全封装，不进入采集调度。`pro_bar` 是 SDK 组合接口，不支持 HTTP。
-
-当前 201 个可采集接口由 V2 编译为 191 个原生采集任务，并产出 194 个可审计数据集。
-普通/VIP 等价接口会合并成同一任务；分页、市场和证券枚举都在单个实例的 `acquire`
-节点内完成。接口实现、任务定义、实例成功和数据完整是四种不同状态；实时状态以
+保存、删除类接口仅做安全封装，不进入采集调度。`pro_bar` 是 SDK 组合接口，不支持
+HTTP。普通/VIP 等价接口可能合并为同一任务；分页、市场和证券枚举都在单个实例的
+`acquire` 节点内完成。实时状态以
 `GET /api/v1/ops/orchestration-v2/summary`、`GET /api/v1/ops/data-health` 和
-[V2 数据审计口径](../DATA_ASSURANCE.md)为准。
+[数据生产与质量](../DATA_PIPELINE.md)为准。
 
 ## 完整接口列表
 
-| HTTP | 接口名 | 功能 | Token权限 | claw-quant实现 | 官方详情 | 机器契约 | 实现代码 |
+| HTTP | 接口名 | 功能 | 权限复核快照 | claw-quant实现 | 官方详情 | 机器契约 | 实现代码 |
 |---|---|---|---|---|---|---|---|
 | POST http://api.tushare.pro | `adj_factor` | 本接口由Tushare自行生产，获取股票复权因子，可提取单只股票全部历史复权因子，也可以提取单日全部股票的复权因子。 | 有权限 | 已实现（契约通用采集器：原始层+强类型标准表） | [doc 28](https://tushare.pro/document/2?doc_id=28) | [JSON](contracts.json) | [collectors/tushare_raw.py:CatalogRawCollector](../../collectors/tushare_raw.py) |
 | POST http://api.tushare.pro | `anns_d` | 获取全量公告数据，提供pdf下载URL | 无权限 | 未实现 | [doc 176](https://tushare.pro/document/2?doc_id=176) | [JSON](contracts.json) | — |

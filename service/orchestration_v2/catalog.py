@@ -63,6 +63,49 @@ _TASK_KEY_OVERRIDES = {
 }
 
 
+# 蚂蚁数据源 scheduled-pull tasks (2026-10 product decision): routes without a
+# Tushare equivalent whose research value needs accumulated time series.
+# Endpoint keys map to the SOURCE_REGISTRY scheduled-pull allow-list; the
+# acquire node resolves route parameters inside ant_scheduled.py.
+_FINANCIAL_DATA_TASKS: tuple[dict[str, str], ...] = (
+    {
+        "task_key": "ant_hot_stock_rank",
+        "endpoint_key": "altdata.hot-stock-rank",
+        "output_dataset": "ant_hot_stock_rank",
+    },
+    {
+        "task_key": "ant_hot_plate_rank",
+        "endpoint_key": "altdata.hot-plate-rank",
+        "output_dataset": "ant_hot_plate_rank",
+    },
+    {
+        "task_key": "ant_equity_structure",
+        "endpoint_key": "stock_fnd.equity-structure",
+        "output_dataset": "ant_equity_structure",
+    },
+    {
+        "task_key": "ant_free_float",
+        "endpoint_key": "stock_fnd.free-float",
+        "output_dataset": "ant_free_float",
+    },
+    {
+        "task_key": "ant_actual_controller",
+        "endpoint_key": "stock_fnd.actual-controller",
+        "output_dataset": "ant_actual_controller",
+    },
+    {
+        "task_key": "ant_controlling_shareholder",
+        "endpoint_key": "stock_fnd.controlling-shareholder",
+        "output_dataset": "ant_controlling_shareholder",
+    },
+    {
+        "task_key": "ant_style_classification",
+        "endpoint_key": "stock_fnd.style-classification",
+        "output_dataset": "ant_style_classification",
+    },
+)
+
+
 _DERIVED_TASKS = (
     TransformationTaskBlueprint(
         "ggt_monthly", ("ggt_daily",), ("ggt_monthly",), ("ggt_daily",), 80
@@ -83,11 +126,14 @@ _DERIVED_TASKS = (
     ),
     TransformationTaskBlueprint(
         "technical_factor_snapshot",
-        ("stock_daily", "adj_factor"),
+        ("stock_daily", "adj_factor", "stock_basic"),
         ("technical_factor_snapshot",),
-        ("daily", "adj_factor"),
+        ("daily", "adj_factor", "stock_basic"),
         90,
-        "technical-factor-snapshot-v1",
+        # v4 freezes the same-day security master alongside bars and factors,
+        # so newly listed and final-day delisted securities cannot be omitted
+        # because the derived task raced a weekly reference refresh.
+        "technical-factor-snapshot-v4",
     ),
     TransformationTaskBlueprint(
         "valuation_percentile_snapshot",
@@ -95,6 +141,21 @@ _DERIVED_TASKS = (
         ("valuation_percentile_snapshot",),
         ("daily_basic", "index_member_all"),
         80,
+    ),
+    TransformationTaskBlueprint(
+        "fama_french_daily",
+        (
+            "stock_daily",
+            # The orchestration data-plane name follows the acquisition
+            # endpoint output.  ``stock_daily_basic`` is the public data
+            # service alias, not the dataset_state identity.
+            "daily_basic",
+            "stock_st",
+        ),
+        ("fama_french_daily",),
+        ("daily", "daily_basic", "stock_st"),
+        80,
+        "ff3-sh-sz-v2",
     ),
     TransformationTaskBlueprint(
         "market_breadth",
@@ -203,9 +264,24 @@ def acquisition_task_blueprints() -> tuple[AcquisitionTaskBlueprint, ...]:
             resource_class=endpoint.resource_class,
         ))
 
+    for spec in _FINANCIAL_DATA_TASKS:
+        endpoint = SOURCE_REGISTRY.get_endpoint("financial_data", spec["endpoint_key"])
+        if endpoint.acquisition_mode.value != "scheduled_pull":
+            raise RuntimeError(
+                f"financial_data endpoint {spec['endpoint_key']} is not "
+                "registered for scheduled pulls"
+            )
+        tasks.append(AcquisitionTaskBlueprint(
+            task_key=spec["task_key"],
+            endpoints=(EndpointRef("financial_data", spec["endpoint_key"]),),
+            output_datasets=(spec["output_dataset"],),
+            cadence=endpoint.cadence,
+            resource_class=endpoint.resource_class,
+        ))
+
     result = tuple(sorted(tasks, key=lambda item: item.task_key))
-    if len(result) != 192:
-        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 192")
+    if len(result) != 199:
+        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 199")
     return result
 
 

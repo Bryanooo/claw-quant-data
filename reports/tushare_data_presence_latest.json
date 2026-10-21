@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-01T00:08:57.435097+08:00",
+  "generated_at": "2026-10-18T20:45:41.732294+08:00",
   "summary": {
-    "collectable_interfaces": 201,
-    "implemented_interfaces": 201,
-    "automatically_scheduled_interfaces": 150,
-    "interfaces_with_positive_rows": 197,
+    "collectable_interfaces": 202,
+    "implemented_interfaces": 202,
+    "automatically_scheduled_interfaces": 153,
+    "interfaces_with_positive_rows": 198,
     "interfaces_without_positive_row_evidence": 4
   },
   "interfaces": [
@@ -16,9 +16,9 @@
       "normalized_tables": [
         "tushare_norm_adj_factor"
       ],
-      "normalized_rows": 10009378,
-      "successful_jobs": 6711,
-      "last_success_at": "2026-09-30T14:29:01.537604+00:00",
+      "normalized_rows": 19150650,
+      "successful_jobs": 8666,
+      "last_success_at": "2026-10-16T11:15:04.692672+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -30,9 +30,9 @@
       "normalized_tables": [
         "bak_basic"
       ],
-      "normalized_rows": 10796023,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:28:54.299542+00:00",
+      "normalized_rows": 10835077,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:02.807335+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -44,9 +44,9 @@
       "normalized_tables": [
         "tushare_norm_bak_daily"
       ],
-      "normalized_rows": 10195606,
-      "successful_jobs": 47,
-      "last_success_at": "2026-09-30T14:29:03.478734+00:00",
+      "normalized_rows": 10234660,
+      "successful_jobs": 54,
+      "last_success_at": "2026-10-16T11:15:11.634941+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -86,9 +86,9 @@
       "normalized_tables": [
         "tushare_norm_bc_bestotcqt"
       ],
-      "normalized_rows": 16263,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:28:54.981607+00:00",
+      "normalized_rows": 19950,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:03.467575+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -114,9 +114,9 @@
       "normalized_tables": [
         "block_trade"
       ],
-      "normalized_rows": 2021,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:28:56.454244+00:00",
+      "normalized_rows": 2519,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:04.278031+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -128,9 +128,9 @@
       "normalized_tables": [
         "tushare_norm_bond_blk"
       ],
-      "normalized_rows": 56,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:28:57.934842+00:00",
+      "normalized_rows": 69,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:05.677399+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -142,9 +142,9 @@
       "normalized_tables": [
         "tushare_norm_bond_blk_detail"
       ],
-      "normalized_rows": 97,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:28:59.458213+00:00",
+      "normalized_rows": 120,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:06.196779+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -171,8 +171,8 @@
         "bse_mapping"
       ],
       "normalized_rows": 248,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:34.486324+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:19.300173+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -185,8 +185,8 @@
         "cashflow"
       ],
       "normalized_rows": 316975,
-      "successful_jobs": 56,
-      "last_success_at": "2026-09-30T14:38:56.197486+00:00",
+      "successful_jobs": 78,
+      "last_success_at": "2026-10-12T15:47:31.450765+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -212,9 +212,9 @@
       "normalized_tables": [
         "tushare_norm_cb_basic"
       ],
-      "normalized_rows": 2628,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:36.015287+00:00",
+      "normalized_rows": 2811,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:19.472564+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -226,9 +226,9 @@
       "normalized_tables": [
         "tushare_norm_cb_call"
       ],
-      "normalized_rows": 23,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:00.922540+00:00",
+      "normalized_rows": 34,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:07.115073+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -240,9 +240,9 @@
       "normalized_tables": [
         "tushare_norm_cb_daily"
       ],
-      "normalized_rows": 833092,
-      "successful_jobs": 1323,
-      "last_success_at": "2026-09-30T14:29:02.880599+00:00",
+      "normalized_rows": 835293,
+      "successful_jobs": 1330,
+      "last_success_at": "2026-10-16T11:15:08.243969+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -254,9 +254,9 @@
       "normalized_tables": [
         "tushare_norm_cb_factor_pro"
       ],
-      "normalized_rows": 7561,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:03.521493+00:00",
+      "normalized_rows": 9448,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:08.518572+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -268,9 +268,9 @@
       "normalized_tables": [
         "tushare_norm_cb_issue"
       ],
-      "normalized_rows": 9,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:03.932840+00:00",
+      "normalized_rows": 12,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:09.115402+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -324,9 +324,9 @@
       "normalized_tables": [
         "ccass_hold"
       ],
-      "normalized_rows": 51937,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T16:06:10.531153+00:00",
+      "normalized_rows": 54319,
+      "successful_jobs": 9,
+      "last_success_at": "2026-10-16T01:15:03.819634+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -352,9 +352,9 @@
       "normalized_tables": [
         "tushare_norm_ci_daily"
       ],
-      "normalized_rows": 1688130,
-      "successful_jobs": 4,
-      "last_success_at": "2026-09-30T14:29:05.160229+00:00",
+      "normalized_rows": 1691224,
+      "successful_jobs": 11,
+      "last_success_at": "2026-10-16T11:15:09.871685+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -478,9 +478,9 @@
       "normalized_tables": [
         "cyq_perf"
       ],
-      "normalized_rows": 711323,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": 9378499,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-12T15:22:40.026275+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -492,9 +492,9 @@
       "normalized_tables": [
         "daily"
       ],
-      "normalized_rows": 18290901,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:08.962145+00:00",
+      "normalized_rows": 18329834,
+      "successful_jobs": 44,
+      "last_success_at": "2026-10-16T11:15:14.126809+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -506,9 +506,9 @@
       "normalized_tables": [
         "tushare_norm_daily_basic"
       ],
-      "normalized_rows": 18269018,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:10.474594+00:00",
+      "normalized_rows": 18307951,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:16.017561+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -520,9 +520,9 @@
       "normalized_tables": [
         "tushare_norm_daily_info"
       ],
-      "normalized_rows": 131120,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:07.500981+00:00",
+      "normalized_rows": 131204,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:12.636854+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -534,9 +534,9 @@
       "normalized_tables": [
         "dc_concept"
       ],
-      "normalized_rows": 14592,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:08.757848+00:00",
+      "normalized_rows": 18409,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:13.760209+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -562,9 +562,9 @@
       "normalized_tables": [
         "dc_daily"
       ],
-      "normalized_rows": 712739,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:09.673685+00:00",
+      "normalized_rows": 1472898,
+      "successful_jobs": 916,
+      "last_success_at": "2026-10-16T11:15:15.070364+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -577,8 +577,8 @@
         "dc_hot"
       ],
       "normalized_rows": 16470,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:09.944651+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:15.102830+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -604,9 +604,9 @@
       "normalized_tables": [
         "dc_member"
       ],
-      "normalized_rows": 184006,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:10.992930+00:00",
+      "normalized_rows": 240006,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:16.204446+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -632,9 +632,9 @@
       "normalized_tables": [
         "dividend"
       ],
-      "normalized_rows": 67570,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:51:36.627658+00:00",
+      "normalized_rows": 67577,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:18.154333+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -646,9 +646,9 @@
       "normalized_tables": [
         "tushare_norm_eco_cal"
       ],
-      "normalized_rows": 99630,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:27.464185+00:00",
+      "normalized_rows": 101251,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:30.693384+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -661,8 +661,8 @@
         "tushare_norm_etf_basic"
       ],
       "normalized_rows": 1833,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:35.797985+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:20.041535+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -675,8 +675,8 @@
         "tushare_norm_etf_index"
       ],
       "normalized_rows": 564,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:36.053892+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:23.308731+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -702,9 +702,9 @@
       "normalized_tables": [
         "tushare_norm_etf_share_size"
       ],
-      "normalized_rows": 1985173,
-      "successful_jobs": 6,
-      "last_success_at": "2026-09-30T16:06:12.512939+00:00",
+      "normalized_rows": 1995358,
+      "successful_jobs": 12,
+      "last_success_at": "2026-10-16T01:15:06.042143+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -814,9 +814,9 @@
       "normalized_tables": [
         "fina_mainbz"
       ],
-      "normalized_rows": 2096152,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": 2096482,
+      "successful_jobs": 146,
+      "last_success_at": "2026-10-12T16:09:11.367153+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -828,7 +828,7 @@
       "normalized_tables": [
         "fina_mainbz"
       ],
-      "normalized_rows": 2096152,
+      "normalized_rows": 2096482,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -870,9 +870,9 @@
       "normalized_tables": [
         "tushare_norm_ft_limit"
       ],
-      "normalized_rows": 20826,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:16.083946+00:00",
+      "normalized_rows": 26916,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:17.261658+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -884,9 +884,9 @@
       "normalized_tables": [
         "tushare_norm_fund_adj"
       ],
-      "normalized_rows": 218479,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:21.967298+00:00",
+      "normalized_rows": 1403766,
+      "successful_jobs": 5146,
+      "last_success_at": "2026-10-16T11:15:22.657376+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -912,9 +912,9 @@
       "normalized_tables": [
         "tushare_norm_fund_company"
       ],
-      "normalized_rows": 443,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:36.590030+00:00",
+      "normalized_rows": 449,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:23.797825+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -926,9 +926,9 @@
       "normalized_tables": [
         "tushare_norm_fund_daily"
       ],
-      "normalized_rows": 216855,
-      "successful_jobs": 4,
-      "last_success_at": "2026-09-30T14:29:24.028231+00:00",
+      "normalized_rows": 1297172,
+      "successful_jobs": 5147,
+      "last_success_at": "2026-10-16T11:15:20.346318+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -940,9 +940,9 @@
       "normalized_tables": [
         "tushare_norm_fund_div"
       ],
-      "normalized_rows": 686,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:25.528236+00:00",
+      "normalized_rows": 902,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:21.750917+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -954,9 +954,9 @@
       "normalized_tables": [
         "tushare_norm_fund_factor_pro"
       ],
-      "normalized_rows": 48901,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:28.415912+00:00",
+      "normalized_rows": 61874,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:24.484619+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -968,9 +968,9 @@
       "normalized_tables": [
         "tushare_norm_fund_manager"
       ],
-      "normalized_rows": 86859,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:45:06.508294+00:00",
+      "normalized_rows": 87653,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:10:26.228770+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -983,8 +983,8 @@
         "tushare_norm_fund_nav"
       ],
       "normalized_rows": 6448978,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:46:22.391055+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:24.093307+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1010,9 +1010,9 @@
       "normalized_tables": [
         "tushare_norm_fund_share"
       ],
-      "normalized_rows": 2706809,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:46:11.204048+00:00",
+      "normalized_rows": 2712269,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:26.774293+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1038,9 +1038,9 @@
       "normalized_tables": [
         "tushare_norm_fut_daily"
       ],
-      "normalized_rows": 26823,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:29.732708+00:00",
+      "normalized_rows": 34355,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:25.817709+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1080,9 +1080,9 @@
       "normalized_tables": [
         "tushare_norm_fut_mapping"
       ],
-      "normalized_rows": 4840,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:31.064166+00:00",
+      "normalized_rows": 6254,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:27.150576+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1094,9 +1094,9 @@
       "normalized_tables": [
         "tushare_norm_fut_settle"
       ],
-      "normalized_rows": 22278,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:32.577113+00:00",
+      "normalized_rows": 28564,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:28.296160+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1109,8 +1109,8 @@
         "tushare_norm_fut_trade_cal"
       ],
       "normalized_rows": 13527,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:33.959311+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:28.703172+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1123,8 +1123,8 @@
         "tushare_norm_fut_weekly_detail"
       ],
       "normalized_rows": 4000,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:37.503672+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:27.219337+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1150,9 +1150,9 @@
       "normalized_tables": [
         "tushare_norm_fut_wsr"
       ],
-      "normalized_rows": 29462,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:35.653636+00:00",
+      "normalized_rows": 39293,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:29.851742+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1165,8 +1165,8 @@
         "fx_daily"
       ],
       "normalized_rows": 622320,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:37.032307+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:30.664669+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1179,8 +1179,8 @@
         "fx_obasic"
       ],
       "normalized_rows": 69,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:37.991210+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:28.289301+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1194,8 +1194,8 @@
         "ggt_monthly"
       ],
       "normalized_rows": 1143,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:38.432940+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:31.123161+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1207,9 +1207,9 @@
       "normalized_tables": [
         "ggt_top10"
       ],
-      "normalized_rows": 49710,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:40.016052+00:00",
+      "normalized_rows": 49850,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:31.670744+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1222,8 +1222,8 @@
         "tushare_norm_gz_index"
       ],
       "normalized_rows": 1181,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:41.437970+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:32.148067+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1235,9 +1235,9 @@
       "normalized_tables": [
         "tushare_norm_hibor"
       ],
-      "normalized_rows": 5494,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:43.009581+00:00",
+      "normalized_rows": 5501,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:32.640513+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1249,9 +1249,9 @@
       "normalized_tables": [
         "tushare_norm_hk_basic"
       ],
-      "normalized_rows": 2832,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:40.857042+00:00",
+      "normalized_rows": 2858,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:31.589531+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1263,9 +1263,9 @@
       "normalized_tables": [
         "tushare_norm_hk_daily"
       ],
-      "normalized_rows": 40503,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T15:29:47.144058+00:00",
+      "normalized_rows": 56224,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:33.646305+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1277,9 +1277,9 @@
       "normalized_tables": [
         "hk_hold"
       ],
-      "normalized_rows": 6955128,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:46.967761+00:00",
+      "normalized_rows": 6955167,
+      "successful_jobs": 13,
+      "last_success_at": "2026-10-16T11:15:33.827116+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1292,8 +1292,8 @@
         "tushare_norm_hk_tradecal"
       ],
       "normalized_rows": 17532,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:48.470586+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:34.321718+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1306,8 +1306,8 @@
         "hm_list"
       ],
       "normalized_rows": 117,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:41.011054+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:32.243377+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1319,9 +1319,9 @@
       "normalized_tables": [
         "hsgt_top10"
       ],
-      "normalized_rows": 440,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:49.964150+00:00",
+      "normalized_rows": 580,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:34.607361+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1333,9 +1333,9 @@
       "normalized_tables": [
         "tushare_norm_idx_anns"
       ],
-      "normalized_rows": 52,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:29:51.519892+00:00",
+      "normalized_rows": 59,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:35.183954+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1347,9 +1347,9 @@
       "normalized_tables": [
         "tushare_norm_idx_factor_pro"
       ],
-      "normalized_rows": 10485419,
-      "successful_jobs": 460,
-      "last_success_at": "2026-09-30T14:29:55.327946+00:00",
+      "normalized_rows": 10500536,
+      "successful_jobs": 481,
+      "last_success_at": "2026-10-16T11:15:38.103006+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1389,9 +1389,9 @@
       "normalized_tables": [
         "index_basic"
       ],
-      "normalized_rows": 11744,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T18:01:12.099069+00:00",
+      "normalized_rows": 11768,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:06:57.927759+00:00",
       "last_raw_at": "2026-09-28T17:52:04.596615+00:00",
       "data_status": "positive_rows"
     },
@@ -1404,8 +1404,8 @@
         "tushare_norm_index_classify"
       ],
       "normalized_rows": 705,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:43.332813+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:36.280221+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1417,9 +1417,9 @@
       "normalized_tables": [
         "index_daily"
       ],
-      "normalized_rows": 35124418,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T15:58:30.909889+00:00",
+      "normalized_rows": 35189271,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-17T01:30:15.161656+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1431,9 +1431,9 @@
       "normalized_tables": [
         "index_dailybasic"
       ],
-      "normalized_rows": 65880,
-      "successful_jobs": 4,
-      "last_success_at": "2026-09-30T14:30:03.020993+00:00",
+      "normalized_rows": 65985,
+      "successful_jobs": 11,
+      "last_success_at": "2026-10-16T11:15:36.620725+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1445,9 +1445,9 @@
       "normalized_tables": [
         "index_global"
       ],
-      "normalized_rows": 168891,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:04.452339+00:00",
+      "normalized_rows": 168956,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:37.627838+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1487,9 +1487,9 @@
       "normalized_tables": [
         "index_weekly"
       ],
-      "normalized_rows": 549277,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-28T17:43:44.513309+00:00",
+      "normalized_rows": 964011,
+      "successful_jobs": 1279,
+      "last_success_at": "2026-10-13T08:00:11.269106+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1515,9 +1515,9 @@
       "normalized_tables": [
         "kpl_concept_cons"
       ],
-      "normalized_rows": 4589865,
-      "successful_jobs": 6,
-      "last_success_at": "2026-09-30T14:30:16.384345+00:00",
+      "normalized_rows": 4684255,
+      "successful_jobs": 13,
+      "last_success_at": "2026-10-16T11:15:49.149387+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1530,8 +1530,8 @@
         "kpl_list"
       ],
       "normalized_rows": 1211,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:18.376021+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:39.559206+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1544,8 +1544,8 @@
         "tushare_norm_libor"
       ],
       "normalized_rows": 36735,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:19.985631+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:39.576466+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1557,9 +1557,9 @@
       "normalized_tables": [
         "limit_cpt_list"
       ],
-      "normalized_rows": 460,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:21.471853+00:00",
+      "normalized_rows": 600,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:40.622478+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1571,9 +1571,9 @@
       "normalized_tables": [
         "limit_list_d"
       ],
-      "normalized_rows": 2119,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:23.259334+00:00",
+      "normalized_rows": 2742,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:41.237679+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1585,9 +1585,9 @@
       "normalized_tables": [
         "tushare_norm_limit_list_ths"
       ],
-      "normalized_rows": 1562,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:24.649561+00:00",
+      "normalized_rows": 1930,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:42.207004+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1599,9 +1599,9 @@
       "normalized_tables": [
         "limit_step"
       ],
-      "normalized_rows": 295,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:30:25.944076+00:00",
+      "normalized_rows": 375,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:42.735483+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1613,9 +1613,9 @@
       "normalized_tables": [
         "tushare_norm_major_news"
       ],
-      "normalized_rows": 15857,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:12.676107+00:00",
+      "normalized_rows": 25091,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:41.814342+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1627,9 +1627,9 @@
       "normalized_tables": [
         "margin"
       ],
-      "normalized_rows": 369,
-      "successful_jobs": 24,
-      "last_success_at": "2026-09-30T16:06:11.493506+00:00",
+      "normalized_rows": 8922,
+      "successful_jobs": 3918,
+      "last_success_at": "2026-10-16T01:15:05.021914+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1641,9 +1641,9 @@
       "normalized_tables": [
         "margin_detail"
       ],
-      "normalized_rows": 1125028,
-      "successful_jobs": 19,
-      "last_success_at": "2026-09-30T16:06:12.128141+00:00",
+      "normalized_rows": 6896304,
+      "successful_jobs": 3776,
+      "last_success_at": "2026-10-16T01:15:09.534852+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1655,9 +1655,9 @@
       "normalized_tables": [
         "margin_secs"
       ],
-      "normalized_rows": 102862,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:25.069081+00:00",
+      "normalized_rows": 134244,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:44.378695+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1670,8 +1670,8 @@
         "tushare_norm_mkt_idx_bmk"
       ],
       "normalized_rows": 141,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:46.023885+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:45.245680+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1683,9 +1683,9 @@
       "normalized_tables": [
         "moneyflow"
       ],
-      "normalized_rows": 14097792,
-      "successful_jobs": 13,
-      "last_success_at": "2026-09-30T14:31:36.830797+00:00",
+      "normalized_rows": 14716274,
+      "successful_jobs": 743,
+      "last_success_at": "2026-10-16T11:16:06.516206+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1697,9 +1697,9 @@
       "normalized_tables": [
         "moneyflow_cnt_ths"
       ],
-      "normalized_rows": 194340,
-      "successful_jobs": 12,
-      "last_success_at": "2026-09-30T14:31:38.336224+00:00",
+      "normalized_rows": 197044,
+      "successful_jobs": 19,
+      "last_success_at": "2026-10-16T11:15:51.138463+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1725,9 +1725,9 @@
       "normalized_tables": [
         "moneyflow_hsgt"
       ],
-      "normalized_rows": 18,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:39.781323+00:00",
+      "normalized_rows": 25,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:54.221305+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1739,9 +1739,9 @@
       "normalized_tables": [
         "moneyflow_ind_dc"
       ],
-      "normalized_rows": 364122,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:41.599786+00:00",
+      "normalized_rows": 371366,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:15:57.788822+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1753,9 +1753,9 @@
       "normalized_tables": [
         "moneyflow_ind_ths"
       ],
-      "normalized_rows": 44640,
-      "successful_jobs": 17,
-      "last_success_at": "2026-09-30T14:31:43.273382+00:00",
+      "normalized_rows": 45270,
+      "successful_jobs": 24,
+      "last_success_at": "2026-10-16T11:16:00.661978+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1767,9 +1767,9 @@
       "normalized_tables": [
         "moneyflow_mkt_dc"
       ],
-      "normalized_rows": 840,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:44.755443+00:00",
+      "normalized_rows": 847,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:04.022175+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1781,9 +1781,9 @@
       "normalized_tables": [
         "moneyflow_ths"
       ],
-      "normalized_rows": 2205890,
-      "successful_jobs": 6,
-      "last_success_at": "2026-09-30T14:31:47.460687+00:00",
+      "normalized_rows": 2242375,
+      "successful_jobs": 13,
+      "last_success_at": "2026-10-16T11:16:08.177202+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1809,9 +1809,9 @@
       "normalized_tables": [
         "namechange"
       ],
-      "normalized_rows": 35,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:48.723615+00:00",
+      "normalized_rows": 44,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:09.746208+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1823,9 +1823,9 @@
       "normalized_tables": [
         "new_share"
       ],
-      "normalized_rows": 50,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:50.207366+00:00",
+      "normalized_rows": 53,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:10.189212+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1837,9 +1837,9 @@
       "normalized_tables": [
         "tushare_norm_opt_basic"
       ],
-      "normalized_rows": 15823,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:49.135436+00:00",
+      "normalized_rows": 17487,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:51.385744+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1880,8 +1880,8 @@
         "tushare_norm_p_list"
       ],
       "normalized_rows": 0,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:48.971163+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:04:55.750838+00:00",
       "last_raw_at": null,
       "data_status": "no_positive_row_evidence"
     },
@@ -1893,9 +1893,9 @@
       "normalized_tables": [
         "pledge_detail"
       ],
-      "normalized_rows": 597,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:51.738028+00:00",
+      "normalized_rows": 755,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:12.913777+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1921,9 +1921,9 @@
       "normalized_tables": [
         "tushare_norm_repo_daily"
       ],
-      "normalized_rows": 1030,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:53.365938+00:00",
+      "normalized_rows": 1292,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:13.510408+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1935,9 +1935,9 @@
       "normalized_tables": [
         "report_rc"
       ],
-      "normalized_rows": 2898358,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:31:59.340279+00:00",
+      "normalized_rows": 2900030,
+      "successful_jobs": 6124,
+      "last_success_at": "2026-10-16T11:16:17.143713+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1949,9 +1949,9 @@
       "normalized_tables": [
         "repurchase"
       ],
-      "normalized_rows": 59824,
-      "successful_jobs": 143,
-      "last_success_at": "2026-09-30T14:46:11.749263+00:00",
+      "normalized_rows": 60032,
+      "successful_jobs": 150,
+      "last_success_at": "2026-10-16T11:16:16.813933+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1992,8 +1992,8 @@
         "sge_basic"
       ],
       "normalized_rows": 13,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:51.898736+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:05:00.206183+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2005,9 +2005,9 @@
       "normalized_tables": [
         "sge_daily"
       ],
-      "normalized_rows": 3283,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:02.281700+00:00",
+      "normalized_rows": 23718,
+      "successful_jobs": 3209,
+      "last_success_at": "2026-10-16T11:16:19.521727+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2019,9 +2019,9 @@
       "normalized_tables": [
         "share_float"
       ],
-      "normalized_rows": 6483785,
-      "successful_jobs": 4,
-      "last_success_at": "2026-09-30T14:32:33.766831+00:00",
+      "normalized_rows": 6602354,
+      "successful_jobs": 11,
+      "last_success_at": "2026-10-16T11:17:19.327592+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2033,9 +2033,9 @@
       "normalized_tables": [
         "tushare_norm_shibor"
       ],
-      "normalized_rows": 4970,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:35.272138+00:00",
+      "normalized_rows": 4977,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:22.552143+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2061,9 +2061,9 @@
       "normalized_tables": [
         "tushare_norm_shibor_quote"
       ],
-      "normalized_rows": 85998,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:36.744088+00:00",
+      "normalized_rows": 86116,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:25.729457+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2076,8 +2076,8 @@
         "slb_len"
       ],
       "normalized_rows": 2811,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:38.227337+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:29.020226+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2090,8 +2090,8 @@
         "tushare_norm_slb_len_mm"
       ],
       "normalized_rows": 55214,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:40.210138+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:32.169928+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2104,8 +2104,8 @@
         "tushare_norm_slb_sec"
       ],
       "normalized_rows": 2287159,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:41.722869+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:35.353474+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2118,8 +2118,8 @@
         "tushare_norm_slb_sec_detail"
       ],
       "normalized_rows": 1043820,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:43.227584+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:38.515795+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2131,7 +2131,7 @@
       "normalized_tables": [
         "stock_st"
       ],
-      "normalized_rows": 721497,
+      "normalized_rows": 722904,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2146,8 +2146,8 @@
         "tushare_norm_stk_account"
       ],
       "normalized_rows": 189,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:44.732523+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:41.704664+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2159,9 +2159,9 @@
       "normalized_tables": [
         "stk_ah_comparison"
       ],
-      "normalized_rows": 4699,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:46.251797+00:00",
+      "normalized_rows": 6164,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:42.768785+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2173,9 +2173,9 @@
       "normalized_tables": [
         "stk_alert"
       ],
-      "normalized_rows": 35,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:47.724660+00:00",
+      "normalized_rows": 52,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:43.261213+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2187,9 +2187,9 @@
       "normalized_tables": [
         "stk_auction"
       ],
-      "normalized_rows": 2442178,
-      "successful_jobs": 286,
-      "last_success_at": "2026-09-30T14:32:50.162440+00:00",
+      "normalized_rows": 2516143,
+      "successful_jobs": 299,
+      "last_success_at": "2026-10-16T11:16:45.144945+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2202,8 +2202,8 @@
         "stk_auction_c"
       ],
       "normalized_rows": 122539,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:52.208951+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:44.695137+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2216,8 +2216,8 @@
         "stk_auction_o"
       ],
       "normalized_rows": 121573,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:32:54.241392+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:45.710398+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2229,9 +2229,9 @@
       "normalized_tables": [
         "tushare_norm_stk_factor"
       ],
-      "normalized_rows": 18544393,
-      "successful_jobs": 470,
-      "last_success_at": "2026-09-30T14:33:07.788601+00:00",
+      "normalized_rows": 18578164,
+      "successful_jobs": 490,
+      "last_success_at": "2026-10-16T11:16:57.579509+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2243,9 +2243,9 @@
       "normalized_tables": [
         "stk_factor_pro"
       ],
-      "normalized_rows": 18491653,
-      "successful_jobs": 593,
-      "last_success_at": "2026-09-30T14:33:26.839430+00:00",
+      "normalized_rows": 18506807,
+      "successful_jobs": 613,
+      "last_success_at": "2026-10-16T11:16:54.921799+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2257,9 +2257,9 @@
       "normalized_tables": [
         "stk_high_shock"
       ],
-      "normalized_rows": 4,
-      "successful_jobs": 4,
-      "last_success_at": "2026-09-30T14:33:29.108376+00:00",
+      "normalized_rows": 7,
+      "successful_jobs": 11,
+      "last_success_at": "2026-10-16T11:16:56.239659+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2271,9 +2271,9 @@
       "normalized_tables": [
         "stk_holdernumber"
       ],
-      "normalized_rows": 444897,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:30.767904+00:00",
+      "normalized_rows": 446016,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:57.742463+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2285,9 +2285,9 @@
       "normalized_tables": [
         "stk_holdertrade"
       ],
-      "normalized_rows": 107204,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:32.270596+00:00",
+      "normalized_rows": 107369,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:16:58.765305+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2299,9 +2299,9 @@
       "normalized_tables": [
         "stk_limit"
       ],
-      "normalized_rows": 16304736,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:37.246829+00:00",
+      "normalized_rows": 16344307,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:02.839924+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2313,9 +2313,9 @@
       "normalized_tables": [
         "stk_managers"
       ],
-      "normalized_rows": 239,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:38.746980+00:00",
+      "normalized_rows": 265,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:00.270957+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2341,9 +2341,9 @@
       "normalized_tables": [
         "stk_nineturn"
       ],
-      "normalized_rows": 127620,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:40.774664+00:00",
+      "normalized_rows": 166538,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:02.262278+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2369,9 +2369,9 @@
       "normalized_tables": [
         "stk_shock"
       ],
-      "normalized_rows": 363,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:42.303540+00:00",
+      "normalized_rows": 460,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:03.770742+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2384,8 +2384,8 @@
         "stk_surv"
       ],
       "normalized_rows": 1266,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:43.716443+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:04.236218+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2425,9 +2425,9 @@
       "normalized_tables": [
         "stock_basic"
       ],
-      "normalized_rows": 5908,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:54.169040+00:00",
+      "normalized_rows": 5912,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:05:13.905636+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2439,9 +2439,9 @@
       "normalized_tables": [
         "stock_company"
       ],
-      "normalized_rows": 6294,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:54.323767+00:00",
+      "normalized_rows": 6298,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:05:19.854456+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2467,9 +2467,9 @@
       "normalized_tables": [
         "stock_st"
       ],
-      "normalized_rows": 721497,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:45.317490+00:00",
+      "normalized_rows": 722904,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:04.800382+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2481,9 +2481,9 @@
       "normalized_tables": [
         "suspend_d"
       ],
-      "normalized_rows": 641796,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:46.755876+00:00",
+      "normalized_rows": 641892,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:05.257801+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2495,9 +2495,9 @@
       "normalized_tables": [
         "tushare_norm_sw_daily"
       ],
-      "normalized_rows": 2381596,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:48.572398+00:00",
+      "normalized_rows": 2384669,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:06.505738+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2509,9 +2509,9 @@
       "normalized_tables": [
         "tushare_norm_sz_daily_info"
       ],
-      "normalized_rows": 69351,
-      "successful_jobs": 24,
-      "last_success_at": "2026-09-30T14:33:49.755246+00:00",
+      "normalized_rows": 69449,
+      "successful_jobs": 31,
+      "last_success_at": "2026-10-16T11:17:06.741729+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2523,9 +2523,9 @@
       "normalized_tables": [
         "tdx_daily"
       ],
-      "normalized_rows": 214239,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:51.526083+00:00",
+      "normalized_rows": 218551,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:07.967995+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2537,9 +2537,9 @@
       "normalized_tables": [
         "tdx_index"
       ],
-      "normalized_rows": 211809,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:52.852874+00:00",
+      "normalized_rows": 216101,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:08.324087+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2565,9 +2565,9 @@
       "normalized_tables": [
         "ths_daily"
       ],
-      "normalized_rows": 217545,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:54.562122+00:00",
+      "normalized_rows": 227817,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:09.500967+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2580,8 +2580,8 @@
         "ths_hot"
       ],
       "normalized_rows": 513644,
-      "successful_jobs": 75,
-      "last_success_at": "2026-09-30T14:46:13.290124+00:00",
+      "successful_jobs": 82,
+      "last_success_at": "2026-10-16T11:17:09.780452+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2594,8 +2594,8 @@
         "ths_index"
       ],
       "normalized_rows": 2517,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:43:55.117752+00:00",
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:05:23.859486+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2607,9 +2607,9 @@
       "normalized_tables": [
         "ths_member"
       ],
-      "normalized_rows": 417633,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-30T15:07:02.591143+00:00",
+      "normalized_rows": 417874,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T19:53:41.818435+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2630,28 +2630,28 @@
     {
       "api_name": "top10_floatholders",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "top10_floatholders"
       ],
-      "normalized_rows": 182373,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": 3058545,
+      "successful_jobs": 95,
+      "last_success_at": "2026-10-11T14:02:33.682889+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "top10_holders",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "top10_holders"
       ],
-      "normalized_rows": 180651,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": 3152384,
+      "successful_jobs": 144,
+      "last_success_at": "2026-10-11T12:52:52.899325+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2663,9 +2663,9 @@
       "normalized_tables": [
         "top_inst"
       ],
-      "normalized_rows": 12837,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:56.359688+00:00",
+      "normalized_rows": 16898,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:10.882381+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2677,9 +2677,9 @@
       "normalized_tables": [
         "top_list"
       ],
-      "normalized_rows": 1395,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:57.806342+00:00",
+      "normalized_rows": 1850,
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:11.213052+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2692,8 +2692,8 @@
         "trade_cal"
       ],
       "normalized_rows": 26858,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:33:59.236486+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:12.263679+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2705,10 +2705,24 @@
       "normalized_tables": [
         "tushare_norm_us_basic"
       ],
-      "normalized_rows": 24526,
-      "successful_jobs": 1,
-      "last_success_at": "2026-09-28T17:44:31.133479+00:00",
+      "normalized_rows": 24689,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-11T16:08:51.369382+00:00",
       "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "us_daily",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 60000,
+      "normalized_tables": [
+        "tushare_norm_us_daily"
+      ],
+      "normalized_rows": 65989,
+      "successful_jobs": 0,
+      "last_success_at": null,
+      "last_raw_at": "2026-10-17T20:01:55.945743+00:00",
       "data_status": "positive_rows"
     },
     {
@@ -2719,9 +2733,9 @@
       "normalized_tables": [
         "tushare_norm_us_tbr"
       ],
-      "normalized_rows": 6187,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:00.705954+00:00",
+      "normalized_rows": 6191,
+      "successful_jobs": 9,
+      "last_success_at": "2026-10-16T23:15:02.273149+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2733,9 +2747,9 @@
       "normalized_tables": [
         "tushare_norm_us_tltr"
       ],
-      "normalized_rows": 6684,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:02.243538+00:00",
+      "normalized_rows": 6688,
+      "successful_jobs": 9,
+      "last_success_at": "2026-10-16T23:15:01.855065+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2748,8 +2762,8 @@
         "tushare_norm_us_tradecal"
       ],
       "normalized_rows": 17532,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:03.737823+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:12.739381+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2761,9 +2775,9 @@
       "normalized_tables": [
         "tushare_norm_us_trltr"
       ],
-      "normalized_rows": 6684,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:05.243930+00:00",
+      "normalized_rows": 6688,
+      "successful_jobs": 9,
+      "last_success_at": "2026-10-16T23:15:02.793113+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2775,9 +2789,9 @@
       "normalized_tables": [
         "tushare_norm_us_trycr"
       ],
-      "normalized_rows": 5934,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:06.711589+00:00",
+      "normalized_rows": 5938,
+      "successful_jobs": 9,
+      "last_success_at": "2026-10-16T23:15:03.253826+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2789,9 +2803,9 @@
       "normalized_tables": [
         "tushare_norm_us_tycr"
       ],
-      "normalized_rows": 9188,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:08.216753+00:00",
+      "normalized_rows": 9192,
+      "successful_jobs": 9,
+      "last_success_at": "2026-10-16T23:15:03.802484+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2818,8 +2832,8 @@
         "tushare_norm_wz_index"
       ],
       "normalized_rows": 3151,
-      "successful_jobs": 3,
-      "last_success_at": "2026-09-30T14:34:09.716755+00:00",
+      "successful_jobs": 10,
+      "last_success_at": "2026-10-16T11:17:13.736204+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     }

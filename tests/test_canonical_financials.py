@@ -142,6 +142,7 @@ def test_financial_periods_fill_only_missing_sections_from_provider():
     result = CanonicalEquityDataService(data, broker).financial_periods(
         symbols=["300750.SZ"],
         report_dates=[date(2026, 6, 30)],
+        allow_quota_fallback=True,
     )
 
     row = result["data"][0]

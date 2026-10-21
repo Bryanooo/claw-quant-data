@@ -157,15 +157,17 @@ CREATE INDEX IF NOT EXISTS idx_share_float_code ON share_float (ts_code);
 
 -- 10. block_trade: 大宗交易
 CREATE TABLE IF NOT EXISTS block_trade (
+    block_trade_id BIGSERIAL    PRIMARY KEY,
     ts_code    VARCHAR(16)  NOT NULL,
     trade_date DATE         NOT NULL,
     price      NUMERIC(12,4) NOT NULL,
     vol        NUMERIC(20,2),
     amount     NUMERIC(20,4),
-    buyer      VARCHAR(128) NOT NULL,
-    seller     VARCHAR(128) NOT NULL,
+    buyer      VARCHAR(128),
+    seller     VARCHAR(128),
     created_at TIMESTAMP    NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (ts_code, trade_date, price, buyer, seller)
+    CONSTRAINT uq_block_trade_natural_key UNIQUE NULLS NOT DISTINCT
+        (ts_code, trade_date, price, buyer, seller)
 );
 
 CREATE INDEX IF NOT EXISTS idx_block_trade_date ON block_trade (trade_date);

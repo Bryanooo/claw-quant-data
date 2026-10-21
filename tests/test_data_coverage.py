@@ -132,13 +132,20 @@ def test_latest_audits_materializes_verified_spans_once_per_overview():
     assert "verified_spans AS MATERIALIZED" in source
 
 
-def test_index_daily_rule_requires_a_market_entity_baseline():
+def test_verified_transport_retires_stale_incomplete_state_without_recollection():
+    source = inspect.getsource(CoverageRepository.actual_partitions)
+
+    assert "execution.status IN ('success','attention')" in source
+    assert "incomplete_dates.difference_update(transport_proof_dates)" in source
+
+
+def test_index_daily_rule_uses_adjacent_published_universe_baseline():
     rule = COVERAGE_RULES.get("index_daily")
 
     assert rule.strategy is CoverageStrategy.TRADING_DAILY
-    assert rule.entity_reference == "index_basic"
+    assert rule.entity_reference == "index_daily_adjacent"
     assert rule.min_entity_ratio == 0.85
-    assert rule.revision == 4
+    assert rule.revision == 5
     assert rule.entity_reference_max_age_days == 120
 
 
@@ -168,6 +175,13 @@ def test_technical_factor_snapshot_starts_at_derived_workflow_launch():
 
     assert rule.availability_start == date(2026, 10, 9)
     assert rule.revision == 2
+
+
+def test_fama_french_coverage_requires_current_formula_version():
+    rule = COVERAGE_RULES.get("fama_french_daily")
+
+    assert rule.revision == 3
+    assert rule.required_values == (("formula_version", "ff3-sh-sz-v2"),)
 
 
 def test_next_morning_margin_rules_do_not_expect_same_day_data():
@@ -302,7 +316,7 @@ def test_manual_all_dataset_audit_includes_unscheduled_rules():
         include_unscheduled=True,
     )
 
-    assert result["total"] == len(COVERAGE_RULES.list()) == 196
+    assert result["total"] == len(COVERAGE_RULES.list()) == 204
     assert {item[0] for item in repository.calls} == {
         rule.dataset_name for rule in COVERAGE_RULES.list()
     }
@@ -906,7 +920,7 @@ def test_upstream_availability_boundary_does_not_create_fake_history_gaps():
 def test_every_public_dataset_has_an_explicit_coverage_classification():
     rules = COVERAGE_RULES.list()
 
-    assert len(rules) == len(DATASETS.list()) == 196
+    assert len(rules) == len(DATASETS.list()) == 204
     assert {item.dataset_name for item in rules} == {
         item.name for item in DATASETS.list()
     }
@@ -942,7 +956,7 @@ def test_fund_share_is_event_sparse_not_daily_expected():
 def test_only_proven_rules_are_automatically_scheduled():
     scheduled = COVERAGE_RULES.scheduled()
 
-    assert len(scheduled) == 59
+    assert len(scheduled) == 60
     assert all(item.auditable for item in scheduled)
     assert COVERAGE_RULES.get("adj_factor").scheduled is True
     assert COVERAGE_RULES.get("adj_factor").coverage_level == "expected_partitions"
@@ -960,6 +974,12 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert COVERAGE_RULES.get("ccass_hold_detail").scheduled is False
     assert COVERAGE_RULES.get("ccass_hold_detail").entity_column == "ts_code"
     assert COVERAGE_RULES.get("hk_daily").scheduled is True
+    assert COVERAGE_RULES.get("us_daily").scheduled is False
+    factor_value = COVERAGE_RULES.get("factor_value")
+    assert factor_value.entity_column == "factor_name"
+    assert factor_value.entity_reference == "factor_catalog"
+    assert factor_value.min_entity_ratio == 1.0
+    assert factor_value.revision == 3
     assert COVERAGE_RULES.get("cn_gdp").strategy.value == "report_quarterly"
     assert COVERAGE_RULES.get("cn_gdp").availability_start == date(1992, 3, 31)
     assert COVERAGE_RULES.get("cn_pmi").strategy.value == "calendar_monthly"

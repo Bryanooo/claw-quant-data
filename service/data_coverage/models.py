@@ -64,6 +64,10 @@ class CoverageRule:
     # Current reference tables without full point-in-time lifecycle fields are
     # reliable cross-sectional denominators only for a recent rolling window.
     entity_reference_max_age_days: int | None = None
+    # Optional code-owned row predicates that must hold before a physical row
+    # can satisfy coverage.  This prevents an obsolete formula/schema version
+    # from being counted as complete merely because the date exists.
+    required_values: tuple[tuple[str, str], ...] = ()
 
     @property
     def auditable(self) -> bool:

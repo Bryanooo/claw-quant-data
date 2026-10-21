@@ -82,7 +82,8 @@ def test_performance_updates_use_local_forecast_units_and_provider_preliminary()
     data = FakeEventDataService({("forecast", "300750.SZ"): [forecast]})
 
     result = CanonicalEquityEventService(data, broker).performance_updates(
-        symbols=["300750.SZ"], report_dates=[date(2024, 12, 31)]
+        symbols=["300750.SZ"], report_dates=[date(2024, 12, 31)],
+        allow_quota_fallback=True,
     )
 
     assert len(broker.calls) == 1
@@ -117,7 +118,8 @@ def test_dividend_fallback_derives_per_share_cash_from_total_and_equity_base():
     result = CanonicalEquityEventService(
         FakeEventDataService(), broker
     ).dividends(
-        symbols=["600519.SH"], report_dates=[date(2025, 12, 31)]
+        symbols=["600519.SH"], report_dates=[date(2025, 12, 31)],
+        allow_quota_fallback=True,
     )
 
     row = result["data"][0]
@@ -255,6 +257,7 @@ def test_holder_count_fallback_preserves_ratio_as_percentage_points():
     ).holder_counts(
         symbols=["300750.SZ"], start_date=date(2024, 2, 1),
         end_date=date(2024, 2, 29),
+        allow_quota_fallback=True,
     )
 
     row = result["data"][0]
@@ -323,7 +326,7 @@ def test_business_segments_fallback_normalizes_explicit_region_period():
         FakeEventDataService(), broker
     ).business_segments(
         symbols=["300750.SZ"], report_dates=[date(2026, 6, 30)],
-        classifications=["region"],
+        classifications=["region"], allow_quota_fallback=True,
     )
 
     row = result["data"][0]

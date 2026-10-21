@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     {
         "method": "GET",
@@ -12,6 +11,13 @@ DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
         "name": "研究能力目录",
         "domain": "能力发现",
         "description": "列出研究能力、数据动作、服务状态和待办缺口。",
+    },
+    {
+        "method": "GET",
+        "path": "/api/v1/research/factor-inputs",
+        "name": "量化研究输入包",
+        "domain": "能力发现",
+        "description": "列出供 factor-lab 冻结快照的版本化基础、财务、资金和技术描述数据契约。",
     },
     {
         "method": "GET",
@@ -196,11 +202,15 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "candlestick-chart", "name": "K线与图表序列", "domain": "技术面", "endpoint": "technicals"},
     {"id": "candlestick-patterns", "name": "K线形态识别", "domain": "技术面", "endpoint": "technicals"},
     {"id": "trend", "name": "趋势与均线", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "ema-bias-bbi", "name": "EMA20/50/200、BIAS与BBI趋势", "domain": "技术面", "endpoint": "technicals"},
     {"id": "momentum", "name": "MACD/RSI 动量", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "ppo-trix", "name": "PPO与TRIX百分比趋势动量", "domain": "技术面", "endpoint": "technicals"},
     {"id": "oscillators", "name": "KDJ/CCI/Williams/MFI", "domain": "技术面", "endpoint": "technicals"},
     {"id": "trend-strength", "name": "ADX/DMI 趋势强度", "domain": "技术面", "endpoint": "technicals"},
     {"id": "volatility", "name": "ATR/布林波动", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "normalized-volatility", "name": "NATR、Keltner与TTM Squeeze", "domain": "技术面", "endpoint": "technicals"},
     {"id": "volume-price", "name": "量价关系", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "volume-momentum", "name": "PVT、VROC与Force Index", "domain": "技术面", "endpoint": "technicals"},
     {"id": "breakout-levels", "name": "可解释支撑压力", "domain": "技术面", "endpoint": "technicals"},
     {"id": "wave-candidates", "name": "波浪候选与失效条件", "domain": "技术面", "endpoint": "technicals"},
     {"id": "bull-bear-lines", "name": "牛熊线与加权趋势线", "domain": "技术面", "endpoint": "technicals"},

@@ -141,12 +141,17 @@ EXACT_TRADE_DATE_HISTORY_APIS = frozenset(
         "bak_daily",
         "bak_basic",
         "cb_daily",
+        # These factor endpoints advertise start/end fields, but live repair
+        # calls prove that a market-wide request must provide trade_date (or a
+        # security code).  Exact-day partitions match their routine contract.
+        "cb_factor_pro",
         "ci_daily",
         "daily_basic",
         # Although these contracts advertise start/end arguments, live
         # provider validation rejects market-wide range requests unless
         # ``trade_date`` (or ``ts_code``) is supplied.
         "fund_daily",
+        "fund_factor_pro",
         "fund_nav",
         "fx_daily",
         "idx_factor_pro",

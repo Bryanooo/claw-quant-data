@@ -5,7 +5,8 @@
 
 确定性基本面、估值和技术指标已经迁移到独立研究命名空间
 `/api/v1/research/*`。资料包仍负责组合原始研究材料；派生接口负责统一公式、窗口、
-基准和质量证据。完整能力与数据缺口见 [RESEARCH_CAPABILITIES.md](RESEARCH_CAPABILITIES.md)。
+基准和质量证据。当前能力与数据缺口以
+`GET /api/v1/research/capabilities` 为准；本文只维护稳定的调用契约和计算语义。
 
 Agent 首先通过研究层检查可用性，不需要调用运营接口：
 
@@ -113,6 +114,33 @@ SIGNAL = MA(C, 10)
 `not_applicable`，避免把“14个交易日”误算成14周或14个月。全部价格和K线采用相同
 复权口径，计算时点为日线收盘后。
 
+## 常用技术指标包
+
+股票与多资产技术接口使用同一个 `common-technicals-v1` 公式契约，并在日、周、月
+各周期独立计算，禁止把日线指标直接缩放成周/月指标：
+
+- 趋势：`EMA20/50/200`、`BIAS6/12/24`、`BBI(3,6,12,24)`；
+- 百分比动量：`PPO(12,26,9)`、`TRIX(12,9)`；
+- 波动：`NATR14`、`Keltner(EMA20 ± 2×Wilder ATR20)`；
+- 挤压：Bollinger(20,2σ) 完全进入 Keltner(20,1.5×ATR) 时
+  `ttm_squeeze.on=true`；
+- 量价：PVT、VROC12/20、Force Index 13，同时提供
+  `force_index_13_normalized_pct` 供跨股票比较。
+
+完整参数在 `data.indicator_contract.parameters` 返回。K线逐点字段与摘要字段使用相同
+计算结果；EMA20/50/200 在对应观察数不足前返回 `null`，不会把短历史的种子值冒充
+完整周期指标。PVT 与原始 Force Index 属于路径相关绝对值，跨标的筛选应使用20期变化、
+百分比或归一化字段。
+
+`data.indicator_contract.parameter_profile` 另外给出当前频率实际采用的 SMA、EMA、
+RSI、ROC、CCI、ATR/NATR 参数族。日、周、月分别使用独立的 bar 参数，而不是把
+“日”机械替换成“周/月”。逐点结果包含 `sma_family`、`ema_family`、`rsi_family`、
+`roc_family_pct`、`cci_family`、`tsi_25_13`、Bollinger `%B` 与带宽；摘要还包含
+9 个连续 K 线几何量、60 期区间位置、ATR5/ATR20、20/120 期回撤深度、20/60 期
+回归斜率与拟合度、ATR 归一化突破幅度和高低位触碰次数。完整参数矩阵见本文的
+“指标参数与因子边界”。这些结果只描述已发生行情，
+不声明预测能力；Alpha158/191、未来收益标签和 IC 检验由 claw-factor-lab 负责。
+
 ### 全市场派生快照
 
 逐股研究接口继续支持任意 `as_of` 即时计算；收盘后的全市场筛选与审计使用 V2
@@ -127,7 +155,8 @@ GET /api/v1/data/datasets/technical_factor_snapshot/records
 
 该数据集每天由一个 `technical_factor_snapshot` 派生实例批量生成，不为每只股票拆分
 任务。每个当日上市证券都有一行，包含 `source_trade_date`、牛门/确认线、20/60日
-成本线、公式版本和 `unavailable_reasons`。停牌股票的 `source_trade_date` 可以早于
+成本线、EMA/BIAS/BBI/PPO/NATR/Keltner/TTM Squeeze/TRIX/PVT/VROC/Force、公式版本
+和 `unavailable_reasons`。停牌股票的 `source_trade_date` 可以早于
 `snapshot_date`；上市历史不足或复权因子缺失会明确标为 `partial`、
 `insufficient_history` 或 `missing_input`，不会静默遗漏。
 
@@ -229,3 +258,88 @@ GET /api/v1/data/datasets/income/records
 服务会同时执行 `end_date <= 2024-03-31` 和 `ann_date <= 2024-04-30`。不具备
 可靠可获得日期字段的数据集会拒绝 `as_of`，不会悄悄退化为不安全查询。Agent
 不会直接调用该路径，所需来源和质量证据由研究响应中的 `meta` 返回。
+
+## 宏观与行业
+
+```http
+GET /api/v1/research/macro/regime?as_of=2026-09-18
+GET /api/v1/research/macro/{theme}?periods=24&as_of=2026-09-18
+GET /api/v1/research/sectors/{provider}/{sector_code}/fundamentals?as_of=2026-09-18
+GET /api/v1/research/sectors/{provider}/{sector_code}/breadth?as_of=2026-09-18
+```
+
+`theme` 支持增长、通胀和流动性主题。宏观状态使用透明规则组合 GDP、PMI、CPI/PPI、
+货币社融和利率；标准表尚未完整保存首次发布值及历次修订，因此历史 `as_of` 不等于
+严格 publication-vintage 快照。
+
+行业身份必须同时包含 `provider` 和 `sector_code`。行业基本面以目标时点有效成分为
+边界，返回聚合财务、同比、估值覆盖和主要贡献公司；行业宽度返回涨跌分布、均线扩散、
+成交额和行情覆盖率。板块指数上涨不能替代成分内部宽度证据。
+
+## ETF 份额与证据分级
+
+```http
+GET /api/v1/research/etfs/flows
+GET /api/v1/research/etfs/state-team-signals
+```
+
+份额资金流按以下口径估算：
+
+```text
+估算申赎资金（亿元） = （期末总份额 - 期初总份额） × 期末单位净值 ÷ 10,000
+```
+
+规模变化不能直接当成资金流，因为还包含价格变化。相同指数的 ETF 按跟踪指数聚合，
+跨产品同时流入流出只表示横截面共现，不证明是同一投资者腾挪。
+
+证据分为 `market_flow_only`、`suspected` 和 `confirmed`。没有正式公告或定期报告中的
+持有人身份与份额变化时，接口不得生成 `confirmed`，避免把做市、套利、联接基金或普通
+投资者误报为国家队行为。
+
+## 投资日历
+
+投资日历与数据日历不同：前者展示宏观发布时间、央行事件和股指期货交割日；后者展示
+某个数据日期的业务数据是否落库并通过审计。
+
+```http
+GET /api/v1/research/investment-calendar?start_date=2026-09-01&end_date=2026-09-30
+GET /api/v1/research/investment-calendar/2026-09-18
+```
+
+经济事件来自财经日历，股指期货交割日来自真实合约 `last_ddate`，浏览器不硬编码日期。
+实际值为空且事件时间已过时标记为“实际值待来源回填”，不能误报成未发生或没有事件。
+响应同时返回来源覆盖范围；超过覆盖截止日表示尚无已采集事实。
+
+## 指标参数与因子边界
+
+claw-data 负责可审计的原始/标准数据和确定性派生指标；claw-factor-lab 负责横截面处理、
+未来收益标签、IC/RankIC、显著性、分组收益、回测和预测性验证。同一个表达式可以在两边
+出现，但 claw-data 不声明其具有预测收益，也不使用未来标签挑参数。
+
+所有周期参数表示当前频率的 bar 数，不是自然日：
+
+| 指标族 | 日线 | 周线 | 月线 |
+|---|---|---|---|
+| SMA | 5/10/20/30/60/120/250 | 5/10/20/30/40/52 | 3/6/12/24/36/60 |
+| EMA | 5/10/12/20/26/50/100/200 | 5/10/12/20/26/50/52 | 3/6/12/20/24/26/36/60 |
+| RSI | 6/12/14/24 | 6/12/14/24 | 6/12/14/24 |
+| ROC | 5/10/20/60/120 | 4/12/26/52 | 3/6/12/24/36 |
+| CCI | 14/20 | 14/20 | 14/20 |
+| ATR/NATR | 14/20 | 14/20 | 14/20 |
+
+MACD 12/26/9、KDJ 9/3/3、Ichimoku 9/26/52 和 Bollinger 20/2 使用行业惯例。
+Alpha158/191、横截面中性化、预测标签和回测属于 factor-lab，不在本服务包装成基础数据。
+
+## Factor Lab 输入契约
+
+`GET /api/v1/research/factor-inputs` 发布 `claw-factor-inputs@v1`，用于冻结
+claw-factor-lab 的可复现输入。当前按核心日线、日频估值、时点基本面、财务参考、
+公司行为、公司新闻、资金情绪、确定性技术描述、ETF、指数与行业、宏观分包。契约同时声明每个
+数据集的日期列、可用时间列、数据源、存储语义、是否为必需输入以及缺行语义。
+
+连续日频数据使用 `stock_daily_sessions` 覆盖规则，必须逐股票与日线交易会话一致；
+预告、快报和大宗交易属于稀疏事件，未观测到记录不代表已证明当期没有事件；
+`technical_factor_snapshot` 是前向物化快照，历史技术指标应由日线因子源重算，不能伪装成
+历史快照全量；`fama_french_daily` 则由已治理的日线、市值和公告时点财务数据自 2020 年
+开始逐交易日重建，并以公式版本和输入行数对账结果留痕。
+财务输入必须带 `as_of` 截止日，缺少受治理可用时间列的数据不得进入历史时点快照。

@@ -181,6 +181,7 @@ _RESEARCH_FIXED_DATASETS: dict[str, tuple[str, ...]] = {
 
 _SYSTEM_RESEARCH_ENDPOINTS = {
     "/api/v1/research/capabilities": "service definitions and research lineage",
+    "/api/v1/research/factor-inputs": "versioned factor-lab observation bundle contracts",
     "/api/v1/research/readiness": "V2 data states, freshness and strict coverage audits",
     "/api/v1/research/validation-set": "versioned end-to-end acceptance cases",
 }

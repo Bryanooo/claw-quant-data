@@ -6,6 +6,7 @@ from service.orchestration_v2.contracts import DatasetAuditContract
 from service.orchestration_v2.service import OrchestrationV2Service
 from service.orchestration_v2.runtime import (
     OrchestrationV2Runtime,
+    V2UnsupportedScopeError,
     bounded_history_target_date,
 )
 from service.tushare_policy import TusharePolicyRegistry
@@ -15,6 +16,7 @@ from service.orchestration_v2.repair_planning import (
     observation_bounds,
     plan_period_repairs,
     validate_quota_guarded_history_scope,
+    validate_bounded_fanout_history_scope,
     validate_single_period_scope,
 )
 
@@ -117,7 +119,8 @@ def test_static_provider_partitions_stay_inside_one_v2_execution_node():
             parameter_name="exchange",
             parameter_value=exchange,
             scope_kind="trade_date",
-            observation_date=date(2026, 9, 24),
+            observation_start=date(2026, 9, 24),
+            observation_end=date(2026, 9, 24),
             purpose="repair",
             policy=policy,
         )
@@ -145,7 +148,8 @@ def test_margin_summary_fans_out_all_exchanges_inside_one_acquire_node():
             parameter_name=fanout.parameter_name,
             parameter_value=exchange,
             scope_kind=fanout.scope,
-            observation_date=date(2026, 10, 9),
+            observation_start=date(2026, 10, 9),
+            observation_end=date(2026, 10, 9),
             purpose="daily",
             policy=policy,
         )
@@ -166,7 +170,8 @@ def test_static_provider_retry_skips_only_verified_request_partitions():
             parameter_name="exchange",
             parameter_value=exchange,
             scope_kind="trade_date",
-            observation_date=date(2026, 9, 24),
+            observation_start=date(2026, 9, 24),
+            observation_end=date(2026, 9, 24),
             purpose="backfill",
             policy=policy,
         )
@@ -352,6 +357,47 @@ def test_daily_dividend_uses_exact_announcement_date_not_all_stock_fanout(
     assert specs[0].parameters["parameters"] == {"ann_date": "20260930"}
 
 
+def test_manual_snapshot_requires_and_freezes_explicit_parameters():
+    from tests.test_orchestration_v2 import acquisition_definition
+    from service.orchestration_v2.contracts import TaskDefinitionDocument
+
+    definition = acquisition_definition(
+        task_key="fund_basic",
+        output_datasets=["fund_basic"],
+        acquisition_endpoint_ids=[7],
+    )
+    definition["validation_contract"]["outputs"] = ["fund_basic"]
+    definition["validation_contract"]["dataset_audits"][0][
+        "dataset_name"
+    ] = "fund_basic"
+    document = TaskDefinitionDocument.model_validate(definition)
+
+    class Repository:
+        @staticmethod
+        def get_endpoint(_endpoint_id):
+            return {
+                "acquisition_endpoint_id": 7,
+                "endpoint_key": "fund_basic",
+                "source_id": "tushare",
+                "lifecycle_status": "active",
+            }
+
+    execution = {
+        "purpose": "manual",
+        "observation_key": "snapshot:2026-10-21",
+        "observation_start": date(2026, 10, 21),
+        "observation_end": date(2026, 10, 21),
+        "frozen_scope": {"manual_parameters": {}},
+    }
+    specs = OrchestrationV2Runtime(Repository())._plan_acquisition(
+        document, execution
+    )
+
+    assert len(specs) == 1
+    assert specs[0].parameters["parameters"] == {}
+    assert specs[0].parameters["complete"] is True
+
+
 def test_dynamic_dependency_fanout_stays_inside_one_execution(monkeypatch):
     monkeypatch.setattr(
         "service.orchestration_v2.runtime.list_fanout_values",
@@ -370,6 +416,76 @@ def test_dynamic_dependency_fanout_stays_inside_one_execution(monkeypatch):
     assert [item.parameters["parameters"]["ts_code"] for item in specs] == [
         "885001.TI",
         "885002.TI",
+    ]
+
+
+def test_dynamic_fanout_freezes_subset_and_splits_date_windows(monkeypatch):
+    monkeypatch.setattr(
+        "service.orchestration_v2.runtime.list_fanout_values",
+        lambda _source, as_of=None: ["000300.SH", "000905.SH"],
+    )
+
+    specs = OrchestrationV2Runtime._dynamic_fanout_specs(
+        api_name="index_weight",
+        fanout=FANOUT_DEFINITIONS["index_weight"],
+        observation_start=date(2020, 1, 1),
+        observation_end=date(2020, 3, 1),
+        purpose="backfill",
+        frozen_scope={"fanout_values": ["000300.SH"]},
+    )
+
+    assert len(specs) == 2
+    assert [item.parameters["parameters"] for item in specs] == [
+        {
+            "start_date": "20200101",
+            "end_date": "20200131",
+            "index_code": "000300.SH",
+        },
+        {
+            "start_date": "20200201",
+            "end_date": "20200301",
+            "index_code": "000300.SH",
+        },
+    ]
+
+
+def test_dynamic_fanout_rejects_frozen_value_outside_universe(monkeypatch):
+    monkeypatch.setattr(
+        "service.orchestration_v2.runtime.list_fanout_values",
+        lambda _source, as_of=None: ["000300.SH"],
+    )
+    with pytest.raises(V2UnsupportedScopeError, match="governed universe"):
+        OrchestrationV2Runtime._dynamic_fanout_specs(
+            api_name="index_weight",
+            fanout=FANOUT_DEFINITIONS["index_weight"],
+            observation_start=date(2020, 1, 1),
+            observation_end=date(2020, 1, 31),
+            purpose="backfill",
+            frozen_scope={"fanout_values": ["NOT-AN-INDEX"]},
+        )
+
+
+def test_factor_value_fanout_resumes_only_missing_factors(monkeypatch):
+    monkeypatch.setattr(
+        "service.orchestration_v2.runtime.list_fanout_values",
+        lambda _source, as_of=None: ["alpha", "beta", "gamma"],
+    )
+    monkeypatch.setattr(
+        "service.orchestration_v2.runtime.query",
+        lambda _statement, _params: [{"factor_name": "beta"}],
+    )
+
+    specs = OrchestrationV2Runtime._dynamic_fanout_specs(
+        api_name="factor_value",
+        fanout=FANOUT_DEFINITIONS["factor_value"],
+        observation_start=date(2026, 10, 20),
+        observation_end=date(2026, 10, 20),
+        purpose="backfill",
+    )
+
+    assert [item.parameters["parameters"]["factor_name"] for item in specs] == [
+        "alpha",
+        "gamma",
     ]
 
 
@@ -406,6 +522,25 @@ def test_quota_guarded_history_is_one_bounded_resumable_execution():
             observation_end=date(2026, 9, 30),
             observation_key="history:2018-01-01:2026-09-30",
             guarded_datasets=frozenset({"cyq_perf"}),
+        )
+
+
+def test_bounded_fanout_history_freezes_short_explicit_window():
+    contract = _contract("cyq_chips")
+    validate_bounded_fanout_history_scope(
+        contracts=(contract,),
+        observation_start=date(2026, 9, 22),
+        observation_end=date(2026, 10, 20),
+        observation_key="fanout-history:2026-09-22:2026-10-20",
+        allowed_datasets=frozenset({"cyq_chips"}),
+    )
+    with pytest.raises(ValueError, match="at most 31 days"):
+        validate_bounded_fanout_history_scope(
+            contracts=(contract,),
+            observation_start=date(2026, 8, 1),
+            observation_end=date(2026, 10, 20),
+            observation_key="fanout-history:2026-08-01:2026-10-20",
+            allowed_datasets=frozenset({"cyq_chips"}),
         )
 
 

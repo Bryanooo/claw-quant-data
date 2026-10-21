@@ -70,7 +70,7 @@ def build_system_overview(
             ),
             "agent_entrypoint": "/api/v1/research",
             "primary_data_rule": (
-                "Tushare 定时入库且审计通过的数据是确定性主口径；蚂蚁数据源 "
+                "Tushare 定时入库且审计通过的数据是确定性主口径；蚂蚁 "
                 "只在明确契约中按需补充，不能覆盖本地事实。"
             ),
         },
@@ -87,7 +87,7 @@ def build_system_overview(
                 "id": "sources",
                 "order": 1,
                 "title": "上游来源",
-                "description": "Tushare 批量采集、蚂蚁数据源 按需查询及官方公开来源。",
+                "description": "Tushare 批量采集、蚂蚁按需查询及官方公开来源。",
             },
             {
                 "id": "production",
@@ -120,7 +120,7 @@ def build_system_overview(
             "financial_data": {
                 "whitelisted_routes": source_policy["routes"],
                 "canonical_adapters_ready": source_policy[
-                    "local_first_canonical_fallback_ready"
+                    "local_canonical_fallback_disabled"
                 ],
                 "local_overlap_adapters_pending": source_policy[
                     "local_overlap_adapter_pending"
@@ -165,14 +165,14 @@ def build_system_overview(
         },
         "number_definitions": [
             {
-                "name": "蚂蚁数据源 白名单路由",
+                "name": "蚂蚁白名单路由",
                 "value": source_policy["routes"],
                 "meaning": "允许调用的供应商原始能力，不等于对 Agent 的研究接口数。",
             },
             {
                 "name": "规范适配器就绪",
-                "value": source_policy["local_first_canonical_fallback_ready"],
-                "meaning": "已完成代码、日期、单位和字段映射的本地优先规范回退。",
+                "value": source_policy["local_canonical_fallback_disabled"],
+                "meaning": "已完成映射的本地等价适配器；查询回退已停用，仅供显式请求使用。",
             },
             {
                 "name": "研究证据路由",
@@ -187,7 +187,7 @@ def build_system_overview(
         ],
         "boundaries": [
             "163 条供应商路由、规范适配器和研究接口属于三个不同维度，不能相互等同。",
-            "蚂蚁数据源 原始响应不持久化；当前按进程 TTL 缓存并保存脱敏请求审计。",
+            "蚂蚁原始响应不持久化；当前按进程 TTL 缓存并保存脱敏请求审计。",
             "供应商技术指标复权口径未声明时只作交叉验证，本地可复现计算仍是主结论。",
             "因子组合、策略回测、组合管理和交易执行不属于本系统当前职责。",
         ],

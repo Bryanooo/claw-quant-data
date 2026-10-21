@@ -88,7 +88,7 @@ def test_profiles_fallback_for_missing_symbol_with_same_contract():
     )])
 
     result = CanonicalFundDataService(FakeDataService(), broker).profiles(
-        symbols=["000001.OF"]
+        symbols=["000001.OF"], allow_quota_fallback=True
     )
 
     assert result["meta"]["fallback_used"] is True
@@ -136,6 +136,7 @@ def test_nav_empty_slice_fallback_preserves_decimal_return_rate():
         symbols=["000001.OF"],
         start_date=date(2026, 9, 30),
         end_date=date(2026, 9, 30),
+        allow_quota_fallback=True,
     )
 
     assert result["data"][0]["daily_return_rate"] == pytest.approx(-0.0193)
@@ -159,6 +160,7 @@ def test_holdings_normalize_weight_and_stock_identity():
     result = CanonicalFundDataService(FakeDataService(), broker).stock_holdings(
         symbols=["000001.OF"],
         report_dates=[date(2026, 6, 30)],
+        allow_quota_fallback=True,
     )
 
     holding = result["data"][0]
@@ -204,6 +206,7 @@ def test_fund_fallback_rejects_protocol_drift_and_unbounded_input():
             symbols=["000001.OF"],
             start_date=date(2026, 9, 30),
             end_date=date(2026, 9, 30),
+            allow_quota_fallback=True,
         )
     with pytest.raises(InvalidQueryError, match="366 days"):
         service.nav(
@@ -247,7 +250,7 @@ def test_fund_manager_fallback_normalizes_tenure():
     ]])])
     result = CanonicalFundDataService(
         FakeDataService(), broker
-    ).managers(symbols=["000001.OF"])
+    ).managers(symbols=["000001.OF"], allow_quota_fallback=True)
 
     assert result["data"][0]["manager_name"] == "张三"
     assert result["data"][0]["tenure_return_rate"] == pytest.approx(0.35)

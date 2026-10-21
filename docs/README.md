@@ -1,60 +1,41 @@
-# 文档导航与维护规则
+# Claw Quant Data 文档
 
-这里仅保留当前有效的契约、架构和操作说明。运行状态不写死在设计文档里；队列、失败、
-数据覆盖和 V2 状态分别以 Dashboard、运维 API 和可重复生成的最新审计报告为准。
+人工维护的正文只保留五份，按阅读顺序如下：
 
-## 入门
+| 文档 | 内容 | 主要读者 |
+|---|---|---|
+| [项目 README](../README.md) | 定位、安装、运行、备份、Dashboard 和测试 | 所有使用者 |
+| [系统架构](ARCHITECTURE.md) | 系统边界、五层结构、API 分区和权威状态入口 | 产品负责人、架构师、开发者 |
+| [数据生产与质量](DATA_PIPELINE.md) | 采集器、任务/节点、重试、审计、数据日历和查询治理 | 数据工程、运维、DBA |
+| [数据来源](DATA_SOURCES.md) | 多来源模型、本地优先、公开 Connector、蚂蚁数据源和扩展流程 | 数据平台开发者、审计人员 |
+| [研究 API](RESEARCH_API.md) | 股票、板块、宏观、ETF、投资日历和指标语义 | Agent、研究应用开发者 |
+| [CLI](CLI.md) | REST 对应的只读命令和示例 | 人类研究员、自动化脚本作者 |
 
-- [项目总览](../README.md)
-- [CLI](CLI.md)
-- [研究 API](RESEARCH_API.md)
-- [研究能力矩阵](RESEARCH_CAPABILITIES.md)
-- [接口分层](DATA_SERVICE_LAYERS.md)
+## 机器契约
 
-## 数据与采集
+机器生成文件不算人工文档，不应复制拆分：
 
-- [采集器架构](COLLECTOR_ARCHITECTURE.md)：采集器内部契约、分页和写入边界。
-- [统一工作流与执行模型](COLLECTION_EXECUTION_MODEL.md)：V2 任务、节点、状态和迁移方案。
-- [V2 切换与运维](V2_CUTOVER_2026-09-29.md)：切换口径、发布、恢复演练和回滚边界。
-- [数据就绪与审计](DATA_ASSURANCE.md)：任务状态、数据状态、历史义务和研究验收口径。
-- [多数据源基础层](MULTI_SOURCE_ARCHITECTURE.md)：来源、Connector、原始证据和扩展边界。
-- [系统全貌与唯一口径](SYSTEM_STATUS.md)：系统定位、五层架构、数字定义和唯一状态入口。
-- [数据查询治理](DATA_API_QUERY_GOVERNANCE.md)：过滤、游标分页和索引发布规则。
-- [Tushare 接口目录](tushare/README.md)：接口、权限、实现和代码链接；完整输入输出契约保存在同目录 JSON。
+- [Tushare 接口索引](tushare/README.md)与 [JSON 契约](tushare/contracts.json)；
+- [Tushare 标准表索引](tushare/tables/README.md)与[表契约](tushare/tables/contracts.json)；
+- [Tushare 官方补充契约](tushare/official_contract_supplements.json)；
+- [蚂蚁数据源路由契约](ant_data/route-contracts.json)。
 
-## 研究能力
+## 运行报告
 
-- [宏观与行业研究](MACRO_INDUSTRY_RESEARCH.md)
-- [跨资产研究](CROSS_ASSET_RESEARCH.md)
-- [ETF 资金流与证据分级](ETF_STATE_TEAM_RESEARCH.md)
-- [投资日历](INVESTMENT_CALENDAR.md)
-- [Agent 与 Skill 架构](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/AGENT_RESEARCH_SKILL_ARCHITECTURE.md)
-- [研究方法、证据与数据依赖对照](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/RESEARCH_METHOD_EVIDENCE.md)
-- [免费替代数据源评估](FREE_DATA_SOURCE_ALTERNATIVES.md)
+`reports/` 是带生成时间的现场快照，不是设计文档。当前状态优先查 API 或重新运行生成器：
 
-## 可重复生成的报告
+| 报告 | 当前入口/生成器 |
+|---|---|
+| 数据集严格审计 | `GET /api/v1/ops/data-health` / `scripts/generate_dataset_audit_report.py` |
+| Tushare 数据落地 | `scripts/report_tushare_data_presence.py` |
+| 数据源优先级 | `GET /api/v1/data/source-priorities` / `scripts/generate_source_priority_report.py` |
+| 服务目录 | `GET /api/v1/catalog` / `scripts/generate_data_service_inventory.py` |
+| Token 权限复核 | `scripts/recheck_tushare_permissions.py`，时间以报告正文为准 |
 
-- [最新全量数据集审计](../reports/dataset_audit_latest.md)
-- [最新 Tushare 数据落地证据](../reports/tushare_data_presence_latest.md)
-- [Tushare 权限复核](../reports/tushare_permission_recheck.md)
+## 维护规则
 
-报告目录不保存逐日快照历史。同一类报告覆盖固定的 `latest` 文件；需要追溯时使用 Git。
-事故中形成的长期规则必须回写到架构、可靠性或数据审计文档，之后删除一次性事故报告。
-
-## 维护约束
-
-1. 文档只描述当前契约或明确标注的目标架构，不把一次任务成功写成长期事实。
-2. 接口数量、队列数量、缺口数量和运行进度来自 API 或生成脚本，不手工复制到多个文件。
-3. 删除或重命名文档时必须执行 `python scripts/check_documentation.py`；CI 会检查相对链接，
-   并拒绝在 `reports/` 新增按日期命名的快照。
-4. 批量接口和表契约使用统一目录加机器 JSON，不再生成“一接口/一表一 Markdown”。
-
-- [研究框架与写入流程审计](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/RESEARCH_WORKFLOW_AUDIT.md)
-- [股票每日、每周、每月研究分工](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/STOCK_RESEARCH_CADENCE.md)
-- [单只股票入队、讨论、研究与报告全流程](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/STOCK_RESEARCH_LIFECYCLE.md)
-
-- [Unified stock research Agent](https://github.com/Bryanooo/claw-quant-agents/blob/main/docs/STOCK_RESEARCH_AGENT.md): concise fundamental conclusions, candlestick-first technical delivery and Node acceptance.
-
-- [公开数据 connector 与蚂蚁数据源](PUBLIC_SOURCE_CONNECTORS.md)：能力契约、8 个查询接口、更名兼容和验证记录。
-
-数据源选型结论：当前以 A 股、ETF 日频研究为目标，暂不接入 Panda；优先完善现有数据的完整性、时点语义和统一口径。仅在具体策略存在明确数据缺口时重新评估。
+1. 只记录当前契约；迁移纪要、事故过程、一次性验收和候选方案不进入 `docs/`。
+2. 数量和运行状态由机器接口或生成器提供，不在正文手工同步。
+3. 新内容优先补进上述主题文档，不为单个功能再建 Markdown。
+4. 修改后运行 `python3 scripts/check_documentation.py` 和 `git diff --check`。
+5. `sql/README.md`、`deploy/hibro/README.md` 和第三方 NOTICE 是目录级维护说明，不属于产品文档。

@@ -151,8 +151,17 @@ def test_registry_exposes_every_collector_table():
     assert collector_tables | normalized_tables | {
         "tushare_current_daily_basic",
         "technical_factor_snapshot",
+        "fama_french_daily",
+        # 蚂蚁数据源 scheduled-pull standard tables (ant_norm_*)
+        "ant_norm_hot_stock_rank",
+        "ant_norm_hot_plate_rank",
+        "ant_norm_equity_structure",
+        "ant_norm_free_float",
+        "ant_norm_actual_controller",
+        "ant_norm_controlling_shareholder",
+        "ant_norm_style_classification",
     } == registered_tables
-    assert len(DATASETS.list()) == 196
+    assert len(DATASETS.list()) == 204
 
 
 def test_normalized_dataset_exposes_versioned_storage_semantics():
@@ -204,6 +213,7 @@ def test_event_driven_freshness_without_sla_is_not_reported_as_stale():
 
 def test_periodic_index_freshness_matches_its_real_cadence():
     assert DATASETS.get("index_daily").freshness_sla_hours == 72
+    assert DATASETS.get("index_weight").freshness_sla_hours == 24 * 55
     assert DATASETS.get("index_weekly").freshness_sla_hours == 24 * 10
     assert DATASETS.get("index_monthly").freshness_sla_hours == 24 * 45
     for dataset in ("slb_len", "slb_len_mm", "slb_sec", "slb_sec_detail"):
@@ -211,17 +221,6 @@ def test_periodic_index_freshness_matches_its_real_cadence():
 
 
 def test_quarterly_freshness_respects_disclosure_deadlines():
-    dataset = DatasetSpec(
-        name="income",
-        table="income",
-        description="income",
-        category="finance",
-        primary_keys=("ts_code", "end_date"),
-        date_column="end_date",
-        freshness_sla_hours=24 * 120,
-        freshness_policy="quarterly_disclosure",
-    )
-
     assert DataService._latest_required_report_period(date(2026, 8, 30)) == date(
         2026, 3, 31
     )

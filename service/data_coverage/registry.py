@@ -69,6 +69,7 @@ def _rule(
     revision: int = 1,
     entity_reference_max_age_days: int | None = None,
     calendar_exchange: str = "SSE",
+    required_values: tuple[tuple[str, str], ...] = (),
 ) -> CoverageRule:
     dataset = DATASETS.get(dataset_name)
     if not dataset.date_column:
@@ -96,6 +97,7 @@ def _rule(
         revision=revision,
         entity_reference_max_age_days=entity_reference_max_age_days,
         calendar_exchange=calendar_exchange,
+        required_values=required_values,
     )
 
 
@@ -220,6 +222,34 @@ _EXPLICIT_RULES = [
             ),
         ),
         _rule(
+            "fama_french_daily",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name=None,
+            entity_column=None,
+            # A single market-level row per trading day, not one row per
+            # security.  The universe is the whole cross-section, so there is
+            # no entity reference to reconcile against.
+            entity_reference=None,
+            min_entity_ratio=None,
+            # Historical reconstruction starts where the governed daily,
+            # daily-basic and announcement-bounded balance-sheet inputs have
+            # been verified together. Earlier dates remain outside this
+            # contract rather than being silently marked complete.
+            availability_start=date(2020, 1, 2),
+            grace_days=1,
+            default_lookback_days=120,
+            scheduled=False,
+            require_transport_proof=False,
+            revision=3,
+            required_values=(("formula_version", "ff3-sh-sz-v2"),),
+            description=(
+                "自2020年起回溯并前向维护，由 stock_daily、daily_basic 与 stock_st "
+                "的同一交易日数据生成，按公告日读取当时可见财报，并严格核对日线与市值行；"
+                "每个交易日写入一行 "
+                "MKT/SMB/HML，横截面过薄时以 insufficient_universe 状态显式留空"
+            ),
+        ),
+        _rule(
             "fund_share",
             CoverageStrategy.OBSERVED_ONLY,
             collection_api_name="fund_share",
@@ -253,6 +283,7 @@ _EXPLICIT_RULES = [
             availability_start=date(1980, 1, 2),
             default_lookback_days=120,
             require_transport_proof=True,
+            scheduled=False,
             revision=1,
             description=(
                 "按独立的美股交易日历审计每个行情日期；完整状态必须同时具备"
@@ -299,18 +330,20 @@ _EXPLICIT_RULES = [
         _rule(
             "index_daily",
             CoverageStrategy.TRADING_DAILY,
-            entity_reference="index_basic",
-            # CSI/CNI include overseas and cross-market indexes that
-            # legitimately do not publish on some SSE open dates (for example
-            # US/HK holidays). Live adjacent-day comparisons show a valid
-            # floor near 87%; 85% retains headroom while still detecting a
-            # missing 5,000-row pagination page or the upstream 8,000-row cap.
+            entity_reference="index_daily_adjacent",
+            # index_basic is a discovery catalogue, not the point-in-time
+            # publication universe of index_daily.  It includes CNI series,
+            # inactive series and categories that index_daily does not return,
+            # and it has no delisting/status field.  Compare with nearby
+            # observed index_daily cross-sections instead.  A missing 5,000-row
+            # page still falls far below this floor.
             min_entity_ratio=0.85,
             description=(
-                "按交易日及 index_daily 支持的已上市指数截面检查完整性；"
-                "官方契约明确排除申万指数，申万行情由 sw_daily 独立采集"
+                "按交易日及相邻已观测 index_daily 截面检查完整性；index_basic "
+                "仅作发现目录且缺少失效日期，不能作为当日发布全集；申万行情由 "
+                "sw_daily 独立采集"
             ),
-            revision=4,
+            revision=5,
             entity_reference_max_age_days=120,
         ),
         _rule(
@@ -566,8 +599,104 @@ _EXPLICIT_RULES = [
         ),
         _rule("ccass_hold", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", description="中央结算持股按香港交易日发布；当前仅审计已观测日期，避免用 SSE 日历制造假缺口"),
         _rule("ccass_hold_detail", CoverageStrategy.OBSERVED_ONLY, entity_column="ts_code", scheduled=False, description="单日超过百万行且需要显式范围；仅审计人工采集到的日期"),
-        _rule("fut_index_daily", CoverageStrategy.OBSERVED_ONLY, description="南华商品指数缺少独立且完整的本地发布日历，仅审计静态指数全集的已观测日期"),
-        _rule("hk_daily", CoverageStrategy.OBSERVED_ONLY, description="港股日线使用独立港股交易日历且接口限频一小时；仅审计已观测日期"),
+        _rule(
+            "cyq_chips",
+            CoverageStrategy.TRADING_DAILY,
+            entity_reference="stock_daily",
+            min_entity_ratio=0.90,
+            availability_start=date(2018, 1, 2),
+            scheduled=False,
+            revision=2,
+            description=(
+                "2018 年起按 SSE 交易日和当日实际有行情的证券截面审计筹码分布；"
+                "该接口按股票展开，缺口只进入显式、额度评估后的批量修复"
+            ),
+        ),
+        _rule(
+            "cb_factor_pro",
+            CoverageStrategy.TRADING_DAILY,
+            entity_reference="cb_daily",
+            min_entity_ratio=0.90,
+            availability_start=date(2026, 8, 27),
+            scheduled=True,
+            revision=2,
+            description="自治理采集启用日起按交易日及同日可转债行情截面检查",
+        ),
+        _rule(
+            "fund_factor_pro",
+            CoverageStrategy.TRADING_DAILY,
+            entity_reference="fund_daily",
+            min_entity_ratio=0.90,
+            availability_start=date(2026, 8, 27),
+            scheduled=True,
+            revision=2,
+            description="自治理采集启用日起按交易日及同日基金行情截面检查",
+        ),
+        _rule(
+            "fut_index_daily",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column="ts_code",
+            availability_start=date(2026, 9, 4),
+            scheduled=False,
+            revision=2,
+            description="自治理采集启用日起按 SSE 交易日检查南华商品指数日期分区",
+        ),
+        *[
+            _rule(
+                dataset_name,
+                CoverageStrategy.TRADING_DAILY,
+                entity_column="ts_code",
+                availability_start=availability_start,
+                scheduled=False,
+                revision=2,
+                description="自治理采集启用日起按 SSE 交易日检查每日分区；高扇出接口只允许显式修复",
+            )
+            for dataset_name, availability_start in (
+                ("opt_daily", date(2026, 1, 14)),
+                ("dc_index", date(2026, 8, 28)),
+                ("etf_sh_cons", date(2026, 8, 27)),
+                ("etf_sz_cons", date(2026, 8, 27)),
+                ("moneyflow_dc", date(2026, 8, 28)),
+            )
+        ],
+        _rule(
+            "factor_value",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column="factor_name",
+            entity_reference="factor_catalog",
+            min_entity_ratio=1.0,
+            availability_start=date(2026, 8, 28),
+            scheduled=False,
+            revision=3,
+            description=(
+                "按 SSE 交易日检查完整受控因子集合；日期存在但缺少任一已知因子"
+                "仍是部分分区，避免把额度中断后的半成品判为完整"
+            ),
+        ),
+        _rule(
+            "stock_st",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name="stock_st",
+            entity_column="ts_code",
+            availability_start=date(2001, 1, 2),
+            accept_verified_empty=True,
+            scheduled=True,
+            revision=3,
+            description=(
+                "按 SSE 交易日检查 ST 名单快照；有物理记录即可证明日期存在，"
+                "零记录交易日必须有精确请求的权威空结果"
+            ),
+        ),
+        _rule(
+            "hk_daily",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column="ts_code",
+            calendar_exchange="HK",
+            availability_start=date(2026, 9, 4),
+            scheduled=True,
+            revision=2,
+            description="自治理采集启用日起使用独立港股交易日历检查日线分区",
+        ),
         _rule(
             "hk_hold",
             CoverageStrategy.OBSERVED_ONLY,
@@ -666,6 +795,18 @@ _EXPLICIT_RULES = [
                 release_on_next_trade_day=(
                     dataset_name in NEXT_MORNING_RELEASE_DATASETS
                 ),
+                entity_reference=(
+                    "fund_daily"
+                    if dataset_name == "fund_adj"
+                    else "stock_daily"
+                    if dataset_name in {"stk_factor", "stk_factor_pro"}
+                    else None
+                ),
+                min_entity_ratio=(
+                    0.90
+                    if dataset_name in {"fund_adj", "stk_factor", "stk_factor_pro"}
+                    else None
+                ),
                 description="按 SSE 交易日检查每日稳定发布的数据分区",
                 # These interfaces have rare, provider-authoritative empty open
                 # dates. They count only when an exact-date V2 execution
@@ -691,7 +832,9 @@ _EXPLICIT_RULES = [
                     else UPSTREAM_HISTORY_STARTS.get(dataset_name)
                 ),
                 revision=(
-                    4
+                    5
+                    if dataset_name in {"fund_adj", "stk_factor", "stk_factor_pro"}
+                    else 4
                     if dataset_name == "etf_share_size"
                     else 4
                     if dataset_name in {"moneyflow_ind_ths", "sz_daily_info"}

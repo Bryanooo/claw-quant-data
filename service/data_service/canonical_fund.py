@@ -145,7 +145,7 @@ class CanonicalFundDataService:
         self,
         *,
         symbols: list[str],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized = self._validate_symbols(symbols)
         records: dict[str, dict[str, Any]] = {}
@@ -204,7 +204,7 @@ class CanonicalFundDataService:
         symbols: list[str],
         start_date: date,
         end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         self._validate_range(start_date, end_date)
         normalized = self._validate_symbols(symbols)
@@ -279,7 +279,7 @@ class CanonicalFundDataService:
         }
 
     def managers(
-        self, *, symbols: list[str], allow_quota_fallback: bool = True,
+        self, *, symbols: list[str], allow_quota_fallback: bool = False,
     ) -> dict:
         normalized = self._validate_symbols(symbols)
         records: list[dict[str, Any]] = []
@@ -391,7 +391,7 @@ class CanonicalFundDataService:
         symbols: list[str],
         start_date: date,
         end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         self._validate_range(start_date, end_date)
         normalized = self._validate_symbols(symbols)
@@ -514,7 +514,7 @@ class CanonicalFundDataService:
         *,
         symbols: list[str],
         report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized = self._validate_symbols(symbols)
         periods = self._validate_report_dates(report_dates)

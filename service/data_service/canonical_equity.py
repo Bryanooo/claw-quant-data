@@ -186,7 +186,7 @@ class CanonicalEquityDataService:
         self,
         *,
         symbols: list[str],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized = self._validate_symbols(symbols)
         records: dict[str, dict[str, Any]] = {}
@@ -305,7 +305,7 @@ class CanonicalEquityDataService:
         symbols: list[str],
         start_date: date,
         end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         self._validate_range(start_date, end_date)
         normalized = self._validate_symbols(symbols)
@@ -529,7 +529,7 @@ class CanonicalEquityDataService:
         *,
         symbols: list[str],
         report_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         """Return audited cumulative statement facts for explicit report periods.
 

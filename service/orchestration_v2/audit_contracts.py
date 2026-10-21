@@ -79,6 +79,7 @@ def coverage_rule_audit_contract(rule: CoverageRule) -> DatasetAuditContract:
         min_entity_ratio=rule.min_entity_ratio,
         require_transport_proof=rule.require_transport_proof,
         accepts_verified_empty=rule.accept_verified_empty,
+        required_values=getattr(rule, "required_values", ()),
     )
 
 

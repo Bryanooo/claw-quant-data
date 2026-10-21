@@ -73,7 +73,7 @@ class CanonicalIndexDataService:
                 f"financial-data canonical fallback failed for {route}: {type(exc).__name__}"
             ) from exc
 
-    def profiles(self, *, symbols: list[str], allow_quota_fallback: bool = True) -> dict:
+    def profiles(self, *, symbols: list[str], allow_quota_fallback: bool = False) -> dict:
         normalized = self._symbols(symbols)
         records: dict[str, dict[str, Any]] = {}
         missing = []
@@ -133,7 +133,7 @@ class CanonicalIndexDataService:
 
     def constituents(
         self, *, symbols: list[str], update_dates: list[date],
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         normalized = self._symbols(symbols)
         dates = sorted(set(update_dates))

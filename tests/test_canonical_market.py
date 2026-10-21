@@ -101,6 +101,7 @@ def test_daily_bars_fall_back_only_for_empty_local_symbols():
         symbols=["000001.SZ"],
         start_date=date(2026, 9, 30),
         end_date=date(2026, 9, 30),
+        allow_quota_fallback=True,
     )
 
     assert len(broker.calls) == 1
@@ -149,6 +150,7 @@ def test_daily_bars_fill_calendar_gap_without_overwriting_local_rows():
         symbols=["000001.SZ"],
         start_date=date(2026, 9, 29),
         end_date=date(2026, 9, 30),
+        allow_quota_fallback=True,
     )
 
     assert response["meta"]["fallback_used"] is True
@@ -187,6 +189,7 @@ def test_trading_sessions_fall_back_to_canonical_dates():
         symbol="000001.SZ",
         start_date=date(2026, 9, 29),
         end_date=date(2026, 9, 30),
+        allow_quota_fallback=True,
     )
 
     assert response["meta"]["fallback_used"] is True
@@ -209,6 +212,7 @@ def test_canonical_fallback_rejects_protocol_drift_and_unbounded_input():
             symbols=["000001.SZ"],
             start_date=date(2026, 9, 30),
             end_date=date(2026, 9, 30),
+            allow_quota_fallback=True,
         )
     with pytest.raises(InvalidQueryError, match="366 days"):
         service.daily_bars(

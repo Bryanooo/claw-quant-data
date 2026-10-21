@@ -17,7 +17,7 @@
 - Auditor：对业务数据独立审计，任务成功不等于数据就绪。
 - Backup：定时产生 PostgreSQL custom-format 备份及校验侧车文件。
 
-系统当前收录 244 个 Tushare 接口契约，其中 202 个是当前 Token 可执行的只读采集接口（`us_daily` 为每小时 1 次的严格限频接口）。可采集接口映射为 192 个原生采集任务；加上当前已物化的派生结果，共有 196 个可审计数据集。数字不相等是因为一个任务可以组合多个上游接口，也可以产出多个数据集。另有 14 个派生任务定义，其中已具备业务实现的版本才允许发布为 active。
+系统当前收录 244 个 Tushare 接口契约，其中 202 个是当前 Token 可执行的只读采集接口。`us_daily` 虽然接口可执行，但因每小时一次的限制且近期不研究美股，当前仅保留存量查询并停止采集。可采集接口映射为 192 个原生采集任务；加上当前已物化的派生结果，共有 196 个可审计数据集。数字不相等是因为一个任务可以组合多个上游接口，也可以产出多个数据集。另有 14 个派生任务定义，其中已具备业务实现的版本才允许发布为 active。
 
 ## V2 执行模型
 
@@ -115,8 +115,8 @@ API Key 为空时 connector 会失败关闭，不会匿名请求或回退到伪�
 | Tushare 公告原文解析 | 22 | 无结构化表，但 A 股事实可从 `anns_d` PDF 解析并保留证据链 |
 | 蚂蚁数据源 必需 | 81 | Tushare 没有完整等价能力；其中 52 条存在局部市场或字段重叠，但不能冒充完整覆盖 |
 
-当前 Tushare 目录共 244 条契约：202 条可自动采集（200 条常规接口，另有
-`hk_daily`/`us_daily` 2 条严格限频接口）、2 条虽有权限但不属于安全定时采集、
+当前 Tushare 目录共 244 条契约：202 条具备采集实现（200 条常规接口，另有
+`hk_daily`/`us_daily` 2 条严格限频接口；`us_daily` 当前研究范围停采）、2 条虽有权限但不属于安全定时采集、
 38 条无权限、1 条继承底层权限、1 条已下线。每个映射项同时显示所需 Tushare 接口和 Token
 权限，因此“供应商存在”不会再被误报为“当前可调用”。反向逐条查询使用
 `GET /api/v1/data/source-priorities/tushare-endpoints`，可按 `mapping_status`、
@@ -201,7 +201,9 @@ Agent 包；本仓库只维护数据和研究 API。部署与方法规范见
 控制台地址：`http://127.0.0.1:8000/dashboard`
 
 “个股研究”支持按股票代码、名称或拼音简码检索，并在同一页面展示日 / 周 / 月 K 线、
-成交量、MACD、MA5/10/20/60/120/250、EMA12/26 和布林带；日线额外展示20/60日
+成交量、MACD，以及按频率治理的 SMA、EMA、RSI、ROC、CCI、ATR/NATR 参数族；同时
+提供 BIAS、BBI、PPO、TSI、TRIX、Bollinger `%B`/带宽、Keltner、TTM Squeeze、PVT、
+VROC、Force Index 和客观价格结构量。日线额外展示20/60日
 实际成交成本线、牛门线、确认线与信号 MA10。K 线可用按钮或鼠标滚轮缩放，并通过
 区间滑块平移；悬浮会列出当日 OHLC、动态单位成交量及所有已勾选指标值，点击可锁定
 该交易日。摘要区同时给出 ATR/波动率、ADX/DMI、Supertrend、MFI/CMF/StochRSI。
@@ -265,15 +267,8 @@ docker run --rm \
 
 ## 文档
 
-- [V2 切换与运维](docs/V2_CUTOVER_2026-09-29.md)
-- [V2 工作流模型](docs/COLLECTION_EXECUTION_MODEL.md)
-- [数据审计](docs/DATA_ASSURANCE.md)
-- [最新全量数据审计报告](reports/dataset_audit_latest.md)
-- [多数据源架构](docs/MULTI_SOURCE_ARCHITECTURE.md)
-- [系统全貌与唯一口径](docs/SYSTEM_STATUS.md)
-- [研究 API](docs/RESEARCH_API.md)
-- [CLI](docs/CLI.md)
-- [文档导航](docs/README.md)
+从[文档目录](docs/README.md)进入。目录按用途和受众区分长期契约、操作说明、机器生成
+目录与运行报告，避免把某次验收快照误当成当前系统状态。
 
 ## 安全边界
 
@@ -282,4 +277,4 @@ docker run --rm \
 - V2 handler 必须来自代码白名单；数据库不会动态执行 Python 源码。
 - 审计事件追加不可变；纠错通过 supersede 与新实例完成，不删除历史证据。
 
-公开数据扩展与蚂蚁数据源配置、8 个新增查询接口及验证记录：见 [公开数据 connector](docs/PUBLIC_SOURCE_CONNECTORS.md)。
+公开数据扩展与蚂蚁数据源配置见[数据来源](docs/DATA_SOURCES.md)。

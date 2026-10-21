@@ -304,6 +304,10 @@ class CoverageRepository:
             if rule.entity_column
             else sql.SQL("NULL::bigint")
         )
+        required_predicate = sql.SQL("").join(
+            sql.SQL(" AND {} = %s").format(sql.Identifier(column))
+            for column, _value in rule.required_values
+        )
         statement = sql.SQL(
             """
             SELECT {date_expression} AS partition_date,
@@ -311,6 +315,7 @@ class CoverageRepository:
                    {entity_expression}::bigint AS entity_count
             FROM {table}
             WHERE {date_expression} BETWEEN %s AND %s
+                  {required_predicate}
             GROUP BY {date_expression}
             ORDER BY {date_expression}
             """
@@ -318,12 +323,20 @@ class CoverageRepository:
             date_expression=date_expression,
             entity_expression=entity_expression,
             table=sql.Identifier(rule.table),
+            required_predicate=required_predicate,
         )
         with (
             self._connection() as connection,
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
-            cursor.execute(statement, (start_date, end_date))
+            cursor.execute(
+                statement,
+                (
+                    start_date,
+                    end_date,
+                    *(value for _column, value in rule.required_values),
+                ),
+            )
             partitions = [
                 ActualPartition(
                     partition_date=row["partition_date"],
@@ -422,7 +435,7 @@ class CoverageRepository:
                 if row["partition_date"] is not None
             }
             transport_proof_dates: set[date] = set()
-            if rule.require_transport_proof:
+            if rule.require_transport_proof or incomplete_dates:
                 # A verified V2 execution certifies its complete logical
                 # observation range.  History collectors often use bounded
                 # weekly/monthly windows, so recording only observation_end
@@ -443,7 +456,13 @@ class CoverageRepository:
                         INTERVAL '1 day'
                     ) AS proof_day
                     WHERE execution.task_key=%s
-                      AND execution.status='success'
+                      -- An attention result can be caused entirely by the
+                      -- business completeness rule after acquisition has
+                      -- already exhausted every provider page.  Keep that
+                      -- verified transport evidence when a corrected audit
+                      -- rule is deployed; forcing another provider request
+                      -- cannot improve the bytes already proven exhaustive.
+                      AND execution.status IN ('success','attention')
                       AND execution.observation_start IS NOT NULL
                       AND execution.observation_end IS NOT NULL
                       AND execution.observation_end >= %s
@@ -517,18 +536,19 @@ class CoverageRepository:
                         for row in cursor.fetchall()
                         if row["partition_date"] is not None
                     )
-                incomplete_dates.update(
-                    item.partition_date
-                    for item in partitions
-                    if item.partition_date not in transport_proof_dates
-                )
+                if rule.require_transport_proof:
+                    incomplete_dates.update(
+                        item.partition_date
+                        for item in partitions
+                        if item.partition_date not in transport_proof_dates
+                    )
             # A verified acquire event is newer, execution-scoped evidence
             # for the same logical period. It may retire a stale legacy
             # ``completion_status=incomplete`` marker, but it does not make a
             # missing/undersized business partition complete; the calculator
             # still evaluates those conditions below.
             transport_proof_dates.update(current_transport_dates)
-            incomplete_dates.difference_update(current_transport_dates)
+            incomplete_dates.difference_update(transport_proof_dates)
             if incomplete_dates:
                 partitions = [
                     ActualPartition(
@@ -745,6 +765,15 @@ class CoverageRepository:
                     ORDER BY cal_date
                 """
                 params = (start_date, cutoff_date)
+            elif rule.calendar_exchange == "HK":
+                statement = """
+                    SELECT DISTINCT cal_date AS partition_date
+                    FROM tushare_norm_hk_tradecal
+                    WHERE is_open = 1
+                      AND cal_date BETWEEN %s AND %s
+                    ORDER BY cal_date
+                """
+                params = (start_date, cutoff_date)
             else:
                 statement = """
                     SELECT cal_date AS partition_date
@@ -798,6 +827,26 @@ class CoverageRepository:
 
     def expected_entity_count(self, rule: CoverageRule, partition_date: date) -> int | None:
         """Estimate the point-in-time universe for supported reference tables."""
+        if rule.entity_reference == "index_daily_adjacent":
+            with self._connection() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT max(entity_count)
+                    FROM (
+                        SELECT trade_date, count(DISTINCT ts_code) AS entity_count
+                        FROM index_daily
+                        WHERE trade_date BETWEEN %s - INTERVAL '14 days'
+                                             AND %s + INTERVAL '14 days'
+                          AND trade_date <> %s
+                        GROUP BY trade_date
+                        ORDER BY abs(trade_date - %s)
+                        LIMIT 6
+                    ) AS adjacent
+                    """,
+                    (partition_date, partition_date, partition_date, partition_date),
+                )
+                value = cursor.fetchone()[0]
+                return int(value) if value else None
         # Through 1992 the mainland market contained only a handful of symbols;
         # one legitimate non-trading symbol makes a percentage threshold
         # unstable. daily and daily_basic are independent upstream endpoints,
@@ -869,6 +918,35 @@ class CoverageRepository:
                        OR daily.trade_date <=
                           to_date(stock.delist_date, 'YYYYMMDD'))
             """,
+            "index_daily_adjacent": """
+                SELECT target.partition_date, max(adjacent.entity_count)::bigint
+                FROM unnest(%s::date[]) AS target(partition_date)
+                LEFT JOIN LATERAL (
+                    SELECT count(DISTINCT daily.ts_code) AS entity_count
+                    FROM index_daily AS daily
+                    WHERE daily.trade_date BETWEEN
+                              target.partition_date - INTERVAL '14 days'
+                              AND target.partition_date + INTERVAL '14 days'
+                      AND daily.trade_date <> target.partition_date
+                    GROUP BY daily.trade_date
+                    ORDER BY abs(daily.trade_date - target.partition_date)
+                    LIMIT 6
+                ) AS adjacent ON TRUE
+                GROUP BY target.partition_date
+            """,
+            "fund_daily": """
+                SELECT count(DISTINCT ts_code)::bigint
+                FROM tushare_norm_fund_daily WHERE trade_date=%s
+            """,
+            "cb_daily": """
+                SELECT count(DISTINCT ts_code)::bigint
+                FROM tushare_norm_cb_daily WHERE trade_date=%s
+            """,
+            "factor_catalog": """
+                SELECT count(DISTINCT factor_name)::bigint
+                FROM tushare_norm_factor_value
+                WHERE factor_name IS NOT NULL AND factor_name<>''
+            """,
         }
         statement = statements.get(rule.entity_reference)
         if not statement:
@@ -876,7 +954,7 @@ class CoverageRepository:
         params = (
             (partition_date, partition_date)
             if rule.entity_reference == "stock_basic"
-            else (partition_date,)
+            else (() if rule.entity_reference == "factor_catalog" else (partition_date,))
         )
         with self._connection() as connection, connection.cursor() as cursor:
             cursor.execute(statement, params)
@@ -974,6 +1052,31 @@ class CoverageRepository:
                 WHERE universe.ts_code IS NULL OR stock.ts_code IS NOT NULL
                 GROUP BY target.partition_date
             """,
+            "fund_daily": """
+                SELECT target.partition_date,
+                       count(DISTINCT universe.ts_code)::bigint
+                FROM unnest(%s::date[]) AS target(partition_date)
+                LEFT JOIN tushare_norm_fund_daily AS universe
+                  ON universe.trade_date=target.partition_date
+                GROUP BY target.partition_date
+            """,
+            "cb_daily": """
+                SELECT target.partition_date,
+                       count(DISTINCT universe.ts_code)::bigint
+                FROM unnest(%s::date[]) AS target(partition_date)
+                LEFT JOIN tushare_norm_cb_daily AS universe
+                  ON universe.trade_date=target.partition_date
+                GROUP BY target.partition_date
+            """,
+            "factor_catalog": """
+                SELECT target.partition_date, catalog.entity_count
+                FROM unnest(%s::date[]) AS target(partition_date)
+                CROSS JOIN (
+                    SELECT count(DISTINCT factor_name)::bigint AS entity_count
+                    FROM tushare_norm_factor_value
+                    WHERE factor_name IS NOT NULL AND factor_name<>''
+                ) AS catalog
+            """,
         }
         statement = statements.get(rule.entity_reference)
         if not statement:
@@ -1005,6 +1108,17 @@ class CoverageRepository:
                     """,
                     (start_date, end_date),
                 )
+            elif exchange == "HK":
+                cursor.execute(
+                    """
+                    SELECT min(cal_date), max(cal_date),
+                           count(DISTINCT cal_date) FILTER (
+                               WHERE cal_date BETWEEN %s AND %s
+                           )
+                    FROM tushare_norm_hk_tradecal
+                    """,
+                    (start_date, end_date),
+                )
             else:
                 cursor.execute(
                     """
@@ -1033,6 +1147,15 @@ class CoverageRepository:
                 cursor.execute(
                     """
                     SELECT DISTINCT cal_date FROM tushare_norm_us_tradecal
+                    WHERE is_open=1 AND cal_date>%s AND cal_date<=%s
+                    ORDER BY cal_date LIMIT 1
+                    """,
+                    (after_date, no_later_than),
+                )
+            elif exchange == "HK":
+                cursor.execute(
+                    """
+                    SELECT DISTINCT cal_date FROM tushare_norm_hk_tradecal
                     WHERE is_open=1 AND cal_date>%s AND cal_date<=%s
                     ORDER BY cal_date LIMIT 1
                     """,

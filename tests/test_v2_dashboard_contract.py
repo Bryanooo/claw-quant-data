@@ -88,7 +88,7 @@ def test_dashboard_separates_public_services_from_internal_dependencies():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     assert "对外服务目录" in html
-    assert "上游数据源" in html
+    assert "数据源总览" in html
     assert "servicePrev" in html and "serviceNext" in html
     assert 'api("/api/v1/catalog")' in script
     assert "local_datasets" in script
@@ -98,18 +98,16 @@ def test_dashboard_separates_public_services_from_internal_dependencies():
 def test_dashboard_exposes_financial_data_dependency_matrix():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
-    assert "数据能力供给策略" in html
-    assert "Tushare 公告解析" in html
-    assert "蚂蚁数据源 必需" in html
-    assert 'api("/api/v1/data/source-priorities")' in script
-    assert "provider_equivalence_summary" in script
+    assert "接口依赖明细" in html
+    assert "蚂蚁必需" in script
+    assert "/api/v1/data/dependencies/interfaces" in script
     assert "equivalence_class" in script
 
 
 def test_dashboard_exposes_financial_data_real_usage_and_research_scope():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
-    assert "蚂蚁数据源 实际调用" in html
+    assert "蚂蚁 实际调用" in html
     assert "状态按批次统计" in html
     assert 'id="financialResearchCount"' in html
     assert "/api/v1/data/sources/ant_data/usage?limit=20" in script
@@ -134,14 +132,30 @@ def test_data_dependency_page_has_provider_and_supply_strategy_hierarchy():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     css = (ROOT / "service/dashboard/dashboard.css").read_text()
-    assert "上游数据源" in html
-    assert "数据能力供给策略" in html
-    assert 'class="strategy-grid"' in html
-    assert 'data-source-class="tushare_direct"' in html
-    assert 'data-source-class="financial_data_only"' in html
-    assert "provider-card" in script
-    assert "coverageLabels" in script
+    assert "数据源总览" in html
+    assert "接口依赖明细" in html
+    assert 'id="interfaceRows"' in html
+    assert 'id="fieldLineageView"' in html
+    assert 'id="lineageRows"' in html
+    assert "状态色约定" in html
+    assert "联动跳转" in html
+    assert "/api/v1/data/dependencies/interfaces" in script
+    assert "/api/v1/data/dependencies/field-lineage" in script
+    assert "/api/v1/data/dependencies/summary" in script
+    assert "page_size=200" in script
+    assert "strip-tile" in script
+    assert "interfaceDetailParts" in script
+    assert "equivalenceLabels" in script
+    assert "不落业务表" in script
+    assert "仅请求证据" in script
+    assert "data-goto-service" in script
+    assert "data-goto-coverage" in script
     assert ".source-mapping-table" in css
+    assert ".interface-detail-row" in css
+    assert ".lineage-field" in css
+    assert ".source-strip" in css
+    assert ".pill.info" in css
+    assert ".legend-box" in css
 
 
 def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
@@ -157,11 +171,23 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert 'id="stockWatchlist"' in html
     assert 'id="stockWatchToggle"' in html
     assert "牛门线与确认线按交易日定义" in html
+    # 个股研究升级：研究模块页签（筹码/基本面/事件/板块/产业链，懒加载）
+    assert 'id="stockModuleTabs"' in html
+    for module in ("chips", "fundamentals", "events", "sectors", "chain"):
+        assert f'data-stock-module="{module}"' in html
+        assert f'data-stock-module-panel="{module}"' in html
+    assert "resetStockModules" in script
+    assert "selectStockModule" in script
+    assert 'industry-chain' in script
+    # 数据依赖页：资产类型筛选与标签
+    assert 'id="interfaceAssetClass"' in html
+    assert "assetClassLabels" in script
+    assert "asset-tag" in css
     assert "/api/v1/research/stocks/search" in script
     assert "/api/v1/research/watchlist" in script
     assert 'method:"POST"' in script
     assert 'method:"DELETE"' in script
-    assert "/technicals?lookback_days=10000" in script
+    assert "/technicals?lookback_days=3000" in script
     assert "include_external=false" in script
     assert "macd_histogram" in script
     assert "niumen_confirmation_line" in script
@@ -184,7 +210,7 @@ def test_stock_chart_supports_zoom_complete_tooltips_and_volume_units():
     assert 'id="stockVolumeTitle"' in html
     assert "zoomStockChart" in script
     assert "panStockChart" in script
-    assert "chart_points=10000" in script
+    assert "chart_points=1500" in script
     assert 'id="stockHistoryRange"' in html
     assert "完整历史" in script
     assert "setPointerCapture" in script

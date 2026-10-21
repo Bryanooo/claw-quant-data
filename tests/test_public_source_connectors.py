@@ -211,7 +211,7 @@ def test_public_api_errors_aliases_and_discovery(monkeypatch):
     app = FastAPI()
     app.include_router(sources.router)
     client = TestClient(app)
-    assert client.get('/v1/data/sources/ant_data').json()['display_name'] == '蚂蚁数据源'
+    assert client.get('/v1/data/sources/ant_data').json()['display_name'] == '蚂蚁'
     assert client.get('/v1/data/sources/ant_data/route-contracts').json()['total'] == 163
     assert client.post('/v1/data/sources/pboc/endpoints/social_financing/query', json={'parameters': {'year': 2020}}).status_code == 422
     assert client.post('/v1/data/sources/nope/endpoints/x/query', json={}).status_code == 404

@@ -4,11 +4,16 @@ from collectors.base import BaseCollector
 import pytest
 
 from service.tushare_rate_limit import (
+    INTERFACE_DAILY_QUOTAS,
     GLOBAL_RATE_KEY,
     TushareRateSlotDeferredError,
     _reserve_daily_quota,
     reserve_tushare_request,
 )
+
+
+def test_factor_value_keeps_daily_quota_headroom():
+    assert INTERFACE_DAILY_QUOTAS["factor_value"] == 900
 
 
 def test_reservation_locks_global_and_interface_slots_before_short_durable_sleep(

@@ -178,7 +178,7 @@ class CanonicalMarketDataService:
         symbols: list[str],
         start_date: date,
         end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         self._validate_range(start_date, end_date)
         normalized = self._validate_symbols(symbols)
@@ -291,7 +291,7 @@ class CanonicalMarketDataService:
         symbol: str,
         start_date: date,
         end_date: date,
-        allow_quota_fallback: bool = True,
+        allow_quota_fallback: bool = False,
     ) -> dict:
         self._validate_range(start_date, end_date)
         normalized_symbol = self._validate_symbols([symbol])[0]

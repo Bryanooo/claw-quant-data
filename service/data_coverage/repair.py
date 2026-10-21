@@ -11,7 +11,11 @@ from service.orchestration_v2.contracts import TaskDefinitionDocument
 from service.orchestration_v2.gap_repair import create_repair_executions
 from service.orchestration_v2.repair_planning import plan_period_repairs
 from service.orchestration_v2.repository import OrchestrationV2Repository
-from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+from service.orchestration_v2.recovery_policy import (
+    DEFERRED_RESEARCH_DATASETS,
+    MANUAL_SCOPE_REPAIR_DATASETS,
+    QUOTA_GUARDED_DATASETS,
+)
 
 
 # These fan-outs are safe when deliberately planned, but a single logical day
@@ -19,7 +23,11 @@ from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
 # daily-call quota.  The auditor must expose the gap without automatically
 # queuing several competing 5,000+ request executions.  Manual repair and the
 # resumable history/initialization path remain available.
-AUTO_REPAIR_EXCLUDED_DATASETS = QUOTA_GUARDED_DATASETS
+AUTO_REPAIR_EXCLUDED_DATASETS = (
+    QUOTA_GUARDED_DATASETS
+    | DEFERRED_RESEARCH_DATASETS
+    | MANUAL_SCOPE_REPAIR_DATASETS
+)
 
 
 def _dataset_tasks() -> dict[str, str]:

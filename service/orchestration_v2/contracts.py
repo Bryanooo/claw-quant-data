@@ -245,6 +245,19 @@ class DatasetAuditContract(ContractModel):
     min_entity_ratio: float | None = Field(default=None, gt=0, le=1)
     require_transport_proof: bool = False
     accepts_verified_empty: bool = False
+    required_values: tuple[tuple[str, str], ...] = ()
+
+    @field_validator("required_values")
+    @classmethod
+    def validate_required_values(
+        cls, values: tuple[tuple[str, str], ...]
+    ) -> tuple[tuple[str, str], ...]:
+        columns = [column for column, _value in values]
+        if len(columns) != len(set(columns)):
+            raise ValueError("required value columns must be unique")
+        if any(not column or len(column) > 128 for column in columns):
+            raise ValueError("invalid required value column")
+        return values
 
     @model_validator(mode="after")
     def validate_audit_geometry(self) -> "DatasetAuditContract":

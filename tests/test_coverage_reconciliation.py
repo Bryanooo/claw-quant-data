@@ -1,4 +1,5 @@
 from service.data_coverage.reconciliation import CoverageRuleReconciler
+from service.data_coverage.registry import COVERAGE_RULES
 
 
 class FakeRepository:
@@ -21,59 +22,10 @@ def test_rule_reconciler_only_requeues_versioned_obsolete_audits():
 
     assert result == {"index_daily": 37}
     assert repository.calls == [
-            ("adj_factor", 3, 100),
-            ("bak_daily", 3, 100),
-            ("balancesheet", 4, 100),
-            ("cashflow", 4, 100),
-            ("cb_daily", 3, 100),
-            ("ci_daily", 2, 100),
-                ("cn_gdp", 2, 100),
-            ("cn_lpr", 3, 100),
-            ("cn_pmi", 2, 100),
-            ("cn_ppi", 2, 100),
-            ("cyq_perf", 3, 100),
-            ("dc_daily", 2, 100),
-            ("etf_share_size", 4, 100),
-                ("fina_mainbz", 2, 100),
-                ("financial_indicator", 4, 100),
-            ("fund_adj", 2, 100),
-            ("fund_daily", 2, 100),
-            ("fund_share", 2, 100),
-            ("ggt_monthly", 2, 100),
-                ("hk_hold", 2, 100),
-                ("idx_factor_pro", 2, 100),
-                ("income", 4, 100),
-        ("index_daily", 4, 100),
-        ("index_dailybasic", 2, 100),
-            ("index_monthly", 2, 100),
-            ("index_weekly", 2, 100),
-            ("industry_daily", 2, 100),
-            ("kpl_concept_cons", 2, 100),
-            ("margin", 4, 100),
-            ("margin_detail", 4, 100),
-            ("moneyflow", 3, 100),
-            ("moneyflow_cnt_ths", 3, 100),
-            ("moneyflow_ind_dc", 3, 100),
-            ("moneyflow_ind_ths", 4, 100),
-            ("moneyflow_mkt_dc", 2, 100),
-            ("moneyflow_ths", 3, 100),
-        ("report_rc", 2, 100),
-        ("repurchase", 3, 100),
-        ("sf_month", 2, 100),
-        ("sge_daily", 4, 100),
-        ("shibor", 3, 100),
-            ("stk_auction", 2, 100),
-            ("stk_factor", 2, 100),
-            ("stk_factor_pro", 2, 100),
-        ("stock_daily", 2, 100),
-        ("stock_daily_basic", 2, 100),
-            ("stock_limit", 2, 100),
-            ("sw_daily", 2, 100),
-            ("sz_daily_info", 4, 100),
-            ("tdx_daily", 2, 100),
-            ("tdx_index", 2, 100),
-            ("technical_factor_snapshot", 2, 100),
-            ("ths_hot", 3, 100),
-            ("top10_floatholders", 2, 100),
-            ("top10_holders", 2, 100),
+        (rule.dataset_name, rule.revision, 100)
+        for rule in COVERAGE_RULES.list()
+        if rule.revision > 1
     ]
+    assert ("cyq_chips", 2, 100) in repository.calls
+    assert ("hk_daily", 2, 100) in repository.calls
+    assert ("stk_factor_pro", 5, 100) in repository.calls

@@ -94,18 +94,21 @@ def build_inventory() -> dict:
             ],
         },
     ]
+    catalogued_get_entrypoints = sum(len(group["items"]) for group in groups)
+    public_data_http_entrypoints = catalogued_get_entrypoints + 1
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "counting_rule": (
-            "63 catalogued GET data-service entrypoints plus one authenticated "
-            "Financial Data POST query-through gateway. The gateway exposes 163 "
-            "allowlisted upstream business routes; those routes are not counted as "
-            "163 separate local HTTP endpoints."
+            f"{catalogued_get_entrypoints} catalogued GET data-service entrypoints "
+            "plus one authenticated Financial Data POST query-through gateway. "
+            f"The gateway exposes {len(FINANCIAL_DATA_ROUTES)} allowlisted upstream "
+            "business routes; upstream routes are not counted as separate local "
+            "HTTP endpoints."
         ),
         "summary": {
-            "catalogued_get_entrypoints": sum(len(group["items"]) for group in groups),
+            "catalogued_get_entrypoints": catalogued_get_entrypoints,
             "financial_data_query_gateways": 1,
-            "public_data_http_entrypoints": sum(len(group["items"]) for group in groups) + 1,
+            "public_data_http_entrypoints": public_data_http_entrypoints,
             "tushare_raw_audit_entrypoints": len(RAW_ENDPOINTS),
             "canonical_store_entrypoints": len(STANDARD_GENERIC_ENDPOINTS),
             "canonical_hybrid_entrypoints": len(CANONICAL_ENDPOINTS),
@@ -119,15 +122,17 @@ def build_inventory() -> dict:
             ),
         },
         "testing": {
-            "route_contract": "64/64 public data entrypoints covered by OpenAPI registration tests",
-            "tushare_mapping_contract": "201/201 collectable interfaces map to public datasets",
-            "dataset_registry_contract": "194/194 registered datasets map to collector or normalization storage",
-            "financial_data_catalog_contract": "163/163 business routes are allowlisted and input-validated",
-            "canonical_contract": "24/24 canonical routes registered; domain services have unit/contract tests",
-            "research_contract": "28/28 research routes registered; calculation services have unit tests",
+            "route_catalog": f"{public_data_http_entrypoints} local HTTP entrypoints catalogued",
+            "dataset_registry": f"{len(DATASETS.list())} standard datasets registered",
+            "financial_data_catalog": (
+                f"{len(FINANCIAL_DATA_ROUTES)} upstream business routes allowlisted"
+            ),
+            "canonical_catalog": f"{len(CANONICAL_ENDPOINTS)} canonical routes registered",
+            "research_catalog": f"{len(RESEARCH_ENDPOINTS)} research routes registered",
             "research_live_acceptance": f"{len(RESEARCH_VALIDATION_CASES)} representative end-to-end cases",
             "financial_data_live_acceptance": (
-                "protocol and query gateway covered; a full 163-route live sweep is intentionally not run "
+                "protocol and query gateway covered; a full "
+                f"{len(FINANCIAL_DATA_ROUTES)}-route live sweep is intentionally not run "
                 "in CI because it consumes provider quota and depends on mutable upstream sample data"
             ),
         },
@@ -183,7 +188,7 @@ def render_markdown(inventory: dict) -> str:
         "",
     ])
     lines.extend(f"- `{route}`" for route in inventory["financial_data"]["routes"])
-    lines.extend(["", "## Test posture", ""])
+    lines.extend(["", "## Contract posture", ""])
     for key, value in inventory["testing"].items():
         lines.append(f"- `{key}`: {value}")
     lines.append("")

@@ -180,3 +180,30 @@ def validate_quota_guarded_history_scope(
     )
     if observation_key != expected_key:
         raise ValueError("bounded history observation key must freeze its exact range")
+
+
+def validate_bounded_fanout_history_scope(
+    *,
+    contracts: tuple[DatasetAuditContract, ...],
+    observation_start: date | None,
+    observation_end: date | None,
+    observation_key: str,
+    allowed_datasets: frozenset[str],
+    max_days: int = 31,
+) -> None:
+    """Allow one resumable date window for explicitly governed fan-out APIs."""
+
+    datasets = frozenset(contract.dataset_name for contract in contracts)
+    if not datasets or not datasets.issubset(allowed_datasets):
+        raise ValueError("bounded fan-out scope is restricted to explicit-repair datasets")
+    if observation_start is None or observation_end is None:
+        raise ValueError("bounded fan-out scope requires observation start and end")
+    if observation_start > observation_end:
+        raise ValueError("bounded fan-out start cannot be after end")
+    if (observation_end - observation_start).days >= max_days:
+        raise ValueError(f"bounded fan-out scope may cover at most {max_days} days")
+    expected_key = (
+        f"fanout-history:{observation_start.isoformat()}:{observation_end.isoformat()}"
+    )
+    if observation_key != expected_key:
+        raise ValueError("bounded fan-out observation key must freeze its exact range")

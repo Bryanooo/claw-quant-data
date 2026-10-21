@@ -27,7 +27,7 @@ def test_ready_transformation_dispatch_freezes_exact_input_states():
             return {"technical_factor_snapshot"}
 
         def latest_common_ready_input_states(self, names):
-            assert names == ("stock_daily", "adj_factor")
+            assert names == ("stock_daily", "adj_factor", "stock_basic")
             return {
                 "stock_daily": {
                     "dataset_state_id": 101,
@@ -39,6 +39,13 @@ def test_ready_transformation_dispatch_freezes_exact_input_states():
                 "adj_factor": {
                     "dataset_state_id": 102,
                     "revision": 3,
+                    "observation_key": "2026-10-09",
+                    "observation_start": datetime(2026, 10, 9).date(),
+                    "observation_end": datetime(2026, 10, 9).date(),
+                },
+                "stock_basic": {
+                    "dataset_state_id": 103,
+                    "revision": 1,
                     "observation_key": "2026-10-09",
                     "observation_start": datetime(2026, 10, 9).date(),
                     "observation_end": datetime(2026, 10, 9).date(),
@@ -62,10 +69,11 @@ def test_ready_transformation_dispatch_freezes_exact_input_states():
     assert repository.request.task_key == "technical_factor_snapshot"
     assert repository.request.observation_key == "2026-10-09"
     assert repository.request.trigger_source.value == "dependency"
-    assert "technical-factor-snapshot-v1" in repository.request.idempotency_key
+    assert "technical-factor-snapshot-v4" in repository.request.idempotency_key
     assert repository.request.frozen_scope["input_dataset_states"] == {
         "stock_daily": {"dataset_state_id": 101, "revision": 2},
         "adj_factor": {"dataset_state_id": 102, "revision": 3},
+        "stock_basic": {"dataset_state_id": 103, "revision": 1},
     }
 
 

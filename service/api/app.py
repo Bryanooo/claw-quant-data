@@ -17,6 +17,8 @@ from service.api.routers import (
     coverage,
     data_health,
     datasets,
+    dependencies,
+    derivations,
     health,
     initialization,
     investment_calendar,
@@ -205,6 +207,8 @@ def create_app(
     application.include_router(datasets.router, prefix="/api")
     application.include_router(interfaces.router, prefix="/api")
     application.include_router(sources.router, prefix="/api")
+    application.include_router(dependencies.router, prefix="/api")
+    application.include_router(derivations.router, prefix="/api")
     application.include_router(normalization.router, prefix="/api")
     application.include_router(raw_archive.router, prefix="/api")
     application.include_router(research.router, prefix="/api")

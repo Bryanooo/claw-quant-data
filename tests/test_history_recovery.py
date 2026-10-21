@@ -34,7 +34,9 @@ def test_reverse_recovery_uses_exact_dates_for_high_cross_section_apis():
 
 def test_reverse_recovery_uses_trade_date_for_provider_rejected_range_apis():
     targets = {
+        "cb_factor_pro": date(2021, 3, 26),
         "fund_daily": date(2021, 3, 26),
+        "fund_factor_pro": date(2021, 3, 26),
         "index_daily": date(2021, 3, 26),
         "index_monthly": date(2016, 8, 31),
         "margin": date(2021, 3, 26),
@@ -49,7 +51,13 @@ def test_reverse_recovery_uses_trade_date_for_provider_rejected_range_apis():
     )
 
     by_api = {item.api_name: item for item in plan.specs}
+    assert by_api["cb_factor_pro"].parameters["parameters"] == {
+        "trade_date": "20210326"
+    }
     assert by_api["fund_daily"].parameters["parameters"] == {
+        "trade_date": "20210326"
+    }
+    assert by_api["fund_factor_pro"].parameters["parameters"] == {
         "trade_date": "20210326"
     }
     assert by_api["index_monthly"].parameters["parameters"] == {
@@ -66,6 +74,8 @@ def test_reverse_recovery_uses_trade_date_for_provider_rejected_range_apis():
     )
     assert by_api["margin_detail"].idempotency_key.endswith(":plan-v2")
     assert by_api["fund_daily"].idempotency_key.endswith(":plan-v1")
+    assert by_api["cb_factor_pro"].idempotency_key.endswith(":plan-v2")
+    assert by_api["fund_factor_pro"].idempotency_key.endswith(":plan-v2")
 
 
 def test_reverse_recovery_respects_verified_provider_availability_boundaries():

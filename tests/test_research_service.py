@@ -625,6 +625,25 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
         )
     assert result["data"]["instrument"]["ts_code"] == "000001.SZ"
     assert result["data"]["momentum"]["stochastic_rsi_14"] is not None
+    assert set(result["data"]["momentum"]["rsi_family"]) == {
+        "6", "12", "14", "24"
+    }
+    assert set(result["data"]["momentum"]["roc_family_pct"]) == {
+        "5", "10", "20", "60", "120"
+    }
+    assert result["data"]["momentum"]["tsi_25_13"] is not None
+    assert result["data"]["volatility"]["bollinger_20"]["percent_b"] is not None
+    assert (
+        result["data"]["levels"]["continuous_structure"]
+        ["regression_60"]["r_squared"] is not None
+    )
+    assert result["data"]["candlesticks"]["latest_geometry"]["body_to_range"] is not None
+    assert result["data"]["timeframes"]["1w"]["indicator_contract"][
+        "parameter_profile"
+    ]["sma"] == [5, 10, 20, 30, 40, 52]
+    assert result["data"]["timeframes"]["1mo"]["indicator_contract"][
+        "parameter_profile"
+    ]["sma"] == [3, 6, 12, 24, 36, 60]
     assert result["data"]["volume_price"]["chaikin_money_flow_20"] is not None
     volume_analysis = result["data"]["volume_price"]["analysis"]
     assert volume_analysis["price_volume_regime"]["classification"]
@@ -947,15 +966,15 @@ def test_etf_flow_and_state_team_views_keep_identity_evidence_explicit():
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 23
-    assert catalog["summary"]["derived_endpoints"] == 19
+    assert catalog["summary"]["agent_endpoints"] == 24
+    assert catalog["summary"]["derived_endpoints"] == 20
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 6
-    assert catalog["summary"]["baseline_techniques"] == 75
-    assert catalog["summary"]["currently_served"] == 67
+    assert catalog["summary"]["baseline_techniques"] == 79
+    assert catalog["summary"]["currently_served"] == 71
     assert catalog["summary"]["planned_from_existing_sources"] == 0
     assert catalog["summary"]["external_or_constrained"] == 8
-    assert len(catalog["techniques"]["served"]) == 67
+    assert len(catalog["techniques"]["served"]) == 71
     assert len(catalog["techniques"]["gaps"]) == 8
     screening = next(
         item for item in catalog["techniques"]["served"]

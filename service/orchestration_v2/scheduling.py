@@ -14,6 +14,7 @@ from service.orchestration_v2.catalog import (
 from service.orchestration_v2.contracts import ExecutionRequest
 from service.orchestration_v2.contracts import NEXT_MORNING_TASKS
 from service.orchestration_v2.repository import OrchestrationV2Repository
+from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
 from service.orchestration_v2.transformations import (
     SUPPORTED_TRANSFORMATION_TASK_KEYS,
 )
@@ -182,7 +183,10 @@ def dispatch_daily_acquisitions(
     task_keys = tuple(
         blueprint.task_key
         for blueprint in acquisition_task_blueprints()
-        if blueprint.cadence == "daily"
+        if (
+            blueprint.cadence == "daily"
+            and blueprint.task_key not in DEFERRED_RESEARCH_DATASETS
+        )
     )
     created = 0
     existing = 0
@@ -264,7 +268,10 @@ def dispatch_due_acquisitions(
         task_keys = tuple(
             item.task_key
             for item in acquisition_task_blueprints()
-            if item.cadence == cadence
+            if (
+                item.cadence == cadence
+                and item.task_key not in DEFERRED_RESEARCH_DATASETS
+            )
         )
         created = existing = 0
         cadence_errors: dict[str, str] = {}

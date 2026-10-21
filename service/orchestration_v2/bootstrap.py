@@ -20,6 +20,7 @@ from service.orchestration_v2.contracts import (
     canonical_digest,
 )
 from service.orchestration_v2.service import OrchestrationV2Service
+from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
 from service.source_connectors.registry import SOURCE_REGISTRY
 
 
@@ -109,7 +110,11 @@ def task_documents(
             "nodes": nodes,
             "output_datasets": task.output_datasets,
             "acquisition_endpoint_ids": ids,
-            "schedule": _acquisition_schedule(task.cadence),
+            "schedule": _acquisition_schedule(
+                "manual"
+                if task.task_key in DEFERRED_RESEARCH_DATASETS
+                else task.cadence
+            ),
             "scope_contract": {
                 "pagination_and_partitions": "within_acquire_node",
                 "cadence": task.cadence,
@@ -174,8 +179,8 @@ def task_documents(
         producer_outputs[task.task_key] = task.output_datasets
 
     result = tuple(documents)
-    if len(result) != 206:
-        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 206")
+    if len(result) != 214:
+        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 214")
     return result
 
 

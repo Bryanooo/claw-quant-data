@@ -1,26 +1,25 @@
 {
-  "generated_at": "2026-10-01T05:58:41.794986+00:00",
-  "counting_rule": "63 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; those routes are not counted as 163 separate local HTTP endpoints.",
+  "generated_at": "2026-10-18T12:46:43.106939+00:00",
+  "counting_rule": "68 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; upstream routes are not counted as separate local HTTP endpoints.",
   "summary": {
-    "catalogued_get_entrypoints": 63,
+    "catalogued_get_entrypoints": 68,
     "financial_data_query_gateways": 1,
-    "public_data_http_entrypoints": 64,
+    "public_data_http_entrypoints": 69,
     "tushare_raw_audit_entrypoints": 5,
     "canonical_store_entrypoints": 6,
     "canonical_hybrid_entrypoints": 24,
-    "derived_research_entrypoints": 28,
+    "derived_research_entrypoints": 33,
     "financial_data_business_routes": 163,
-    "standard_datasets": 194,
-    "tushare_only_datasets": 193,
+    "standard_datasets": 197,
+    "tushare_only_datasets": 196,
     "multi_source_datasets": 1
   },
   "testing": {
-    "route_contract": "64/64 public data entrypoints covered by OpenAPI registration tests",
-    "tushare_mapping_contract": "201/201 collectable interfaces map to public datasets",
-    "dataset_registry_contract": "194/194 registered datasets map to collector or normalization storage",
-    "financial_data_catalog_contract": "163/163 business routes are allowlisted and input-validated",
-    "canonical_contract": "24/24 canonical routes registered; domain services have unit/contract tests",
-    "research_contract": "28/28 research routes registered; calculation services have unit tests",
+    "route_catalog": "69 local HTTP entrypoints catalogued",
+    "dataset_registry": "197 standard datasets registered",
+    "financial_data_catalog": "163 upstream business routes allowlisted",
+    "canonical_catalog": "24 canonical routes registered",
+    "research_catalog": "33 research routes registered",
     "research_live_acceptance": "13 representative end-to-end cases",
     "financial_data_live_acceptance": "protocol and query gateway covered; a full 163-route live sweep is intentionally not run in CI because it consumes provider quota and depends on mutable upstream sample data"
   },
@@ -398,6 +397,16 @@
         },
         {
           "method": "GET",
+          "path": "/api/v1/research/stocks/search",
+          "name": "股票搜索",
+          "domain": "关系发现",
+          "description": "按股票代码、名称、全称或拼音简码检索证券主数据。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
           "path": "/api/v1/research/stocks/{ts_code}/fundamentals",
           "name": "基本面分析",
           "domain": "个股研究",
@@ -412,6 +421,36 @@
           "name": "估值分析",
           "domain": "个股研究",
           "description": "历史估值分位、同行对比及 DCF/DDM 输入数据。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/analyst-revisions",
+          "name": "一致预期与盈利修正",
+          "domain": "个股研究",
+          "description": "按券商去重，对比等长窗口内的盈利、收入、EPS、目标价一致预期及修正方向。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/ownership",
+          "name": "股东与机构行为",
+          "domain": "个股研究",
+          "description": "汇总十大股东、基金、北向、股东户数及增减持的时点行为证据。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/shareholder-return",
+          "name": "总股东回报",
+          "domain": "股东回报",
+          "description": "用复权价格计算总回报，并单列分红、回购及未来解禁证据，避免重复计息。",
           "origin": "system-derived aggregation over canonical datasets",
           "test_scope": "route + calculation unit tests; representative live acceptance set",
           "route_contract": "covered"
@@ -472,6 +511,16 @@
           "name": "市场宽度",
           "domain": "市场研究",
           "description": "涨跌分布、成交、均线扩散和涨跌停情绪。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/market/technical-screen",
+          "name": "全市场技术条件筛选",
+          "domain": "市场研究",
+          "description": "按透明预设筛选并排序A股候选，同时披露全市场覆盖率和严格审计证据。",
           "origin": "system-derived aggregation over canonical datasets",
           "test_scope": "route + calculation unit tests; representative live acceptance set",
           "route_contract": "covered"

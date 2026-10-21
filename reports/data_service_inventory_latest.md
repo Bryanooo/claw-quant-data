@@ -1,23 +1,23 @@
 # Data service inventory
 
-Generated: `2026-10-01T05:58:41.794986+00:00`
+Generated: `2026-10-18T12:46:43.106939+00:00`
 
-63 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; those routes are not counted as 163 separate local HTTP endpoints.
+68 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; upstream routes are not counted as separate local HTTP endpoints.
 
 ## Summary
 
 | Measure | Count |
 |---|---:|
-| `catalogued_get_entrypoints` | 63 |
+| `catalogued_get_entrypoints` | 68 |
 | `financial_data_query_gateways` | 1 |
-| `public_data_http_entrypoints` | 64 |
+| `public_data_http_entrypoints` | 69 |
 | `tushare_raw_audit_entrypoints` | 5 |
 | `canonical_store_entrypoints` | 6 |
 | `canonical_hybrid_entrypoints` | 24 |
-| `derived_research_entrypoints` | 28 |
+| `derived_research_entrypoints` | 33 |
 | `financial_data_business_routes` | 163 |
-| `standard_datasets` | 194 |
-| `tushare_only_datasets` | 193 |
+| `standard_datasets` | 197 |
+| `tushare_only_datasets` | 196 |
 | `multi_source_datasets` | 1 |
 
 ## Public service groups
@@ -72,21 +72,26 @@ Generated: `2026-10-01T05:58:41.794986+00:00`
 | GET | `/api/v1/data/canonical/index-profiles` | 规范指数档案 | Tushare canonical DB first; Financial Data only after a verified local miss | route + canonical model + source-selection contract |
 | GET | `/api/v1/data/canonical/index-constituents` | 规范指数成分权重 | Tushare canonical DB first; Financial Data only after a verified local miss | route + canonical model + source-selection contract |
 
-### 系统聚合研究服务 (28)
+### 系统聚合研究服务 (33)
 
 | Method | Path | Service | Origin | Test scope |
 |---|---|---|---|---|
 | GET | `/api/v1/research/capabilities` | 研究能力目录 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/readiness` | 研究数据就绪状态 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/validation-set` | 研究端到端验证集 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/search` | 股票搜索 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/fundamentals` | 基本面分析 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/valuation` | 估值分析 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/analyst-revisions` | 一致预期与盈利修正 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/ownership` | 股东与机构行为 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/shareholder-return` | 总股东回报 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/technicals` | 技术面分析 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/capital-flow` | 资金与筹码 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/repurchase-progress` | 回购进展 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/instruments/{asset_type}/{code}/technicals` | 多资产技术面 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/event-study` | 事件研究 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/market/breadth` | 市场宽度 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/market/technical-screen` | 全市场技术条件筛选 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/macro/regime` | 宏观状态 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/macro/{theme}` | 宏观主题序列 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/etfs/flows` | ETF份额资金流 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
@@ -273,13 +278,12 @@ The local gateway is `POST /api/v1/data/sources/financial_data/query`. It expose
 - `/api/v2/info/news/article`
 - `/api/v2/info/news/search_evidence`
 
-## Test posture
+## Contract posture
 
-- `route_contract`: 64/64 public data entrypoints covered by OpenAPI registration tests
-- `tushare_mapping_contract`: 201/201 collectable interfaces map to public datasets
-- `dataset_registry_contract`: 194/194 registered datasets map to collector or normalization storage
-- `financial_data_catalog_contract`: 163/163 business routes are allowlisted and input-validated
-- `canonical_contract`: 24/24 canonical routes registered; domain services have unit/contract tests
-- `research_contract`: 28/28 research routes registered; calculation services have unit tests
+- `route_catalog`: 69 local HTTP entrypoints catalogued
+- `dataset_registry`: 197 standard datasets registered
+- `financial_data_catalog`: 163 upstream business routes allowlisted
+- `canonical_catalog`: 24 canonical routes registered
+- `research_catalog`: 33 research routes registered
 - `research_live_acceptance`: 13 representative end-to-end cases
 - `financial_data_live_acceptance`: protocol and query gateway covered; a full 163-route live sweep is intentionally not run in CI because it consumes provider quota and depends on mutable upstream sample data

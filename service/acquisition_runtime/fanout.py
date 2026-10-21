@@ -86,7 +86,11 @@ _DEFINITIONS = (
     # Fan-out by factor_name remains below the 1000-call daily allowance.
     FanoutDefinition(
         "factor_value", "factor_name", "factor_name", "trade_date",
-        max_window_days=31, allow_date_window=True,
+        # One factor already returns roughly the whole A-share universe for
+        # one session.  A multi-session request can hit the provider's 6,000
+        # row cap and become unprovably incomplete, so split repairs into
+        # exact trading-day children inside the same resumable execution.
+        max_window_days=1, allow_date_window=True,
     ),
     FanoutDefinition("fina_audit", "stock", "ts_code", "period"),
     FanoutDefinition("fina_indicator", "stock", "ts_code", "period"),

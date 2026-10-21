@@ -1,0 +1,33 @@
+[project]
+name = "claw-quant-data"
+version = "0.1.0"
+description = "Auditable financial data foundation for research agents"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# Deliberately minimal: the codebase predates a linter, so we only enforce the
+# pyflakes rules that catch real bugs — undefined names (F821/F811), unused
+# variables (F841), and f-string mistakes (F541) — without forcing a noisy
+# one-shot reformat.
+#
+# Deliberately NOT enforced:
+#   - F401 unused imports: ~50 legacy leftovers scattered across 40 files; a
+#     dedicated cleanup pass should remove them before enabling.
+#   - F541 f-strings without placeholders: 4 legacy spots (one multi-line SQL).
+#   - I   import ordering: established project style.
+#   - E701/E702 single-line bodies, E402 deferred imports: established style.
+select = ["F"]
+ignore = ["E501", "F401", "F541"]
+
+[tool.ruff.lint.per-file-ignores]
+# Generated or vendored code is not held to lint standards.
+"third_party/**" = ["F"]
+# service/tools/__init__.py is a deliberate re-export barrel for the legacy
+# query helpers; its symbols are part of the module's public surface even
+# though the functions themselves are not the Agent contract.
+"service/tools/__init__.py" = ["F401", "F403"]
+"service/tools/index/__init__.py" = ["F401"]

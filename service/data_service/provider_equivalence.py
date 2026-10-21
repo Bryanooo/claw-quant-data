@@ -318,8 +318,8 @@ PARTIAL_TUSHARE_OVERLAPS: dict[str, tuple[str, ...]] = {
 
 
 ROUTE_NOTES: dict[str, str] = {
-    "/api/v1/altdata/hot-plate-rank": "蚂蚁数据源 是支付宝口径；Tushare 热榜的数据源和排名方法不同。",
-    "/api/v1/altdata/hot-stock-rank": "蚂蚁数据源 是支付宝散户关注度；Tushare 热榜不能复现该口径。",
+    "/api/v1/altdata/hot-plate-rank": "蚂蚁是支付宝口径；Tushare 热榜的数据源和排名方法不同。",
+    "/api/v1/altdata/hot-stock-rank": "蚂蚁是支付宝散户关注度；Tushare 热榜不能复现该口径。",
     "/api/v1/common/entity_relationship": "Tushare 仅覆盖部分 AH、北交所代码及曾用名关系，缺少完整跨市场实体图谱。",
     "/api/v1/common/trading-day": "Tushare 有 A/H/US/期货日历，但没有覆盖该合同中现货等全部资产的统一交易日历。",
     "/api/v1/common/trading-state": "Tushare 没有覆盖多资产市场的统一实时交易状态接口。",
@@ -332,10 +332,10 @@ ROUTE_NOTES: dict[str, str] = {
     "/api/v1/fund/share-split": "fund_adj 只能观察复权因子变化，不能确定拆分类型和登记变更日。",
     "/api/v1/fund/trade-limit": "Tushare 缺少按业务类型、收费方式展开的场外基金交易限制。",
     "/api/v1/index_fnd/index-constituents-list-weight": "Tushare 可覆盖 A 股主要指数，不能完整覆盖该合同声明的港股指数成分。",
-    "/api/v1/info/announcements": "anns_d 提供 A 股公告 PDF，不能完整覆盖 蚂蚁数据源 的 A 股与港股合同。",
+    "/api/v1/info/announcements": "anns_d 提供 A 股公告 PDF，不能完整覆盖蚂蚁的 A 股与港股合同。",
     "/api/v1/info/news-global-search": "Tushare 新闻源可做局部检索，但不是全网搜索与证据抽取服务。",
     "/api/v1/macro/data-query": "Tushare 有核心宏观序列，但不覆盖地区、长尾国家和细分产业指标全集。",
-    "/api/v1/macro/meta-search": "Tushare 没有与 蚂蚁数据源 长尾宏观指标库等价的语义检索目录。",
+    "/api/v1/macro/meta-search": "Tushare 没有与蚂蚁长尾宏观指标库等价的语义检索目录。",
     "/api/v1/onecode/query": "部分指标可由 Tushare 计算，但 OneCode 动态指标全集及其口径不是公开等价物。",
     "/api/v1/onecode/recall": "factor_list 仅覆盖 Tushare 量化因子，不能替代 OneCode 全指标语义召回。",
     "/api/v1/quote/basic-snapshot": "Tushare 只有若干品种实时接口，缺少统一 A/H/US/基金/板块/指数/现货快照。",
@@ -364,7 +364,7 @@ ROUTE_NOTES: dict[str, str] = {
     "/api/v1/stock_sh_equity/freeze-pledge": "pledge_detail/pledge_stat 覆盖质押，但没有完整股权冻结事件。",
     "/api/v1/us_stock/equity-structure": "us_daily_adj 有总股本和流通股本，但缺少内部人持股及公司/证券双层股本。",
     "/api/v1/us_stock/security-markings": "us_basic 缺少完整 ADR 比例、首次发行和双重上市标识。",
-    "/api/v2/info/news/article": "Tushare 有正文，但不能用 蚂蚁数据源 的 feed_id 读取同一篇内容。",
+    "/api/v2/info/news/article": "Tushare 有正文，但不能用蚂蚁的 feed_id 读取同一篇内容。",
     "/api/v2/info/news/search_evidence": "Tushare 有新闻/公告子集，缺少相同去重、标签和 feed_id 证据合同。",
 }
 

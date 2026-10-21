@@ -112,7 +112,7 @@ def test_pledges_fallback_normalizes_provider_event():
         FakeDataService(), broker
     ).pledges(
         symbols=["300750.SZ"], start_date=date(2026, 7, 1),
-        end_date=date(2026, 8, 31),
+        end_date=date(2026, 8, 31), allow_quota_fallback=True,
     )
 
     row = result["data"][0]

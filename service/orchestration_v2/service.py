@@ -182,10 +182,12 @@ class OrchestrationV2Service:
         document = TaskDefinitionDocument.model_validate(definition["definition"])
         if parsed.purpose.value in {"initialization", "backfill", "repair"}:
             from service.orchestration_v2.repair_planning import (
+                validate_bounded_fanout_history_scope,
                 validate_quota_guarded_history_scope,
                 validate_single_period_scope,
             )
             from service.orchestration_v2.recovery_policy import (
+                MANUAL_SCOPE_REPAIR_DATASETS,
                 QUOTA_GUARDED_DATASETS,
             )
 
@@ -196,6 +198,14 @@ class OrchestrationV2Service:
                     observation_end=parsed.observation_end,
                     observation_key=parsed.observation_key,
                     guarded_datasets=QUOTA_GUARDED_DATASETS,
+                )
+            elif parsed.frozen_scope.get("recovery_scope") == "bounded_fanout_history":
+                validate_bounded_fanout_history_scope(
+                    contracts=document.validation_contract.dataset_audits,
+                    observation_start=parsed.observation_start,
+                    observation_end=parsed.observation_end,
+                    observation_key=parsed.observation_key,
+                    allowed_datasets=MANUAL_SCOPE_REPAIR_DATASETS,
                 )
             else:
                 for contract in document.validation_contract.dataset_audits:

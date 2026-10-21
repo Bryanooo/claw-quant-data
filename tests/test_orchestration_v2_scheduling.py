@@ -1,5 +1,7 @@
 from datetime import date
 
+from service.acquisition_runtime.fanout import FANOUT_DEFINITIONS
+from service.history_recovery import MARKET_WIDE_FANOUT_OVERRIDES
 from service.orchestration_v2 import scheduling
 from service.orchestration_v2.catalog import acquisition_task_blueprints
 from service.tushare_policy import TusharePolicyRegistry
@@ -42,9 +44,13 @@ def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
     expected = {
         item.task_key
         for item in acquisition_task_blueprints()
-        if item.cadence == "daily"
+        if (
+            item.cadence == "daily"
+            and item.task_key not in scheduling.DEFERRED_RESEARCH_DATASETS
+        )
     }
     assert "stock_st" in expected
+    assert "us_daily" not in expected
     assert result == {
         "target_date": "2026-09-28",
         "delayed_target_date": "2026-09-28",
@@ -63,7 +69,10 @@ def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
         by_task[task_key].observation_start
         == by_task[task_key].observation_end
         == date(2026, 9, 25)
-        for task_key in scheduling.US_COMPLETED_SESSION_TASKS
+        for task_key in (
+            scheduling.US_COMPLETED_SESSION_TASKS
+            - scheduling.DEFERRED_RESEARCH_DATASETS
+        )
     )
     assert all(
         item.observation_start == item.observation_end == date(2026, 9, 28)
@@ -116,7 +125,7 @@ def test_closed_day_keeps_next_morning_tasks_on_prior_open_day(monkeypatch):
         "ccass_hold", "etf_share_size", "margin", "margin_detail"
     }
     by_task = {item.task_key: item for item in repository.requests}
-    assert by_task["us_daily"].observation_key == "2026-10-09"
+    assert "us_daily" not in by_task
     assert by_task["margin"].observation_key == "2026-10-08"
     assert by_task["margin_detail"].observation_key == "2026-10-08"
 
@@ -143,7 +152,7 @@ def test_open_day_dispatches_previous_day_after_next_morning_release(monkeypatch
     )
 
     by_task = {item.task_key: item for item in repository.requests}
-    assert by_task["us_daily"].observation_key == "2026-10-12"
+    assert "us_daily" not in by_task
     assert by_task["margin"].observation_key == "2026-10-09"
     assert by_task["margin_detail"].observation_key == "2026-10-09"
     assert result["superseded_not_due"] == 0
@@ -162,6 +171,56 @@ def test_reviewed_cadences_do_not_fall_back_to_snapshot_heuristics():
         "trade_date",
     )
     assert policies.get("ths_member").parameter_strategy == "dependency_fanout"
+    assert policies.get("stock_basic").cadence == "daily"
+    assert (
+        policies.get("cyq_perf").cadence,
+        policies.get("cyq_perf").parameter_strategy,
+    ) == ("weekly", "ts_code_fanout")
+
+
+def test_cyq_perf_is_dispatched_as_one_closed_week(monkeypatch):
+    repository = _Repository()
+    monkeypatch.setattr(
+        scheduling,
+        "dispatch_latest_daily_acquisitions",
+        lambda *_args, **_kwargs: {
+            "eligible": 0,
+            "created": 0,
+            "existing": 0,
+            "errors": {},
+        },
+    )
+
+    scheduling.dispatch_due_acquisitions(
+        date(2026, 10, 21),
+        include_current_daily=False,
+        repository=repository,
+    )
+
+    request = next(item for item in repository.requests if item.task_key == "cyq_perf")
+    assert request.observation_key == "2026-W42"
+    assert request.observation_start == date(2026, 10, 12)
+    assert request.observation_end == date(2026, 10, 18)
+    assert request.frozen_scope["cadence"] == "weekly"
+
+
+def test_daily_schedule_has_no_unbatched_dynamic_entity_fanout():
+    # factor_value has about 202 governed factor-name children.  One exact-day
+    # run remains below its 1,000-call allowance, while a multi-day child can
+    # silently hit the provider's 6,000-row response cap.
+    exempt = {*MARKET_WIDE_FANOUT_OVERRIDES, "dividend", "factor_value"}
+    unsafe = []
+    for blueprint in acquisition_task_blueprints():
+        fanout = FANOUT_DEFINITIONS.get(blueprint.task_key)
+        if (
+            blueprint.cadence == "daily"
+            and fanout is not None
+            and fanout.source != "static"
+            and blueprint.task_key not in exempt
+        ):
+            unsafe.append(blueprint.task_key)
+
+    assert unsafe == []
 
 
 def test_legacy_ggt_catalog_gap_still_builds_bounded_trade_date_request():

@@ -545,7 +545,7 @@ class DataService:
                     {
                         **item,
                         "dataset": item["source_dataset"],
-                        "source": "蚂蚁数据源",
+                        "source": "蚂蚁",
                         "domain": domain,
                         "data_state": item["state"],
                     }

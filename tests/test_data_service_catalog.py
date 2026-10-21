@@ -65,7 +65,7 @@ def test_catalog_distinguishes_registration_from_observed_raw_coverage():
         "direct_interface_queries": 1,
         "canonical_endpoints": 24,
     }
-    assert research["metrics"]["endpoints"] == 33
+    assert research["metrics"]["endpoints"] == 34
     assert all(item["status"] == "available" for item in research["items"])
 
 
@@ -77,7 +77,7 @@ def test_every_advertised_data_service_endpoint_exists_in_openapi():
         (endpoint["method"], endpoint["path"])
         for endpoint in endpoints
     ]
-    assert len(endpoints) == 68
+    assert len(endpoints) == 69
     assert len(identities) == len(set(identities))
     for endpoint in endpoints:
         assert endpoint["path"] in paths, endpoint["path"]
@@ -86,7 +86,7 @@ def test_every_advertised_data_service_endpoint_exists_in_openapi():
 
 def test_canonical_and_research_catalog_counts_are_stable():
     assert len(CANONICAL_ENDPOINTS) == 24
-    assert len(RESEARCH_ENDPOINTS) == 33
+    assert len(RESEARCH_ENDPOINTS) == 34
 
 
 def test_every_canonical_and_research_service_exposes_complete_lineage():
@@ -129,7 +129,7 @@ def test_catalog_endpoint_contract_keeps_sources_and_fallbacks():
         for endpoint in layer["endpoints"]
     ]
     validated = [DataServiceEndpoint.model_validate(item) for item in endpoints]
-    assert len(validated) == 68
+    assert len(validated) == 69
     market_bars = next(item for item in validated if item.path.endswith("/market-bars"))
     assert market_bars.upstream_sources == ["tushare", "financial_data"]
     assert market_bars.local_datasets == ["stock_daily"]

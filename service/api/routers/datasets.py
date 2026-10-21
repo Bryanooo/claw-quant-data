@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from service.api.dependencies import (
     CanonicalEquityActionServiceDependency,
@@ -55,6 +55,23 @@ from service.data_service.provider_equivalence import (
 )
 
 router = APIRouter(prefix="/v1/data", tags=["data"])
+
+
+@router.get("/etf-rotation/contract")
+def get_etf_rotation_contract() -> dict:
+    """Versioned issuer evidence; never declares vendor coverage complete."""
+    from service.data_service.etf_contract import etf_rotation_contract
+    return etf_rotation_contract()
+
+
+@router.get("/etf-rotation/daily-facts")
+def get_etf_daily_facts(symbol: str, start_date: date, end_date: date) -> dict:
+    """Reviewed daily research data with explicit derivation and state semantics."""
+    from service.data_service.etf_daily_facts import daily_facts
+    try:
+        return daily_facts(symbol, start_date.isoformat(), end_date.isoformat())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 _STANDARD_QUERY_PARAMETERS = {
     "date",
@@ -214,7 +231,7 @@ def canonical_market_bars(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical A-share daily bars, reading local DB before quota data."""
     return service.daily_bars(
@@ -234,7 +251,7 @@ def canonical_trading_sessions(
     symbol: str,
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical A-share open sessions with a bounded quota fallback."""
     return service.trading_days(
@@ -252,7 +269,7 @@ def canonical_trading_sessions(
 def canonical_fund_profiles(
     service: CanonicalFundDataServiceDependency,
     symbols: list[str] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical fund profiles, reading local DB before quota data."""
     return service.profiles(
@@ -270,7 +287,7 @@ def canonical_fund_nav(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical fund NAV records with conservative gap semantics."""
     return service.nav(
@@ -289,7 +306,7 @@ def canonical_fund_stock_holdings(
     service: CanonicalFundDataServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical disclosed fund stock holdings by quarter end."""
     return service.stock_holdings(
@@ -308,7 +325,7 @@ def canonical_fund_dividends(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return fund cash distributions normalized to CNY per fund unit."""
     return service.dividends(
@@ -324,7 +341,7 @@ def canonical_fund_dividends(
 def canonical_fund_managers(
     service: CanonicalFundDataServiceDependency,
     symbols: list[str] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return fund-manager tenures with normalized dates and provenance."""
     return service.managers(
@@ -339,7 +356,7 @@ def canonical_fund_managers(
 def canonical_index_profiles(
     service: CanonicalIndexDataServiceDependency,
     symbols: list[str] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical SH/SZ index identity and base information."""
     return service.profiles(
@@ -355,7 +372,7 @@ def canonical_index_constituents(
     service: CanonicalIndexDataServiceDependency,
     symbols: list[str] = Query(...),
     update_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return weighted index constituents for explicit observation dates."""
     return service.constituents(
@@ -371,7 +388,7 @@ def canonical_index_constituents(
 def canonical_equity_profiles(
     service: CanonicalEquityDataServiceDependency,
     symbols: list[str] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return canonical A-share identities from local DB or bounded fallback."""
     return service.profiles(
@@ -389,7 +406,7 @@ def canonical_equity_valuations(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return daily A-share valuation facts with explicit unit semantics."""
     return service.valuations(
@@ -408,7 +425,7 @@ def canonical_equity_financial_periods(
     service: CanonicalEquityDataServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return cumulative financial statements with section-level provenance."""
     return service.financial_periods(
@@ -426,7 +443,7 @@ def canonical_equity_performance_updates(
     service: CanonicalEquityEventServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return forecasts and preliminary results for explicit report periods."""
     return service.performance_updates(
@@ -444,7 +461,7 @@ def canonical_equity_financial_metrics(
     service: CanonicalEquityEventServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return core profitability, growth, solvency and efficiency metrics."""
     return service.financial_metrics(
@@ -462,7 +479,7 @@ def canonical_equity_ttm_financials(
     service: CanonicalEquityEventServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return locally derived or provider-reported rolling twelve-month facts."""
     return service.ttm_financials(
@@ -480,7 +497,7 @@ def canonical_equity_dividends(
     service: CanonicalEquityEventServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return dividend proposals for explicit fiscal report periods."""
     return service.dividends(
@@ -499,7 +516,7 @@ def canonical_equity_repurchases(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return bounded share-repurchase plans and progress events."""
     return service.repurchases(
@@ -519,7 +536,7 @@ def canonical_equity_holder_counts(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return shareholder-count observations with explicit date semantics."""
     return service.holder_counts(
@@ -539,7 +556,7 @@ def canonical_equity_business_segments(
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
     classifications: list[str] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return business composition by explicit report period and dimension."""
     return service.business_segments(
@@ -558,7 +575,7 @@ def canonical_equity_shareholders(
     service: CanonicalEquityActionServiceDependency,
     symbols: list[str] = Query(...),
     report_dates: list[date] = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return disclosed major shareholders for explicit quarter ends."""
     return service.shareholders(
@@ -576,7 +593,7 @@ def canonical_equity_restricted_releases(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return restricted-share releases and their supply-pressure ratios."""
     return service.restricted_releases(
@@ -594,7 +611,7 @@ def canonical_equity_pledges(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return equity pledge/freeze events with explicit source provenance."""
     return service.pledges(
@@ -612,7 +629,7 @@ def canonical_equity_risk_alerts(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return ST/delisting-risk status episodes with source provenance."""
     return service.risk_alerts(
@@ -630,7 +647,7 @@ def canonical_equity_suspensions(
     symbols: list[str] = Query(...),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    allow_quota_fallback: bool = True,
+    allow_quota_fallback: bool = False,
 ) -> dict:
     """Return trading suspension and resumption events."""
     return service.suspensions(

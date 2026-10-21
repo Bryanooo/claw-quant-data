@@ -38,11 +38,25 @@ class OrchestrationV2Repository:
         "dataset_state",
     })
 
-    def __init__(self, connection_factory: Callable[..., Any] = psycopg2.connect):
+    def __init__(
+        self,
+        connection_factory: Callable[..., Any] = psycopg2.connect,
+        connection_context: Callable[[], Any] | None = None,
+    ):
         self._connection_factory = connection_factory
+        # Optional zero-argument context manager yielding a pooled writable
+        # connection.  When provided (the API process injects the shared
+        # ThreadedConnectionPool here) every method reuses that pool instead
+        # of opening one TCP connection per call; commit/rollback semantics
+        # are identical because the context commits on success.
+        self._connection_context = connection_context
 
     @contextmanager
     def _connection(self):
+        if self._connection_context is not None:
+            with self._connection_context() as connection:
+                yield connection
+            return
         connection = self._connection_factory(**DB_CONFIG)
         try:
             yield connection
@@ -501,6 +515,33 @@ class OrchestrationV2Repository:
             )
             return {
                 row["dataset_name"]: dict(row)
+                for row in cursor.fetchall()
+            }
+
+    def latest_execution_states(self) -> dict[str, dict]:
+        """Return the newest non-superseded execution for every task key.
+
+        Read-only projection for the dashboard interface inventory: a task
+        whose latest attempt still stands (success, attention, queued, ...)
+        maps to that row.  Superseded rows are skipped so a replaced attempt
+        is never mistaken for the current state of a task.
+        """
+        if not self.schema_exists():
+            return {}
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (task_key)
+                       task_key, task_execution_id, status, current_node_key,
+                       purpose, observation_start, observation_end,
+                       attempt_count, final_error_category, updated_at
+                FROM orchestration_v2.task_execution
+                WHERE status <> 'superseded'
+                ORDER BY task_key, task_execution_id DESC
+                """
+            )
+            return {
+                row["task_key"]: dict(row)
                 for row in cursor.fetchall()
             }
 
@@ -1170,210 +1211,42 @@ class OrchestrationV2Repository:
             created = cursor.fetchone()
             if created:
                 return dict(created), True
+            # INSERT ... ON CONFLICT DO NOTHING reported a conflict.  The
+            # winner owns the unique idempotency_key, so re-read by that exact
+            # key first.  This is deterministic even when the competing
+            # transaction has already committed and moved the row to a
+            # terminal status.
             cursor.execute(
                 """
                 SELECT * FROM orchestration_v2.task_execution
                 WHERE idempotency_key=%s
-                   OR (
-                        task_key=%s AND observation_key=%s
-                    AND status IN (
-                        'created','queued','running','waiting_dependency',
-                        'retrying','validating','publishing'
-                    )
-                   )
-                ORDER BY (idempotency_key=%s) DESC, task_execution_id DESC
+                ORDER BY task_execution_id DESC
                 LIMIT 1
                 """,
-                (
-                    request.idempotency_key,
-                    request.task_key,
-                    request.observation_key,
-                    request.idempotency_key,
-                ),
+                (request.idempotency_key,),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return dict(existing), False
+            # Defensive fallback for pre-migration rows created under a
+            # different idempotency spelling for the same logical cycle.
+            cursor.execute(
+                """
+                SELECT * FROM orchestration_v2.task_execution
+                WHERE task_key=%s AND observation_key=%s
+                  AND status IN (
+                    'created','queued','running','waiting_dependency',
+                    'retrying','validating','publishing'
+                  )
+                ORDER BY task_execution_id DESC
+                LIMIT 1
+                """,
+                (request.task_key, request.observation_key),
             )
             existing = cursor.fetchone()
             if not existing:
                 raise RuntimeError("execution insert conflicted but owner was not found")
             return dict(existing), False
-
-    def reopen_daily_without_transport(self, observation_date) -> list[dict]:
-        """Correct a false terminal daily run that skipped acquisition.
-
-        This is intentionally narrower than a generic terminal-state retry:
-        only successful daily executions with no completed acquire request are
-        eligible. The correction and invalidation of their published dataset
-        state are recorded atomically and visibly in the event stream.
-        """
-
-        reopened: list[dict] = []
-        with self._connection() as connection, self._dict_cursor(connection) as cursor:
-            cursor.execute(
-                """
-                SELECT execution.*, definition.definition
-                FROM orchestration_v2.task_execution AS execution
-                JOIN orchestration_v2.task_definition AS definition
-                  ON definition.task_definition_id=execution.task_definition_id
-                WHERE execution.purpose='daily'
-                  AND execution.observation_start=%s
-                  AND execution.observation_end=%s
-                  AND execution.status='success'
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM orchestration_v2.task_execution_event AS event
-                      WHERE event.task_execution_id=execution.task_execution_id
-                        AND event.event_type='node.acquire.request_completed'
-                  )
-                ORDER BY execution.task_execution_id
-                FOR UPDATE OF execution
-                """,
-                (observation_date, observation_date),
-            )
-            candidates = list(cursor.fetchall())
-            for candidate in candidates:
-                nodes = candidate["definition"].get("nodes", [])
-                node_status = {node["key"]: "pending" for node in nodes}
-                if nodes:
-                    node_status[nodes[0]["key"]] = "ready"
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.task_execution
-                    SET status='queued', current_node_key=%s,
-                        node_status=%s::jsonb, eligible_at=NOW(),
-                        finished_at=NULL, final_error_category=NULL,
-                        final_error_message=NULL, final_error_detail='{}'::jsonb,
-                        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
-                        updated_at=NOW()
-                    WHERE task_execution_id=%s AND status='success'
-                    RETURNING *
-                    """,
-                    (
-                        nodes[0]["key"] if nodes else None,
-                        json.dumps(node_status, ensure_ascii=False),
-                        candidate["task_execution_id"],
-                    ),
-                )
-                row = cursor.fetchone()
-                if not row:
-                    continue
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.dataset_state
-                    SET data_status='pending', ready=false,
-                        validation_summary=validation_summary || jsonb_build_object(
-                            'invalidated', true,
-                            'invalidation_reason', 'daily_acquire_was_skipped'
-                        ),
-                        updated_at=NOW()
-                    WHERE source_execution_id=%s
-                    """,
-                    (candidate["task_execution_id"],),
-                )
-                self._append_event(
-                    cursor,
-                    candidate["task_execution_id"],
-                    event_type="execution.reopened_invalid_preflight",
-                    node_key=nodes[0]["key"] if nodes else None,
-                    attempt_number=max(1, int(candidate["attempt_count"])),
-                    event_key=(
-                        "execution.reopened_invalid_preflight:"
-                        f"{candidate['task_execution_id']}"
-                    ),
-                    payload={
-                        "reason": "daily_acquire_was_skipped",
-                        "observation_date": observation_date.isoformat(),
-                    },
-                    evidence_references=[],
-                )
-                reopened.append(dict(row))
-        return reopened
-
-    def reopen_daily_for_revalidation(self, observation_date) -> list[dict]:
-        """Re-run validation for terminal daily scopes using stored transport.
-
-        This maintenance operation is intentionally date-bounded and preserves
-        each execution identity. The runtime reuses verified acquire events,
-        so no provider call is repeated merely to correct validation logic.
-        """
-
-        reopened: list[dict] = []
-        with self._connection() as connection, self._dict_cursor(connection) as cursor:
-            cursor.execute(
-                """
-                SELECT execution.*, definition.definition
-                FROM orchestration_v2.task_execution AS execution
-                JOIN orchestration_v2.task_definition AS definition
-                  ON definition.task_definition_id=execution.task_definition_id
-                WHERE execution.purpose='daily'
-                  AND execution.observation_start=%s
-                  AND execution.observation_end=%s
-                  AND execution.status IN ('success', 'attention')
-                ORDER BY execution.task_execution_id
-                FOR UPDATE OF execution
-                """,
-                (observation_date, observation_date),
-            )
-            candidates = list(cursor.fetchall())
-            for candidate in candidates:
-                nodes = candidate["definition"].get("nodes", [])
-                node_status = {node["key"]: "pending" for node in nodes}
-                if nodes:
-                    node_status[nodes[0]["key"]] = "ready"
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.task_execution
-                    SET status='queued', current_node_key=%s,
-                        node_status=%s::jsonb, eligible_at=NOW(),
-                        max_attempts=GREATEST(max_attempts,attempt_count+1),
-                        finished_at=NULL, final_error_category=NULL,
-                        final_error_message=NULL, final_error_detail='{}'::jsonb,
-                        lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
-                        updated_at=NOW()
-                    WHERE task_execution_id=%s
-                      AND status IN ('success', 'attention')
-                    RETURNING *
-                    """,
-                    (
-                        nodes[0]["key"] if nodes else None,
-                        json.dumps(node_status, ensure_ascii=False),
-                        candidate["task_execution_id"],
-                    ),
-                )
-                row = cursor.fetchone()
-                if not row:
-                    continue
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.dataset_state
-                    SET data_status='auditing', ready=false,
-                        validation_summary=validation_summary || jsonb_build_object(
-                            'revalidating', true,
-                            'revalidation_reason', 'task_scope_must_ignore_discovery_grace'
-                        ),
-                        updated_at=NOW()
-                    WHERE source_execution_id=%s
-                    """,
-                    (candidate["task_execution_id"],),
-                )
-                self._append_event(
-                    cursor,
-                    candidate["task_execution_id"],
-                    event_type="execution.reopened_revalidation",
-                    node_key=nodes[0]["key"] if nodes else None,
-                    attempt_number=max(1, int(candidate["attempt_count"])),
-                    event_key=(
-                        "execution.reopened_revalidation:"
-                        f"{candidate['task_execution_id']}:"
-                        f"{candidate['attempt_count']}"
-                    ),
-                    payload={
-                        "reason": "task_scope_must_ignore_discovery_grace",
-                        "observation_date": observation_date.isoformat(),
-                        "provider_recollection": False,
-                    },
-                    evidence_references=[],
-                )
-                reopened.append(dict(row))
-        return reopened
 
     def supersede_not_expected_daily_scope(
         self,
@@ -1555,84 +1428,6 @@ class OrchestrationV2Repository:
                 )
                 requeued.append(dict(row))
         return requeued
-
-    def supersede_attention_executions(
-        self,
-        execution_ids: tuple[int, ...],
-        *,
-        reason: str,
-    ) -> list[dict]:
-        """Supersede explicitly selected invalid scopes without deleting history.
-
-        This is the operator-safe escape hatch for executions created from a
-        definition that was later corrected (for example, a quarterly endpoint
-        accidentally dispatched with a weekly scope).  Only terminal
-        ``attention`` executions may be changed, so active work cannot be
-        interrupted and a broad selector cannot retire healthy history.
-        """
-
-        if not execution_ids:
-            return []
-        superseded: list[dict] = []
-        with self._connection() as connection, self._dict_cursor(connection) as cursor:
-            cursor.execute(
-                """
-                SELECT *
-                FROM orchestration_v2.task_execution
-                WHERE task_execution_id=ANY(%s)
-                  AND status='attention'
-                ORDER BY task_execution_id
-                FOR UPDATE
-                """,
-                (list(execution_ids),),
-            )
-            for candidate in cursor.fetchall():
-                execution_id = int(candidate["task_execution_id"])
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.task_execution
-                    SET status='superseded', finished_at=NOW(),
-                        final_error_category='invalid_scope',
-                        final_error_message=%s,
-                        final_error_detail=jsonb_build_object(
-                            'corrective_action', 'supersede_invalid_definition_scope'
-                        ),
-                        lease_owner=NULL, lease_token=NULL,
-                        lease_expires_at=NULL, updated_at=NOW()
-                    WHERE task_execution_id=%s AND status='attention'
-                    RETURNING *
-                    """,
-                    (reason, execution_id),
-                )
-                row = cursor.fetchone()
-                if not row:
-                    continue
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.dataset_state
-                    SET expectation_status='not_expected',
-                        data_status='pending', ready=false,
-                        validation_summary=validation_summary || jsonb_build_object(
-                            'superseded', true,
-                            'superseded_reason', %s
-                        ),
-                        updated_at=NOW()
-                    WHERE source_execution_id=%s
-                    """,
-                    (reason, execution_id),
-                )
-                self._append_event(
-                    cursor,
-                    execution_id,
-                    event_type="execution.operator_superseded_invalid_scope",
-                    node_key=candidate.get("current_node_key"),
-                    attempt_number=max(1, int(candidate["attempt_count"])),
-                    event_key=f"execution.operator_superseded_invalid_scope:{execution_id}",
-                    payload={"reason": reason},
-                    evidence_references=[],
-                )
-                superseded.append(dict(row))
-        return superseded
 
     def reconcile_resolved_attention_executions(self, *, limit: int = 500) -> int:
         """Close stale alerts when a later execution verified the same scope.
@@ -2024,6 +1819,112 @@ class OrchestrationV2Repository:
                 reconciled += 1
         return reconciled
 
+    def supersede_obsolete_definition_executions(
+        self,
+        task_keys: tuple[str, ...],
+        *,
+        reason: str,
+        limit: int = 5000,
+    ) -> int:
+        """Retire non-running executions frozen to an obsolete definition.
+
+        An implementation/formula change may leave the audit contract itself
+        unchanged.  In that case the generic stale-audit reconciler cannot
+        identify the work as obsolete, yet executing it would publish data
+        under stale provenance.  This explicit, task-scoped operation keeps
+        the old attempts as evidence and permits clean replanning against the
+        active definition.  Running work is deliberately never interrupted.
+        """
+
+        if not task_keys:
+            return 0
+        if not reason.strip():
+            raise ValueError("reason is required")
+        if not 1 <= limit <= 10000:
+            raise ValueError("limit must be between 1 and 10000")
+        superseded = 0
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT execution.*, active.task_definition_id
+                           AS replacement_definition_id,
+                       active.version AS replacement_definition_version
+                FROM orchestration_v2.task_execution AS execution
+                JOIN orchestration_v2.task_definition AS active
+                  ON active.task_key=execution.task_key
+                 AND active.lifecycle_status='active'
+                WHERE execution.task_key=ANY(%s)
+                  AND execution.task_definition_id<>active.task_definition_id
+                  AND execution.status IN (
+                      'created','queued','waiting_dependency','retrying',
+                      'attention'
+                  )
+                ORDER BY execution.task_execution_id
+                FOR UPDATE OF execution SKIP LOCKED
+                LIMIT %s
+                """,
+                (list(task_keys), limit),
+            )
+            for candidate in cursor.fetchall():
+                execution_id = int(candidate["task_execution_id"])
+                replacement_definition_id = int(
+                    candidate["replacement_definition_id"]
+                )
+                replacement_version = int(
+                    candidate["replacement_definition_version"]
+                )
+                cursor.execute(
+                    """
+                    UPDATE orchestration_v2.task_execution
+                    SET status='superseded', finished_at=NOW(),
+                        final_error_category='definition_superseded',
+                        final_error_message=%s,
+                        final_error_detail=final_error_detail ||
+                            jsonb_build_object(
+                                'replacement_definition_id', %s,
+                                'replacement_definition_version', %s,
+                                'corrective_action',
+                                'replan_with_active_definition'
+                            ),
+                        lease_owner=NULL, lease_token=NULL,
+                        lease_expires_at=NULL, updated_at=NOW()
+                    WHERE task_execution_id=%s
+                      AND status IN (
+                          'created','queued','waiting_dependency','retrying',
+                          'attention'
+                      )
+                    """,
+                    (
+                        reason,
+                        replacement_definition_id,
+                        replacement_version,
+                        execution_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    continue
+                self._append_event(
+                    cursor,
+                    execution_id,
+                    event_type="execution.superseded_definition",
+                    node_key=candidate.get("current_node_key"),
+                    attempt_number=max(1, int(candidate["attempt_count"])),
+                    event_key=(
+                        "execution.superseded_definition:"
+                        f"{execution_id}:{replacement_definition_id}"
+                    ),
+                    payload={
+                        "reason": reason,
+                        "replacement_definition_id": replacement_definition_id,
+                        "replacement_definition_version": replacement_version,
+                    },
+                    evidence_references=[{
+                        "task_definition_id": replacement_definition_id,
+                    }],
+                )
+                superseded += 1
+        return superseded
+
     def promote_quota_guarded_history_executions(self, *, limit: int = 100) -> int:
         """Give priority only to the newest covering guarded-history scope."""
 
@@ -2109,86 +2010,6 @@ class OrchestrationV2Repository:
                 )
                 normalized += 1
         return normalized
-
-    def supersede_invalid_scope_executions(
-        self,
-        execution_ids: tuple[int, ...],
-        *,
-        reason: str,
-    ) -> list[dict]:
-        """Stop explicitly selected non-terminal work whose scope is invalid.
-
-        This is deliberately ID-based: a rule correction may invalidate a
-        large queued history plan, but operators must first resolve the exact
-        executions instead of retiring work through a broad task/status
-        predicate.  History and events are retained; no business rows are
-        deleted.
-        """
-
-        if not execution_ids:
-            return []
-        superseded: list[dict] = []
-        active_statuses = ("queued", "retrying", "running", "validating", "attention")
-        with self._connection() as connection, self._dict_cursor(connection) as cursor:
-            cursor.execute(
-                """
-                SELECT *
-                FROM orchestration_v2.task_execution
-                WHERE task_execution_id=ANY(%s)
-                  AND status=ANY(%s)
-                ORDER BY task_execution_id
-                FOR UPDATE
-                """,
-                (list(execution_ids), list(active_statuses)),
-            )
-            for candidate in cursor.fetchall():
-                execution_id = int(candidate["task_execution_id"])
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.task_execution
-                    SET status='superseded', finished_at=NOW(),
-                        final_error_category='invalid_scope',
-                        final_error_message=%s,
-                        final_error_detail=jsonb_build_object(
-                            'corrective_action', 'supersede_invalid_coverage_scope'
-                        ),
-                        lease_owner=NULL, lease_token=NULL,
-                        lease_expires_at=NULL, updated_at=NOW()
-                    WHERE task_execution_id=%s
-                      AND status=ANY(%s)
-                    RETURNING *
-                    """,
-                    (reason, execution_id, list(active_statuses)),
-                )
-                row = cursor.fetchone()
-                if not row:
-                    continue
-                cursor.execute(
-                    """
-                    UPDATE orchestration_v2.dataset_state
-                    SET expectation_status='not_expected',
-                        data_status='pending', ready=false,
-                        validation_summary=validation_summary || jsonb_build_object(
-                            'superseded', true,
-                            'superseded_reason', %s
-                        ),
-                        updated_at=NOW()
-                    WHERE source_execution_id=%s
-                    """,
-                    (reason, execution_id),
-                )
-                self._append_event(
-                    cursor,
-                    execution_id,
-                    event_type="execution.operator_superseded_invalid_scope",
-                    node_key=candidate.get("current_node_key"),
-                    attempt_number=max(1, int(candidate["attempt_count"])),
-                    event_key=f"execution.operator_superseded_invalid_scope:{execution_id}",
-                    payload={"reason": reason},
-                    evidence_references=[],
-                )
-                superseded.append(dict(row))
-        return superseded
 
     def retry_attention_executions(
         self,
@@ -2475,6 +2296,31 @@ class OrchestrationV2Repository:
                       AND queued.eligible_at <= NOW()
                       AND queued.attempt_count < queued.max_attempts
                       AND queued.resource_class = ANY(%s)
+                      -- factor_value needs about 202 calls for one complete
+                      -- market date and has a 1,000-call daily allowance.
+                      -- Let the 19:15 routine partition reserve its calls
+                      -- before historical dates consume the remaining quota.
+                      AND NOT (
+                        queued.task_key='factor_value'
+                        AND queued.purpose IN (
+                          'initialization','backfill','repair'
+                        )
+                        AND (NOW() AT TIME ZONE 'Asia/Shanghai')::time
+                            < TIME '20:00:00'
+                      )
+                      -- us_daily has a provider-enforced one-call-per-hour
+                      -- window.  Do not lease another execution merely to
+                      -- discover the shared slot is still closed; the runtime
+                      -- can wait inline when the boundary is within 15s.
+                      AND NOT (
+                        queued.task_key='us_daily'
+                        AND EXISTS (
+                          SELECT 1 FROM sys_tushare_rate_limit AS rate_slot
+                          WHERE rate_slot.api_name='us_daily'
+                            AND rate_slot.next_allowed_at >
+                                NOW() + INTERVAL '15 seconds'
+                        )
+                      )
                       AND NOT (
                         queued.task_key = ANY(%s)
                         AND EXISTS (
@@ -2856,6 +2702,138 @@ class OrchestrationV2Repository:
                 evidence_references=evidence_references or [],
             )
 
+    def _publish_dataset_state_locked(
+        self,
+        cursor,
+        execution: dict,
+        execution_id: int,
+        update: DatasetStateUpdate,
+        *,
+        validation_payload: dict[str, Any],
+        evidence_references: list[dict[str, Any]] | None = None,
+    ) -> dict:
+        """Append validation/state events and upsert one dataset_state row.
+
+        The caller owns the transaction and has already locked the execution
+        row; this helper only performs the append-only writes.
+        """
+        scope_digest = canonical_digest(update.scope)
+        published_at = datetime.now().astimezone() if update.ready else None
+        validation = self._append_event(
+            cursor,
+            execution_id,
+            event_type="dataset.validation.completed",
+            node_key="validate",
+            attempt_number=None,
+            event_key=None,
+            payload=validation_payload,
+            evidence_references=evidence_references or [],
+        )
+        event_type = "dataset.ready" if update.ready else "dataset.state.updated"
+        state_event = self._append_event(
+            cursor,
+            execution_id,
+            event_type=event_type,
+            node_key="publish",
+            attempt_number=None,
+            event_key=(
+                f"{event_type}:{execution_id}:{update.dataset_name}:"
+                f"{update.observation_key}:{scope_digest}:{update.contract_version}:"
+                f"attempt-{execution['attempt_count']}"
+            ),
+            payload={
+                "dataset_name": update.dataset_name,
+                "observation_key": update.observation_key,
+                "scope_digest": scope_digest,
+                "contract_version": update.contract_version,
+                "data_status": update.data_status.value,
+                "validation_event_id": validation["event_id"],
+            },
+            evidence_references=[],
+        )
+        cursor.execute(
+            """
+            INSERT INTO orchestration_v2.dataset_state(
+                dataset_name, observation_key, observation_start,
+                observation_end, observation_period, publication_date,
+                available_at, collected_at, scope, scope_digest,
+                contract_version, expectation_status, data_status, ready,
+                expected_count, actual_count, gap_summary,
+                validation_summary, source_execution_id,
+                validation_event_id, published_at
+            ) VALUES (
+                %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,
+                %s::jsonb,%s::jsonb,%s,%s,%s
+            )
+            ON CONFLICT (
+                dataset_name, observation_key, scope_digest
+            ) DO UPDATE SET
+                observation_start=EXCLUDED.observation_start,
+                observation_end=EXCLUDED.observation_end,
+                observation_period=EXCLUDED.observation_period,
+                publication_date=EXCLUDED.publication_date,
+                available_at=EXCLUDED.available_at,
+                collected_at=EXCLUDED.collected_at,
+                scope=EXCLUDED.scope,
+                contract_version=EXCLUDED.contract_version,
+                expectation_status=EXCLUDED.expectation_status,
+                data_status=EXCLUDED.data_status,
+                ready=EXCLUDED.ready,
+                expected_count=EXCLUDED.expected_count,
+                actual_count=EXCLUDED.actual_count,
+                gap_summary=EXCLUDED.gap_summary,
+                validation_summary=EXCLUDED.validation_summary,
+                source_execution_id=EXCLUDED.source_execution_id,
+                validation_event_id=EXCLUDED.validation_event_id,
+                published_at=EXCLUDED.published_at,
+                revision=orchestration_v2.dataset_state.revision+1,
+                updated_at=NOW()
+            RETURNING *
+            """,
+            (
+                update.dataset_name,
+                update.observation_key,
+                update.observation_start,
+                update.observation_end,
+                update.observation_period,
+                update.publication_date,
+                update.available_at,
+                update.collected_at,
+                json.dumps(update.scope, ensure_ascii=False),
+                scope_digest,
+                update.contract_version,
+                update.expectation_status,
+                update.data_status,
+                update.ready,
+                update.expected_count,
+                update.actual_count,
+                json.dumps(update.gap_summary, ensure_ascii=False),
+                json.dumps(update.validation_summary, ensure_ascii=False),
+                execution_id,
+                validation["event_id"],
+                published_at,
+            ),
+        )
+        state = dict(cursor.fetchone())
+        state["publication_event_id"] = state_event["event_id"]
+        return state
+
+    @staticmethod
+    def _locked_publishable_execution(cursor, execution_id: int) -> dict:
+        cursor.execute(
+            """
+            SELECT status, attempt_count FROM orchestration_v2.task_execution
+            WHERE task_execution_id=%s FOR UPDATE
+            """,
+            (execution_id,),
+        )
+        execution = cursor.fetchone()
+        if not execution:
+            raise LookupError(f"task execution not found: {execution_id}")
+        if execution["status"] not in {"validating", "publishing"}:
+            raise ValueError("dataset state may only be published after validation")
+        return dict(execution)
+
     def publish_dataset_state(
         self,
         execution_id: int,
@@ -2864,120 +2842,49 @@ class OrchestrationV2Repository:
         validation_payload: dict[str, Any],
         evidence_references: list[dict[str, Any]] | None = None,
     ) -> dict:
-        scope_digest = canonical_digest(update.scope)
-        published_at = datetime.now().astimezone() if update.ready else None
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
-            cursor.execute(
-                """
-                SELECT status, attempt_count FROM orchestration_v2.task_execution
-                WHERE task_execution_id=%s FOR UPDATE
-                """,
-                (execution_id,),
+            execution = self._locked_publishable_execution(cursor, execution_id)
+            return self._publish_dataset_state_locked(
+                cursor,
+                execution,
+                execution_id,
+                update,
+                validation_payload=validation_payload,
+                evidence_references=evidence_references,
             )
-            execution = cursor.fetchone()
-            if not execution:
-                raise LookupError(f"task execution not found: {execution_id}")
-            if execution["status"] not in {"validating", "publishing"}:
-                raise ValueError("dataset state may only be published after validation")
 
-            validation = self._append_event(
-                cursor,
-                execution_id,
-                event_type="dataset.validation.completed",
-                node_key="validate",
-                attempt_number=None,
-                event_key=None,
-                payload=validation_payload,
-                evidence_references=evidence_references or [],
-            )
-            event_type = "dataset.ready" if update.ready else "dataset.state.updated"
-            state_event = self._append_event(
-                cursor,
-                execution_id,
-                event_type=event_type,
-                node_key="publish",
-                attempt_number=None,
-                event_key=(
-                    f"{event_type}:{execution_id}:{update.dataset_name}:"
-                    f"{update.observation_key}:{scope_digest}:{update.contract_version}:"
-                    f"attempt-{execution['attempt_count']}"
-                ),
-                payload={
-                    "dataset_name": update.dataset_name,
-                    "observation_key": update.observation_key,
-                    "scope_digest": scope_digest,
-                    "contract_version": update.contract_version,
-                    "data_status": update.data_status.value,
-                    "validation_event_id": validation["event_id"],
-                },
-                evidence_references=[],
-            )
-            cursor.execute(
-                """
-                INSERT INTO orchestration_v2.dataset_state(
-                    dataset_name, observation_key, observation_start,
-                    observation_end, observation_period, publication_date,
-                    available_at, collected_at, scope, scope_digest,
-                    contract_version, expectation_status, data_status, ready,
-                    expected_count, actual_count, gap_summary,
-                    validation_summary, source_execution_id,
-                    validation_event_id, published_at
-                ) VALUES (
-                    %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,
-                    %s::jsonb,%s::jsonb,%s,%s,%s
+    def publish_dataset_states(
+        self,
+        execution_id: int,
+        publications: list[
+            tuple[
+                DatasetStateUpdate,
+                dict[str, Any],
+                list[dict[str, Any]] | None,
+            ]
+        ],
+    ) -> list[dict]:
+        """Publish every dataset state of one execution in a single transaction.
+
+        Multi-output tasks (for example weekly+monthly bars) must not end up
+        with some datasets ready while others failed mid-publication; either
+        the whole batch commits or none of it does.
+        """
+        states: list[dict] = []
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            execution = self._locked_publishable_execution(cursor, execution_id)
+            for update, validation_payload, evidence_references in publications:
+                states.append(
+                    self._publish_dataset_state_locked(
+                        cursor,
+                        execution,
+                        execution_id,
+                        update,
+                        validation_payload=validation_payload,
+                        evidence_references=evidence_references,
+                    )
                 )
-                ON CONFLICT (
-                    dataset_name, observation_key, scope_digest
-                ) DO UPDATE SET
-                    observation_start=EXCLUDED.observation_start,
-                    observation_end=EXCLUDED.observation_end,
-                    observation_period=EXCLUDED.observation_period,
-                    publication_date=EXCLUDED.publication_date,
-                    available_at=EXCLUDED.available_at,
-                    collected_at=EXCLUDED.collected_at,
-                    scope=EXCLUDED.scope,
-                    contract_version=EXCLUDED.contract_version,
-                    expectation_status=EXCLUDED.expectation_status,
-                    data_status=EXCLUDED.data_status,
-                    ready=EXCLUDED.ready,
-                    expected_count=EXCLUDED.expected_count,
-                    actual_count=EXCLUDED.actual_count,
-                    gap_summary=EXCLUDED.gap_summary,
-                    validation_summary=EXCLUDED.validation_summary,
-                    source_execution_id=EXCLUDED.source_execution_id,
-                    validation_event_id=EXCLUDED.validation_event_id,
-                    published_at=EXCLUDED.published_at,
-                    revision=orchestration_v2.dataset_state.revision+1,
-                    updated_at=NOW()
-                RETURNING *
-                """,
-                (
-                    update.dataset_name,
-                    update.observation_key,
-                    update.observation_start,
-                    update.observation_end,
-                    update.observation_period,
-                    update.publication_date,
-                    update.available_at,
-                    update.collected_at,
-                    json.dumps(update.scope, ensure_ascii=False),
-                    scope_digest,
-                    update.contract_version,
-                    update.expectation_status,
-                    update.data_status,
-                    update.ready,
-                    update.expected_count,
-                    update.actual_count,
-                    json.dumps(update.gap_summary, ensure_ascii=False),
-                    json.dumps(update.validation_summary, ensure_ascii=False),
-                    execution_id,
-                    validation["event_id"],
-                    published_at,
-                ),
-            )
-            state = dict(cursor.fetchone())
-            state["publication_event_id"] = state_event["event_id"]
-            return state
+        return states
 
     def renew_lease(
         self,

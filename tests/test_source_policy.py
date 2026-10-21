@@ -31,8 +31,8 @@ def test_financial_data_dependency_classes_are_complete_and_disjoint():
         "financial_data_first": 106,
         "financial_data_required_now": 106,
         "active_implicit_fallbacks": 0,
-        "active_canonical_fallbacks": 29,
-        "local_first_canonical_fallback_ready": 29,
+        "active_canonical_fallbacks": 0,
+        "local_canonical_fallback_disabled": 29,
         "local_overlap_adapter_pending": 28,
         "financial_data_realtime_required": 4,
         "financial_data_primary_no_local_canonical": 102,
@@ -40,7 +40,7 @@ def test_financial_data_dependency_classes_are_complete_and_disjoint():
     assert sum(
         summary[key]
         for key in (
-            "local_first_canonical_fallback_ready",
+            "local_canonical_fallback_disabled",
             "local_overlap_adapter_pending",
             "financial_data_realtime_required",
             "financial_data_primary_no_local_canonical",

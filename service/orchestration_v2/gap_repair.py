@@ -21,7 +21,10 @@ from service.orchestration_v2.repair_planning import (
     plan_period_repairs,
 )
 from service.orchestration_v2.service import OrchestrationV2Service
-from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+from service.orchestration_v2.recovery_policy import (
+    DEFERRED_RESEARCH_DATASETS,
+    QUOTA_GUARDED_DATASETS,
+)
 
 
 def dataset_task_map() -> dict[str, str]:
@@ -174,6 +177,8 @@ def plan_quota_guarded_history_repairs(
     )
     proposals: list[RepairInstanceProposal] = []
     for dataset_name in sorted(QUOTA_GUARDED_DATASETS):
+        if dataset_name in DEFERRED_RESEARCH_DATASETS:
+            continue
         problems = current.get(dataset_name) or {}
         task_key = task_by_dataset.get(dataset_name)
         if not problems or not task_key or not repository.get_active_definition(task_key):

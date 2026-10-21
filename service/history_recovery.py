@@ -76,6 +76,8 @@ MARKET_WIDE_FANOUT_OVERRIDES = {
 # corrected repair forever.  Keeping this scoped avoids replaying unrelated
 # historical work after an implementation-only deployment.
 RECOVERY_PLAN_REVISIONS = {
+    "cb_factor_pro": 2,
+    "fund_factor_pro": 2,
     "margin": 2,
     "margin_detail": 2,
     "top10_floatholders": 2,

@@ -2,9 +2,11 @@
 
 The 蚂蚁数据源 provider exposes provider-native tools.  Those tools are
 not interchangeable with the canonical datasets served by ``/v1/data``.  This
-module records the reviewed overlap and, crucially, makes the quota policy
-deterministic: local canonical data wins; 蚂蚁数据源 is used only when a
-canonical adapter exists and the requested local slice is absent or stale.
+module records the reviewed overlap and makes the quota policy deterministic:
+local canonical data wins.  Since 2026-10 the query-time quota fallback is
+**disabled**: routes whose facts are already scheduled from Tushare never
+consume 蚂蚁数据源 quota at read time (adapters remain recorded as capability
+evidence and can only be used through explicit, separately governed calls).
 """
 
 from __future__ import annotations
@@ -232,7 +234,7 @@ class RouteSourcePolicy:
         if not self.local_datasets:
             return "financial_data_primary_no_local_canonical"
         if self.adapter_status.startswith("partial_ready"):
-            return "local_first_canonical_fallback_ready"
+            return "local_canonical_fallback_disabled"
         return "local_overlap_adapter_pending"
 
     @property
@@ -244,8 +246,8 @@ class RouteSourcePolicy:
 
     @property
     def public_access(self) -> str:
-        if self.dependency_class == "local_first_canonical_fallback_ready":
-            return "canonical_api_with_bounded_fallback"
+        if self.dependency_class == "local_canonical_fallback_disabled":
+            return "local_dataset_only"
         if self.dependency_class == "local_overlap_adapter_pending":
             return "local_dataset_or_explicit_provider_gateway"
         return "explicit_provider_gateway_only"
@@ -278,7 +280,10 @@ def route_source_policy(route: str) -> RouteSourcePolicy:
             route=route,
             preferred_read=LOCAL_DB_FIRST,
             local_datasets=local_datasets,
-            financial_data_role="quota_fallback_after_local_miss",
+            # Runtime fallback is disabled by product decision (2026-10):
+            # Tushare-scheduled canonical datasets are the only supply for
+            # these facts; provider quota is never spent to fill gaps.
+            financial_data_role="fallback_disabled",
             # No provider-native response is allowed to leak into a canonical
             # response until symbol, date, unit and field mappings are tested.
             adapter_status=READY_CANONICAL_ADAPTERS.get(
@@ -289,8 +294,8 @@ def route_source_policy(route: str) -> RouteSourcePolicy:
                 "by the listed canonical datasets"
             ),
             reason=(
-                "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且"
-                "规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度"
+                "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度"
+                "（适配器保留为能力记录，仅供显式请求使用）"
             ),
         )
     if route in REALTIME_FINANCIAL_ROUTES:
@@ -321,7 +326,7 @@ def source_policy_summary(
     classes = {
         name: sum(item.dependency_class == name for item in policies)
         for name in (
-            "local_first_canonical_fallback_ready",
+            "local_canonical_fallback_disabled",
             "local_overlap_adapter_pending",
             "financial_data_realtime_required",
             "financial_data_primary_no_local_canonical",
@@ -339,9 +344,7 @@ def source_policy_summary(
             item.requires_financial_data for item in policies
         ),
         "active_implicit_fallbacks": 0,
-        "active_canonical_fallbacks": classes[
-            "local_first_canonical_fallback_ready"
-        ],
+        "active_canonical_fallbacks": 0,
         **classes,
     }
 

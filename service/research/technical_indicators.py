@@ -12,6 +12,51 @@ from math import sqrt
 from statistics import mean, pstdev
 from typing import Any
 
+COMMON_INDICATOR_FORMULA_VERSION = "common-technicals-v1"
+
+
+# Parameters are expressed in bars, not calendar days.  The profile keeps the
+# familiar A-share daily settings while preventing a misleading 250-month
+# moving average from appearing merely because the same function is reused for
+# resampled data.  MACD/KDJ/Ichimoku keep their conventional parameters and are
+# reported separately by the research service.
+INDICATOR_PARAMETER_PROFILES: dict[str, dict[str, tuple[int, ...]]] = {
+    "1d": {
+        "sma": (5, 10, 20, 30, 60, 120, 250),
+        "ema": (5, 10, 12, 20, 26, 50, 100, 200),
+        "rsi": (6, 12, 14, 24),
+        "roc": (5, 10, 20, 60, 120),
+        "cci": (14, 20),
+        "atr": (14, 20),
+    },
+    "1w": {
+        "sma": (5, 10, 20, 30, 40, 52),
+        "ema": (5, 10, 12, 20, 26, 50, 52),
+        "rsi": (6, 12, 14, 24),
+        "roc": (4, 12, 26, 52),
+        "cci": (14, 20),
+        "atr": (14, 20),
+    },
+    "1mo": {
+        "sma": (3, 6, 12, 24, 36, 60),
+        "ema": (3, 6, 12, 20, 24, 26, 36, 60),
+        "rsi": (6, 12, 14, 24),
+        "roc": (3, 6, 12, 24, 36),
+        "cci": (14, 20),
+        "atr": (14, 20),
+    },
+}
+
+
+def indicator_parameter_profile(timeframe: str) -> dict[str, list[int]]:
+    """Return the governed common-parameter profile for one bar frequency."""
+
+    try:
+        profile = INDICATOR_PARAMETER_PROFILES[timeframe]
+    except KeyError as exc:
+        raise ValueError(f"unsupported timeframe: {timeframe}") from exc
+    return {name: list(windows) for name, windows in profile.items()}
+
 
 def _number(value: Any) -> float | None:
     if value is None or value == "":
@@ -28,6 +73,612 @@ def _round(value: float | None, digits: int = 4) -> float | None:
 
 def _returns(values: list[float]) -> list[float]:
     return [current / previous - 1 for previous, current in pairwise(values) if previous]
+
+
+def _sma_series(values: list[float], window: int) -> list[float | None]:
+    """Rolling arithmetic mean in O(n), including long 120/250-bar windows."""
+
+    output: list[float | None] = [None] * len(values)
+    running = 0.0
+    for index, value in enumerate(values):
+        running += value
+        if index >= window:
+            running -= values[index - window]
+        if index + 1 >= window:
+            output[index] = running / window
+    return output
+
+
+def _ema_series(values: list[float], window: int) -> list[float]:
+    if not values:
+        return []
+    alpha = 2 / (window + 1)
+    output = [values[0]]
+    for value in values[1:]:
+        output.append(alpha * value + (1 - alpha) * output[-1])
+    return output
+
+
+def _optional_ema_series(
+    values: list[float | None], window: int,
+) -> list[float | None]:
+    """EMA over a series whose leading values may be unavailable."""
+
+    output: list[float | None] = [None] * len(values)
+    current: float | None = None
+    alpha = 2 / (window + 1)
+    for index, value in enumerate(values):
+        if value is None:
+            continue
+        current = value if current is None else alpha * value + (1 - alpha) * current
+        output[index] = current
+    return output
+
+
+def _wilder_series(values: list[float], window: int) -> list[float | None]:
+    """Wilder RMA with an SMA seed after a complete initial window."""
+
+    output: list[float | None] = [None] * len(values)
+    if len(values) < window:
+        return output
+    current = mean(values[:window])
+    output[window - 1] = current
+    for index in range(window, len(values)):
+        current = (current * (window - 1) + values[index]) / window
+        output[index] = current
+    return output
+
+
+def _rsi_series(values: list[float], window: int) -> list[float | None]:
+    """Wilder RSI aligned to input bars and seeded after ``window`` changes."""
+
+    output: list[float | None] = [None] * len(values)
+    if len(values) <= window:
+        return output
+    changes = [values[index] - values[index - 1] for index in range(1, len(values))]
+    gain = mean(max(value, 0.0) for value in changes[:window])
+    loss = mean(max(-value, 0.0) for value in changes[:window])
+
+    def value() -> float:
+        if loss == 0:
+            return 100.0 if gain > 0 else 50.0
+        return 100 - 100 / (1 + gain / loss)
+
+    output[window] = value()
+    for index in range(window + 1, len(values)):
+        change = changes[index - 1]
+        gain = (gain * (window - 1) + max(change, 0.0)) / window
+        loss = (loss * (window - 1) + max(-change, 0.0)) / window
+        output[index] = value()
+    return output
+
+
+def _roc_series(values: list[float], window: int) -> list[float | None]:
+    return [
+        (values[index] / values[index - window] - 1) * 100
+        if index >= window and values[index - window] else None
+        for index in range(len(values))
+    ]
+
+
+def _cci_series(
+    highs: list[float], lows: list[float], closes: list[float], window: int,
+) -> list[float | None]:
+    typical = [(high + low + close) / 3 for high, low, close in zip(highs, lows, closes)]
+    output: list[float | None] = [None] * len(typical)
+    for index in range(window - 1, len(typical)):
+        selected = typical[index - window + 1:index + 1]
+        average = mean(selected)
+        deviation = mean(abs(value - average) for value in selected)
+        output[index] = (
+            (typical[index] - average) / (0.015 * deviation)
+            if deviation else 0.0
+        )
+    return output
+
+
+def _true_ranges(
+    highs: list[float], lows: list[float], closes: list[float],
+) -> list[float]:
+    return [
+        max(
+            high - low,
+            abs(high - closes[index - 1]) if index else high - low,
+            abs(low - closes[index - 1]) if index else high - low,
+        )
+        for index, (high, low) in enumerate(zip(highs, lows))
+    ]
+
+
+def _tsi_series(
+    closes: list[float], slow: int = 25, fast: int = 13,
+) -> list[float | None]:
+    """True Strength Index using double EMA-smoothed momentum."""
+
+    if not closes:
+        return []
+    momentum = [0.0] + [current - previous for previous, current in pairwise(closes)]
+    first = _ema_series(momentum, slow)
+    second = _ema_series(first, fast)
+    abs_first = _ema_series([abs(value) for value in momentum], slow)
+    abs_second = _ema_series(abs_first, fast)
+    minimum = slow + fast - 1
+    return [
+        numerator / denominator * 100
+        if index + 1 >= minimum and denominator else None
+        for index, (numerator, denominator) in enumerate(zip(second, abs_second))
+    ]
+
+
+def _linear_regression(values: list[float], window: int) -> dict[str, float | None]:
+    if len(values) < window:
+        return {"slope_pct_per_bar": None, "r_squared": None}
+    selected = values[-window:]
+    x_average = (window - 1) / 2
+    y_average = mean(selected)
+    x_variance = sum((index - x_average) ** 2 for index in range(window))
+    covariance = sum(
+        (index - x_average) * (value - y_average)
+        for index, value in enumerate(selected)
+    )
+    slope = covariance / x_variance if x_variance else 0.0
+    fitted = [y_average + slope * (index - x_average) for index in range(window)]
+    total = sum((value - y_average) ** 2 for value in selected)
+    residual = sum((value - estimate) ** 2 for value, estimate in zip(selected, fitted))
+    return {
+        "slope_pct_per_bar": slope / y_average * 100 if y_average else None,
+        "r_squared": 1 - residual / total if total else 0.0,
+    }
+
+
+def _candle_geometry(
+    opened: float, high: float, low: float, close: float,
+) -> dict[str, float | None]:
+    span = high - low
+    body_top = max(opened, close)
+    body_bottom = min(opened, close)
+    return {
+        "body_return": (close - opened) / opened if opened else None,
+        "range_to_open": span / opened if opened else None,
+        "body_to_range": (close - opened) / span if span else None,
+        "upper_shadow_to_open": (high - body_top) / opened if opened else None,
+        "upper_shadow_to_range": (high - body_top) / span if span else None,
+        "lower_shadow_to_open": (body_bottom - low) / opened if opened else None,
+        "lower_shadow_to_range": (body_bottom - low) / span if span else None,
+        "close_location_to_open": (2 * close - high - low) / opened if opened else None,
+        "close_location_to_range": (2 * close - high - low) / span if span else None,
+    }
+
+
+def parameterized_indicator_pack(
+    opens: list[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    volumes: list[float],
+    *,
+    timeframe: str,
+) -> dict[str, Any]:
+    """Return common indicator families under a frequency-aware contract.
+
+    These are deterministic descriptive indicators.  Alpha158/Alpha191 factor
+    expressions, cross-sectional transforms and predictive validation remain
+    outside this package and belong to ``claw-factor-lab``.
+    """
+
+    if not (
+        len(opens) == len(highs) == len(lows) == len(closes) == len(volumes)
+    ):
+        raise ValueError("OHLCV inputs must have equal length")
+    profile = indicator_parameter_profile(timeframe)
+    if not closes:
+        missing_family = {
+            name: {str(window): None for window in profile[name]}
+            for name in ("sma", "ema", "rsi", "roc", "cci", "atr")
+        }
+        return {
+            "status": "insufficient_history",
+            "timeframe": timeframe,
+            "parameters": profile,
+            "series": {},
+            "latest": missing_family | {
+                "natr": {
+                    str(window): None for window in profile["atr"]
+                },
+                "tsi_25_13": None,
+                "bollinger_20_2": {
+                    "lower": None,
+                    "middle": None,
+                    "upper": None,
+                    "percent_b": None,
+                    "bandwidth_pct": None,
+                },
+                "candle_geometry": {
+                    key: None for key in (
+                        "body_return", "range_to_open", "body_to_range",
+                        "upper_shadow_to_open", "upper_shadow_to_range",
+                        "lower_shadow_to_open", "lower_shadow_to_range",
+                        "close_location_to_open", "close_location_to_range",
+                    )
+                },
+                "structure": {
+                    "range_position_60": None,
+                    "atr_5_to_20_ratio": None,
+                    "retracement_depth_20": None,
+                    "retracement_depth_120": None,
+                    "regression_20": {
+                        "slope_pct_per_bar": None, "r_squared": None,
+                    },
+                    "regression_60": {
+                        "slope_pct_per_bar": None, "r_squared": None,
+                    },
+                    "breakout_over_prior_high_60_atr": None,
+                    "high_touch_count_60_1pct": None,
+                    "low_touch_count_60_1pct": None,
+                },
+            },
+        }
+
+    sma = {window: _sma_series(closes, window) for window in profile["sma"]}
+    ema = {window: _ema_series(closes, window) for window in profile["ema"]}
+    rsi = {window: _rsi_series(closes, window) for window in profile["rsi"]}
+    roc = {window: _roc_series(closes, window) for window in profile["roc"]}
+    cci = {
+        window: _cci_series(highs, lows, closes, window)
+        for window in profile["cci"]
+    }
+    true_ranges = _true_ranges(highs, lows, closes)
+    atr = {window: _wilder_series(true_ranges, window) for window in profile["atr"]}
+    natr = {
+        window: [
+            value / close * 100 if value is not None and close else None
+            for value, close in zip(values, closes)
+        ]
+        for window, values in atr.items()
+    }
+    tsi = _tsi_series(closes)
+    bollinger_middle = _sma_series(closes, 20)
+    bollinger_std = [
+        pstdev(closes[index - 19:index + 1]) if index >= 19 else None
+        for index in range(len(closes))
+    ]
+    bollinger_upper = [
+        middle + 2 * deviation
+        if middle is not None and deviation is not None else None
+        for middle, deviation in zip(bollinger_middle, bollinger_std)
+    ]
+    bollinger_lower = [
+        middle - 2 * deviation
+        if middle is not None and deviation is not None else None
+        for middle, deviation in zip(bollinger_middle, bollinger_std)
+    ]
+    bollinger_percent_b = [
+        (close - lower) / (upper - lower)
+        if lower is not None and upper is not None and upper != lower else None
+        for close, lower, upper in zip(closes, bollinger_lower, bollinger_upper)
+    ]
+    bollinger_bandwidth = [
+        (upper - lower) / middle * 100
+        if lower is not None and upper is not None and middle else None
+        for lower, middle, upper in zip(
+            bollinger_lower, bollinger_middle, bollinger_upper
+        )
+    ]
+    candle_geometry = [
+        _candle_geometry(opened, high, low, close)
+        for opened, high, low, close in zip(opens, highs, lows, closes)
+    ]
+
+    def retracement(window: int) -> float | None:
+        if len(closes) < window:
+            return None
+        high = max(highs[-window:])
+        low = min(lows[-window:])
+        return (high - closes[-1]) / (high - low) if high != low else 0.0
+
+    atr5 = mean(true_ranges[-5:]) if len(true_ranges) >= 5 else None
+    atr20 = mean(true_ranges[-20:]) if len(true_ranges) >= 20 else None
+    atr14_latest = atr.get(14, [None])[-1]
+    prior_high60 = max(highs[-61:-1]) if len(highs) >= 61 else None
+    range_high60 = max(highs[-60:]) if len(highs) >= 60 else None
+    range_low60 = min(lows[-60:]) if len(lows) >= 60 else None
+    touch_high = (
+        sum(value >= range_high60 * 0.99 for value in highs[-60:])
+        if range_high60 is not None else None
+    )
+    touch_low = (
+        sum(value <= range_low60 * 1.01 for value in lows[-60:])
+        if range_low60 is not None else None
+    )
+    structure = {
+        "range_position_60": (
+            (closes[-1] - range_low60) / (range_high60 - range_low60)
+            if range_high60 is not None and range_low60 is not None
+            and range_high60 != range_low60 else None
+        ),
+        "atr_5_to_20_ratio": atr5 / atr20 if atr5 is not None and atr20 else None,
+        "retracement_depth_20": retracement(20),
+        "retracement_depth_120": retracement(120),
+        "regression_20": _linear_regression(closes, 20),
+        "regression_60": _linear_regression(closes, 60),
+        "breakout_over_prior_high_60_atr": (
+            (closes[-1] - prior_high60) / atr14_latest
+            if prior_high60 is not None and atr14_latest else None
+        ),
+        "high_touch_count_60_1pct": touch_high,
+        "low_touch_count_60_1pct": touch_low,
+    }
+    series: dict[str, Any] = {
+        "sma": sma,
+        "ema": ema,
+        "rsi": rsi,
+        "roc": roc,
+        "cci": cci,
+        "atr": atr,
+        "natr": natr,
+        "tsi_25_13": tsi,
+        "bollinger_middle_20": bollinger_middle,
+        "bollinger_upper_20_2": bollinger_upper,
+        "bollinger_lower_20_2": bollinger_lower,
+        "bollinger_percent_b_20_2": bollinger_percent_b,
+        "bollinger_bandwidth_20_2_pct": bollinger_bandwidth,
+        "candle_geometry": candle_geometry,
+    }
+    latest = {
+        "sma": {str(window): values[-1] for window, values in sma.items()},
+        "ema": {str(window): values[-1] for window, values in ema.items()},
+        "rsi": {str(window): values[-1] for window, values in rsi.items()},
+        "roc": {str(window): values[-1] for window, values in roc.items()},
+        "cci": {str(window): values[-1] for window, values in cci.items()},
+        "atr": {str(window): values[-1] for window, values in atr.items()},
+        "natr": {str(window): values[-1] for window, values in natr.items()},
+        "tsi_25_13": tsi[-1],
+        "bollinger_20_2": {
+            "lower": bollinger_lower[-1],
+            "middle": bollinger_middle[-1],
+            "upper": bollinger_upper[-1],
+            "percent_b": bollinger_percent_b[-1],
+            "bandwidth_pct": bollinger_bandwidth[-1],
+        },
+        "candle_geometry": candle_geometry[-1],
+        "structure": structure,
+    }
+    longest = max(max(values) for values in profile.values())
+    return {
+        "status": "ready" if len(closes) >= longest else "limited_history",
+        "timeframe": timeframe,
+        "observations": len(closes),
+        "parameters": profile | {
+            "tsi": [25, 13],
+            "bollinger": [20, 2],
+            "structure_windows": [5, 20, 60, 120],
+        },
+        "series": series,
+        "latest": latest,
+        "boundary": (
+            "descriptive deterministic indicators only; Alpha158/Alpha191 "
+            "and predictive factor validation belong to claw-factor-lab"
+        ),
+    }
+
+
+def common_indicator_pack(
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """Return one auditable common-indicator contract and aligned series.
+
+    Price indicators consume governed adjusted OHLC. Volume is intentionally
+    left unadjusted. Raw path-dependent PVT/Force values are accompanied by
+    normalized rolling values suitable for cross-sectional factor screening.
+    """
+
+    if not (len(highs) == len(lows) == len(closes) == len(volumes)):
+        raise ValueError("highs, lows, closes and volumes must have equal length")
+    if not closes:
+        return {
+            "status": "insufficient_history",
+            "observations": 0,
+            "formula_version": COMMON_INDICATOR_FORMULA_VERSION,
+            "series": {},
+            "latest": {},
+        }
+
+    ema = {window: _ema_series(closes, window) for window in (12, 20, 26, 50, 200)}
+    sma = {window: _sma_series(closes, window) for window in (3, 6, 12, 20, 24)}
+
+    bias: dict[int, list[float | None]] = {}
+    for window in (6, 12, 24):
+        bias[window] = [
+            (close / average - 1) * 100 if average else None
+            for close, average in zip(closes, sma[window])
+        ]
+    bbi = [
+        mean(float(value) for value in values) if all(value is not None for value in values) else None
+        for values in zip(sma[3], sma[6], sma[12], sma[24])
+    ]
+
+    ppo = [
+        (fast - slow) / slow * 100 if slow else None
+        for fast, slow in zip(ema[12], ema[26])
+    ]
+    ppo_signal = _optional_ema_series(ppo, 9)
+    ppo_histogram = [
+        value - signal if value is not None and signal is not None else None
+        for value, signal in zip(ppo, ppo_signal)
+    ]
+
+    true_ranges = [
+        max(
+            high - low,
+            abs(high - closes[index - 1]) if index else high - low,
+            abs(low - closes[index - 1]) if index else high - low,
+        )
+        for index, (high, low) in enumerate(zip(highs, lows))
+    ]
+    atr14 = _wilder_series(true_ranges, 14)
+    atr20 = _wilder_series(true_ranges, 20)
+    natr14 = [
+        atr / close * 100 if atr is not None and close else None
+        for atr, close in zip(atr14, closes)
+    ]
+    keltner_middle = ema[20]
+    keltner_upper = [
+        middle + 2 * atr if atr is not None else None
+        for middle, atr in zip(keltner_middle, atr20)
+    ]
+    keltner_lower = [
+        middle - 2 * atr if atr is not None else None
+        for middle, atr in zip(keltner_middle, atr20)
+    ]
+
+    bollinger_middle = sma[20]
+    bollinger_std: list[float | None] = [
+        pstdev(closes[index - 19:index + 1]) if index >= 19 else None
+        for index in range(len(closes))
+    ]
+    squeeze_on: list[bool | None] = []
+    squeeze_momentum: list[float | None] = []
+    for index, (middle, deviation, atr) in enumerate(
+        zip(bollinger_middle, bollinger_std, atr20)
+    ):
+        if middle is None or deviation is None or atr is None:
+            squeeze_on.append(None)
+            squeeze_momentum.append(None)
+            continue
+        # Canonical TTM squeeze comparison uses a 1.5 ATR Keltner envelope,
+        # while the separately exposed display channel uses 2 ATR.
+        squeeze_on.append(
+            middle + 2 * deviation < keltner_middle[index] + 1.5 * atr
+            and middle - 2 * deviation > keltner_middle[index] - 1.5 * atr
+        )
+        highest = max(highs[max(0, index - 19):index + 1])
+        lowest = min(lows[max(0, index - 19):index + 1])
+        baseline = (highest + lowest + 2 * middle) / 4
+        squeeze_momentum.append(closes[index] - baseline)
+
+    trix_ema_1 = ema[12]
+    trix_ema_2 = _ema_series(trix_ema_1, 12)
+    trix_ema_3 = _ema_series(trix_ema_2, 12)
+    trix: list[float | None] = [None]
+    trix.extend(
+        (current / previous - 1) * 100 if previous else None
+        for previous, current in pairwise(trix_ema_3)
+    )
+    trix_signal = _optional_ema_series(trix, 9)
+    trix_histogram = [
+        value - signal if value is not None and signal is not None else None
+        for value, signal in zip(trix, trix_signal)
+    ]
+
+    pvt = [0.0]
+    raw_force = [0.0]
+    for index in range(1, len(closes)):
+        previous = closes[index - 1]
+        pvt.append(pvt[-1] + volumes[index] * (closes[index] / previous - 1) if previous else pvt[-1])
+        raw_force.append((closes[index] - previous) * volumes[index])
+    force13 = _ema_series(raw_force, 13)
+    average_volume20 = _sma_series(volumes, 20)
+    pvt_change_20: list[float | None] = []
+    force13_normalized: list[float | None] = []
+    for index in range(len(closes)):
+        pvt_change_20.append(
+            pvt[index] - pvt[index - 20] if index >= 20 else None
+        )
+        denominator = closes[index] * average_volume20[index] if average_volume20[index] else None
+        force13_normalized.append(
+            force13[index] / denominator * 100 if denominator else None
+        )
+    vroc: dict[int, list[float | None]] = {}
+    for window in (12, 20):
+        vroc[window] = [
+            (volumes[index] / volumes[index - window] - 1) * 100
+            if index >= window and volumes[index - window] else None
+            for index in range(len(volumes))
+        ]
+
+    strict_ema = {
+        window: [
+            value if index + 1 >= window else None
+            for index, value in enumerate(ema[window])
+        ]
+        for window in (20, 50, 200)
+    }
+    series: dict[str, list[Any]] = {
+        "ema_12": ema[12],
+        "ema_20": strict_ema[20],
+        "ema_26": ema[26],
+        "ema_50": strict_ema[50],
+        "ema_200": strict_ema[200],
+        **{f"bias_{window}": bias[window] for window in bias},
+        "bbi": bbi,
+        "ppo": ppo,
+        "ppo_signal": ppo_signal,
+        "ppo_histogram": ppo_histogram,
+        "natr_14": natr14,
+        "keltner_middle": keltner_middle,
+        "keltner_upper": keltner_upper,
+        "keltner_lower": keltner_lower,
+        "ttm_squeeze_on": squeeze_on,
+        "ttm_squeeze_momentum": squeeze_momentum,
+        "trix_12": trix,
+        "trix_signal_9": trix_signal,
+        "trix_histogram": trix_histogram,
+        "pvt": pvt,
+        "pvt_change_20": pvt_change_20,
+        "vroc_12": vroc[12],
+        "vroc_20": vroc[20],
+        "force_index_13": force13,
+        "force_index_13_normalized": force13_normalized,
+    }
+    latest = {key: values[-1] if values else None for key, values in series.items()}
+    latest.update({
+        "ema_20_distance_pct": (closes[-1] / strict_ema[20][-1] - 1) * 100 if strict_ema[20][-1] else None,
+        "ema_50_distance_pct": (closes[-1] / strict_ema[50][-1] - 1) * 100 if strict_ema[50][-1] else None,
+        "ema_200_distance_pct": (closes[-1] / strict_ema[200][-1] - 1) * 100 if strict_ema[200][-1] else None,
+        "bbi_distance_pct": (closes[-1] / bbi[-1] - 1) * 100 if bbi[-1] else None,
+    })
+    required_latest = (
+        "ema_20", "ema_50", "ema_200", "bias_6", "bias_12", "bias_24",
+        "bbi", "ppo", "ppo_signal", "natr_14", "keltner_middle",
+        "keltner_upper", "keltner_lower", "ttm_squeeze_on", "trix_12",
+        "trix_signal_9", "pvt_change_20", "vroc_12", "vroc_20",
+        "force_index_13_normalized",
+    )
+    status = (
+        "limited_history" if len(closes) < 200
+        else "ready" if all(latest.get(key) is not None for key in required_latest)
+        else "missing_input"
+    )
+    return {
+        "status": status,
+        "observations": len(closes),
+        "formula_version": COMMON_INDICATOR_FORMULA_VERSION,
+        "parameters": {
+            "ema_windows": [12, 20, 26, 50, 200],
+            "bias_windows": [6, 12, 24],
+            "bbi_windows": [3, 6, 12, 24],
+            "ppo": [12, 26, 9],
+            "natr": 14,
+            "keltner": {"ema": 20, "atr": 20, "multiplier": 2.0},
+            "ttm_squeeze": {"bollinger": [20, 2.0], "keltner": [20, 1.5]},
+            "trix": [12, 9],
+            "vroc_windows": [12, 20],
+            "force_index": 13,
+            "atr_smoothing": "Wilder RMA",
+        },
+        "series": series,
+        "latest": latest,
+        "comparability": {
+            "cross_sectional": [
+                "ema_*_distance_pct", "bias_*", "bbi_distance_pct", "ppo",
+                "natr_14", "trix_12", "vroc_*", "force_index_13_normalized",
+            ],
+            "path_dependent_raw": ["pvt", "force_index_13"],
+        },
+    }
 
 
 def aroon(highs: list[float], lows: list[float], window: int = 25) -> dict[str, Any]:

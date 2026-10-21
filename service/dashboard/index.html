@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Claw Quant · 数据控制台</title>
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261013-data-console-v4" />
+  <link rel="icon" type="image/png" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
+  <link rel="apple-touch-icon" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261021-interface-inventory-13" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
-    <div class="brand"><span>CQ</span><div><strong>Claw Quant</strong><small>Data Operations</small></div></div>
+    <div class="brand"><img src="/dashboard-assets/claw-quant-icon.png?v=20261021" alt="Claw Quant" /><div><strong>Claw Quant</strong><small>Data Operations</small></div></div>
     <button id="sidebarToggle" class="icon-button" title="收起侧栏">☰</button>
     <nav>
       <p class="nav-group">工作台</p>
@@ -25,6 +27,7 @@
       <p class="nav-group">资产</p>
       <button class="nav" data-view="services"><span>◇</span><b>服务目录</b></button>
       <button class="nav" data-view="sources"><span>⇄</span><b>数据依赖</b></button>
+      <button class="nav" data-view="derivations"><span>∑</span><b>数据派生</b></button>
     </nav>
     <div class="sidebar-foot"><span class="dot"></span><span id="engineLabel">数据服务运行中</span></div>
   </aside>
@@ -64,7 +67,7 @@
             <div class="stock-chart-controls"><label>初始窗口 <select id="stockPoints"><option value="90">90 根</option><option value="180" selected>180 根</option><option value="250">250 根</option></select></label><div class="stock-zoom-controls" role="group" aria-label="K线缩放"><button id="stockZoomOut" title="缩小，显示更多K线">−</button><button id="stockZoomIn" title="放大，显示更少K线">＋</button><button id="stockZoomReset" title="回到最新区间">最新</button></div><span id="stockZoomStatus" class="stock-zoom-status">—</span><button id="stockReload">刷新行情</button></div>
           </div>
           <div class="stock-overlay-legend" id="stockOverlayLegend">
-            <button data-stock-overlay="ma_5"><i style="--line-color:#9b7bd4"></i>MA5</button><button data-stock-overlay="ma_10"><i style="--line-color:#d19b3f"></i>MA10</button><button class="active" data-stock-overlay="ma_20"><i style="--line-color:#348fcb"></i>MA20</button><button class="active" data-stock-overlay="ma_60"><i style="--line-color:#7b8794"></i>MA60</button><button data-stock-overlay="ma_120"><i style="--line-color:#4d8d7c"></i>MA120</button><button data-stock-overlay="ma_250"><i style="--line-color:#6a7480"></i>MA250</button><button data-stock-overlay="ema_12"><i style="--line-color:#35a78a"></i>EMA12</button><button data-stock-overlay="ema_26"><i style="--line-color:#2f6f9f"></i>EMA26</button><button data-stock-overlay="bollinger"><i style="--line-color:#8795a1"></i>BOLL</button><button class="active daily-only" data-stock-overlay="cost_20"><i style="--line-color:#b96a93"></i>成本20</button><button class="active daily-only" data-stock-overlay="cost_60"><i style="--line-color:#8753a6"></i>成本60</button><button class="active daily-only" data-stock-overlay="niumen_line"><i style="--line-color:#e07a35"></i>牛门线</button><button class="active daily-only" data-stock-overlay="niumen_confirmation_line"><i style="--line-color:#c94848"></i>确认线</button><button class="daily-only" data-stock-overlay="niumen_signal_ma_10"><i style="--line-color:#e7a85c"></i>信号MA10</button>
+            <button data-stock-overlay="ma_5"><i style="--line-color:#9b7bd4"></i>MA5</button><button data-stock-overlay="ma_10"><i style="--line-color:#d19b3f"></i>MA10</button><button class="active" data-stock-overlay="ma_20"><i style="--line-color:#348fcb"></i>MA20</button><button class="active" data-stock-overlay="ma_60"><i style="--line-color:#7b8794"></i>MA60</button><button data-stock-overlay="ma_120"><i style="--line-color:#4d8d7c"></i>MA120</button><button data-stock-overlay="ma_250"><i style="--line-color:#6a7480"></i>MA250</button><button data-stock-overlay="ema_20"><i style="--line-color:#35a78a"></i>EMA20</button><button data-stock-overlay="ema_50"><i style="--line-color:#2f6f9f"></i>EMA50</button><button data-stock-overlay="ema_200"><i style="--line-color:#17666f"></i>EMA200</button><button data-stock-overlay="bbi"><i style="--line-color:#945ca8"></i>BBI</button><button data-stock-overlay="bollinger"><i style="--line-color:#8795a1"></i>BOLL</button><button data-stock-overlay="keltner"><i style="--line-color:#4d91a8"></i>Keltner</button><button class="active daily-only" data-stock-overlay="cost_20"><i style="--line-color:#b96a93"></i>成本20</button><button class="active daily-only" data-stock-overlay="cost_60"><i style="--line-color:#8753a6"></i>成本60</button><button class="active daily-only" data-stock-overlay="niumen_line"><i style="--line-color:#e07a35"></i>牛门线</button><button class="active daily-only" data-stock-overlay="niumen_confirmation_line"><i style="--line-color:#c94848"></i>确认线</button><button class="daily-only" data-stock-overlay="niumen_signal_ma_10"><i style="--line-color:#e7a85c"></i>信号MA10</button>
           </div>
           <div id="stockDailyNote" class="stock-method-note">牛门线与确认线按交易日定义，仅在日 K 展示；成本线使用成交额 / 成交量的严格滚动口径。</div>
           <div class="stock-pan-row"><span>历史浏览</span><button id="stockPanPrev" title="向前浏览更早K线">←</button><input id="stockPan" type="range" min="0" max="0" value="0" aria-label="平移K线可视区间"/><button id="stockPanNext" title="向后浏览更新K线">→</button><small id="stockHistoryRange">可直接左右拖动 K 线；滚轮缩放</small></div>
@@ -83,7 +86,25 @@
           <article><span>波动率 / ATR</span><strong id="stockVolatility">—</strong><small id="stockVolatilityDetail">—</small></article>
           <article><span>ADX / DMI 趋势强度</span><strong id="stockStrength">—</strong><small id="stockStrengthDetail">—</small></article>
           <article><span>资金动量</span><strong id="stockMoneyFlow">—</strong><small id="stockMoneyFlowDetail">—</small></article>
+          <article><span>EMA / BBI 趋势</span><strong id="stockEmaBbi">—</strong><small id="stockEmaBbiDetail">—</small></article>
+          <article><span>BIAS / PPO</span><strong id="stockBiasPpo">—</strong><small id="stockBiasPpoDetail">—</small></article>
+          <article><span>波动挤压</span><strong id="stockSqueeze">—</strong><small id="stockSqueezeDetail">—</small></article>
+          <article><span>PVT / VROC / Force</span><strong id="stockVolumeMomentum">—</strong><small id="stockVolumeMomentumDetail">—</small></article>
         </section>
+
+        <nav class="stock-module-tabs" id="stockModuleTabs" role="tablist" aria-label="研究模块">
+          <button class="active" data-stock-module="market">行情因子</button>
+          <button data-stock-module="chips">筹码分布</button>
+          <button data-stock-module="fundamentals">基本面</button>
+          <button data-stock-module="events">公司事件</button>
+          <button data-stock-module="sectors">板块 · 同行</button>
+          <button data-stock-module="chain">产业链</button>
+        </nav>
+        <section id="stockModuleChips" class="stock-module hidden" data-stock-module-panel="chips"></section>
+        <section id="stockModuleFundamentals" class="stock-module hidden" data-stock-module-panel="fundamentals"></section>
+        <section id="stockModuleEvents" class="stock-module hidden" data-stock-module-panel="events"></section>
+        <section id="stockModuleSectors" class="stock-module hidden" data-stock-module-panel="sectors"></section>
+        <section id="stockModuleChain" class="stock-module hidden" data-stock-module-panel="chain"></section>
       </div>
     </section>
 
@@ -97,7 +118,7 @@
           <article><span>Tushare 可采接口</span><strong id="systemTushareCount">—</strong><small>批量历史与日常主数据源</small></article>
           <article><span>规范数据集</span><strong id="systemDatasetCount">—</strong><small>本地稳定业务模型</small></article>
           <article><span>对外研究接口</span><strong id="systemResearchCount">—</strong><small>用户与 Agent 的稳定入口</small></article>
-          <article><span>研究证据路由</span><strong id="systemEvidenceCount">—</strong><small>已治理的 蚂蚁数据源 路由</small></article>
+          <article><span>研究证据路由</span><strong id="systemEvidenceCount">—</strong><small>已治理的蚂蚁路由</small></article>
         </div>
         <div id="systemArchitecture" class="system-architecture"></div>
         <div class="system-scope-grid">
@@ -150,11 +171,30 @@
     </section>
 
     <section class="view hidden" data-panel="sources">
-      <section class="card source-overview"><div class="source-overview-head"><div><p class="eyebrow">UPSTREAM REGISTRY</p><h2>上游数据源</h2><p>这里只展示内部依赖。系统优先读取已落库且通过校验的数据，确实缺失时才查询外部数据源。</p></div><div class="source-kpis"><span><b id="sourceProviderCount">—</b> 个数据源</span><span><b id="sourceCapabilityCount">—</b> 项登记能力</span><span><b id="sourcePersistCount">—</b> 个可持久化</span></div></div><div id="sourceCards" class="provider-grid"></div></section>
-      <section class="card provider-usage"><div class="card-head"><div><p class="eyebrow">QUERY-THROUGH AUDIT</p><h2>蚂蚁数据源 实际调用</h2><p id="financialUsageSummary">读取按需查询审计中…</p></div><span id="financialUsageState" class="pill pending">读取中</span></div><div class="metrics compact provider-usage-metrics"><article><span>真实上游请求</span><strong id="financialRequestCount">—</strong><small>缓存命中不重复计费</small></article><article><span>成功批次</span><strong id="financialSuccessCount">—</strong><small>按批次状态统计</small></article><article><span>失败批次</span><strong id="financialFailureCount">—</strong><small>需要检查上游或契约</small></article><article><span>研究层已接入</span><strong id="financialResearchCount">—</strong><small>供应商路由</small></article></div><div class="table-wrap"><table class="provider-usage-table"><thead><tr><th>供应商路由</th><th>所在批次</th><th>完成批次</th><th>失败批次</th><th>最近真实请求</th></tr></thead><tbody id="financialUsageRows"></tbody></table></div><p class="provider-usage-note">状态按批次统计；某一路由在成功批次中仍可能合法返回空数据，研究响应会单独标记每条路由状态和口径核对结果。</p></section>
-      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">SUPPLY STRATEGY</p><h2>数据能力供给策略</h2><p>每个能力都明确本地数据、Tushare 与 蚂蚁数据源 的职责，避免同一请求在不同来源间产生口径漂移。</p></div><span id="sourceDependencyTotal" class="count-badge">—</span></div><div class="strategy-grid"><button class="strategy-filter direct" data-source-class="tushare_direct"><span>01</span><div><strong id="sourceRouteCount">—</strong><b>Tushare 直接等价</b><small>本地数据可直接供给</small></div></button><button class="strategy-filter derived" data-source-class="tushare_derived"><span>02</span><div><strong id="sourceRequiredCount">—</strong><b>确定性派生</b><small>基于本地数据计算得到</small></div></button><button class="strategy-filter parsing" data-source-class="tushare_announcement_parse"><span>03</span><div><strong id="sourceRealtimeCount">—</strong><b>公告解析</b><small>从公告证据提取字段</small></div></button><button class="strategy-filter external" data-source-class="financial_data_only"><span>04</span><div><strong id="sourceNoLocalCount">—</strong><b>蚂蚁数据源 必需</b><small>本地暂不具备完整口径</small></div></button></div><div class="mapping-toolbar"><div><strong>能力映射明细</strong><small id="sourceDependencyResult">读取中…</small></div><div class="filters"><select id="sourceDependencyClass"><option value="">全部供给策略</option><option value="tushare_direct">Tushare 直接等价</option><option value="tushare_derived">Tushare 确定性派生</option><option value="tushare_announcement_parse">Tushare 公告解析</option><option value="financial_data_only">蚂蚁数据源 必需</option></select><input id="sourceDependencySearch" placeholder="搜索能力、接口或数据集"/><button id="sourceDependencyQuery">筛选</button></div></div><div class="table-wrap"><table class="source-mapping-table"><thead><tr><th>数据能力</th><th>供给策略</th><th>本地规范数据</th><th>上游参考</th><th>判定说明</th></tr></thead><tbody id="sourceDependencyRows"></tbody></table></div><footer><button id="sourceDependencyPrev">上一页</button><span id="sourceDependencyPage">第 1 页</span><button id="sourceDependencyNext">下一页</button></footer></section>
+      <section class="card source-overview"><div class="source-overview-head"><div><p class="eyebrow">UPSTREAM REGISTRY</p><h2>数据源总览</h2><p>系统优先读取已落库且通过校验的数据，确实缺失时才查询外部数据源。</p></div><div class="source-kpis"><span><b id="sourceOverviewSources">—</b> 个数据源</span><span><b id="sourceOverviewInterfaces">—</b> 项接口</span><span><b id="sourceOverviewDatasets">—</b> 个数据集</span></div></div><div id="sourceStrip" class="source-strip"></div></section>
+      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">INTERFACE INVENTORY</p><h2>接口依赖明细</h2><p>以接口为中心的数据依赖清单：每个接口展示采集状态、频率、关联任务、输出数据集、数据库表与可采集字段；点行展开血缘与运行状态，供给策略判定也合并在这里。</p></div><div class="view-switch"><button id="interfaceViewTable" class="active" data-interface-view="table">接口视角</button><button id="interfaceViewLineage" data-interface-view="lineage">字段血缘</button></div></div>
+        <div id="interfaceTableView">
+          <div class="mapping-toolbar"><div><strong>接口清单</strong><small id="interfaceResult">读取中…</small></div><div class="filters"><select id="interfaceSource"><option value="">全部来源</option><option value="tushare">Tushare</option><option value="financial_data">蚂蚁</option><option value="public">公开来源</option></select><select id="interfaceAssetClass"><option value="">全部类型</option><option value="stock">股票（A股）</option><option value="hk_stock">港股</option><option value="us_stock">美股</option><option value="fund">基金</option><option value="index_etf">指数·ETF·板块</option><option value="bond">债券</option><option value="derivatives">期权·期货</option><option value="forex">外汇</option><option value="macro">宏观</option><option value="altdata">另类数据</option><option value="info">资讯·公告</option><option value="chain">产业链·关联</option><option value="quote">行情快照</option><option value="factor">因子库</option><option value="other">其他</option></select><select id="interfaceStatus"><option value="">全部状态</option><option value="active">在用</option><option value="paused">停采·存量</option><option value="no_permission">无权限</option><option value="not_scheduled">未启用</option><option value="realtime_required">在用·实时</option><option value="ant_primary">在用·主供</option><option value="public_registered">登记能力</option></select><select id="interfaceCategory"><option value="">全部分类</option></select><select id="interfaceCadence"><option value="">全部频率</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="hourly">每小时</option><option value="manual">按需</option><option value="on_demand">按需</option><option value="realtime">实时</option><option value="unscheduled">未纳入调度</option></select><input id="interfaceSearch" placeholder="搜索接口、任务、数据集或表"/><button id="interfaceQuery">筛选</button></div></div>
+          <div class="table-wrap"><table class="source-mapping-table interface-table"><thead><tr><th>接口标识</th><th>来源</th><th>状态</th><th>采集频率</th><th>获取方式 / 关联任务</th><th>输出数据集</th><th>数据库表</th><th>字段数</th></tr></thead><tbody id="interfaceRows"></tbody></table></div>
+          <footer><span id="interfaceTotalHint" class="muted"></span><span class="pager"><button id="interfacePrev">上一页</button><span id="interfacePage">第 1 页</span><button id="interfaceNext">下一页</button></span></footer>
+        </div>
+        <div id="fieldLineageView" class="hidden">
+          <div class="mapping-toolbar"><div><strong>字段血缘</strong><small id="lineageResult">按物理表查看字段来自哪些接口</small></div><div class="filters"><input id="lineageSearch" placeholder="搜索表名、接口名或字段名"/><button id="lineageQuery">筛选</button></div></div>
+          <div class="table-wrap"><table class="source-mapping-table lineage-table"><thead><tr><th style="width:22%">数据库表</th><th style="width:24%">来源接口</th><th>可采集字段（字段 ← 接口）</th></tr></thead><tbody id="lineageRows"></tbody></table></div>
+          <footer><button id="lineagePrev">上一页</button><span id="lineagePage">第 1 页</span><button id="lineageNext">下一页</button></footer>
+        </div>
+        <div class="dependency-legends">
+          <div class="legend-box"><strong>状态色约定</strong><p><span class="pill ready">在用</span> <span class="pill ant">在用·实时/主供</span> <span class="pill pending">未启用/停采</span> <span class="pill attention">无权限</span></p></div>
+          <div class="legend-box"><strong>联动跳转</strong><p>任务名 → 执行历史 · 数据集 → 服务目录 · 表名 → 覆盖审计</p></div>
+        </div>
+      </section>
+      <section class="card provider-usage"><div class="card-head"><div><p class="eyebrow">QUERY-THROUGH AUDIT</p><h2>蚂蚁 实际调用</h2><p id="financialUsageSummary">读取按需查询审计中…</p></div><span id="financialUsageState" class="pill pending">读取中</span></div><div class="metrics compact provider-usage-metrics"><article><span>真实上游请求</span><strong id="financialRequestCount">—</strong><small>缓存命中不重复计费</small></article><article><span>成功批次</span><strong id="financialSuccessCount">—</strong><small>按批次状态统计</small></article><article><span>失败批次</span><strong id="financialFailureCount">—</strong><small>需要检查上游或契约</small></article><article><span>研究层已接入</span><strong id="financialResearchCount">—</strong><small>供应商路由</small></article></div><div class="table-wrap"><table class="provider-usage-table"><thead><tr><th>供应商路由</th><th>所在批次</th><th>完成批次</th><th>失败批次</th><th>最近真实请求</th></tr></thead><tbody id="financialUsageRows"></tbody></table></div><p class="provider-usage-note">状态按批次统计；某一路由在成功批次中仍可能合法返回空数据，研究响应会单独标记每条路由状态和口径核对结果。</p></section>
     </section>
-
+    <section class="view hidden" data-panel="derivations">
+      <section class="card source-overview"><div class="source-overview-head"><div><p class="eyebrow">DERIVED INDICATORS</p><h2>数据派生</h2><p>以下指标由系统基于已采集落库的数据计算产生：持久化派生任务按依赖就绪自动物化，研究层指标按需即时计算、不落表。</p></div><div class="source-kpis"><span><b id="derivationTaskCount">—</b> 个派生任务</span><span><b id="derivationImplementedCount">—</b> 个已实现</span><span><b id="derivationOndemandCount">—</b> 个即时指标</span></div></div><div id="derivationStrip" class="source-strip"></div></section>
+      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">MATERIALIZED TASKS</p><h2>派生任务清单</h2><p id="derivationResult">读取中…</p></div></div><div class="table-wrap"><table class="source-mapping-table derivation-table"><thead><tr><th>派生指标</th><th>状态</th><th>用哪些数据算</th><th>算法版本</th><th>算的频率</th><th>已算天数 / 日期范围</th><th>最新数据日期</th></tr></thead><tbody id="derivationRows"></tbody></table></div><footer><span id="derivationTotalHint" class="muted"></span><span class="pager"><button id="derivationPrev">上一页</button><span id="derivationPage">第 1 页</span><button id="derivationNext">下一页</button></span></footer><div class="dependency-legends"><div class="legend-box"><strong>状态说明</strong><p><span class="pill ready">已实现·自动派发</span> <span class="pill pending">规划中·蓝图已登记</span> <span class="pill info">采集运行时物化</span></p><p class="detail-reason">派发巡检每 2 分钟执行：上游输入数据全部就绪且通过校验后，才创建派生执行实例。</p></div></div></section>
+      <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">ON-DEMAND ANALYTICS</p><h2>即时计算指标（研究层）</h2><p id="ondemandResult">读取中…</p></div></div><div class="table-wrap"><table class="source-mapping-table"><thead><tr><th>指标</th><th>领域</th><th>说明</th><th>计算方式</th><th>接口</th></tr></thead><tbody id="ondemandRows"></tbody></table></div><footer><span id="ondemandTotalHint" class="muted"></span><span class="pager"><button id="ondemandPrev">上一页</button><span id="ondemandPage">第 1 页</span><button id="ondemandNext">下一页</button></span></footer></section>
+    </section>
     <section class="view hidden" data-panel="services">
       <section class="card"><div class="card-head"><div><p class="eyebrow">PUBLIC API CATALOG</p><h2>对外服务目录</h2><p id="serviceSummary">这里只列出供用户和 Agent 调用的稳定 REST 服务；上游供应商请到“数据依赖”查看。</p></div><div class="filters"><select id="serviceLayer"><option value="">全部层级</option><option value="research">研究层</option><option value="standard">标准层</option><option value="raw">审计层</option></select><input id="serviceSearch" placeholder="搜索服务、路径或数据集"/><button id="serviceQuery">查询</button></div></div><div class="table-wrap"><table><thead><tr><th>层级 / 服务</th><th>对外接口</th><th>提供的数据</th><th>数据形态</th><th>读取策略</th></tr></thead><tbody id="serviceRows"></tbody></table></div><footer><button id="servicePrev">上一页</button><span id="servicePage">第 1 页</span><button id="serviceNext">下一页</button></footer></section>
     </section>
@@ -165,6 +205,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261013-data-console-v4" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261021-interface-inventory-13" defer></script>
 </body>
 </html>

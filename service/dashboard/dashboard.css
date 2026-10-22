@@ -358,6 +358,7 @@ dialog::backdrop { background: rgba(3,8,13,.62); }
 .stock-chart-stage .axis-label, .stock-subchart .axis-label { fill: var(--subtle); font-size: 10px; }
 .stock-chart-stage .candle-up, .stock-subchart .bar-up { fill: #d95252; stroke: #d95252; }
 .stock-chart-stage .candle-down, .stock-subchart .bar-down { fill: #17855b; stroke: #17855b; }
+.factor-line { fill: none; stroke-width: 1.45; vector-effect: non-scaling-stroke; }
 .stock-chart-stage .factor-line, .stock-subchart .factor-line { fill: none; stroke-width: 1.45; vector-effect: non-scaling-stroke; }
 .stock-chart-stage .crosshair { stroke: var(--subtle); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
 .stock-chart-stage .hit-area { fill: transparent; cursor: inherit; }

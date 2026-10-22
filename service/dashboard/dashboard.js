@@ -974,7 +974,7 @@ function renderMacroRates(payload){
   const data=payload?.data||{},meta=payload?.meta||{};
   const spread=(data.spread_10y||[]).map(r=>[String(r.observation_date),Number(r.spread)]).reverse();
   renderResearchLinesInto($("macroSpreadChart"),spread,{color:"#D85A30",zero:true,digits:2});
-  const latestSpread=(data.spread_10y||[]).at(-1);
+  const latestSpread=(data.spread_10y||[])[0];
   $("macroSpreadNote").textContent=latestSpread?`最新 ${latestSpread.observation_date} · 中债 10Y ${stockNumber(latestSpread.cn_10y)}% − 美债 10Y ${stockNumber(latestSpread.us_10y)}%`:"暂无重叠交易日";
   const tenorLabels={yield_3m:"3月",yield_6m:"6月",yield_1y:"1年",yield_3y:"3年",yield_5y:"5年",yield_7y:"7年",yield_10y:"10年",yield_30y:"30年",m3:"3月",m6:"6月",y1:"1年",y2:"2年",y3:"3年",y5:"5年",y7:"7年",y10:"10年",y20:"20年",y30:"30年"};
   const curveCards=(curveRow,dateField)=>{

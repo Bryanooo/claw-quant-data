@@ -679,6 +679,57 @@ class ResearchRepository:
             ),
         }
 
+    def macro_cn_curve(self, *, as_of: date, observations: int = 60) -> list[dict]:
+        """Return official ChinaBond curve rows, newest date first (3 rows/day)."""
+
+        return self._database.fetch_all(
+            """
+            SELECT curve_date AS observation_date, curve_name,
+                   yield_3m, yield_6m, yield_1y, yield_3y,
+                   yield_5y, yield_7y, yield_10y, yield_30y
+            FROM public_norm_chinabond_yield_curve
+            WHERE curve_date <= %s
+            ORDER BY curve_date DESC, curve_name
+            LIMIT %s
+            """,
+            (as_of, observations * 3),
+        )
+
+    def macro_us_curve(self, *, as_of: date, observations: int = 60) -> list[dict]:
+        """Return US treasury constant-maturity curve rows, newest date first."""
+
+        return self._database.fetch_all(
+            """
+            WITH latest AS (
+                SELECT DISTINCT ON (date) *
+                FROM tushare_norm_us_tycr
+                WHERE date IS NOT NULL
+                ORDER BY date, _source_collected_at DESC, _last_seen_at DESC
+            )
+            SELECT date AS observation_date, m3, m6, y1, y2, y3,
+                   y5, y7, y10, y20, y30
+            FROM latest
+            WHERE date <= %s
+            ORDER BY date DESC
+            LIMIT %s
+            """,
+            (as_of, observations),
+        )
+
+    def macro_schedule(self, *, as_of: date, limit: int = 60) -> list[dict]:
+        """Return upcoming macro data release announcements."""
+
+        return self._database.fetch_all(
+            """
+            SELECT publish_date, month, title, issuing_org, data_api
+            FROM tushare_norm_cn_schedule
+            WHERE publish_date IS NOT NULL AND publish_date >= %s
+            ORDER BY publish_date ASC, title
+            LIMIT %s
+            """,
+            (as_of, limit),
+        )
+
     def industry_fundamentals(
         self,
         member_codes: list[str],

@@ -198,6 +198,23 @@ _NORMALIZED_MERGE_POLICY_OVERRIDES = {
 
 def _curated_datasets() -> list[DatasetSpec]:
     return [
+        # 中债收益率曲线（官方定采）。时间序列只在按日采集后才存在；
+        # 读取路径不得为合成历史而实时穿透上游。
+        DatasetSpec(
+            name="chinabond_yield_curve",
+            table="public_norm_chinabond_yield_curve",
+            description="中债收益率曲线（国债/商业银行AAA/中短票AAA，每日定采）",
+            category="macro",
+            primary_keys=("curve_date", "curve_name"),
+            exact_filters={"curve_date": "curve_date", "curve_name": "curve_name"},
+            date_column="curve_date",
+            availability_column="curve_date",
+            default_order=("curve_date", "curve_name"),
+            default_descending=True,
+            freshness_sla_hours=48,
+            freshness_policy="max_age",
+            source_ids=("chinabond",),
+        ),
         # 蚂蚁数据源 scheduled-pull standard tables (ant_norm_*).  Time series
         # only exist because collection runs on a schedule; read paths must
         # never spend provider quota to synthesize them on demand.

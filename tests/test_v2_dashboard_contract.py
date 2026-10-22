@@ -278,3 +278,29 @@ def test_nav_groups_place_calendars_by_audience():
     assert governance < calendar
 
 
+def test_macro_research_page_and_endpoints_contract():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    router = (ROOT / "service/api/routers/research.py").read_text()
+
+    assert 'data-view="macro"' in html
+    assert 'data-panel="macro"' in html
+    for module in ("regime", "growth", "inflation", "liquidity", "rates", "calendar"):
+        assert f'data-macro-module="{module}"' in html
+        assert f'data-macro-module-panel="{module}"' in html
+    assert "loadMacroResearch" in script and "switchMacroModule" in script
+    assert "renderMacroRegime" in script and "renderMacroRates" in script
+    assert "macroCnCurveGrid" in html and "macroSpreadChart" in html
+    assert "/macro/rates" in router and "/macro/schedule" in router
+    assert "def macro_rates" in router and "def macro_schedule" in router
+    service = (ROOT / "service/research/service.py").read_text()
+    assert "def macro_rates" in service and "def macro_schedule" in service
+    repository = (ROOT / "service/research/repository.py").read_text()
+    assert "public_norm_chinabond_yield_curve" in repository
+    connector = (ROOT / "service/source_connectors/chinabond.py").read_text()
+    assert "SCHEDULED_PULL" in connector
+    assert "ChinaBondConnector" in (
+        ROOT / "service/source_connectors/__init__.py"
+    ).read_text()
+
+

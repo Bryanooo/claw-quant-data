@@ -316,7 +316,7 @@ def test_manual_all_dataset_audit_includes_unscheduled_rules():
         include_unscheduled=True,
     )
 
-    assert result["total"] == len(COVERAGE_RULES.list()) == 204
+    assert result["total"] == len(COVERAGE_RULES.list()) == 205
     assert {item[0] for item in repository.calls} == {
         rule.dataset_name for rule in COVERAGE_RULES.list()
     }
@@ -920,7 +920,7 @@ def test_upstream_availability_boundary_does_not_create_fake_history_gaps():
 def test_every_public_dataset_has_an_explicit_coverage_classification():
     rules = COVERAGE_RULES.list()
 
-    assert len(rules) == len(DATASETS.list()) == 204
+    assert len(rules) == len(DATASETS.list()) == 205
     assert {item.dataset_name for item in rules} == {
         item.name for item in DATASETS.list()
     }
@@ -956,7 +956,7 @@ def test_fund_share_is_event_sparse_not_daily_expected():
 def test_only_proven_rules_are_automatically_scheduled():
     scheduled = COVERAGE_RULES.scheduled()
 
-    assert len(scheduled) == 60
+    assert len(scheduled) == 61
     assert all(item.auditable for item in scheduled)
     assert COVERAGE_RULES.get("adj_factor").scheduled is True
     assert COVERAGE_RULES.get("adj_factor").coverage_level == "expected_partitions"

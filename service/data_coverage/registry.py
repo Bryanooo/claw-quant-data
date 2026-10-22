@@ -735,6 +735,18 @@ _EXPLICIT_RULES = [
             revision=3,
         ),
         _rule(
+            "chinabond_yield_curve",
+            CoverageStrategy.TRADING_DAILY,
+            entity_column=None,
+            default_lookback_days=3650,
+            availability_start=date(2006, 3, 1),
+            description=(
+                "从官方曲线起点 2006-03-01 起按 SSE 开市日检查 "
+                "中债收益率日度分区；三条曲线在起始日齐全即视为完整分区"
+            ),
+            revision=1,
+        ),
+        _rule(
             "cn_lpr",
             CoverageStrategy.CALENDAR_MONTHLY,
             collection_api_name="shibor_lpr",

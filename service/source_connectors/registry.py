@@ -148,6 +148,25 @@ CHINAMONEY_SOURCE = SourceSpec(
 )
 
 
+CHINABOND_SOURCE = SourceSpec(
+    source_id="chinabond",
+    display_name="中债收益率曲线（中央结算公司）",
+    kind=SourceKind.HYBRID,
+    acquisition_modes=(AcquisitionMode.SCHEDULED_PULL, AcquisitionMode.QUERY_THROUGH),
+    base_url="https://yield.chinabond.com.cn",
+    timezone="Asia/Shanghai",
+    license_policy={
+        "persist_raw_records": True,
+        "official_public_data": True,
+    },
+    configuration={
+        "adapter": "chinabond",
+        "business_scope": "中债国债、商业银行普通债(AAA)、中短期票据(AAA)收益率曲线",
+        "canonical_datasets": ["chinabond_yield_curve"],
+    },
+)
+
+
 FINANCIAL_DATA_SOURCE = SourceSpec(
     source_id="financial_data",
     display_name="蚂蚁",
@@ -232,6 +251,7 @@ def build_source_registry() -> SourceRegistry:
     registry = SourceRegistry((
         TUSHARE_SOURCE,
         CHINAMONEY_SOURCE,
+        CHINABOND_SOURCE,
         FINANCIAL_DATA_SOURCE,
     ))
     registry.register_endpoint(EndpointSpec(
@@ -260,6 +280,25 @@ def build_source_registry() -> SourceRegistry:
             "query_through": True,
             "success_does_not_imply_non_empty": True,
             "business_timestamp_required_for_realtime_claims": True,
+        },
+    ))
+    registry.register_endpoint(EndpointSpec(
+        source_id="chinabond",
+        endpoint_key="yield_curve_history",
+        title="中债收益率曲线历史（国债/银行AAA/中短票AAA）",
+        acquisition_mode=AcquisitionMode.SCHEDULED_PULL,
+        resource_class="generic",
+        cadence="daily",
+        parser_name="chinabond_yield_curve",
+        parser_version="1",
+        request_contract={
+            "start_date": "YYYY-MM-DD（缺省为 end_date 前 14 天）",
+            "end_date": "YYYY-MM-DD（缺省为今天）",
+            "official_page": "https://yield.chinabond.com.cn",
+        },
+        completeness_policy={
+            "expected_frequency": "daily",
+            "scheduled_payload_bound": "one_360day_capped_window_per_payload",
         },
     ))
     # Reviewed scheduled-pull allow-list (2026-10 product decision): routes

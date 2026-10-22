@@ -63,6 +63,18 @@ _TASK_KEY_OVERRIDES = {
 }
 
 
+# 官方公开源 scheduled-pull tasks: endpoints registered in the source
+# registry with SCHEDULED_PULL mode and a dedicated connector that persists
+# canonical rows (chinabond.py mirrors chinamoney.py).
+_OFFICIAL_SOURCE_TASKS: tuple[dict[str, str], ...] = (
+    {
+        "task_key": "chinabond_yield_curve",
+        "source_id": "chinabond",
+        "endpoint_key": "yield_curve_history",
+        "output_dataset": "chinabond_yield_curve",
+    },
+)
+
 # 蚂蚁数据源 scheduled-pull tasks (2026-10 product decision): routes without a
 # Tushare equivalent whose research value needs accumulated time series.
 # Endpoint keys map to the SOURCE_REGISTRY scheduled-pull allow-list; the
@@ -279,9 +291,24 @@ def acquisition_task_blueprints() -> tuple[AcquisitionTaskBlueprint, ...]:
             resource_class=endpoint.resource_class,
         ))
 
+    for spec in _OFFICIAL_SOURCE_TASKS:
+        endpoint = SOURCE_REGISTRY.get_endpoint(spec["source_id"], spec["endpoint_key"])
+        if endpoint.acquisition_mode.value != "scheduled_pull":
+            raise RuntimeError(
+                f"{spec['source_id']} endpoint {spec['endpoint_key']} is not "
+                "registered for scheduled pulls"
+            )
+        tasks.append(AcquisitionTaskBlueprint(
+            task_key=spec["task_key"],
+            endpoints=(EndpointRef(spec["source_id"], spec["endpoint_key"]),),
+            output_datasets=(spec["output_dataset"],),
+            cadence=endpoint.cadence,
+            resource_class=endpoint.resource_class,
+        ))
+
     result = tuple(sorted(tasks, key=lambda item: item.task_key))
-    if len(result) != 199:
-        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 199")
+    if len(result) != 200:
+        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 200")
     return result
 
 

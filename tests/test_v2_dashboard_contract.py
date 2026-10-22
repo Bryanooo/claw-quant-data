@@ -266,3 +266,15 @@ def test_sidebar_nav_scrolls_when_items_exceed_viewport():
     assert "min-height: 0" in nav_rule
     assert "flex: 1 1 auto" in nav_rule
 
+
+def test_nav_groups_place_calendars_by_audience():
+    html = (ROOT / "service/dashboard/index.html").read_text()
+
+    research = html.index('class="nav-group-label"')
+    investment = html.index('data-view="investment"')
+    governance = html.index('<p class="nav-group">治理</p>')
+    calendar = html.index('data-view="calendar"')
+    assert research < investment < governance
+    assert governance < calendar
+
+

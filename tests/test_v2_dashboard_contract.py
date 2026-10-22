@@ -213,6 +213,27 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert "include_external=false" in script
     assert "macd_histogram" in script
     assert "niumen_confirmation_line" in script
+    # 研究页体验：K线缩放/成交量副图/十字线 tooltip + 列表排序 + 双栏布局 + 折线数值卡
+    for prefix in ("market", "etf", "sector"):
+        for suffix in ("VolumeChart", "Tooltip", "ZoomStatus", "ZoomIn", "ZoomOut", "ZoomReset", "PanPrev", "PanNext"):
+            assert f'id="{prefix}{suffix}"' in html
+    assert "renderResearchChart" in script
+    assert "renderResearchVolume" in script
+    assert "attachResearchChartEvents" in script
+    assert "researchZoom" in script and "researchPan" in script
+    for note in ("marketMarginNote", "marketNorthNote", "marketFlowNote"):
+        assert f'id="{note}"' in html
+    assert 'id="etfEmpty"' in html and 'id="sectorEmpty"' in html
+    assert 'class="research-split"' in html or 'research-split' in html
+    assert 'data-research-sort="etf"' in html and 'data-research-sort="sector"' in html
+    assert "bindResearchSortHeaders" in script and "researchSortedRows" in script
+    assert "renderLineCard" in script
+    for note in ("macroGdpNote", "macroCpiNote", "macroPpiNote", "macroM2Note", "macroSfNote", "macroShiborNote", "macroCn10yNote", "macroUs10yNote"):
+        assert f'id="{note}"' in html
+    assert ".research-split" in css
+    assert "th.sortable" in css
+    assert ".research-volume-chart" in css
+    assert ".line-note" in css
     assert ".stock-factor-grid" in css
     assert ".stock-watchlist-card" in css
 

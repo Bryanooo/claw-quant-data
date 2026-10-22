@@ -600,3 +600,41 @@ footer .pager { display: inline-flex; align-items: center; gap: 10px; }
 .factor-groups { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px; }
 .factor-dataset-card .table-wrap { max-height: 460px; overflow: auto; }
 .factor-dataset-card .table-wrap td code { font-size: 12px; }
+
+/* ===== 研究页体验升级：K线工具栏/成交量副图/双栏布局/排序表头 ===== */
+.chart-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 6px 8px; }
+.chart-zoom-status { color: var(--muted); font-size: 12px; }
+.chart-toolbar .timeframe-switch button { padding: 3px 10px; font-size: 12px; }
+.stock-chart-stage { cursor: crosshair; }
+.research-volume-chart { display: block; width: calc(100% - 12px); height: 96px; margin: 2px 6px 0; }
+.line-note { color: var(--muted); font-size: 12px; text-align: right; }
+.funds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.research-split { display: grid; grid-template-columns: minmax(380px, 42fr) 58fr; gap: 14px; align-items: start; }
+.research-split-list { position: sticky; top: 12px; max-height: calc(100vh - 110px); overflow: auto; }
+.research-split-list table { font-size: 12.5px; }
+.research-split-list .table-wrap { max-height: none; }
+.research-split-detail { min-width: 0; }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--text); }
+th.sortable[data-dir="desc"]::after { content: " ↓"; font-size: 11px; color: var(--accent, #348fcb); }
+th.sortable[data-dir="asc"]::after { content: " ↑"; font-size: 11px; color: var(--accent, #348fcb); }
+.interface-row.active { background: var(--panel-soft); box-shadow: inset 2px 0 0 var(--accent, #348fcb); }
+@media (max-width: 1150px) {
+  .research-split { grid-template-columns: 1fr; }
+  .research-split-list { position: static; max-height: 420px; }
+}
+.row-name { display: block; font-weight: 600; }
+.row-code { display: block; margin-top: 2px; color: var(--subtle); font-size: 11px; }
+.research-split-list td { vertical-align: top; }
+.research-split-list table { min-width: 0; width: 100%; }
+.research-split-list th, .research-split-list td { padding: 10px 10px; }
+.research-split-list th { position: static; }
+.research-volume-chart .grid-line { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.research-volume-chart .axis-label { fill: var(--subtle); font-size: 10px; }
+.research-volume-chart .bar-up { fill: #d95252; }
+.research-volume-chart .bar-down { fill: #17855b; }
+.research-split-list .card-head { flex-wrap: wrap; gap: 10px; }
+.research-split-list .card-head > div { flex: 1 1 100%; }
+.research-split-list .sector-toolbar { width: 100%; flex-wrap: wrap; }
+.research-split-list .sector-toolbar input, .research-split-list .card-head input { flex: 1 1 100%; width: 100%; box-sizing: border-box; }
+.research-split-list .card-head p { line-height: 1.5; }

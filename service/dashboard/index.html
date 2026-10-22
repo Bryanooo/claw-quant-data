@@ -7,7 +7,7 @@
   <title>Claw Quant · 数据控制台</title>
   <link rel="icon" type="image/png" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
   <link rel="apple-touch-icon" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261022-macro-2" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261023-research-3" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -128,58 +128,91 @@
           <button data-market-module="funds">资金面</button>
         </nav>
         <div class="stock-module" id="marketModuleValuation" data-market-module-panel="valuation">
-          <section class="card stock-chart-card"><div class="card-head"><h3 id="marketChartTitle">日 K 与均线</h3></div><svg id="marketPriceChart" viewBox="0 0 1200 430" role="img" aria-label="指数K线"></svg></section>
+          <section class="card stock-chart-card">
+            <div class="card-head"><h3 id="marketChartTitle">日 K 与均线</h3></div>
+            <div class="chart-toolbar"><span class="chart-zoom-status" id="marketZoomStatus"></span><div class="timeframe-switch" role="group" aria-label="K线缩放"><button id="marketZoomIn" type="button">放大</button><button id="marketZoomOut" type="button">缩小</button><button id="marketZoomReset" type="button">重置</button><button id="marketPanPrev" type="button">‹</button><button id="marketPanNext" type="button">›</button></div></div>
+            <div class="stock-chart-stage"><svg id="marketPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" role="img" aria-label="指数K线"></svg><div id="marketTooltip" class="stock-tooltip hidden"></div></div>
+            <svg id="marketVolumeChart" class="research-volume-chart" viewBox="0 0 1200 96" preserveAspectRatio="none" role="img" aria-label="指数成交量"></svg>
+          </section>
           <section class="card"><div class="card-head"><h3>技术状态</h3><p id="marketTrendSummary"></p></div><div id="marketIndicatorGrid" class="stock-factor-grid"></div></section>
           <section class="card"><div class="card-head"><h3>估值分位</h3><p id="marketValuationNote">基于近两年指数估值序列</p></div><div id="marketValuationGrid" class="valuation-grid"></div></section>
         </div>
         <div class="stock-module hidden" id="marketModuleFunds" data-market-module-panel="funds">
-          <p class="research-module-note">两融余额（元→亿元）、北向资金与大盘主力净流入（万元→亿元），单位统一为亿元。</p>
-          <div id="marketFundsGrid" class="funds-grid"></div>
+          <p class="research-module-note">两融余额（元→亿元）、北向资金与大盘主力净流入（万元→亿元），单位统一为亿元；卡片右上为最新值与近 5/20 期变动。</p>
+          <div id="marketFundsGrid" class="funds-grid">
+            <section class="card"><div class="card-head"><h3>两融余额（亿元）</h3><p class="line-note" id="marketMarginNote"></p></div><svg id="marketMarginChart" viewBox="0 0 640 190" role="img" aria-label="两融余额"></svg></section>
+            <section class="card"><div class="card-head"><h3>北向资金净流入（亿元）</h3><p class="line-note" id="marketNorthNote"></p></div><svg id="marketNorthChart" viewBox="0 0 640 190" role="img" aria-label="北向资金"></svg></section>
+            <section class="card"><div class="card-head"><h3>大盘主力净流入（亿元）</h3><p class="line-note" id="marketFlowNote"></p></div><svg id="marketFlowChart" viewBox="0 0 640 190" role="img" aria-label="主力净流入"></svg></section>
+          </div>
         </div>
       </div>
       <div id="marketLoading" class="stock-empty"><div class="stock-empty-mark">◉</div><h2>正在加载大盘数据</h2><p>指数行情、估值分位与全市场资金面。</p></div>
     </section>
 
     <section class="view hidden" data-panel="etf">
-      <section class="card">
-        <div class="card-head"><div><p class="eyebrow">ETF LAB</p><h2>场内基金排行</h2><p id="etfDirectoryMeta">按最新交易日成交额排序</p></div><input id="etfSearch" autocomplete="off" placeholder="搜索名称或代码" aria-label="搜索 ETF"/></div>
-        <div class="table-wrap"><table><thead><tr><th>名称</th><th>代码</th><th>最新价</th><th>涨跌幅</th><th>成交额（万）</th><th>类型</th></tr></thead><tbody id="etfRows"></tbody></table></div>
-      </section>
-      <div id="etfWorkspace" class="hidden">
-        <section class="card stock-identity-card">
-          <div class="stock-identity"><div class="stock-avatar" id="etfAvatar">◈</div><div><div class="stock-name-line"><h2 id="etfName">—</h2><code id="etfCode">—</code></div><p id="etfMeta">—</p></div></div>
-          <div class="stock-identity-actions"><div class="stock-quote"><strong id="etfClose">—</strong><span id="etfChange">—</span><small id="etfDate">—</small></div></div>
-        </section>
-        <nav class="stock-module-tabs" id="etfModuleTabs" role="tablist" aria-label="ETF 研究模块">
-          <button class="active" data-etf-module="quotes">行情与净值</button>
-          <button data-etf-module="shares">份额与申赎</button>
-        </nav>
-        <div class="stock-module" id="etfModuleQuotes" data-etf-module-panel="quotes">
-          <section class="card stock-chart-card"><div class="card-head"><h3>日 K 与均线</h3></div><svg id="etfPriceChart" viewBox="0 0 1200 430" role="img" aria-label="ETF K线"></svg></section>
-          <section class="card"><div class="card-head"><h3>技术状态</h3><p id="etfTrendSummary"></p></div><div id="etfIndicatorGrid" class="stock-factor-grid"></div></section>
-          <section class="card"><div class="card-head"><h3>净值与溢价</h3><p id="etfPremiumNote">二级市场收盘价相对单位净值的偏离</p></div><div class="valuation-grid" id="etfNavGrid"></div></section>
+      <div class="research-split">
+        <div class="research-split-list">
+          <section class="card">
+            <div class="card-head"><div><p class="eyebrow">ETF LAB</p><h2>场内基金排行</h2><p id="etfDirectoryMeta">按最新交易日成交额排序</p></div><input id="etfSearch" autocomplete="off" placeholder="搜索名称或代码" aria-label="搜索 ETF"/></div>
+            <div class="table-wrap"><table><thead><tr id="etfHeadRow"><th>名称 / 代码</th><th class="sortable" data-research-sort="etf" data-sort-key="close">最新价</th><th class="sortable" data-research-sort="etf" data-sort-key="pct_change">涨跌幅</th><th class="sortable" data-research-sort="etf" data-sort-key="amount">成交额（亿元）</th></tr></thead><tbody id="etfRows"></tbody></table></div>
+          </section>
         </div>
-        <div class="stock-module hidden" id="etfModuleShares" data-etf-module-panel="shares">
-          <div id="etfSharesGrid" class="valuation-grid"></div>
-          <section class="card"><div class="card-head"><h3>近期份额变动（申赎估计）</h3><p>份额增量≈净申购，减量≈净赎回；单位亿份</p></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>份额变动（亿份）</th></tr></thead><tbody id="etfFlowRows"></tbody></table></div></section>
+        <div class="research-split-detail">
+          <div id="etfEmpty" class="stock-empty"><div class="stock-empty-mark">◈</div><h2>选择一只 ETF</h2><p>在左侧列表点击任意场内基金，这里会展示 K 线、技术状态与净值/份额详情。</p></div>
+          <div id="etfWorkspace" class="hidden">
+            <section class="card stock-identity-card">
+              <div class="stock-identity"><div class="stock-avatar" id="etfAvatar">◈</div><div><div class="stock-name-line"><h2 id="etfName">—</h2><code id="etfCode">—</code></div><p id="etfMeta">—</p></div></div>
+              <div class="stock-identity-actions"><div class="stock-quote"><strong id="etfClose">—</strong><span id="etfChange">—</span><small id="etfDate">—</small></div></div>
+            </section>
+            <nav class="stock-module-tabs" id="etfModuleTabs" role="tablist" aria-label="ETF 研究模块">
+              <button class="active" data-etf-module="quotes">行情与净值</button>
+              <button data-etf-module="shares">份额与申赎</button>
+            </nav>
+            <div class="stock-module" id="etfModuleQuotes" data-etf-module-panel="quotes">
+              <section class="card stock-chart-card">
+                <div class="card-head"><h3>日 K 与均线</h3></div>
+                <div class="chart-toolbar"><span class="chart-zoom-status" id="etfZoomStatus"></span><div class="timeframe-switch" role="group" aria-label="K线缩放"><button id="etfZoomIn" type="button">放大</button><button id="etfZoomOut" type="button">缩小</button><button id="etfZoomReset" type="button">重置</button><button id="etfPanPrev" type="button">‹</button><button id="etfPanNext" type="button">›</button></div></div>
+                <div class="stock-chart-stage"><svg id="etfPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" role="img" aria-label="ETF K线"></svg><div id="etfTooltip" class="stock-tooltip hidden"></div></div>
+                <svg id="etfVolumeChart" class="research-volume-chart" viewBox="0 0 1200 96" preserveAspectRatio="none" role="img" aria-label="ETF 成交量"></svg>
+              </section>
+              <section class="card"><div class="card-head"><h3>技术状态</h3><p id="etfTrendSummary"></p></div><div id="etfIndicatorGrid" class="stock-factor-grid"></div></section>
+              <section class="card"><div class="card-head"><h3>净值与溢价</h3><p id="etfPremiumNote">二级市场收盘价相对单位净值的偏离</p></div><div class="valuation-grid" id="etfNavGrid"></div></section>
+            </div>
+            <div class="stock-module hidden" id="etfModuleShares" data-etf-module-panel="shares">
+              <div id="etfSharesGrid" class="valuation-grid"></div>
+              <section class="card"><div class="card-head"><h3>近期份额变动（申赎估计）</h3><p>份额增量≈净申购，减量≈净赎回；单位亿份</p></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>份额变动（亿份）</th></tr></thead><tbody id="etfFlowRows"></tbody></table></div></section>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <section class="view hidden" data-panel="sector">
-      <section class="card">
-        <div class="card-head"><div><p class="eyebrow">SECTOR LAB</p><h2>板块列表</h2><p id="sectorDirectoryMeta">同花顺行业与概念指数</p></div>
-          <div class="sector-toolbar"><div class="timeframe-switch" role="group" aria-label="板块数据源"><button class="active" data-sector-source="ths">同花顺</button><button data-sector-source="dc">东财</button></div><input id="sectorSearch" autocomplete="off" placeholder="搜索板块" aria-label="搜索板块"/></div>
+      <div class="research-split">
+        <div class="research-split-list">
+          <section class="card">
+            <div class="card-head"><div><p class="eyebrow">SECTOR LAB</p><h2>板块列表</h2><p id="sectorDirectoryMeta">同花顺行业与概念指数</p></div>
+              <div class="sector-toolbar"><div class="timeframe-switch" role="group" aria-label="板块数据源"><button class="active" data-sector-source="ths">同花顺</button><button data-sector-source="dc">东财</button></div><input id="sectorSearch" autocomplete="off" placeholder="搜索板块" aria-label="搜索板块"/></div>
+            </div>
+            <div class="table-wrap"><table><thead><tr id="sectorHeadRow"><th data-research-sort="sector" data-sort-key="name" class="sortable">板块 / 代码</th><th class="sortable" data-research-sort="sector" data-sort-key="pct_change">涨跌幅</th><th class="sortable" data-research-sort="sector" data-sort-key="volume">成交量</th><th class="sortable" data-research-sort="sector" data-sort-key="net_amount">资金净流（亿）</th><th>领涨股</th></tr></thead><tbody id="sectorRows"></tbody></table></div>
+          </section>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>板块</th><th>代码</th><th>收盘</th><th>涨跌幅</th><th>成交量</th><th>资金净流（亿）</th><th>领涨股</th></tr></thead><tbody id="sectorRows"></tbody></table></div>
-      </section>
-      <div id="sectorWorkspace" class="hidden">
-        <section class="card stock-identity-card">
-          <div class="stock-identity"><div class="stock-avatar" id="sectorAvatar">⬡</div><div><div class="stock-name-line"><h2 id="sectorName">—</h2><code id="sectorCode">—</code></div><p id="sectorMeta">—</p></div></div>
-          <div class="stock-identity-actions"><div class="stock-quote"><strong id="sectorClose">—</strong><span id="sectorChange">—</span><small id="sectorDate">—</small></div></div>
-        </section>
-        <section class="card stock-chart-card"><div class="card-head"><h3>板块日 K 与均线</h3></div><svg id="sectorPriceChart" viewBox="0 0 1200 430" role="img" aria-label="板块K线"></svg></section>
-        <section class="card"><div class="card-head"><h3>成分股</h3><p id="sectorMembersMeta">点击成分股跳转个股研究</p></div><div id="sectorMemberChips" class="peer-chips"></div></section>
+        <div class="research-split-detail">
+          <div id="sectorEmpty" class="stock-empty"><div class="stock-empty-mark">⬡</div><h2>选择一个板块</h2><p>在左侧列表点击任意板块，这里会展示板块 K 线与成分股（点击成分股可跳转个股研究）。</p></div>
+          <div id="sectorWorkspace" class="hidden">
+            <section class="card stock-identity-card">
+              <div class="stock-identity"><div class="stock-avatar" id="sectorAvatar">⬡</div><div><div class="stock-name-line"><h2 id="sectorName">—</h2><code id="sectorCode">—</code></div><p id="sectorMeta">—</p></div></div>
+              <div class="stock-identity-actions"><div class="stock-quote"><strong id="sectorClose">—</strong><span id="sectorChange">—</span><small id="sectorDate">—</small></div></div>
+            </section>
+            <section class="card stock-chart-card">
+              <div class="card-head"><h3>板块日 K 与均线</h3></div>
+              <div class="chart-toolbar"><span class="chart-zoom-status" id="sectorZoomStatus"></span><div class="timeframe-switch" role="group" aria-label="K线缩放"><button id="sectorZoomIn" type="button">放大</button><button id="sectorZoomOut" type="button">缩小</button><button id="sectorZoomReset" type="button">重置</button><button id="sectorPanPrev" type="button">‹</button><button id="sectorPanNext" type="button">›</button></div></div>
+              <div class="stock-chart-stage"><svg id="sectorPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" role="img" aria-label="板块K线"></svg><div id="sectorTooltip" class="stock-tooltip hidden"></div></div>
+              <svg id="sectorVolumeChart" class="research-volume-chart" viewBox="0 0 1200 96" preserveAspectRatio="none" role="img" aria-label="板块成交量"></svg>
+            </section>
+            <section class="card"><div class="card-head"><h3>成分股</h3><p id="sectorMembersMeta">点击成分股跳转个股研究</p></div><div id="sectorMemberChips" class="peer-chips"></div></section>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -197,19 +230,19 @@
       </div>
       <div class="stock-module hidden" id="macroModuleGrowth" data-macro-module-panel="growth">
         <p class="research-module-note">GDP 同比为季度序列（国家统计局）；PMI 为月度序列（制造业分项，50 为荣枯线）。</p>
-        <section class="card"><div class="card-head"><h3>GDP 同比（%）</h3></div><svg id="macroGdpChart" viewBox="0 0 640 190" role="img" aria-label="GDP同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>GDP 同比（%）</h3><p class="line-note" id="macroGdpNote"></p></div><svg id="macroGdpChart" viewBox="0 0 640 190" role="img" aria-label="GDP同比"></svg></section>
         <section class="card"><div class="card-head"><h3>制造业 PMI 与分项</h3><p id="macroPmiNote"></p></div><div id="macroPmiGrid" class="funds-grid"></div></section>
       </div>
       <div class="stock-module hidden" id="macroModuleInflation" data-macro-module-panel="inflation">
         <p class="research-module-note">CPI 为全国居民消费价格同比；PPI 为工业生产者出厂价格同比，均为月度（%）。</p>
-        <section class="card"><div class="card-head"><h3>CPI 同比（%）</h3></div><svg id="macroCpiChart" viewBox="0 0 640 190" role="img" aria-label="CPI同比"></svg></section>
-        <section class="card"><div class="card-head"><h3>PPI 同比（%）</h3></div><svg id="macroPpiChart" viewBox="0 0 640 190" role="img" aria-label="PPI同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>CPI 同比（%）</h3><p class="line-note" id="macroCpiNote"></p></div><svg id="macroCpiChart" viewBox="0 0 640 190" role="img" aria-label="CPI同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>PPI 同比（%）</h3><p class="line-note" id="macroPpiNote"></p></div><svg id="macroPpiChart" viewBox="0 0 640 190" role="img" aria-label="PPI同比"></svg></section>
       </div>
       <div class="stock-module hidden" id="macroModuleLiquidity" data-macro-module-panel="liquidity">
         <p class="research-module-note">M0/M1/M2 为同比（%）；社会融资为月度增量（亿元）；SHIBOR 为日度利率（%）；LPR 为贷款市场报价利率（%）。</p>
-        <section class="card"><div class="card-head"><h3>M1 / M2 同比剪刀差（%）</h3></div><svg id="macroM2Chart" viewBox="0 0 640 190" role="img" aria-label="M1M2同比"></svg></section>
-        <section class="card"><div class="card-head"><h3>社会融资规模增量（亿元）</h3></div><svg id="macroSfChart" viewBox="0 0 640 190" role="img" aria-label="社融增量"></svg></section>
-        <section class="card"><div class="card-head"><h3>SHIBOR 3M（%）</h3></div><svg id="macroShiborChart" viewBox="0 0 640 190" role="img" aria-label="SHIBOR3M"></svg></section>
+        <section class="card"><div class="card-head"><h3>M1 / M2 同比剪刀差（%）</h3><p class="line-note" id="macroM2Note"></p></div><svg id="macroM2Chart" viewBox="0 0 640 190" role="img" aria-label="M1M2同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>社会融资规模增量（亿元）</h3><p class="line-note" id="macroSfNote"></p></div><svg id="macroSfChart" viewBox="0 0 640 190" role="img" aria-label="社融增量"></svg></section>
+        <section class="card"><div class="card-head"><h3>SHIBOR 3M（%）</h3><p class="line-note" id="macroShiborNote"></p></div><svg id="macroShiborChart" viewBox="0 0 640 190" role="img" aria-label="SHIBOR3M"></svg></section>
         <section class="card"><div class="card-head"><h3>LPR 1Y / 5Y（%）</h3><p id="macroLprNote"></p></div><div id="macroLprGrid" class="stock-factor-grid"></div></section>
       </div>
       <div class="stock-module hidden" id="macroModuleRates" data-macro-module-panel="rates">
@@ -217,8 +250,8 @@
         <section class="card"><div class="card-head"><h3>中美国债 10Y 利差（%）</h3><p id="macroSpreadNote"></p></div><svg id="macroSpreadChart" viewBox="0 0 640 190" role="img" aria-label="中美10Y利差"></svg></section>
         <section class="card"><div class="card-head"><h3>中债国债收益率曲线（最新日）</h3><p id="macroCnCurveNote"></p></div><div id="macroCnCurveGrid" class="stock-factor-grid"></div></section>
         <section class="card"><div class="card-head"><h3>美债收益率曲线（最新日）</h3><p id="macroUsCurveNote"></p></div><div id="macroUsCurveGrid" class="stock-factor-grid"></div></section>
-        <section class="card"><div class="card-head"><h3>中债 10Y 国债收益率（%）</h3></div><svg id="macroCn10yChart" viewBox="0 0 640 190" role="img" aria-label="中债10Y"></svg></section>
-        <section class="card"><div class="card-head"><h3>美债 10Y 收益率（%）</h3></div><svg id="macroUs10yChart" viewBox="0 0 640 190" role="img" aria-label="美债10Y"></svg></section>
+        <section class="card"><div class="card-head"><h3>中债 10Y 国债收益率（%）</h3><p class="line-note" id="macroCn10yNote"></p></div><svg id="macroCn10yChart" viewBox="0 0 640 190" role="img" aria-label="中债10Y"></svg></section>
+        <section class="card"><div class="card-head"><h3>美债 10Y 收益率（%）</h3><p class="line-note" id="macroUs10yNote"></p></div><svg id="macroUs10yChart" viewBox="0 0 640 190" role="img" aria-label="美债10Y"></svg></section>
       </div>
       <div class="stock-module hidden" id="macroModuleCalendar" data-macro-module-panel="calendar">
         <p class="research-module-note">宏观事件日程来自官方发布日历，发布日期可能调整，使用前请刷新核对。</p>
@@ -335,6 +368,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261022-macro-2" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261023-research-1" defer></script>
 </body>
 </html>

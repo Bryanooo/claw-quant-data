@@ -179,8 +179,8 @@ def task_documents(
         producer_outputs[task.task_key] = task.output_datasets
 
     result = tuple(documents)
-    if len(result) != 214:
-        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 214")
+    if len(result) != 215:
+        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 215")
     return result
 
 

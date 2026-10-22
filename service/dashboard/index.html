@@ -22,6 +22,7 @@
       <button class="nav" data-view="market"><span>◉</span><b>大盘研究</b></button>
       <button class="nav" data-view="etf"><span>◈</span><b>ETF 研究</b></button>
       <button class="nav" data-view="sector"><span>⬡</span><b>板块研究</b></button>
+      <button class="nav" data-view="macro"><span>≋</span><b>宏观研究</b></button>
       <button class="nav" data-view="factors"><span>ƒ</span><b>量化因子</b></button>
       <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
       <p class="nav-group">治理</p>
@@ -182,6 +183,50 @@
       </div>
     </section>
 
+    <section class="view hidden" data-panel="macro">
+      <nav class="stock-module-tabs" id="macroModuleTabs" role="tablist" aria-label="宏观研究模块">
+        <button class="active" data-macro-module="regime">宏观状态</button>
+        <button data-macro-module="growth">增长</button>
+        <button data-macro-module="inflation">通胀</button>
+        <button data-macro-module="liquidity">流动性</button>
+        <button data-macro-module="rates">全球利率</button>
+        <button data-macro-module="calendar">宏观日历</button>
+      </nav>
+      <div class="stock-module hidden" id="macroModuleRegime" data-macro-module-panel="regime">
+        <section class="card"><div class="card-head"><h3>增长 / 通胀 / 流动性四象限</h3><p id="macroRegimeNote"></p></div><div id="macroRegimeGrid" class="stock-factor-grid"></div></section>
+      </div>
+      <div class="stock-module hidden" id="macroModuleGrowth" data-macro-module-panel="growth">
+        <p class="research-module-note">GDP 同比为季度序列（国家统计局）；PMI 为月度序列（制造业分项，50 为荣枯线）。</p>
+        <section class="card"><div class="card-head"><h3>GDP 同比（%）</h3></div><svg id="macroGdpChart" viewBox="0 0 640 190" role="img" aria-label="GDP同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>制造业 PMI 与分项</h3><p id="macroPmiNote"></p></div><div id="macroPmiGrid" class="funds-grid"></div></section>
+      </div>
+      <div class="stock-module hidden" id="macroModuleInflation" data-macro-module-panel="inflation">
+        <p class="research-module-note">CPI 为全国居民消费价格同比；PPI 为工业生产者出厂价格同比，均为月度（%）。</p>
+        <section class="card"><div class="card-head"><h3>CPI 同比（%）</h3></div><svg id="macroCpiChart" viewBox="0 0 640 190" role="img" aria-label="CPI同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>PPI 同比（%）</h3></div><svg id="macroPpiChart" viewBox="0 0 640 190" role="img" aria-label="PPI同比"></svg></section>
+      </div>
+      <div class="stock-module hidden" id="macroModuleLiquidity" data-macro-module-panel="liquidity">
+        <p class="research-module-note">M0/M1/M2 为同比（%）；社会融资为月度增量（亿元）；SHIBOR 为日度利率（%）；LPR 为贷款市场报价利率（%）。</p>
+        <section class="card"><div class="card-head"><h3>M1 / M2 同比剪刀差（%）</h3></div><svg id="macroM2Chart" viewBox="0 0 640 190" role="img" aria-label="M1M2同比"></svg></section>
+        <section class="card"><div class="card-head"><h3>社会融资规模增量（亿元）</h3></div><svg id="macroSfChart" viewBox="0 0 640 190" role="img" aria-label="社融增量"></svg></section>
+        <section class="card"><div class="card-head"><h3>SHIBOR 3M（%）</h3></div><svg id="macroShiborChart" viewBox="0 0 640 190" role="img" aria-label="SHIBOR3M"></svg></section>
+        <section class="card"><div class="card-head"><h3>LPR 1Y / 5Y（%）</h3><p id="macroLprNote"></p></div><div id="macroLprGrid" class="stock-factor-grid"></div></section>
+      </div>
+      <div class="stock-module hidden" id="macroModuleRates" data-macro-module-panel="rates">
+        <p class="research-module-note">中债曲线来自中央结算公司官方（每日定采落库）；美债曲线为 Tushare us_tycr（日频）；单位均为 %。</p>
+        <section class="card"><div class="card-head"><h3>中美国债 10Y 利差（%）</h3><p id="macroSpreadNote"></p></div><svg id="macroSpreadChart" viewBox="0 0 640 190" role="img" aria-label="中美10Y利差"></svg></section>
+        <section class="card"><div class="card-head"><h3>中债国债收益率曲线（最新日）</h3><p id="macroCnCurveNote"></p></div><div id="macroCnCurveGrid" class="stock-factor-grid"></div></section>
+        <section class="card"><div class="card-head"><h3>美债收益率曲线（最新日）</h3><p id="macroUsCurveNote"></p></div><div id="macroUsCurveGrid" class="stock-factor-grid"></div></section>
+        <section class="card"><div class="card-head"><h3>中债 10Y 国债收益率（%）</h3></div><svg id="macroCn10yChart" viewBox="0 0 640 190" role="img" aria-label="中债10Y"></svg></section>
+        <section class="card"><div class="card-head"><h3>美债 10Y 收益率（%）</h3></div><svg id="macroUs10yChart" viewBox="0 0 640 190" role="img" aria-label="美债10Y"></svg></section>
+      </div>
+      <div class="stock-module hidden" id="macroModuleCalendar" data-macro-module-panel="calendar">
+        <p class="research-module-note">宏观事件日程来自官方发布日历，发布日期可能调整，使用前请刷新核对。</p>
+        <div class="table-wrap"><table><thead><tr><th>发布日期</th><th>事件</th><th>发布机构</th><th>数据接口</th></tr></thead><tbody id="macroScheduleRows"></tbody></table></div>
+      </div>
+      <div id="macroLoading" class="stock-empty"><div class="stock-empty-mark">≋</div><h2>宏观研究</h2><p>增长、通胀、流动性、全球利率与官方发布日历。</p></div>
+    </section>
+
     <section class="view" data-panel="overview">
       <section class="card system-overview-card">
         <div class="system-overview-head">
@@ -290,6 +335,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261022-factor-1" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261022-macro-1" defer></script>
 </body>
 </html>

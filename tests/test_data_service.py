@@ -160,8 +160,9 @@ def test_registry_exposes_every_collector_table():
         "ant_norm_actual_controller",
         "ant_norm_controlling_shareholder",
         "ant_norm_style_classification",
+        "public_norm_chinabond_yield_curve",
     } == registered_tables
-    assert len(DATASETS.list()) == 204
+    assert len(DATASETS.list()) == 205
 
 
 def test_normalized_dataset_exposes_versioned_storage_semantics():

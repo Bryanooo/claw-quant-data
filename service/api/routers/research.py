@@ -440,6 +440,28 @@ def macro_regime(
     return service.macro_regime(as_of=as_of)
 
 
+@router.get("/macro/rates")
+def macro_rates(
+    service: ResearchServiceDependency,
+    observations: int = Query(default=60, ge=2, le=250),
+    as_of: date | None = None,
+) -> dict:
+    """Return official ChinaBond and US treasury curves plus the 10Y spread."""
+
+    return service.macro_rates(observations=observations, as_of=as_of)
+
+
+@router.get("/macro/schedule")
+def macro_schedule(
+    service: ResearchServiceDependency,
+    limit: int = Query(default=60, ge=1, le=200),
+    as_of: date | None = None,
+) -> dict:
+    """Return upcoming macro data release announcements."""
+
+    return service.macro_schedule(limit=limit, as_of=as_of)
+
+
 @router.get("/macro/{theme}")
 def macro_theme(
     theme: str,

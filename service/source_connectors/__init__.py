@@ -10,6 +10,7 @@ from service.source_connectors.contracts import (
 )
 from service.source_connectors.registry import SOURCE_CONNECTORS, SOURCE_REGISTRY
 from service.source_connectors.chinamoney import ChinaMoneyConnector
+from service.source_connectors.chinabond import ChinaBondConnector
 from service.source_connectors.ant_data import AntDataConnector
 from service.source_connectors.raw_archive import SourceRawArchive
 from service.source_connectors.tushare import TushareConnector
@@ -19,6 +20,8 @@ if "tushare" not in SOURCE_CONNECTORS:
     SOURCE_CONNECTORS.register(TushareConnector())
 if "chinamoney" not in SOURCE_CONNECTORS:
     SOURCE_CONNECTORS.register(ChinaMoneyConnector())
+if "chinabond" not in SOURCE_CONNECTORS:
+    SOURCE_CONNECTORS.register(ChinaBondConnector())
 if "financial_data" not in SOURCE_CONNECTORS:
     SOURCE_CONNECTORS.register(AntDataConnector(
         archive=SourceRawArchive(

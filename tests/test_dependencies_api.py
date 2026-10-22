@@ -141,8 +141,8 @@ def test_field_lineage_maps_table_fields_to_interfaces():
 def test_summary_counts_are_consistent():
     summary = dependency_summary()
     assert summary["interfaces"] == 415
-    assert summary["datasets"] == 204
-    assert summary["tasks"] == 199
+    assert summary["datasets"] == 205
+    assert summary["tasks"] == 200
     assert summary["by_source"]["tushare"] == 244
     # 194 Tushare + 7 reviewed 蚂蚁 scheduled-pull routes
     assert summary["by_status"]["active"] == 201

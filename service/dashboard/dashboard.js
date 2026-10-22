@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { factors: null, execution: { page: 1, size: 50, before: null, history: [], next: null, total: 0 }, tasks: { page: 1, size: 30, items: null }, today: { page: 1, size: 20, items: [] }, calendar: { page: 1, size: 20, items: [], issues: new Map(), day: null }, services: { page: 1, size: 20, items: null }, interfaces: { page: 1, size: 50, items: null, runtimeAvailable: true, viewMode: "table", expanded: null, detailCache: new Map(), lineage: null, lineagePage: 1, lineageSize: 15 }, derivations: { items: null, runtimeAvailable: true, coverageAvailable: true, summary: null, expanded: null, page: 1, size: 20, ondemand: null, ondemandPage: 1, ondemandSize: 20 }, stock: { selected: null, response: null, timeframe: "1d", overlays: new Set(["ma_20","ma_60","cost_20","cost_60","niumen_line","niumen_confirmation_line"]), viewport: { timeframe: null, total: 0, start: 0, count: 0 }, selectedTradeDate: null, searchTimer: null, watchlist: [], watchlistLoaded: false, watchlistBusy: false, requestVersion: 0, module: "market", modules: {}, moduleBusy: {}, drag: { active: false, moved: false, startX: 0, startIndex: 0, pointerId: null } }, initId: null, research: { market: { selected: null, response: null, valuation: null, funds: null, tab: "valuation" }, etf: { items: null, selected: null, response: null, nav: null, tab: "quotes" }, sector: { source: "ths", items: null, selected: null, response: null, members: null } } };
+const state = { factors: null, execution: { page: 1, size: 50, before: null, history: [], next: null, total: 0 }, tasks: { page: 1, size: 30, items: null }, today: { page: 1, size: 20, items: [] }, calendar: { page: 1, size: 20, items: [], issues: new Map(), day: null }, services: { page: 1, size: 20, items: null }, interfaces: { page: 1, size: 50, items: null, runtimeAvailable: true, viewMode: "table", expanded: null, detailCache: new Map(), lineage: null, lineagePage: 1, lineageSize: 15 }, derivations: { items: null, runtimeAvailable: true, coverageAvailable: true, summary: null, expanded: null, page: 1, size: 20, ondemand: null, ondemandPage: 1, ondemandSize: 20 }, stock: { selected: null, response: null, timeframe: "1d", overlays: new Set(["ma_20","ma_60","cost_20","cost_60","niumen_line","niumen_confirmation_line"]), viewport: { timeframe: null, total: 0, start: 0, count: 0 }, selectedTradeDate: null, searchTimer: null, watchlist: [], watchlistLoaded: false, watchlistBusy: false, requestVersion: 0, module: "market", modules: {}, moduleBusy: {}, drag: { active: false, moved: false, startX: 0, startIndex: 0, pointerId: null } }, initId: null, research: { market: { selected: null, response: null, valuation: null, funds: null, tab: "valuation" }, etf: { items: null, selected: null, response: null, nav: null, tab: "quotes" }, sector: { source: "ths", items: null, selected: null, response: null, members: null }, macro: { tab: "regime", loaded: {}, data: {} } } };
 const labels = {queued:"排队",running:"运行",retrying:"重试",validating:"校验",publishing:"发布",success:"成功",attention:"需处理",historical_attention:"历史失败",superseded:"已被后续成功替代",cancelled:"已取消",not_dispatched:"未派发",not_due:"尚未到调度或发布时间",not_expected:"非交易日无需执行",complete:"完整",empty_verified:"已验证为空",gaps:"缺失",partial:"不完整",indeterminate:"待确认",ready:"严格就绪",ready_after_repair:"补采恢复",active:"进行中",waiting_upstream:"等待上游",operator_action_required:"需要处理",present:"审计通过",observed_only:"已有数据",missing:"缺失",pending:"待核验",acquisition:"原生采集",transformation:"派生计算",draft:"草稿",retired:"已停用"};
 const fmt = (v) => Number(v || 0).toLocaleString();
 const esc = (v) => String(v ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -28,9 +28,9 @@ function notice(message) { $("notice").textContent=message; $("notice").classLis
 function activate(name) {
   document.querySelectorAll("[data-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.panel!==name));
   document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x.dataset.view===name));
-  const names={overview:"数据运营总览",today:"今日交付",stock:"个股研究",market:"大盘研究",etf:"ETF 研究",sector:"板块研究",factors:"量化因子目录",tasks:"采集任务",executions:"执行历史",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据依赖",derivations:"数据派生",services:"对外服务目录",investment:"投资日历"};
+  const names={overview:"数据运营总览",today:"今日交付",stock:"个股研究",market:"大盘研究",etf:"ETF 研究",sector:"板块研究",macro:"宏观研究",factors:"量化因子目录",tasks:"采集任务",executions:"执行历史",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据依赖",derivations:"数据派生",services:"对外服务目录",investment:"投资日历"};
   $("pageTitle").textContent=names[name];
-  ({today:loadToday,stock:loadStockResearch,market:loadMarketResearch,etf:loadEtfResearch,sector:loadSectorResearch,factors:loadFactors,tasks:loadTasks,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,derivations:loadDerivations,services:loadServices,investment:loadInvestment}[name]||(()=>{}))();
+  ({today:loadToday,stock:loadStockResearch,market:loadMarketResearch,etf:loadEtfResearch,sector:loadSectorResearch,macro:loadMacroResearch,factors:loadFactors,tasks:loadTasks,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,derivations:loadDerivations,services:loadServices,investment:loadInvestment}[name]||(()=>{}))();
 }
 
 async function loadOverview(force=false) {
@@ -890,6 +890,113 @@ function jumpToStock(code,name){
   $("stockSearch").value=code;stockSearch(true);activate("stock");
 }
 // ===== 研究分组结束 =====
+
+// ---- 宏观研究 ----
+const MACRO_ENDPOINTS={regime:"/api/v1/research/macro/regime",growth:"/api/v1/research/macro/growth?periods=36",inflation:"/api/v1/research/macro/inflation?periods=36",liquidity:"/api/v1/research/macro/liquidity?periods=36",rates:"/api/v1/research/macro/rates?observations=90",calendar:"/api/v1/research/macro/schedule?limit=80"};
+const MACRO_DIRECTIONS={improving:"改善",weakening:"走弱",rising:"上行",falling:"下行",tightening:"收紧",easing:"宽松",mixed:"混合"};
+function macroSeriesRows(series){
+  if(!Array.isArray(series))return[];
+  return series.map(row=>[String(row.observation_date||row.period||""),Number(row.gdp_yoy??row.yoy??row.m2_yoy??row.inc_month??row.three_month??row.manufacturing??NaN)]).filter(r=>r[0]&&Number.isFinite(r[1])).reverse();
+}
+async function loadMacroResearch(){
+  const view=state.research.macro;
+  if(!view.loaded.regime){
+    $("macroLoading").classList.remove("hidden");
+    document.querySelectorAll("[data-macro-module]").forEach(b=>b.classList.toggle("active",b.dataset.macroModule===view.tab));
+    document.querySelectorAll("[data-macro-module-panel]").forEach(p=>p.classList.toggle("hidden",p.dataset.macroModulePanel!==view.tab));
+    await loadMacroModule(view.tab);
+  }
+}
+async function loadMacroModule(name){
+  const view=state.research.macro;
+  try{
+    if(!view.loaded[name])view.data[name]=await api(MACRO_ENDPOINTS[name]);
+    view.loaded[name]=true;
+    $("macroLoading").classList.add("hidden");
+    ({regime:renderMacroRegime,growth:renderMacroGrowth,inflation:renderMacroInflation,liquidity:renderMacroLiquidity,rates:renderMacroRates,calendar:renderMacroCalendar})[name](view.data[name]);
+  }catch(error){$("macroLoading").classList.add("hidden");notice(`宏观研究「${name}」加载失败：${error.message}`);}
+}
+function switchMacroModule(name){
+  const view=state.research.macro;view.tab=name;
+  document.querySelectorAll("[data-macro-module]").forEach(b=>b.classList.toggle("active",b.dataset.macroModule===name));
+  document.querySelectorAll("[data-macro-module-panel]").forEach(p=>p.classList.toggle("hidden",p.dataset.macroModulePanel!==name));
+  loadMacroModule(name);
+}
+function renderMacroRegime(payload){
+  const data=payload?.data||{},meta=payload?.meta||{};
+  $("macroRegimeGrid").innerHTML=[
+    researchFactorCard("增长",MACRO_DIRECTIONS[data.growth?.direction]||"—",`GDP 同比 ${stockNumber(data.growth?.gdp?.gdp_yoy)}%（${data.growth?.gdp?.period||"—"}）· PMI ${stockNumber(data.growth?.pmi?.manufacturing)}（${data.growth?.pmi?.period||"—"}）`),
+    researchFactorCard("通胀",MACRO_DIRECTIONS[data.inflation?.direction]||"—",`CPI 同比 ${stockNumber(data.inflation?.cpi?.yoy)}% · PPI 同比 ${stockNumber(data.inflation?.ppi?.yoy)}%（${data.inflation?.cpi?.period||"—"}）`),
+    researchFactorCard("流动性",MACRO_DIRECTIONS[data.liquidity?.direction]||"—",`M2 同比 ${stockNumber(data.liquidity?.money_supply?.m2_yoy)}% · SHIBOR 3M ${stockNumber(data.liquidity?.shibor?.three_month)}% · LPR 1Y ${stockNumber(data.liquidity?.lpr?.one_year)}%`),
+    researchFactorCard("社融增量",`${stockNumber(data.liquidity?.social_financing?.inc_month,0)} 亿`,`单月增量 · ${data.liquidity?.social_financing?.period||"—"}`),
+  ].join("");
+  $("macroRegimeNote").textContent=`象限判定 ${data.quadrant||"—"} · 方向为分项多数投票 · 数据截至 ${meta.as_of||"—"}`;
+}
+function renderMacroThemeChart(svgId,rows,opts){
+  renderResearchLinesInto($(svgId),rows,opts);
+}
+function renderMacroGrowth(payload){
+  const data=payload?.data||{};
+  const gdp=macroSeriesRows(data.gdp);
+  $("macroGdpChart").closest("section").querySelector("svg").setAttribute("viewBox","0 0 640 190");
+  renderResearchLinesInto($("macroGdpChart"),gdp,{color:"#185FA5",digits:2});
+  const pmi=data.pmi||[];
+  const fields=[["manufacturing","制造业"],["large_enterprise","大型企业"],["medium_enterprise","中型企业"],["small_enterprise","小型企业"],["production","生产"],["new_orders","新订单"],["composite","综合"]];
+  $("macroPmiGrid").innerHTML=fields.map(([key,label])=>{
+    const rows=pmi.map(r=>[String(r.observation_date||r.period),Number(r[key])]).filter(r=>r[0]&&Number.isFinite(r[1])).reverse();
+    const latest=rows.at(-1)?.[1];
+    return `<section class="card"><div class="card-head"><h3>${label}</h3><p>${latest!=null?`最新 ${stockNumber(latest)}`:"暂无数据"}</p></div><svg viewBox="0 0 640 190" role="img"></svg></section>`;
+  }).join("");
+  $("macroPmiGrid").querySelectorAll("svg").forEach((svg,i)=>renderResearchLinesInto(svg,pmi.map(r=>[String(r.observation_date||r.period),Number(r[fields[i][0]])]).filter(r=>r[0]&&Number.isFinite(r[1])).reverse(),{color:"#0F6E56",zero:true,digits:1}));
+  $("macroPmiNote").textContent=`50 为荣枯线 · 共 ${pmi.length} 个月度观测`;
+}
+function renderMacroInflation(payload){
+  const data=payload?.data||{};
+  renderResearchLinesInto($("macroCpiChart"),macroSeriesRows(data.cpi),{color:"#BA7517",zero:true,digits:2});
+  renderResearchLinesInto($("macroPpiChart"),macroSeriesRows(data.ppi),{color:"#993C1D",zero:true,digits:2});
+}
+function renderMacroLiquidity(payload){
+  const data=payload?.data||{};
+  const m2=data.money_supply||[];
+  const pairs=m2.map(r=>[String(r.observation_date||r.period),Number(r.m1_yoy),Number(r.m2_yoy)]).filter(r=>r[0]&&Number.isFinite(r[1])&&Number.isFinite(r[2])).reverse();
+  const scissors=pairs.map(([d,m1,m2v])=>[d,m1-m2v]);
+  renderResearchLinesInto($("macroM2Chart"),scissors,{color:"#534AB7",zero:true,digits:2});
+  renderResearchLinesInto($("macroSfChart"),(data.social_financing||[]).map(r=>[String(r.observation_date||r.period),Number(r.inc_month)]).filter(r=>r[0]&&Number.isFinite(r[1])).reverse(),{color:"#378ADD",zero:true,digits:0});
+  renderResearchLinesInto($("macroShiborChart"),(data.shibor||[]).map(r=>[String(r.observation_date),Number(r.three_month)]).filter(r=>r[0]&&Number.isFinite(r[1])).reverse(),{color:"#1D9E75",digits:3});
+  const lpr=data.lpr||[],latest=lpr.at(-1);
+  $("macroLprGrid").innerHTML=[
+    researchFactorCard("LPR 1Y",stockNumber(latest?.[1]??latest?.one_year),latest?`发布日 ${latest[0]||latest.observation_date||"—"}`:"暂无数据"),
+    researchFactorCard("LPR 5Y",stockNumber(latest?.five_year),`${lpr.length} 个月度发布`),
+  ].join("");
+  $("macroLprNote").textContent=`LPR 自 2019-08 改革后按月发布；最新 ${latest?.[0]||"—"}`;
+}
+function renderMacroRates(payload){
+  const data=payload?.data||{},meta=payload?.meta||{};
+  const spread=(data.spread_10y||[]).map(r=>[String(r.observation_date),Number(r.spread)]).reverse();
+  renderResearchLinesInto($("macroSpreadChart"),spread,{color:"#D85A30",zero:true,digits:2});
+  const latestSpread=(data.spread_10y||[]).at(-1);
+  $("macroSpreadNote").textContent=latestSpread?`最新 ${latestSpread.observation_date} · 中债 10Y ${stockNumber(latestSpread.cn_10y)}% − 美债 10Y ${stockNumber(latestSpread.us_10y)}%`:"暂无重叠交易日";
+  const tenorLabels={yield_3m:"3月",yield_6m:"6月",yield_1y:"1年",yield_3y:"3年",yield_5y:"5年",yield_7y:"7年",yield_10y:"10年",yield_30y:"30年",m3:"3月",m6:"6月",y1:"1年",y2:"2年",y3:"3年",y5:"5年",y7:"7年",y10:"10年",y20:"20年",y30:"30年"};
+  const curveCards=(curveRow,dateField)=>{
+    if(!curveRow||!Object.keys(curveRow).length)return'<p class="empty-row">暂无数据</p>';
+    const date=curveRow.observation_date;
+    return Object.entries(tenorLabels).filter(([k])=>curveRow[k]!=null).map(([k,label])=>researchFactorCard(label,`${stockNumber(curveRow[k])}%`,`观测日 ${date||"—"}`)).join("");
+  };
+  const cnCurves=data.cn_curve?.latest||{};
+  $("macroCnCurveGrid").innerHTML=Object.entries(cnCurves).map(([name,row])=>`<h3 style="grid-column:1/-1;margin:4px 0 0">${esc(name)}${row.observation_date?` · ${row.observation_date}`:""}</h3>${Object.entries(tenorLabels).filter(([k])=>row[k]!=null).map(([k,label])=>researchFactorCard(label,`${stockNumber(row[k])}%`,`10Y−3M ${stockNumber(row.yield_10y-row.yield_3m)}%`)).join("")}`).join("")||'<p class="empty-row">暂无中债数据（等待首次定采入库）</p>';
+  $("macroCnCurveNote").textContent=`三条曲线 · 8 档期限 · 历史序列 ${data.cn_curve?.history?.length||0} 行`;
+  $("macroUsCurveGrid").innerHTML=curveCards(data.us_curve?.latest);
+  $("macroUsCurveNote").textContent=data.us_curve?.latest?.observation_date?`观测日 ${data.us_curve.latest.observation_date} · 历史 ${data.us_curve?.history?.length||0} 个交易日`:"暂无美债数据";
+  const cn10=(data.cn_curve?.history||[]).concat(Object.values(data.cn_curve?.latest||{})).filter(r=>r.curve_name==="中债国债收益率曲线").map(r=>[String(r.observation_date),Number(r.yield_10y)]).filter(r=>r[0]&&Number.isFinite(r[1])).sort((a,b)=>a[0]<b[0]?-1:1);
+  const us10=(data.us_curve?.history||[]).concat(data.us_curve?.latest?[data.us_curve.latest]:[]).map(r=>[String(r.observation_date),Number(r.y10)]).filter(r=>r[0]&&Number.isFinite(r[1])).sort((a,b)=>a[0]<b[0]?-1:1);
+  renderResearchLinesInto($("macroCn10yChart"),cn10,{color:"#185FA5",digits:2});
+  renderResearchLinesInto($("macroUs10yChart"),us10,{color:"#993C1D",digits:2});
+}
+function renderMacroCalendar(payload){
+  const rows=payload?.data||[];
+  $("macroScheduleRows").innerHTML=rows.map(r=>`<tr><td>${esc(String(r.publish_date||"—"))}</td><td>${esc(String(r.title||"—"))}</td><td>${esc(String(r.issuing_org||"—"))}</td><td><code>${esc(String(r.data_api||"—"))}</code></td></tr>`).join("")||'<tr><td colspan="4" class="empty-row">暂无未来的发布安排</td></tr>';
+}
+document.getElementById("macroModuleTabs").addEventListener("click",e=>{const b=e.target.closest("[data-macro-module]");if(b)switchMacroModule(b.dataset.macroModule);});
 
 // ---- 量化因子目录 ----
 async function loadFactors(force=false){

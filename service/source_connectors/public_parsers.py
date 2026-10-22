@@ -314,9 +314,8 @@ def chinabond_yield_curve(start, end=None, curve="all"):
             seen.setdefault(day, set()).add(by_name[rec[0]])
             row = {"date": day, "curve": rec[0]}
             row.update({k: _v39_num(v) for k, v in zip(_CHINABOND_TENORS, rec[2:])})
-            for tenor in _CHINABOND_TENORS:
-                if row[tenor] is None and not (by_name[rec[0]] == "mtn_aaa" and tenor == "30y"):
-                    raise RuntimeError("ChinaBond required tenor missing")
+            if all(row[tenor] is None for tenor in _CHINABOND_TENORS):
+                raise RuntimeError("ChinaBond required tenor missing")
             rows.append(row)
             chunk += 1
         if chunk == 0 and (stop - cursor).days >= 6:

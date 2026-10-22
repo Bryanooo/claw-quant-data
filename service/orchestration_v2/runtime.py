@@ -849,6 +849,34 @@ class OrchestrationV2Runtime:
                 priority=30,
                 resource_class=selected["resource_class"] or "generic",
             ),)
+        if selected["source_id"] == "chinabond":
+            # 官方公开源 scheduled pulls are partition-free the same way: the
+            # connector resolves its own rolling window (default 14 days) and
+            # upserts by (curve_date, curve_name), so one source_endpoint job
+            # covers the whole observation period.
+            payload = {
+                "source_id": "chinabond",
+                "endpoint_key": selected["endpoint_key"],
+                "acquisition_mode": "scheduled_pull",
+                "parameters": {},
+                "complete": True,
+                "resume": True,
+            }
+            return (BatchChildSpec(
+                task_name="source_endpoint",
+                parameters=payload,
+                idempotency_key=(
+                    f"v2:chinabond:{selected['endpoint_key']}:"
+                    f"{execution['observation_key']}"
+                ),
+                api_name=selected["endpoint_key"],
+                cadence=selected.get("cadence") or "daily",
+                period_key=execution["observation_key"],
+                expected_for=execution["observation_end"],
+                handler=TASKS.handler_metadata("source_endpoint", payload),
+                priority=30,
+                resource_class=selected["resource_class"] or "generic",
+            ),)
         if selected["source_id"] != "tushare":
             raise V2UnsupportedScopeError(
                 f"V2 bounded history runtime is not implemented for "

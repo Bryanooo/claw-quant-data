@@ -69,7 +69,6 @@ PUBLIC_SOURCES = tuple(SourceSpec(
     ("cninfo", "巨潮互动易", "https://irm.cninfo.com.cn", "深市投资者问答", "SZSE/CNINFO"),
     ("sse", "上证 e 互动", "https://sns.sseinfo.com", "沪市投资者问答", "SSE"),
     ("sina", "新浪财经", "https://stock.finance.sina.com.cn", "ETF 期权合约、报价、Greeks", "Sina"),
-    ("chinabond", "中债收益率曲线", "https://yield.chinabond.com.cn", "国债、银行 AAA、中短票 AAA", "CCDC"),
     ("pboc", "中国人民银行", "https://www.pbc.gov.cn", "社会融资规模增量分项", "PBOC"),
 ])
 

@@ -4276,6 +4276,133 @@ class ResearchService:
             },
         }
 
+    def macro_rates(
+        self,
+        *,
+        as_of: date | None = None,
+        observations: int = 60,
+    ) -> dict[str, Any]:
+        """Return CN (official ChinaBond) and US treasury curves plus the 10Y spread."""
+
+        observations = max(2, min(int(observations), 250))
+        effective_as_of = as_of or business_now().date()
+        cn_rows = [
+            _numeric_row(row)
+            for row in self._repository.macro_cn_curve(
+                as_of=effective_as_of, observations=observations
+            )
+        ]
+        us_rows = [
+            _numeric_row(row)
+            for row in self._repository.macro_us_curve(
+                as_of=effective_as_of, observations=observations
+            )
+        ]
+
+        def _by_date(rows: list[dict[str, Any]]) -> dict[date, dict[str, Any]]:
+            grouped: dict[date, dict[str, Any]] = {}
+            for row in rows:
+                grouped.setdefault(row["observation_date"], {})[
+                    row.get("curve_name", "curve")
+                ] = row
+            return grouped
+
+        cn_grouped = _by_date(cn_rows)
+        us_grouped = _by_date(us_rows)
+        _CN_TREASURY = "中债国债收益率曲线"
+        spread = []
+        for day in sorted(set(cn_grouped) & set(us_grouped), reverse=True)[:observations]:
+            cn_row = cn_grouped[day].get(_CN_TREASURY) or next(
+                iter(cn_grouped[day].values())
+            )
+            us_row = us_grouped[day]["curve"]
+            cn_10y = cn_row.get("yield_10y")
+            us_10y = us_row.get("y10")
+            if cn_10y is None or us_10y is None:
+                continue
+            spread.append({
+                "observation_date": day,
+                "cn_10y": cn_10y,
+                "us_10y": us_10y,
+                "spread": _round(cn_10y - us_10y),
+            })
+
+        def _latest_curve(rows: list[dict[str, Any]], date_key: str) -> dict[str, Any]:
+            if not rows:
+                return {}
+            newest = rows[0][date_key]
+            return {row.get("curve_name", "curve"): row for row in rows if row[date_key] == newest}
+
+        cn_latest = _latest_curve(cn_rows, "observation_date")
+        us_latest = _latest_curve(us_rows, "observation_date")
+        return {
+            "data": {
+                "cn_curve": {
+                    "latest": cn_latest,
+                    "history": [
+                        row for row in cn_rows
+                        if not cn_latest or row["observation_date"] != cn_rows[0]["observation_date"]
+                    ][: observations * 3],
+                },
+                "us_curve": {
+                    "latest": us_latest.get("curve", {}),
+                    "history": us_rows[1:],
+                },
+                "spread_10y": spread,
+            },
+            "meta": {
+                "as_of": effective_as_of,
+                "observations": observations,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": {
+                    "cn": "chinabond (CCDC official, scheduled pull)",
+                    "us": "tushare us_tycr",
+                },
+                "quality": {
+                    "status": "ready" if cn_rows and us_rows else "warning",
+                    "missing_series": [
+                        name for name, rows in (
+                            ("cn_curve", cn_rows), ("us_curve", us_rows),
+                        ) if not rows
+                    ],
+                    "warnings": [
+                        "CN and US curves are matched by observation date; the spread skips dates where either side is missing",
+                    ],
+                },
+            },
+        }
+
+    def macro_schedule(
+        self,
+        *,
+        as_of: date | None = None,
+        limit: int = 60,
+    ) -> dict[str, Any]:
+        """Return upcoming macro data release schedule entries."""
+
+        effective_as_of = as_of or business_now().date()
+        rows = [
+            _numeric_row(row)
+            for row in self._repository.macro_schedule(
+                as_of=effective_as_of, limit=max(1, min(int(limit), 200))
+            )
+        ]
+        return {
+            "data": rows,
+            "meta": {
+                "as_of": effective_as_of,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": ["tushare cn_schedule"],
+                "quality": {
+                    "status": "ready" if rows else "warning",
+                    "missing_series": [] if rows else ["cn_schedule"],
+                    "warnings": [
+                        "publish dates come from the official release calendar and may shift; refresh before acting on them",
+                    ],
+                },
+            },
+        }
+
     def macro_regime(
         self,
         *,

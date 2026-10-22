@@ -475,11 +475,11 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
     transformations = transformation_task_blueprints()
 
     assert task_baseline_summary() == {
-        "acquisition": 199,
+        "acquisition": 200,
         "transformation": 15,
-        "total": 214,
+        "total": 215,
     }
-    assert len({item.task_key for item in acquisitions}) == 199
+    assert len({item.task_key for item in acquisitions}) == 200
     assert len({item.task_key for item in transformations}) == 15
     assert not (
         {item.task_key for item in acquisitions}
@@ -534,8 +534,8 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     }
     documents = task_documents(endpoint_ids)
 
-    assert len(endpoint_contracts()) == len(references) == 210
-    assert len(documents) == 214
+    assert len(endpoint_contracts()) == len(references) == 211
+    assert len(documents) == 215
     by_key = {document.task_key: document for document in documents}
     assert [node.kind.value for node in by_key["daily"].nodes] == [
         "condition", "scope_plan", "acquire", "validate", "publish"

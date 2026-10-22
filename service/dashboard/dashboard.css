@@ -563,3 +563,39 @@ footer .pager { display: inline-flex; align-items: center; gap: 10px; }
 .sector-day.down { color: #17855b; }
 .sector-code { display: block; margin-top: 7px; color: var(--subtle); font-size: 10px; }
 .peer-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+
+/* ---- 研究分组（大盘 / ETF / 板块） ---- */
+.nav-group-label { margin: 10px 12px 4px; font-size: 10px; letter-spacing: .14em; color: var(--subtle); text-transform: uppercase; }
+.research-index-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.research-index-chips button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: 12px; cursor: pointer; }
+.research-index-chips button.active { background: var(--accent, #2f5fa8); border-color: transparent; color: #fff; }
+.valuation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.valuation-grid article { min-height: 96px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.valuation-grid article span { display: block; font-size: 11px; color: var(--subtle); margin-bottom: 6px; }
+.valuation-grid article strong { font-size: 18px; }
+.valuation-grid article small { display: block; margin-top: 5px; color: var(--subtle); font-size: 11px; }
+.valuation-grid article svg { margin-top: 8px; width: 100%; height: auto; }
+.funds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.funds-grid .card svg { width: 100%; height: auto; }
+.sector-toolbar { display: flex; align-items: center; gap: 10px; }
+.sector-toolbar input { min-width: 170px; }
+.research-module-note { color: var(--subtle); font-size: 12px; margin: 0 0 12px; }
+.peer-chip { padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 12px; cursor: pointer; }
+.peer-chip:hover { border-color: var(--accent, #2f5fa8); color: var(--accent, #2f5fa8); }
+
+
+/* ---- 量化因子目录 ---- */
+.source-chip { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); text-align: left; }
+.source-chip b { font-size: 12.5px; }
+.source-chip span { font-size: 10.5px; color: var(--subtle); }
+.source-chip:hover { border-color: var(--accent); }
+.factor-dataset-card { margin-top: 16px; }
+.factor-count-badge { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--subtle); }
+.factor-stats { margin: 12px 0; }
+.factor-source-line { margin: 4px 0 10px; font-size: 12px; color: var(--muted); }
+.factor-source-line a { color: var(--accent); text-decoration: none; }
+.factor-source-line a:hover { text-decoration: underline; }
+.factor-adjustment { margin: 4px 0 10px; font-size: 12px; color: var(--subtle); }
+.factor-groups { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px; }
+.factor-dataset-card .table-wrap { max-height: 460px; overflow: auto; }
+.factor-dataset-card .table-wrap td code { font-size: 12px; }

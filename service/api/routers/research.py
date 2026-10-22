@@ -157,6 +157,105 @@ def stock_shareholder_return(
     )
 
 
+_MARKET_CACHE = TTLCache(ttl_seconds=120, max_entries=8)
+_DIRECTORY_CACHE = TTLCache(ttl_seconds=300, max_entries=8)
+
+
+@router.get("/indices/{ts_code}/valuation")
+def index_valuation(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=750, ge=120, le=3000),
+    as_of: date | None = None,
+) -> dict:
+    key = ("index-valuation", ts_code.upper(), lookback_days, str(as_of))
+
+    def build() -> dict:
+        return service.index_valuation(
+            ts_code.upper(), lookback_days=lookback_days, as_of=as_of,
+        )
+
+    return _MARKET_CACHE.get_or_compute(key, build)
+
+
+@router.get("/market/funds")
+def market_funds(
+    service: ResearchServiceDependency,
+    days: int = Query(default=120, ge=20, le=500),
+    as_of: date | None = None,
+) -> dict:
+    key = ("market-funds", days, str(as_of))
+
+    def build() -> dict:
+        return service.market_funds(days=days, as_of=as_of)
+
+    return _MARKET_CACHE.get_or_compute(key, build)
+
+
+@router.get("/etfs/directory")
+def etf_directory(
+    service: ResearchServiceDependency,
+    limit: int = Query(default=150, ge=10, le=500),
+    as_of: date | None = None,
+) -> dict:
+    key = ("etf-directory", limit, str(as_of))
+
+    def build() -> dict:
+        return service.etf_directory(limit=limit, as_of=as_of)
+
+    return _DIRECTORY_CACHE.get_or_compute(key, build)
+
+
+@router.get("/etfs/{ts_code}/nav-shares")
+def etf_nav_shares(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=400, ge=60, le=2000),
+    as_of: date | None = None,
+) -> dict:
+    key = ("etf-nav-shares", ts_code.upper(), lookback_days, str(as_of))
+
+    def build() -> dict:
+        return service.etf_nav_shares(
+            ts_code.upper(), lookback_days=lookback_days, as_of=as_of,
+        )
+
+    return _MARKET_CACHE.get_or_compute(key, build)
+
+
+@router.get("/sectors/directory")
+def sector_directory(
+    service: ResearchServiceDependency,
+    source: str = Query(default="ths", pattern=r"^(ths|dc)$"),
+    limit: int = Query(default=400, ge=10, le=1000),
+    as_of: date | None = None,
+) -> dict:
+    key = ("sector-directory", source, limit, str(as_of))
+
+    def build() -> dict:
+        return service.sector_directory(source=source, limit=limit, as_of=as_of)
+
+    return _DIRECTORY_CACHE.get_or_compute(key, build)
+
+
+@router.get("/sectors/{ts_code}/members")
+def sector_members(
+    ts_code: str,
+    service: ResearchServiceDependency,
+    source: str = Query(default="ths", pattern=r"^(ths|dc)$"),
+    limit: int = Query(default=150, ge=10, le=500),
+    as_of: date | None = None,
+) -> dict:
+    key = ("sector-members", source, ts_code.upper(), limit, str(as_of))
+
+    def build() -> dict:
+        return service.sector_members(
+            ts_code.upper(), source=source, limit=limit, as_of=as_of,
+        )
+
+    return _MARKET_CACHE.get_or_compute(key, build)
+
+
 @router.get("/stocks/{ts_code}/technicals")
 def stock_technicals(
     ts_code: str,

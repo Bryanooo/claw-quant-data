@@ -24,7 +24,6 @@ from service.research.technical_indicators import (
     parabolic_sar as _parabolic_sar,
     relative_risk_metrics as _relative_risk_metrics,
     rolling_pstdev_series,
-    sma_series as _sma_series,
 )
 from service.research.volume_price import (
     transaction_cost_series as _transaction_cost_series,
@@ -1763,14 +1762,18 @@ class ResearchService:
         end: date | None = None,
         as_of: date | None = None,
         max_records: int = 5000,
+        filter_mode: str = "standard",
+        cursor_paging: bool = False,
     ) -> list[dict]:
         """Page through a governed dataset without bypassing its public rules."""
 
         rows: list[dict] = []
         offset = 0
+        cursor: str | None = None
+        use_cursor = cursor_paging
         while len(rows) < max_records:
             limit = min(1000, max_records - len(rows))
-            page = self._data.query_dataset(
+            response = self._data.query_dataset(
                 name,
                 exact_filters=filters or {},
                 date_value=None,
@@ -1778,13 +1781,21 @@ class ResearchService:
                 end_date=end.isoformat() if end else None,
                 as_of=as_of.isoformat() if as_of else None,
                 limit=limit,
-                offset=offset,
+                offset=0 if use_cursor else offset,
                 include_total=False,
-            )["data"]
+                filter_mode=filter_mode,
+                cursor=cursor if use_cursor else None,
+            )
+            page = response["data"]
             rows.extend(page)
+            cursor = (response.get("page") or {}).get("next_cursor")
             if len(page) < limit:
                 break
-            offset += len(page)
+            if use_cursor:
+                if not cursor:
+                    break
+            else:
+                offset += len(page)
         return rows
 
     def _ensure_stock(self, ts_code: str) -> dict:
@@ -2900,6 +2911,474 @@ class ResearchService:
                     "status": "ready" if not warnings else "warning",
                     "warnings": warnings,
                 },
+            },
+        }
+
+    def index_valuation(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 750,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Index-level valuation series (PE/PB/turnover) with percentile ranks."""
+
+        effective_as_of = as_of or business_now().date()
+        start = effective_as_of - timedelta(days=int(lookback_days * 1.6) + 40)
+        rows = self._load_many(
+            "index_dailybasic", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of,
+            max_records=min(lookback_days + 60, 4000),
+        )
+        rows.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+        basic_rows = self._load("index_basic", filters={"ts_code": ts_code}, limit=1)
+        basic = basic_rows[0] if basic_rows else {}
+
+        def _field_series(field: str) -> dict[str, Any] | None:
+            pairs = [
+                (str(observed), _number(row.get(field)))
+                for row in rows
+                if (observed := _day(row.get("trade_date"))) is not None
+                and _number(row.get(field)) is not None
+            ]
+            if not pairs:
+                return None
+            history = [value for _, value in pairs]
+            latest = history[-1]
+            percentile = sum(1 for value in history if value <= latest) / len(history) * 100
+            return {
+                "latest": _round(latest),
+                "percentile_pct": _round(percentile, 1),
+                "history_min": _round(min(history)),
+                "history_max": _round(max(history)),
+                "observations": len(pairs),
+                "series": pairs[-260:],
+            }
+
+        return {
+            "data": {
+                "instrument": {
+                    "ts_code": ts_code,
+                    "name": basic.get("name"),
+                    "market": basic.get("market"),
+                    "publisher": basic.get("publisher"),
+                },
+                "as_of": str(effective_as_of),
+                "metrics": {
+                    field: _field_series(field)
+                    for field in ("pe", "pe_ttm", "pb", "turnover_rate")
+                },
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "window_days": lookback_days,
+                "observations": len(rows),
+                "generated_at": datetime.now(timezone.utc),
+            },
+        }
+
+    def market_funds(
+        self,
+        *,
+        days: int = 120,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Market-wide funding landscape: margin balance, northbound, market flow."""
+
+        effective_as_of = as_of or business_now().date()
+        start = effective_as_of - timedelta(days=int(days * 1.5) + 20)
+
+        margin_rows = self._load_many(
+            "margin", filters={}, start=start, end=effective_as_of,
+            max_records=5000,
+        )
+        margin_by_day: dict[str, float] = {}
+        for row in margin_rows:
+            observed = _day(row.get("trade_date"))
+            balance = _number(row.get("rzye"))
+            if observed is None or balance is None:
+                continue
+            key = observed.isoformat()
+            margin_by_day[key] = margin_by_day.get(key, 0.0) + balance
+
+        hsgt_rows = self._load_many(
+            "moneyflow_hsgt", filters={}, start=start, end=effective_as_of,
+            max_records=600,
+        )
+        north_series = sorted(
+            (str(observed), value)
+            for row in hsgt_rows
+            if (observed := _day(row.get("trade_date"))) is not None
+            and (value := _number(row.get("north_money"))) is not None
+        )
+
+        mkt_rows = self._load_many(
+            "moneyflow_mkt_dc", filters={}, start=start, end=effective_as_of,
+            max_records=600,
+        )
+        flow_series = sorted(
+            (str(observed), value)
+            for row in mkt_rows
+            if (observed := _day(row.get("trade_date"))) is not None
+            and (value := _number(row.get("net_amount"))) is not None
+        )
+
+        return {
+            "data": {
+                "as_of": str(effective_as_of),
+                # margin rzye is CNY yuan; moneyflow series are CNY 10k.
+                "margin_balance": {
+                    "unit": "亿元",
+                    "series": [
+                        (day, _round(value / 1e8, 2))
+                        for day, value in sorted(margin_by_day.items())
+                    ][-days:],
+                },
+                "north_money": {
+                    "unit": "亿元",
+                    "series": [
+                        (day, _round(value / 1e4, 2))
+                        for day, value in north_series
+                    ][-days:],
+                },
+                "market_flow": {
+                    "unit": "亿元",
+                    "series": [
+                        (day, _round(value / 1e4, 2))
+                        for day, value in flow_series
+                    ][-days:],
+                },
+            },
+            "meta": {
+                "window_days": days,
+                "generated_at": datetime.now(timezone.utc),
+                "provenance": [
+                    {"dataset": "margin", "days": len(margin_by_day)},
+                    {"dataset": "moneyflow_hsgt", "days": len(north_series)},
+                    {"dataset": "moneyflow_mkt_dc", "days": len(flow_series)},
+                ],
+            },
+        }
+
+    def etf_directory(
+        self,
+        *,
+        as_of: date | None = None,
+        limit: int = 150,
+    ) -> dict[str, Any]:
+        """Exchange-traded fund directory ranked by the latest session turnover."""
+
+        effective_as_of = as_of or business_now().date()
+        basic_rows = self._load_many(
+            "fund_basic", filters={}, max_records=30000, cursor_paging=True,
+        )
+        identity = {
+            row.get("ts_code"): row
+            for row in basic_rows
+            if row.get("ts_code") and row.get("market") == "E"
+        }
+        daily_rows = self._load_many(
+            "fund_daily", filters={}, start=effective_as_of - timedelta(days=8),
+            end=effective_as_of, max_records=60000, cursor_paging=True,
+        )
+        latest = max(
+            (observed for row in daily_rows
+             if (observed := _day(row.get("trade_date"))) is not None),
+            default=None,
+        )
+        if latest is None:
+            raise RecordNotFoundError("no fund_daily observations available")
+        items: list[dict[str, Any]] = []
+        for row in daily_rows:
+            if _day(row.get("trade_date")) != latest:
+                continue
+            code = row.get("ts_code")
+            basic = identity.get(code)
+            if not basic:
+                continue
+            items.append({
+                "ts_code": code,
+                "name": basic.get("name"),
+                "fund_type": basic.get("fund_type"),
+                "management": basic.get("management"),
+                "close": _number(row.get("close")),
+                "pct_change": _number(row.get("pct_change")),
+                "amount": _number(row.get("amount")),
+                "volume": _number(row.get("vol")),
+            })
+        items.sort(key=lambda item: item.get("amount") or 0, reverse=True)
+        return {
+            "data": {"trade_date": str(latest), "items": items[:limit]},
+            "meta": {
+                "as_of": str(effective_as_of),
+                "listed_exchange_funds": len(identity),
+                "matched": len(items),
+                "generated_at": datetime.now(timezone.utc),
+            },
+        }
+
+    def etf_nav_shares(
+        self,
+        ts_code: str,
+        *,
+        lookback_days: int = 400,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """ETF net-asset-value curve, share/creation-redemption proxy, premium."""
+
+        effective_as_of = as_of or business_now().date()
+        start = effective_as_of - timedelta(days=int(lookback_days * 1.5) + 40)
+        nav_rows = self._load_many(
+            "fund_nav", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, max_records=2600,
+        )
+        nav_rows.sort(key=lambda row: _day(row.get("nav_date")) or date.min)
+        nav_by_day = {
+            observed.isoformat(): value
+            for row in nav_rows
+            if (observed := _day(row.get("nav_date"))) is not None
+            and (value := _number(row.get("unit_nav"))) is not None
+        }
+        share_rows = self._load_many(
+            "fund_share", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, max_records=2600,
+        )
+        share_rows.sort(key=lambda row: _day(row.get("trade_date")) or date.min)
+        share_series = [
+            (str(observed), _number(row.get("fd_share")))
+            for row in share_rows
+            if (observed := _day(row.get("trade_date"))) is not None
+            and _number(row.get("fd_share")) is not None
+        ]
+        share_flows: list[tuple[str, float]] = []
+        for (previous_day, previous_share), (day, share) in pairwise(share_series):
+            change = share - previous_share
+            if abs(change) >= 1e-6:
+                share_flows.append((day, _round(change / 1e4, 3)))
+        daily_rows = self._load_many(
+            "fund_daily", filters={"ts_code": ts_code}, start=start,
+            end=effective_as_of, max_records=2600,
+        )
+        premium_series: list[tuple[str, float]] = []
+        for row in daily_rows:
+            observed = _day(row.get("trade_date"))
+            close = _number(row.get("close"))
+            nav = nav_by_day.get(observed.isoformat()) if observed else None
+            if observed and close and nav:
+                premium_series.append(
+                    (observed.isoformat(), _round((close / nav - 1) * 100, 3))
+                )
+        basic_rows = self._load("fund_basic", filters={"ts_code": ts_code}, limit=1)
+        basic = basic_rows[0] if basic_rows else {}
+        return {
+            "data": {
+                "instrument": {
+                    "ts_code": ts_code,
+                    "name": basic.get("name"),
+                    "fund_type": basic.get("fund_type"),
+                    "management": basic.get("management"),
+                },
+                "nav": {
+                    "series": [
+                        (str(observed), _number(row.get("unit_nav")), _number(row.get("accum_nav")))
+                        for row in nav_rows[-260:]
+                        if (observed := _day(row.get("nav_date"))) is not None
+                    ],
+                },
+                "shares": {
+                    "unit": "亿份",
+                    "series": [
+                        (day, _round(value / 1e4, 3)) for day, value in share_series
+                    ][-260:],
+                    "flows": share_flows[-120:],
+                },
+                "premium_pct": {
+                    "series": premium_series[-260:],
+                    "latest": premium_series[-1][1] if premium_series else None,
+                },
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "window_days": lookback_days,
+                "nav_observations": len(nav_rows),
+                "share_observations": len(share_rows),
+                "generated_at": datetime.now(timezone.utc),
+            },
+        }
+
+    def sector_directory(
+        self,
+        *,
+        source: str = "ths",
+        as_of: date | None = None,
+        limit: int = 400,
+    ) -> dict[str, Any]:
+        """Board directory with latest quotes and money flow, from THS or DC."""
+
+        normalized = (source or "ths").lower()
+        if normalized not in {"ths", "dc"}:
+            raise InvalidQueryError("sector source must be one of ths, dc")
+        effective_as_of = as_of or business_now().date()
+        window_start = effective_as_of - timedelta(days=12)
+        if normalized == "ths":
+            boards = self._load_many("ths_index", filters={}, max_records=4000)
+            daily_rows = self._load_many(
+                "industry_daily", filters={}, start=window_start,
+                end=effective_as_of, max_records=40000, cursor_paging=True,
+            )
+            latest = max(
+                (observed for row in daily_rows
+                 if (observed := _day(row.get("trade_date"))) is not None),
+                default=None,
+            )
+            day_by_code = {
+                row.get("ts_code"): row
+                for row in daily_rows
+                if latest is not None and _day(row.get("trade_date")) == latest
+            }
+            flow_rows = self._load_many(
+                "moneyflow_ind_ths", filters={}, start=window_start,
+                end=effective_as_of, max_records=600,
+            )
+            flow_latest = max(
+                (observed for row in flow_rows
+                 if (observed := _day(row.get("trade_date"))) is not None),
+                default=None,
+            )
+            flows = {
+                row.get("ts_code"): row
+                for row in flow_rows
+                if flow_latest is not None and _day(row.get("trade_date")) == flow_latest
+            }
+            items: list[dict[str, Any]] = []
+            for board in boards:
+                code = board.get("ts_code")
+                day = day_by_code.get(code)
+                if not day:
+                    continue
+                flow = flows.get(code) or {}
+                items.append({
+                    "ts_code": code,
+                    "name": board.get("name"),
+                    "board_type": board.get("type"),
+                    "close": _number(day.get("close")),
+                    "pct_change": _number(day.get("pct_change")),
+                    "volume": _number(day.get("vol")),
+                    "turnover_rate": _number(day.get("turnover_rate")),
+                    "net_amount": _number(flow.get("net_amount")),
+                    "lead_stock": flow.get("lead_stock"),
+                    "flow_trade_date": str(flow_latest) if flow_latest else None,
+                })
+            quote_date = str(latest) if latest else None
+        else:
+            index_rows = self._load_many(
+                "dc_index", filters={}, start=window_start, end=effective_as_of,
+                max_records=20000,
+            )
+            latest = max(
+                (observed for row in index_rows
+                 if (observed := _day(row.get("trade_date"))) is not None),
+                default=None,
+            )
+            flow_rows = self._load_many(
+                "moneyflow_ind_dc", filters={}, start=window_start,
+                end=effective_as_of, max_records=600,
+            )
+            flow_latest = max(
+                (observed for row in flow_rows
+                 if (observed := _day(row.get("trade_date"))) is not None),
+                default=None,
+            )
+            flows = {
+                row.get("ts_code"): row
+                for row in flow_rows
+                if flow_latest is not None and _day(row.get("trade_date")) == flow_latest
+            }
+            items = []
+            for row in index_rows:
+                if _day(row.get("trade_date")) != latest:
+                    continue
+                code = row.get("ts_code")
+                flow = flows.get(code) or {}
+                items.append({
+                    "ts_code": code,
+                    "name": row.get("name"),
+                    "board_type": None,
+                    "close": _number(row.get("close")),
+                    "pct_change": _number(row.get("percent")),
+                    "volume": None,
+                    "turnover_rate": None,
+                    "net_amount": _number(flow.get("net_amount")),
+                    "lead_stock": flow.get("lead_stock"),
+                    "flow_trade_date": str(flow_latest) if flow_latest else None,
+                })
+            quote_date = str(latest) if latest else None
+        items.sort(key=lambda item: item.get("pct_change") if item.get("pct_change") is not None else -1e9, reverse=True)
+        return {
+            "data": {"source": normalized, "quote_date": quote_date, "items": items[:limit]},
+            "meta": {
+                "as_of": str(effective_as_of),
+                "matched": len(items),
+                "generated_at": datetime.now(timezone.utc),
+            },
+        }
+
+    def sector_members(
+        self,
+        ts_code: str,
+        *,
+        source: str = "ths",
+        limit: int = 150,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Constituent stocks of one board (identity and weight, no quotes)."""
+
+        normalized = (source or "ths").lower()
+        if normalized not in {"ths", "dc"}:
+            raise InvalidQueryError("sector source must be one of ths, dc")
+        if normalized == "ths":
+            rows = self._load("ths_member", filters={"ts_code": ts_code}, limit=limit)
+            members = [
+                {
+                    "ts_code": row.get("con_code"),
+                    "name": row.get("con_name"),
+                    "weight": _number(row.get("weight")),
+                    "in_date": row.get("in_date"),
+                }
+                for row in rows
+            ]
+        else:
+            effective_as_of = as_of or business_now().date()
+            member_rows = self._load_many(
+                "dc_member", filters={"ts_code": ts_code},
+                start=effective_as_of - timedelta(days=60), end=effective_as_of,
+                max_records=1000,
+            )
+            latest = max(
+                (observed for row in member_rows
+                 if (observed := _day(row.get("trade_date"))) is not None),
+                default=None,
+            )
+            members = [
+                {
+                    "ts_code": row.get("con_code"),
+                    "name": row.get("con_name"),
+                    "weight": _number(row.get("weight")),
+                    "in_date": None,
+                }
+                for row in member_rows
+                if latest is not None and _day(row.get("trade_date")) == latest
+            ][:limit]
+        return {
+            "data": {
+                "board": ts_code,
+                "source": normalized,
+                "members": members,
+            },
+            "meta": {
+                "ts_code": ts_code,
+                "count": len(members),
+                "generated_at": datetime.now(timezone.utc),
             },
         }
 

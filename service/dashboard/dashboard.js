@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { execution: { page: 1, size: 50, before: null, history: [], next: null, total: 0 }, tasks: { page: 1, size: 30, items: null }, today: { page: 1, size: 20, items: [] }, calendar: { page: 1, size: 20, items: [], issues: new Map(), day: null }, services: { page: 1, size: 20, items: null }, interfaces: { page: 1, size: 50, items: null, runtimeAvailable: true, viewMode: "table", expanded: null, detailCache: new Map(), lineage: null, lineagePage: 1, lineageSize: 15 }, derivations: { items: null, runtimeAvailable: true, coverageAvailable: true, summary: null, expanded: null, page: 1, size: 20, ondemand: null, ondemandPage: 1, ondemandSize: 20 }, stock: { selected: null, response: null, timeframe: "1d", overlays: new Set(["ma_20","ma_60","cost_20","cost_60","niumen_line","niumen_confirmation_line"]), viewport: { timeframe: null, total: 0, start: 0, count: 0 }, selectedTradeDate: null, searchTimer: null, watchlist: [], watchlistLoaded: false, watchlistBusy: false, requestVersion: 0, module: "market", modules: {}, moduleBusy: {}, drag: { active: false, moved: false, startX: 0, startIndex: 0, pointerId: null } }, initId: null };
+const state = { factors: null, execution: { page: 1, size: 50, before: null, history: [], next: null, total: 0 }, tasks: { page: 1, size: 30, items: null }, today: { page: 1, size: 20, items: [] }, calendar: { page: 1, size: 20, items: [], issues: new Map(), day: null }, services: { page: 1, size: 20, items: null }, interfaces: { page: 1, size: 50, items: null, runtimeAvailable: true, viewMode: "table", expanded: null, detailCache: new Map(), lineage: null, lineagePage: 1, lineageSize: 15 }, derivations: { items: null, runtimeAvailable: true, coverageAvailable: true, summary: null, expanded: null, page: 1, size: 20, ondemand: null, ondemandPage: 1, ondemandSize: 20 }, stock: { selected: null, response: null, timeframe: "1d", overlays: new Set(["ma_20","ma_60","cost_20","cost_60","niumen_line","niumen_confirmation_line"]), viewport: { timeframe: null, total: 0, start: 0, count: 0 }, selectedTradeDate: null, searchTimer: null, watchlist: [], watchlistLoaded: false, watchlistBusy: false, requestVersion: 0, module: "market", modules: {}, moduleBusy: {}, drag: { active: false, moved: false, startX: 0, startIndex: 0, pointerId: null } }, initId: null, research: { market: { selected: null, response: null, valuation: null, funds: null, tab: "valuation" }, etf: { items: null, selected: null, response: null, nav: null, tab: "quotes" }, sector: { source: "ths", items: null, selected: null, response: null, members: null } } };
 const labels = {queued:"排队",running:"运行",retrying:"重试",validating:"校验",publishing:"发布",success:"成功",attention:"需处理",historical_attention:"历史失败",superseded:"已被后续成功替代",cancelled:"已取消",not_dispatched:"未派发",not_due:"尚未到调度或发布时间",not_expected:"非交易日无需执行",complete:"完整",empty_verified:"已验证为空",gaps:"缺失",partial:"不完整",indeterminate:"待确认",ready:"严格就绪",ready_after_repair:"补采恢复",active:"进行中",waiting_upstream:"等待上游",operator_action_required:"需要处理",present:"审计通过",observed_only:"已有数据",missing:"缺失",pending:"待核验",acquisition:"原生采集",transformation:"派生计算",draft:"草稿",retired:"已停用"};
 const fmt = (v) => Number(v || 0).toLocaleString();
 const esc = (v) => String(v ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -28,9 +28,9 @@ function notice(message) { $("notice").textContent=message; $("notice").classLis
 function activate(name) {
   document.querySelectorAll("[data-panel]").forEach(x=>x.classList.toggle("hidden",x.dataset.panel!==name));
   document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x.dataset.view===name));
-  const names={overview:"数据运营总览",today:"今日交付",stock:"个股研究",tasks:"采集任务",executions:"执行历史",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据依赖",derivations:"数据派生",services:"对外服务目录",investment:"投资日历"};
+  const names={overview:"数据运营总览",today:"今日交付",stock:"个股研究",market:"大盘研究",etf:"ETF 研究",sector:"板块研究",factors:"量化因子目录",tasks:"采集任务",executions:"执行历史",calendar:"数据日历",coverage:"覆盖审计",initialization:"数据初始化",sources:"数据依赖",derivations:"数据派生",services:"对外服务目录",investment:"投资日历"};
   $("pageTitle").textContent=names[name];
-  ({today:loadToday,stock:loadStockResearch,tasks:loadTasks,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,derivations:loadDerivations,services:loadServices,investment:loadInvestment}[name]||(()=>{}))();
+  ({today:loadToday,stock:loadStockResearch,market:loadMarketResearch,etf:loadEtfResearch,sector:loadSectorResearch,factors:loadFactors,tasks:loadTasks,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,derivations:loadDerivations,services:loadServices,investment:loadInvestment}[name]||(()=>{}))();
 }
 
 async function loadOverview(force=false) {
@@ -656,18 +656,304 @@ async function refresh(options={}){
     await loadOverview(force);
     const active=document.querySelector(".nav.active")?.dataset.view;
     if(!active||active==="overview")return;
-    // 后台轮询只刷新轻量视图；个股页图表已渲染，不必每 30 秒重画。
-    if(active==="stock")return;
+    // 后台轮询只刷新轻量视图；研究页图表已渲染，不必每 30 秒重画。
+    if(["stock","market","etf","sector"].includes(active))return;
     await ({today:loadToday,stock:loadStockResearch,tasks:loadTasks,executions:loadExecutions,calendar:loadCalendar,coverage:loadCoverage,initialization:loadInitialization,sources:loadSources,services:loadServices,investment:loadInvestment}[active]||(()=>{}))();
   }catch(e){notice(`加载失败：${e.message}`);}
 }
 
 document.querySelector("nav").onclick=e=>{const b=e.target.closest("[data-view]");if(b)activate(b.dataset.view)};
-document.body.onclick=e=>{const moduleTab=e.target.closest("[data-stock-module]");if(moduleTab){selectStockModule(moduleTab.dataset.stockModule);return;}const moduleRetry=e.target.closest("[data-stock-module-retry]");if(moduleRetry){selectStockModule(moduleRetry.dataset.stockModuleRetry);return;}const stockPeer=e.target.closest("[data-stock-peer]");if(stockPeer){const item=state.stock.watchlist.find(row=>row.ts_code===stockPeer.dataset.stockPeer);selectStock(item||{ts_code:stockPeer.dataset.stockPeer,name:stockPeer.textContent});return;}const watchRemove=e.target.closest("[data-watch-remove]");if(watchRemove){removeStockWatchlist(watchRemove.dataset.watchRemove);return;}const watchOpen=e.target.closest("[data-watch-open]");if(watchOpen){const item=state.stock.watchlist.find(row=>row.ts_code===watchOpen.dataset.watchOpen);if(item)selectStock(item);return;}const example=e.target.closest("[data-stock-example]");if(example){$("stockSearch").value=example.dataset.stockExample;stockSearch(true);return;}const suggestion=e.target.closest("[data-stock-code]");if(suggestion){const item=($("stockSuggestions")._items||[]).find(row=>row.ts_code===suggestion.dataset.stockCode);if(item)selectStock(item);return;}const timeframe=e.target.closest("[data-stock-timeframe]");if(timeframe){state.stock.timeframe=timeframe.dataset.stockTimeframe;state.stock.viewport={timeframe:null,total:0,start:0,count:0};state.stock.selectedTradeDate=null;renderStockResearch();return;}const overlay=e.target.closest("[data-stock-overlay]");if(overlay){const key=overlay.dataset.stockOverlay;state.stock.overlays.has(key)?state.stock.overlays.delete(key):state.stock.overlays.add(key);overlay.classList.toggle("active",state.stock.overlays.has(key));renderStockResearch();return;}const interfaceViewSwitch=e.target.closest("[data-interface-view]");if(interfaceViewSwitch){setInterfaceView(interfaceViewSwitch.dataset.interfaceView);return;}const taskLink=e.target.closest("[data-task-name]");if(taskLink){$("executionTask").value=taskLink.dataset.taskName;activate("executions");return;}const gotoService=e.target.closest("[data-goto-service]");if(gotoService){$("serviceSearch").value=gotoService.dataset.gotoService;activate("services");return;}const gotoCoverage=e.target.closest("[data-goto-coverage]");if(gotoCoverage){activate("coverage");return;}const stripTile=e.target.closest("[data-strip-source]");if(stripTile){const value=stripTile.dataset.stripSource;const select=$("interfaceSource");select.value=select.value===value?"":value;state.interfaces.page=1;renderInterfaceRows();document.querySelector(".source-mapping")?.scrollIntoView({behavior:"smooth",block:"start"});return;}const derivationRow=e.target.closest("[data-derivation-key]");if(derivationRow){state.derivations.expanded=state.derivations.expanded===derivationRow.dataset.derivationKey?null:derivationRow.dataset.derivationKey;renderDerivationRows();return;}const interfaceRow=e.target.closest(".interface-row");if(interfaceRow){const identity=`${interfaceRow.dataset.interfaceSource}/${interfaceRow.dataset.interfaceKey}`;state.interfaces.expanded=state.interfaces.expanded===identity?null:identity;renderInterfaceRows();return;}const retry=e.target.closest("[data-retry]");if(retry){retryExecution(retry.dataset.retry,retry.dataset.taskKey);return;}const execution=e.target.closest("[data-execution]");if(execution){showExecution(execution.dataset.execution);return;}const task=e.target.closest("[data-task]");if(task){showTask(task.dataset.task);return;}const target=e.target.closest("[data-view-target]");if(target)activate(target.dataset.viewTarget);if(!e.target.closest(".stock-search-box"))$("stockSuggestions").classList.add("hidden");};
+// ===== 研究分组：大盘 / ETF / 板块（共用通用图表渲染器） =====
+const MARKET_INDEXES=[{ts_code:"000001.SH",name:"上证指数"},{ts_code:"399001.SZ",name:"深证成指"},{ts_code:"399006.SZ",name:"创业板指"},{ts_code:"000300.SH",name:"沪深300"},{ts_code:"000905.SH",name:"中证500"},{ts_code:"000852.SH",name:"中证1000"},{ts_code:"000016.SH",name:"上证50"},{ts_code:"000688.SH",name:"科创50"}];
+const researchMA=(points,window)=>{const closes=points.map(p=>Number(p.close));return points.map((_,i)=>i+1>=window?closes.slice(i+1-window,i+1).reduce((a,b)=>a+b,0)/window:null);};
+function renderResearchCandles(svgId,points,mas=[[5,"#348fcb"],[20,"#d19b3f"],[60,"#8a63c9"]]){
+  const svg=$(svgId),width=1200,height=430,margin={left:12,right:72,top:15,bottom:28},pw=width-margin.left-margin.right,ph=height-margin.top-margin.bottom;
+  if(!points||!points.length){svg.innerHTML='<text x="600" y="215" text-anchor="middle" class="axis-label">没有可展示的行情</text>';return;}
+  const series=mas.map(([w])=>researchMA(points,w));
+  const values=points.flatMap(p=>[p.high,p.low]).concat(series.flat()).map(Number).filter(Number.isFinite);
+  const rawMin=Math.min(...values),rawMax=Math.max(...values),pad=Math.max((rawMax-rawMin)*.06,rawMax*.005),min=rawMin-pad,max=rawMax+pad;
+  const x=i=>margin.left+(i+.5)*pw/points.length,y=v=>margin.top+(max-v)/(max-min)*ph,step=pw/points.length,bw=Math.max(1.5,Math.min(7,step*.64));
+  let m="";
+  for(let t=0;t<=5;t++){const v=max-(max-min)*t/5,py=margin.top+ph*t/5;m+=`<line class="grid-line" x1="${margin.left}" y1="${py}" x2="${width-margin.right}" y2="${py}"/><text class="axis-label" x="${width-margin.right+8}" y="${py+3}">${stockNumber(v,2)}</text>`;}
+  const ticks=Math.min(6,points.length);for(let t=0;t<ticks;t++){const i=Math.round(t*(points.length-1)/Math.max(ticks-1,1));m+=`<text class="axis-label" text-anchor="middle" x="${x(i)}" y="${height-7}">${esc(String(points[i].trade_date).slice(5,10))}</text>`;}
+  points.forEach((p,i)=>{const o=Number(p.open),c=Number(p.close),up=c>=o,top=y(Math.max(o,c)),b=y(Math.min(o,c));m+=`<line class="${up?"candle-up":"candle-down"}" x1="${x(i)}" y1="${y(Number(p.high))}" x2="${x(i)}" y2="${y(Number(p.low))}"/><rect class="${up?"candle-up":"candle-down"}" x="${x(i)-bw/2}" y="${top}" width="${bw}" height="${Math.max(1,b-top)}"/>`;});
+  series.forEach((vals,idx)=>{const[w,color]=mas[idx];let path="",draw=false;vals.forEach((v,i)=>{if(!Number.isFinite(v)){draw=false;return;}path+=`${draw?"L":"M"}${x(i).toFixed(2)},${y(v).toFixed(2)} `;draw=true;});m+=`<path class="factor-line" d="${path.trim()}" stroke="${color}"/>`;});
+  svg.innerHTML=m;
+}
+const researchFactorCard=(label,value,detail)=>`<article><span>${esc(label)}</span><strong>${value}</strong><small>${detail||""}</small></article>`;
+const researchPct=value=>value==null||Number.isNaN(Number(value))?"—":`${Number(value)>=0?"+":""}${Number(value).toFixed(2)}%`;
+function researchIndicatorCards(timeframe){
+  const trend=timeframe.trend||{},momentum=timeframe.momentum||{},volatility=timeframe.volatility||{},strength=timeframe.trend_strength||{},volume=timeframe.volume_price||{};
+  const ma=trend.moving_averages||{},regimeLabel={bullish:"多头排列",bearish:"空头排列",mixed:"多空交织"}[trend.regime]||"—";
+  const points=timeframe.chart?.points||[],windowHigh=window=>{const rows=points.slice(-window);const highs=rows.map(p=>Number(p.high)).filter(Number.isFinite),lows=rows.map(p=>Number(p.low)).filter(Number.isFinite);return {high:highs.length?Math.max(...highs):null,low:lows.length?Math.min(...lows):null}};
+  const recent=windowHigh(20),year=windowHigh(250);
+  return [
+    researchFactorCard("趋势状态",regimeLabel,`MA20 ${stockNumber(ma["20"])} · MA60 ${stockNumber(ma["60"])} · MA250 ${stockNumber(ma["250"])}`),
+    researchFactorCard("MACD",`${stockNumber(trend.macd,3)}`,`DIF ${stockNumber(trend.macd,3)} · DEA ${stockNumber(trend.macd_signal,3)}`),
+    researchFactorCard("RSI / KDJ",`RSI ${stockNumber(momentum.rsi_14,1)}`,`K ${stockNumber(momentum.kdj?.k,1)} · D ${stockNumber(momentum.kdj?.d,1)} · J ${stockNumber(momentum.kdj?.j,1)}`),
+    researchFactorCard("ADX 趋势强度",`${stockNumber(strength.adx_14,1)}`,`+DI ${stockNumber(strength.plus_di_14,1)} · −DI ${stockNumber(strength.minus_di_14,1)}`),
+    researchFactorCard("波动率",`ATR ${stockNumber(volatility.atr_14)}`,`20期年化 ${researchPct(volatility.annualized_volatility_20_period_pct)} · NATR ${researchPct(volatility.natr_14_pct)}`),
+    researchFactorCard("量能",`5/20 比 ${stockNumber(volume.volume_5_to_20_ratio,2)}`,`5日均量 ${stockVolumeText(volume.volume_5_average)} · 20日均量 ${stockVolumeText(volume.volume_20_average)}`),
+    researchFactorCard("动量",`ROC12 ${researchPct(momentum.roc_12_pct)}`,`20日 ${researchPct(momentum.return_20_period_pct)} · 60日 ${researchPct(momentum.return_60_period_pct)}`),
+    researchFactorCard("区间极值",`高 ${stockNumber(recent.high)} / 20日`,`低 ${stockNumber(recent.low)} / 20日 · 250日高 ${stockNumber(year.high)}`),
+  ].join("");
+}
+function renderResearchHeadline(prefix,timeframe,instrument){
+  const points=timeframe?.chart?.points||[],latest=points.at(-1),previous=points.at(-2)||latest,change=Number(previous?.close)?(Number(latest.close)/Number(previous.close)-1)*100:null;
+  $(`${prefix}Name`).textContent=instrument.name||instrument.code||"—";
+  $(`${prefix}Code`).textContent=instrument.ts_code||instrument.code||"—";
+  $(`${prefix}Close`).textContent=stockNumber(latest?.close);
+  const changeEl=$(`${prefix}Change`);changeEl.textContent=researchPct(change);changeEl.className=change>0?"up":change<0?"down":"";
+  $(`${prefix}Date`).textContent=latest?.trade_date||"—";
+}
+function renderValuationGrid(target,metrics){
+  const labels={pe:"市盈率 PE",pe_ttm:"市盈率 TTM",pb:"市净率 PB",turnover_rate:"换手率 %"};
+  $(target).innerHTML=Object.entries(metrics||{}).filter(([,v])=>v).map(([field,v])=>`<article><span>${labels[field]||field}</span><strong>${stockNumber(v.latest)}</strong><small>分位 ${stockNumber(v.percentile_pct,1)}% · 区间 ${stockNumber(v.history_min)} – ${stockNumber(v.history_max)}</small></article>`).join("")||'<p class="empty-row">暂无估值数据</p>';
+}
+// ---- 大盘研究 ----
+async function selectMarketIndex(item){
+  const view=state.research.market;view.selected=item;view.response=null;view.valuation=null;
+  $("marketWorkspace").classList.remove("hidden");$("marketLoading").classList.add("hidden");
+  $("marketName").textContent=item.name;$("marketCode").textContent=item.ts_code;$("marketClose").textContent="加载中…";
+  $("marketIndexChips").querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.marketIndex===item.ts_code));
+  try{
+    const [response,valuation]=await Promise.all([
+      api(`/api/v1/research/instruments/index/${encodeURIComponent(item.ts_code)}/technicals?lookback_days=1200&chart_points=180`),
+      api(`/api/v1/research/indices/${encodeURIComponent(item.ts_code)}/valuation?lookback_days=750`),
+    ]);
+    view.response=response;view.valuation=valuation;
+    renderMarketResearch();
+  }catch(error){notice(`大盘研究加载失败：${error.message}`);}
+}
+function renderMarketResearch(){
+  const view=state.research.market;if(!view.response)return;
+  const timeframe=view.response.data.timeframes["1d"];
+  renderResearchHeadline("market",timeframe,view.response.data.instrument.identity||view.selected);
+  renderResearchCandles("marketPriceChart",timeframe.chart.points);
+  $("marketIndicatorGrid").innerHTML=researchIndicatorCards(timeframe);
+  $("marketTrendSummary").textContent=`观测 ${timeframe.observations} 根 · ${timeframe.chart.points.length} 根展示`;
+  renderValuationGrid("marketValuationGrid",view.valuation?.data?.metrics);
+}
+function switchMarketModule(name){
+  state.research.market.tab=name;
+  document.querySelectorAll("[data-market-module]").forEach(b=>b.classList.toggle("active",b.dataset.marketModule===name));
+  document.querySelectorAll("[data-market-module-panel]").forEach(p=>p.classList.toggle("hidden",p.dataset.marketModulePanel!==name));
+  if(name==="funds")loadMarketFunds();
+}
+async function loadMarketFunds(){
+  const view=state.research.market;
+  try{
+    if(!view.funds)view.funds=await api("/api/v1/research/market/funds?days=120");
+    const funds=view.funds.data;
+    const card=(title,series,color,zero)=>`<section class="card"><div class="card-head"><h3>${title}</h3></div><svg viewBox="0 0 640 ${zero?190:170}" role="img"></svg></section>`;
+    const rows=funds.margin_balance.series,fows=funds.north_money.series,flows=funds.market_flow.series;
+    $("marketFundsGrid").innerHTML=card("两融余额（亿元）",rows,"#348fcb",false)+card("北向资金净流入（亿元）",fows,"#1d9e75",true)+card("大盘主力净流入（亿元）",flows,"#d85a30",true);
+    const svgs=$("marketFundsGrid").querySelectorAll("svg");
+    renderResearchLinesInto(svgs[0],rows,{color:"#348fcb",digits:0});
+    renderResearchLinesInto(svgs[1],fows,{color:"#1d9e75",zero:true,digits:0});
+    renderResearchLinesInto(svgs[2],flows,{color:"#d85a30",zero:true,digits:0});
+  }catch(error){notice(`资金面加载失败：${error.message}`);}
+}
+function renderResearchLinesInto(svg,rows,opts){
+  const container=svg.closest("section");svg.setAttribute("viewBox","0 0 640 190");
+  const proxy={innerHTML:"",setAttribute(){},closest:()=>container};
+  // 简单封装：直接在原 svg 上渲染
+  const width=640,height=190,margin={left:8,right:64,top:12,bottom:20},pw=width-margin.left-margin.right,ph=height-margin.top-margin.bottom;
+  const values=rows.map(r=>Number(r[1])).filter(Number.isFinite);
+  if(!values.length){svg.innerHTML='<text x="300" y="90" text-anchor="middle" class="axis-label">暂无数据</text>';return;}
+  const zero=opts.zero,rawMin=Math.min(...values,zero?0:Infinity),rawMax=Math.max(...values,zero?0:-Infinity),pad=(rawMax-rawMin)*.1||Math.abs(rawMax)*.05||1,min=rawMin-pad,max=rawMax+pad;
+  const x=i=>margin.left+(i+.5)*pw/rows.length,y=v=>margin.top+(max-v)/(max-min)*ph;
+  let m="";
+  for(let t=0;t<=3;t++){const v=max-(max-min)*t/3,py=margin.top+ph*t/3;m+=`<line class="grid-line" x1="${margin.left}" y1="${py}" x2="${width-margin.right}" y2="${py}"/><text class="axis-label" x="${width-margin.right+6}" y="${py+3}">${stockNumber(v,opts.digits??2)}</text>`;}
+  if(zero&&min<0&&max>0)m+=`<line class="grid-line" x1="${margin.left}" y1="${y(0)}" x2="${width-margin.right}" y2="${y(0)}" stroke-dasharray="4 3"/>`;
+  let path="",draw=false;rows.forEach((r,i)=>{const v=Number(r[1]);if(!Number.isFinite(v)){draw=false;return;}path+=`${draw?"L":"M"}${x(i).toFixed(2)},${y(v).toFixed(2)} `;draw=true;});
+  m+=`<path class="factor-line" d="${path.trim()}" stroke="${opts.color||"#348fcb"}"/>`;
+  const ticks=Math.min(3,rows.length);for(let t=0;t<ticks;t++){const i=Math.round(t*(rows.length-1)/Math.max(ticks-1,1));m+=`<text class="axis-label" text-anchor="middle" x="${x(i)}" y="${height-5}">${esc(String(rows[i][0]).slice(5,10))}</text>`;}
+  svg.innerHTML=m;
+}
+async function loadMarketResearch(){
+  $("marketIndexChips").innerHTML=MARKET_INDEXES.map(item=>`<button data-market-index="${item.ts_code}">${esc(item.name)}</button>`).join("");
+  if(!state.research.market.selected)await selectMarketIndex(MARKET_INDEXES[0]);
+}
+// ---- ETF 研究 ----
+async function loadEtfResearch(){
+  const view=state.research.etf;
+  if(!view.items){
+    try{const directory=await api("/api/v1/research/etfs/directory?limit=200");view.items=directory.data.items;$("etfDirectoryMeta").textContent=`${directory.data.trade_date} · 共 ${directory.meta.matched} 只场内基金，按成交额排序（显示前 ${view.items.length}）`;}
+    catch(error){notice(`ETF 目录加载失败：${error.message}`);return;}
+  }
+  renderEtfRows();
+}
+function renderEtfRows(){
+  const view=state.research.etf,query=($("etfSearch").value||"").trim().toLowerCase();
+  const items=(view.items||[]).filter(item=>!query||String(item.name||"").toLowerCase().includes(query)||String(item.ts_code||"").toLowerCase().includes(query));
+  $("etfRows").innerHTML=items.slice(0,80).map(item=>`<tr class="interface-row" data-etf-select="${esc(item.ts_code)}" data-etf-name="${esc(item.name)}"><td>${esc(item.name)}</td><td><code>${esc(item.ts_code)}</code></td><td>${stockNumber(item.close)}</td><td class="${Number(item.pct_change)>0?"up":Number(item.pct_change)<0?"down":""}">${researchPct(item.pct_change)}</td><td>${fmt(item.amount)}</td><td>${esc(item.fund_type||"—")}</td></tr>`).join("")||'<tr><td colspan="6" class="empty-row">没有匹配的 ETF</td></tr>';
+}
+async function selectEtf(item){
+  const view=state.research.etf;view.selected=item;view.response=null;view.nav=null;view.tab="quotes";
+  $("etfWorkspace").classList.remove("hidden");$("etfWorkspace").scrollIntoView({behavior:"smooth",block:"start"});
+  $("etfName").textContent=item.name;$("etfCode").textContent=item.ts_code;$("etfClose").textContent="加载中…";
+  document.querySelectorAll("[data-etf-module]").forEach(b=>b.classList.toggle("active",b.dataset.etfModule==="quotes"));
+  document.querySelectorAll("[data-etf-module-panel]").forEach(p=>p.classList.toggle("hidden",p.dataset.etfModulePanel!=="quotes"));
+  try{
+    const [response,nav]=await Promise.all([
+      api(`/api/v1/research/instruments/etf/${encodeURIComponent(item.ts_code)}/technicals?lookback_days=1200&chart_points=180`),
+      api(`/api/v1/research/etfs/${encodeURIComponent(item.ts_code)}/nav-shares?lookback_days=400`),
+    ]);
+    view.response=response;view.nav=nav;renderEtfResearch();
+  }catch(error){notice(`ETF 研究加载失败：${error.message}`);}
+}
+function renderEtfResearch(){
+  const view=state.research.etf;if(!view.response)return;
+  const timeframe=view.response.data.timeframes["1d"],identity=view.response.data.instrument.identity||{};
+  renderResearchHeadline("etf",timeframe,{name:identity.name||view.selected.name,ts_code:view.selected.ts_code});
+  renderResearchCandles("etfPriceChart",timeframe.chart.points);
+  $("etfIndicatorGrid").innerHTML=researchIndicatorCards(timeframe);
+  $("etfTrendSummary").textContent=`观测 ${timeframe.observations} 根 · ${timeframe.chart.points.length} 根展示`;
+  const nav=view.nav?.data||{};
+  const navRows=nav.nav?.series||[],premium=nav.premium_pct||{},shares=nav.shares||{};
+  $("etfNavGrid").innerHTML=[
+    researchFactorCard("单位净值",stockNumber(navRows.at(-1)?.[1]),`累计净值 ${stockNumber(navRows.at(-1)?.[2])} · ${navRows.length} 个净值日`),
+    researchFactorCard("最新溢价率",researchPct(premium.latest),`基于最新收盘价相对单位净值`),
+    researchFactorCard("最新份额",`${stockNumber(shares.series?.at(-1)?.[1],3)} 亿份`,`管理机构 ${esc(nav.instrument?.management||"—")}`),
+  ].join("");
+  $("etfFlowRows").innerHTML=(shares.flows||[]).slice(-15).reverse().map(([day,value])=>`<tr><td>${esc(day)}</td><td class="${value>0?"up":value<0?"down":""}">${stockNumber(value,3)}</td></tr>`).join("")||'<tr><td colspan="2" class="empty-row">暂无份额变动记录</td></tr>';
+  const shareRows=shares.series||[],recentFlows=(shares.flows||[]).slice(-20),netCreate=recentFlows.reduce((sum,[,v])=>sum+(Number(v)||0),0);
+  $("etfSharesGrid").innerHTML=[
+    researchFactorCard("最新份额",`${stockNumber(shareRows.at(-1)?.[1],3)} 亿份`,`${shareRows.length} 个份额观测日`),
+    researchFactorCard("近 20 日净申赎",`${netCreate>=0?"+":""}${stockNumber(netCreate,3)} 亿份`,netCreate>0?"净申购（资金流入）":netCreate<0?"净赎回（资金流出）":"份额基本持平"),
+    researchFactorCard("最大单日变动",`${(function(){const m=recentFlows.reduce((a,[,v])=>Math.abs(Number(v))>Math.abs(a)?Number(v):a,0);return `${m>=0?"+":""}${stockNumber(m,3)}`})()} 亿份`,`观测窗口 ${recentFlows.at(0)?.[0]||"—"} → ${recentFlows.at(-1)?.[0]||"—"}`),
+  ].join("");
+  renderEtfNavChart(navRows);
+  renderEtfShareChart(shareRows);
+}
+function renderEtfNavChart(navRows){
+  const grid=$("etfNavGrid");let svg=document.getElementById("etfNavChart");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.id="etfNavChart";svg.setAttribute("viewBox","0 0 640 190");svg.setAttribute("role","img");svg.style.gridColumn="1 / -1";grid.appendChild(svg);}
+  renderResearchLinesInto(svg,navRows.map(r=>[r[0],r[1]]),{color:"#1d9e75",digits:2});
+}
+function renderEtfShareChart(shareRows){
+  const grid=$("etfSharesGrid");let svg=document.getElementById("etfShareChart");
+  if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.id="etfShareChart";svg.setAttribute("viewBox","0 0 640 190");svg.setAttribute("role","img");svg.style.gridColumn="1 / -1";grid.appendChild(svg);}
+  renderResearchLinesInto(svg,shareRows,{color:"#348fcb",digits:1});
+}
+function switchEtfModule(name){
+  state.research.etf.tab=name;
+  document.querySelectorAll("[data-etf-module]").forEach(b=>b.classList.toggle("active",b.dataset.etfModule===name));
+  document.querySelectorAll("[data-etf-module-panel]").forEach(p=>p.classList.toggle("hidden",p.dataset.etfModulePanel!==name));
+}
+// ---- 板块研究 ----
+async function loadSectorResearch(){await loadSectorDirectory();}
+async function loadSectorDirectory(){
+  const view=state.research.sector;
+  try{
+    const directory=await api(`/api/v1/research/sectors/directory?source=${view.source}&limit=400`);
+    view.items=directory.data.items;
+    $("sectorDirectoryMeta").textContent=`${directory.data.quote_date} · ${view.source==="ths"?"同花顺行业与概念指数":"东方财富板块"} · 共 ${directory.meta.matched} 个板块`;
+  }catch(error){notice(`板块列表加载失败：${error.message}`);return;}
+  renderSectorRows();
+}
+function renderSectorRows(){
+  const view=state.research.sector,query=($("sectorSearch").value||"").trim().toLowerCase();
+  const items=(view.items||[]).filter(item=>!query||String(item.name||"").toLowerCase().includes(query)||String(item.ts_code||"").toLowerCase().includes(query));
+  $("sectorRows").innerHTML=items.slice(0,120).map(item=>`<tr class="interface-row" data-sector-select="${esc(item.ts_code)}" data-sector-name="${esc(item.name)}"><td>${esc(item.name||"")}${item.board_type==="N"?' <small class="iface-name">概念</small>':item.board_type==="I"?' <small class="iface-name">行业</small>':""}</td><td><code>${esc(item.ts_code)}</code></td><td>${stockNumber(item.close)}</td><td class="${Number(item.pct_change)>0?"up":Number(item.pct_change)<0?"down":""}">${researchPct(item.pct_change)}</td><td>${item.volume==null?"—":fmt(item.volume)}</td><td class="${Number(item.net_amount)>0?"up":Number(item.net_amount)<0?"down":""}">${item.net_amount==null?"—":fmt(item.net_amount)}</td><td>${esc(item.lead_stock||"—")}</td></tr>`).join("")||'<tr><td colspan="7" class="empty-row">没有匹配的板块</td></tr>';
+}
+function switchSectorSource(source){
+  state.research.sector.source=source;state.research.sector.items=null;state.research.sector.selected=null;state.research.sector.response=null;state.research.sector.members=null;
+  document.querySelectorAll("[data-sector-source]").forEach(b=>b.classList.toggle("active",b.dataset.sectorSource===source));
+  $("sectorWorkspace").classList.add("hidden");
+  loadSectorDirectory();
+}
+async function selectSector(item){
+  const view=state.research.sector;view.selected=item;view.response=null;view.members=null;
+  $("sectorWorkspace").classList.remove("hidden");$("sectorWorkspace").scrollIntoView({behavior:"smooth",block:"start"});
+  $("sectorName").textContent=item.name;$("sectorCode").textContent=item.ts_code;$("sectorClose").textContent="加载中…";
+  try{
+    const [response,members]=await Promise.all([
+      api(`/api/v1/research/instruments/sector/${encodeURIComponent(item.ts_code)}/technicals?lookback_days=1200&chart_points=180`),
+      api(`/api/v1/research/sectors/${encodeURIComponent(item.ts_code)}/members?source=${view.source}&limit=150`),
+    ]);
+    view.response=response;view.members=members;renderSectorResearch();
+  }catch(error){notice(`板块研究加载失败：${error.message}`);}
+}
+function renderSectorResearch(){
+  const view=state.research.sector;if(!view.response)return;
+  const timeframe=view.response.data.timeframes["1d"];
+  renderResearchHeadline("sector",timeframe,{name:view.selected.name,ts_code:view.selected.ts_code});
+  renderResearchCandles("sectorPriceChart",timeframe.chart.points);
+  $("sectorDate").textContent=`${$("sectorDate").textContent||""} · ${timeframe.observations} 根`;
+  const members=view.members?.data?.members||[];
+  $("sectorMembersMeta").textContent=`共 ${members.length} 只成分股 · 点击跳转个股研究`;
+  $("sectorMemberChips").innerHTML=members.map(member=>`<button class="peer-chip" data-sector-member="${esc(member.ts_code)}">${esc(member.name||member.ts_code)}</button>`).join("")||'<span class="empty-row">暂无成分股数据</span>';
+}
+function jumpToStock(code,name){
+  $("stockSearch").value=code;stockSearch(true);activate("stock");
+}
+// ===== 研究分组结束 =====
+
+// ---- 量化因子目录 ----
+async function loadFactors(force=false){
+  if(force||!state.factors){
+    try{ state.factors=await api("/api/v1/data/factor-catalog"); }
+    catch(error){ notice(`量化因子目录加载失败：${error.message}`); return; }
+  }
+  renderFactors();
+}
+function factorKindPill(kind){ return kind==="derived"?'<span class="pill info">内部派生</span>':'<span class="pill ready">Tushare 采集</span>'; }
+function renderFactorRows(ds){
+  if(ds.name==="factor_value"){
+    return ds.factors.map(f=>`<tr><td><code>${esc(f.name)}</code></td><td>${esc(f.group_label)}</td><td>${esc(f.description)}</td><td>${esc(f.min_date)} → ${esc(f.max_date)}</td><td class="num">${fmt(f.row_count)}</td></tr>`).join("");
+  }
+  if(ds.kind==="derived"||ds.name==="cyq_perf"||ds.name==="cyq_chips"){
+    return ds.factors.map(f=>`<tr><td><code>${esc(f.name)}</code></td><td>${esc(f.description)}</td></tr>`).join("");
+  }
+  return ds.factors.map(f=>`<tr><td><code>${esc(f.name)}</code></td><td>${esc(f.description)}</td><td>${esc(f.detail||"—")}</td></tr>`).join("");
+}
+function renderFactors(){
+  const cat=state.factors; if(!cat) return;
+  const query=($("factorSearch").value||"").trim().toLowerCase();
+  const datasets=cat.datasets;
+  const totalFactors=datasets.reduce((sum,ds)=>sum+(ds.factor_count||0),0);
+  $("factorSummary").textContent=`${datasets.length} 个因子数据集 · ${fmt(totalFactors)} 个因子/指标族 · 数据范围来自本地实表统计，调度状态以覆盖审计为准`;
+  $("factorStrip").innerHTML=datasets.map(ds=>{const s=ds.stats||{};return `<button class="source-chip" data-factor-dataset="${esc(ds.name)}"><b>${esc(ds.name)}</b><span>${fmt(s.row_count||0)} 行</span><span>${esc(s.min_date||"—")} ~ ${esc(s.max_date||"—")}</span></button>`;}).join("");
+  const matched=datasets.filter(ds=>{
+    if(!query) return true;
+    if((ds.name+" "+ds.title+" "+ds.description).toLowerCase().includes(query)) return true;
+    return (ds.factors||[]).some(f=>`${f.name} ${f.description||""} ${f.group_label||""} ${f.detail||""}`.toLowerCase().includes(query));
+  });
+  $("factorCatalog").innerHTML=matched.map(ds=>{
+    const s=ds.stats||{};
+    const range=s.min_date?`${s.min_date} → ${s.max_date}（${fmt(s.days)} 个交易日）`:"暂无数据";
+    const src=[esc(ds.source),ds.source_interface?`接口 <code>${esc(ds.source_interface)}</code>`:null,ds.doc_url?`<a href="${esc(ds.doc_url)}" target="_blank" rel="noreferrer">tushare 文档</a>`:null,`数据库表 <code>${esc(ds.table)}</code>`,`采集频率 ${esc(ds.frequency)}`].filter(Boolean).join(" · ");
+    const groupChips=(ds.factor_groups||[]).map(g=>`<span class="dataset-chip" title="${esc(g.description)}">${esc(g.label)} × ${fmt(g.count)}</span>`).join("");
+    const adjustment=ds.adjustment_note?`<p class="factor-adjustment">${esc(ds.adjustment_note)}</p>`:"";
+    let head,table;
+    if(ds.name==="factor_value"){
+      head='<tr><th>因子</th><th>分组</th><th>说明</th><th>数据范围</th><th>行数</th></tr>';
+    }else if(ds.kind==="derived"||ds.name==="cyq_perf"||ds.name==="cyq_chips"){
+      head='<tr><th>指标</th><th>说明</th></tr>';
+    }else{
+      head='<tr><th>指标族</th><th>说明</th><th>复权口径 / 窗口 / 子字段</th></tr>';
+    }
+    table=`<div class="table-wrap"><table><thead>${head}</thead><tbody>${renderFactorRows(ds)}</tbody></table></div>`;
+    return `<section class="card factor-dataset-card" id="factor-dataset-${esc(ds.name)}"><div class="card-head"><div><h3>${esc(ds.title)} ${factorKindPill(ds.kind)}<small class="factor-count-badge">${fmt(ds.factor_count)} 个因子</small></h3><p>${esc(ds.description)}</p></div></div><div class="metrics compact factor-stats"><article><span>本地行数</span><strong>${fmt(s.row_count||0)}</strong><small>${esc(ds.table)}</small></article><article><span>数据采集范围</span><strong>${esc(s.min_date||"—")} ~ ${esc(s.max_date||"—")}</strong><small>${s.days?`${fmt(s.days)} 个交易日`:"暂无数据"}</small></article><article><span>源头</span><strong>${esc(ds.source)}</strong><small>${ds.source_interface?`接口 ${esc(ds.source_interface)}`:"系统派生计算"}</small></article></div><p class="factor-source-line">${src}</p>${adjustment}${groupChips?`<div class="factor-groups">${groupChips}</div>`:""}${table}</section>`;
+  }).join("")||'<section class="card"><div class="empty-state">没有匹配的因子</div></section>';
+}
+
+document.body.onclick=e=>{
+  const factorChip=e.target.closest("[data-factor-dataset]");if(factorChip){const el=$("factor-dataset-"+factorChip.dataset.factorDataset);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});return;}
+  const marketIndex=e.target.closest("[data-market-index]");if(marketIndex){const item=MARKET_INDEXES.find(x=>x.ts_code===marketIndex.dataset.marketIndex);if(item)selectMarketIndex(item);return;}
+  const marketModule=e.target.closest("[data-market-module]");if(marketModule){switchMarketModule(marketModule.dataset.marketModule);return;}
+  const etfSelect=e.target.closest("[data-etf-select]");if(etfSelect){const item=(state.research.etf.items||[]).find(x=>x.ts_code===etfSelect.dataset.etfSelect);if(item)selectEtf(item);return;}
+  const etfModule=e.target.closest("[data-etf-module]");if(etfModule){switchEtfModule(etfModule.dataset.etfModule);return;}
+  const sectorSource=e.target.closest("[data-sector-source]");if(sectorSource){switchSectorSource(sectorSource.dataset.sectorSource);return;}
+  const sectorSelect=e.target.closest("[data-sector-select]");if(sectorSelect){const item=(state.research.sector.items||[]).find(x=>x.ts_code===sectorSelect.dataset.sectorSelect);if(item)selectSector(item);return;}
+  const sectorMember=e.target.closest("[data-sector-member]");if(sectorMember){jumpToStock(sectorMember.dataset.sectorMember);return;}
+  const moduleTab=e.target.closest("[data-stock-module]");if(moduleTab){selectStockModule(moduleTab.dataset.stockModule);return;}const moduleRetry=e.target.closest("[data-stock-module-retry]");if(moduleRetry){selectStockModule(moduleRetry.dataset.stockModuleRetry);return;}const stockPeer=e.target.closest("[data-stock-peer]");if(stockPeer){const item=state.stock.watchlist.find(row=>row.ts_code===stockPeer.dataset.stockPeer);selectStock(item||{ts_code:stockPeer.dataset.stockPeer,name:stockPeer.textContent});return;}const watchRemove=e.target.closest("[data-watch-remove]");if(watchRemove){removeStockWatchlist(watchRemove.dataset.watchRemove);return;}const watchOpen=e.target.closest("[data-watch-open]");if(watchOpen){const item=state.stock.watchlist.find(row=>row.ts_code===watchOpen.dataset.watchOpen);if(item)selectStock(item);return;}const example=e.target.closest("[data-stock-example]");if(example){$("stockSearch").value=example.dataset.stockExample;stockSearch(true);return;}const suggestion=e.target.closest("[data-stock-code]");if(suggestion){const item=($("stockSuggestions")._items||[]).find(row=>row.ts_code===suggestion.dataset.stockCode);if(item)selectStock(item);return;}const timeframe=e.target.closest("[data-stock-timeframe]");if(timeframe){state.stock.timeframe=timeframe.dataset.stockTimeframe;state.stock.viewport={timeframe:null,total:0,start:0,count:0};state.stock.selectedTradeDate=null;renderStockResearch();return;}const overlay=e.target.closest("[data-stock-overlay]");if(overlay){const key=overlay.dataset.stockOverlay;state.stock.overlays.has(key)?state.stock.overlays.delete(key):state.stock.overlays.add(key);overlay.classList.toggle("active",state.stock.overlays.has(key));renderStockResearch();return;}const interfaceViewSwitch=e.target.closest("[data-interface-view]");if(interfaceViewSwitch){setInterfaceView(interfaceViewSwitch.dataset.interfaceView);return;}const taskLink=e.target.closest("[data-task-name]");if(taskLink){$("executionTask").value=taskLink.dataset.taskName;activate("executions");return;}const gotoService=e.target.closest("[data-goto-service]");if(gotoService){$("serviceSearch").value=gotoService.dataset.gotoService;activate("services");return;}const gotoCoverage=e.target.closest("[data-goto-coverage]");if(gotoCoverage){activate("coverage");return;}const stripTile=e.target.closest("[data-strip-source]");if(stripTile){const value=stripTile.dataset.stripSource;const select=$("interfaceSource");select.value=select.value===value?"":value;state.interfaces.page=1;renderInterfaceRows();document.querySelector(".source-mapping")?.scrollIntoView({behavior:"smooth",block:"start"});return;}const derivationRow=e.target.closest("[data-derivation-key]");if(derivationRow){state.derivations.expanded=state.derivations.expanded===derivationRow.dataset.derivationKey?null:derivationRow.dataset.derivationKey;renderDerivationRows();return;}const interfaceRow=e.target.closest(".interface-row");if(interfaceRow){const identity=`${interfaceRow.dataset.interfaceSource}/${interfaceRow.dataset.interfaceKey}`;state.interfaces.expanded=state.interfaces.expanded===identity?null:identity;renderInterfaceRows();return;}const retry=e.target.closest("[data-retry]");if(retry){retryExecution(retry.dataset.retry,retry.dataset.taskKey);return;}const execution=e.target.closest("[data-execution]");if(execution){showExecution(execution.dataset.execution);return;}const task=e.target.closest("[data-task]");if(task){showTask(task.dataset.task);return;}const target=e.target.closest("[data-view-target]");if(target)activate(target.dataset.viewTarget);if(!e.target.closest(".stock-search-box"))$("stockSuggestions").classList.add("hidden");};
 $("sidebarToggle").onclick=()=>{const collapsed=$("sidebar").classList.toggle("collapsed");localStorage.setItem("cq-sidebar",collapsed?"collapsed":"expanded");}; $("themeToggle").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("cq-theme",document.body.classList.contains("dark")?"dark":"light");if(state.stock.response)renderStockResearch();};
-$("refreshButton").onclick=()=>refresh(); $("stockSearchButton").onclick=()=>stockSearch(true); $("stockSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();stockSearch(true);}}; $("stockSearch").oninput=()=>{clearTimeout(state.stock.searchTimer);state.stock.searchTimer=setTimeout(()=>stockSearch(false),220);}; $("stockWatchToggle").onclick=toggleStockWatchlist; $("stockReload").onclick=fetchStockResearch; $("stockPoints").onchange=()=>{state.stock.viewport={timeframe:null,total:0,start:0,count:0};state.stock.selectedTradeDate=null;renderStockResearch();}; $("stockZoomIn").onclick=()=>zoomStockChart(1); $("stockZoomOut").onclick=()=>zoomStockChart(-1); $("stockZoomReset").onclick=()=>{state.stock.viewport={timeframe:null,total:0,start:0,count:0};state.stock.selectedTradeDate=null;renderStockResearch();}; $("stockPanPrev").onclick=()=>panStockChart(-1); $("stockPanNext").onclick=()=>panStockChart(1); $("stockPan").oninput=e=>{state.stock.viewport.start=Number(e.target.value)||0;state.stock.selectedTradeDate=null;scheduleStockRender();}; $("stockPriceChart").addEventListener("wheel",e=>{if(!state.stock.response)return;e.preventDefault();const rect=e.currentTarget.getBoundingClientRect(),anchor=(e.clientX-rect.left)/Math.max(rect.width,1);zoomStockChart(e.deltaY<0?1:-1,anchor);},{passive:false});
+$("refreshButton").onclick=()=>refresh(); $("etfSearch").oninput=renderEtfRows; $("sectorSearch").oninput=renderSectorRows; $("stockSearchButton").onclick=()=>stockSearch(true); $("stockSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();stockSearch(true);}}; $("stockSearch").oninput=()=>{clearTimeout(state.stock.searchTimer);state.stock.searchTimer=setTimeout(()=>stockSearch(false),220);}; $("stockWatchToggle").onclick=toggleStockWatchlist; $("stockReload").onclick=fetchStockResearch; $("stockPoints").onchange=()=>{state.stock.viewport={timeframe:null,total:0,start:0,count:0};state.stock.selectedTradeDate=null;renderStockResearch();}; $("stockZoomIn").onclick=()=>zoomStockChart(1); $("stockZoomOut").onclick=()=>zoomStockChart(-1); $("stockZoomReset").onclick=()=>{state.stock.viewport={timeframe:null,total:0,start:0,count:0};state.stock.selectedTradeDate=null;renderStockResearch();}; $("stockPanPrev").onclick=()=>panStockChart(-1); $("stockPanNext").onclick=()=>panStockChart(1); $("stockPan").oninput=e=>{state.stock.viewport.start=Number(e.target.value)||0;state.stock.selectedTradeDate=null;scheduleStockRender();}; $("stockPriceChart").addEventListener("wheel",e=>{if(!state.stock.response)return;e.preventDefault();const rect=e.currentTarget.getBoundingClientRect(),anchor=(e.clientX-rect.left)/Math.max(rect.width,1);zoomStockChart(e.deltaY<0?1:-1,anchor);},{passive:false});
 const stockStage=$("stockChartStage");stockStage.onpointerdown=e=>{if(!state.stock.response||e.button!==0)return;const drag=state.stock.drag;drag.active=true;drag.moved=false;drag.startX=e.clientX;drag.startIndex=state.stock.viewport.start;drag.pointerId=e.pointerId;stockStage.setPointerCapture?.(e.pointerId);stockStage.classList.add("dragging");};stockStage.onpointermove=e=>{const drag=state.stock.drag;if(!drag.active||drag.pointerId!==e.pointerId)return;const delta=e.clientX-drag.startX;if(Math.abs(delta)<4)return;drag.moved=true;const bars=Math.round(delta/Math.max(stockStage.clientWidth,1)*state.stock.viewport.count),maxStart=Math.max(0,state.stock.viewport.total-state.stock.viewport.count),next=Math.max(0,Math.min(maxStart,drag.startIndex-bars));if(next!==state.stock.viewport.start){state.stock.viewport.start=next;state.stock.selectedTradeDate=null;scheduleStockRender();}};const finishStockDrag=e=>{const drag=state.stock.drag;if(!drag.active||drag.pointerId!==e.pointerId)return;drag.active=false;stockStage.releasePointerCapture?.(e.pointerId);stockStage.classList.remove("dragging");setTimeout(()=>{drag.moved=false;},0);};stockStage.onpointerup=finishStockDrag;stockStage.onpointercancel=finishStockDrag;
-$("todayDate").onchange=loadToday; $("todayQuery").onclick=()=>{state.today.page=1;renderTodayRows();}; $("todaySearch").onkeydown=e=>{if(e.key==="Enter"){state.today.page=1;renderTodayRows();}}; $("taskQuery").onclick=()=>loadTasks(true); $("taskSearch").onkeydown=e=>{if(e.key==="Enter"){state.tasks.page=1;renderTaskRows();}}; $("executionQuery").onclick=()=>loadExecutions(true); $("calendarMonth").onchange=loadCalendar; $("calendarDetailQuery").onclick=()=>{state.calendar.page=1;renderCalendarDetail();}; $("calendarDetailSearch").onkeydown=e=>{if(e.key==="Enter"){state.calendar.page=1;renderCalendarDetail();}}; $("auditAll").onclick=auditAll; $("initStartButton").onclick=startInitialization; $("interfaceQuery").onclick=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceSearch").onkeydown=e=>{if(e.key==="Enter"){state.interfaces.page=1;renderInterfaceRows();}}; $("interfaceSource").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceAssetClass").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceStatus").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceCategory").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceCadence").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("lineageQuery").onclick=()=>{state.interfaces.lineagePage=1;renderFieldLineage();}; $("lineageSearch").onkeydown=e=>{if(e.key==="Enter"){state.interfaces.lineagePage=1;renderFieldLineage();}}; $("serviceQuery").onclick=()=>loadServices(true); $("investmentMonth").onchange=loadInvestment; $("detailClose").onclick=()=>$("detailDialog").close();
+$("todayDate").onchange=loadToday; $("factorSearch").oninput=renderFactors; $("factorSearch").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();renderFactors();}}; $("todayQuery").onclick=()=>{state.today.page=1;renderTodayRows();}; $("todaySearch").onkeydown=e=>{if(e.key==="Enter"){state.today.page=1;renderTodayRows();}}; $("taskQuery").onclick=()=>loadTasks(true); $("taskSearch").onkeydown=e=>{if(e.key==="Enter"){state.tasks.page=1;renderTaskRows();}}; $("executionQuery").onclick=()=>loadExecutions(true); $("calendarMonth").onchange=loadCalendar; $("calendarDetailQuery").onclick=()=>{state.calendar.page=1;renderCalendarDetail();}; $("calendarDetailSearch").onkeydown=e=>{if(e.key==="Enter"){state.calendar.page=1;renderCalendarDetail();}}; $("auditAll").onclick=auditAll; $("initStartButton").onclick=startInitialization; $("interfaceQuery").onclick=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceSearch").onkeydown=e=>{if(e.key==="Enter"){state.interfaces.page=1;renderInterfaceRows();}}; $("interfaceSource").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceAssetClass").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceStatus").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceCategory").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("interfaceCadence").onchange=()=>{state.interfaces.page=1;renderInterfaceRows();}; $("lineageQuery").onclick=()=>{state.interfaces.lineagePage=1;renderFieldLineage();}; $("lineageSearch").onkeydown=e=>{if(e.key==="Enter"){state.interfaces.lineagePage=1;renderFieldLineage();}}; $("serviceQuery").onclick=()=>loadServices(true); $("investmentMonth").onchange=loadInvestment; $("detailClose").onclick=()=>$("detailDialog").close();
 $("todayPrev").onclick=()=>{if(state.today.page>1){state.today.page--;renderTodayRows();}};$("todayNext").onclick=()=>{state.today.page++;renderTodayRows();};
 $("executionPrev").onclick=()=>{if(state.execution.page===1)return;state.execution.before=state.execution.history.pop()||null;state.execution.page--;loadExecutions()};$("executionNext").onclick=()=>{if(!state.execution.next)return;state.execution.history.push(state.execution.before);state.execution.before=state.execution.next;state.execution.page++;loadExecutions()};
 $("taskPrev").onclick=()=>{if(state.tasks.page>1){state.tasks.page--;renderTaskRows();}};$("taskNext").onclick=()=>{state.tasks.page++;renderTaskRows();};

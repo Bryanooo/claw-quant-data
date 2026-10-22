@@ -187,6 +187,24 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert "<th>资产类型</th>" in html
     assert "asset-badge" in script
     assert ".asset-badge" in css
+    # 研究分组：导航分组 + 大盘 / ETF / 板块研究页
+    assert 'class="nav-group-label"' in html and "研究" in html
+    for view in ("market", "etf", "sector"):
+        assert f'data-view="{view}"' in html
+        assert f'data-panel="{view}"' in html
+    assert "loadMarketResearch" in script
+    assert "loadEtfResearch" in script
+    assert "loadSectorResearch" in script
+    assert "renderResearchCandles" in script
+    assert "/api/v1/research/instruments/index/" in script
+    assert "/api/v1/research/instruments/etf/" in script
+    assert "/api/v1/research/instruments/sector/" in script
+    assert "/api/v1/research/indices/" in script
+    assert "/api/v1/research/market/funds" in script
+    assert "/api/v1/research/etfs/directory" in script
+    assert "/api/v1/research/etfs/" in script and "nav-shares" in script
+    assert "/api/v1/research/sectors/directory" in script
+    assert "/api/v1/research/sectors/" in script and "members" in script
     assert "/api/v1/research/stocks/search" in script
     assert "/api/v1/research/watchlist" in script
     assert 'method:"POST"' in script

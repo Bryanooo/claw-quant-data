@@ -8,12 +8,18 @@ from service.api.dependencies import (
     RawArchiveServiceDependency,
     get_data_health_service,
 )
+from service.cache import TTLCache
 from service.data_health import DataHealthService
 from service.data_service.catalog import build_data_service_catalog
 from service.system_overview import build_system_overview
 
 
 router = APIRouter(prefix="/v1/system", tags=["system"])
+
+# The overview aggregates runtime roll-ups and registry summaries; both only
+# move when a collection cycle writes data.  A short TTL keeps 30-second
+# dashboard polling cheap while still reflecting a fresh cycle quickly.
+_OVERVIEW_CACHE = TTLCache(ttl_seconds=30, max_entries=2)
 
 
 @router.get("/overview")
@@ -22,13 +28,17 @@ def system_overview(
     data_service: DataServiceDependency,
     interface_service: InterfaceDataServiceDependency,
     health_service: DataHealthService = Depends(get_data_health_service),
+    refresh: bool = False,
 ) -> dict:
-    public_catalog = build_data_service_catalog(
-        raw_interfaces=raw_service.list_interfaces(),
-        datasets=data_service.list_datasets(),
-        interfaces=interface_service.list_interfaces(),
-    )
-    return build_system_overview(
-        public_catalog=public_catalog,
-        data_health=health_service.overview(),
-    )
+    def build() -> dict:
+        public_catalog = build_data_service_catalog(
+            raw_interfaces=raw_service.list_interfaces(),
+            datasets=data_service.list_datasets(),
+            interfaces=interface_service.list_interfaces(),
+        )
+        return build_system_overview(
+            public_catalog=public_catalog,
+            data_health=health_service.overview(),
+        )
+
+    return _OVERVIEW_CACHE.get_or_compute("overview", build, force=refresh)

@@ -89,6 +89,33 @@ def _sma_series(values: list[float], window: int) -> list[float | None]:
     return output
 
 
+def sma_series(values: list[float], window: int) -> list[float | None]:
+    """Public alias for the rolling mean used by chart payloads."""
+
+    return _sma_series(values, window)
+
+
+def rolling_pstdev_series(
+    values: list[float], window: int = 20
+) -> list[float | None]:
+    """Population standard deviation per bar using plain float arithmetic.
+
+    ``statistics.pstdev`` evaluates exact rational arithmetic, which costs an
+    order of magnitude more than floats when it runs once per bar.  Bollinger
+    bands are rounded to four decimals downstream, so the float result is
+    identical at the published precision while the series computes in
+    milliseconds instead of hundreds of milliseconds.
+    """
+
+    output: list[float | None] = [None] * len(values)
+    for index in range(window - 1, len(values)):
+        segment = values[index - window + 1 : index + 1]
+        average = sum(segment) / window
+        variance = sum((value - average) ** 2 for value in segment) / window
+        output[index] = sqrt(variance)
+    return output
+
+
 def _ema_series(values: list[float], window: int) -> list[float]:
     if not values:
         return []
@@ -338,10 +365,7 @@ def parameterized_indicator_pack(
     }
     tsi = _tsi_series(closes)
     bollinger_middle = _sma_series(closes, 20)
-    bollinger_std = [
-        pstdev(closes[index - 19:index + 1]) if index >= 19 else None
-        for index in range(len(closes))
-    ]
+    bollinger_std = rolling_pstdev_series(closes, 20)
     bollinger_upper = [
         middle + 2 * deviation
         if middle is not None and deviation is not None else None
@@ -535,10 +559,7 @@ def common_indicator_pack(
     ]
 
     bollinger_middle = sma[20]
-    bollinger_std: list[float | None] = [
-        pstdev(closes[index - 19:index + 1]) if index >= 19 else None
-        for index in range(len(closes))
-    ]
+    bollinger_std: list[float | None] = rolling_pstdev_series(closes, 20)
     squeeze_on: list[bool | None] = []
     squeeze_momentum: list[float | None] = []
     for index, (middle, deviation, atr) in enumerate(

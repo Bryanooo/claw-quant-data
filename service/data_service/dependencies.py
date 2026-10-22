@@ -440,7 +440,9 @@ def _public_compilation() -> list[dict[str, Any]]:
 
 
 @lru_cache(maxsize=1)
+@lru_cache(maxsize=1)
 def interface_inventory() -> list[dict[str, Any]]:
+    """Compiled interface inventory (cached: code-level assets, no runtime state)."""
     tushare_rows, _ = _tushare_compilation()
     return [*tushare_rows, *_financial_data_compilation(), *_public_compilation()]
 

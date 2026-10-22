@@ -34,6 +34,7 @@ from service.api.routers import (
     system,
 )
 from service.api.schemas import ErrorResponse
+from service.api.warmup import schedule_warmup
 from service.acquisition_runtime.models import (
     InvalidTaskParametersError,
     JobConflictError,
@@ -68,6 +69,12 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         application.state.database = database_factory()
+        # Precompute the dashboard's aggregate roll-ups in the background so the
+        # first page view does not wait for several seconds of audit SQL.
+        try:
+            schedule_warmup(application.state.database)
+        except Exception:  # pragma: no cover - warm-up must never block startup
+            logger.warning("dashboard cache warm-up could not start", exc_info=True)
         try:
             yield
         finally:

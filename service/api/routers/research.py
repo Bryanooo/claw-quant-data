@@ -5,12 +5,16 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from service.api.dependencies import ResearchServiceDependency, get_data_health_service
+from service.cache import TTLCache
 from service.data_health import DataHealthService
 from service.research.validation import validation_catalog
 from service.research.factor_inputs import factor_input_catalog
 
 
 router = APIRouter(prefix="/v1/research", tags=["research"])
+
+_CAPABILITIES_CACHE = TTLCache(ttl_seconds=120, max_entries=2)
+_TECHNICALS_CACHE = TTLCache(ttl_seconds=60, max_entries=6)
 
 
 @router.get("/calendar")
@@ -29,8 +33,12 @@ def research_validation_set() -> dict:
 def research_capabilities(service: ResearchServiceDependency) -> dict:
     # Capability discovery is static plus the lightweight backfill ledger.
     # Strict runtime data state has its own endpoint and is intentionally not
-    # hidden behind (or recomputed by) catalog discovery.
-    return service.capabilities()
+    # hidden behind (or recomputed by) catalog discovery.  The matrix walks
+    # every technique and interface, so it is cached for two minutes.
+    def build() -> dict:
+        return service.capabilities()
+
+    return _CAPABILITIES_CACHE.get_or_compute("capabilities", build)
 
 
 @router.get("/factor-inputs")
@@ -159,13 +167,23 @@ def stock_technicals(
     as_of: date | None = None,
     include_external: bool = True,
     include_realtime: bool = True,
+    include_chart_alias: bool = True,
 ) -> dict:
-    return service.technicals(
-        ts_code.upper(), lookback_days=lookback_days, chart_points=chart_points,
-        benchmark=benchmark.upper(), as_of=as_of,
-        include_external=include_external,
-        include_realtime=include_realtime,
+    key = (
+        ts_code.upper(), lookback_days, chart_points, benchmark.upper(),
+        str(as_of), include_external, include_realtime, include_chart_alias,
     )
+
+    def build() -> dict:
+        return service.technicals(
+            ts_code.upper(), lookback_days=lookback_days, chart_points=chart_points,
+            benchmark=benchmark.upper(), as_of=as_of,
+            include_external=include_external,
+            include_realtime=include_realtime,
+            include_chart_alias=include_chart_alias,
+        )
+
+    return _TECHNICALS_CACHE.get_or_compute(key, build)
 
 
 @router.get("/instruments/{asset_type}/{code}/technicals")

@@ -120,7 +120,8 @@ def test_dashboard_starts_with_one_machine_readable_system_overview():
     html = (ROOT / "service/dashboard/index.html").read_text()
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     assert "系统全貌与唯一口径" in html
-    assert 'const system = await api("/api/v1/system/overview")' in script
+    assert "/api/v1/system/overview" in script
+    assert "refresh=true" in script  # 手动刷新绕过后端 TTL 缓存
     assert "system.runtime.summary" in script
     assert 'id="systemNumberDefinitions"' in html
     assert 'id="systemBoundaries"' in html
@@ -142,7 +143,8 @@ def test_data_dependency_page_has_provider_and_supply_strategy_hierarchy():
     assert "/api/v1/data/dependencies/interfaces" in script
     assert "/api/v1/data/dependencies/field-lineage" in script
     assert "/api/v1/data/dependencies/summary" in script
-    assert "page_size=200" in script
+    assert "page_size=${pageSize}" in script  # 分页参数化，其余分页并发拉取
+    assert "Promise.all(pages" in script
     assert "strip-tile" in script
     assert "interfaceDetailParts" in script
     assert "equivalenceLabels" in script

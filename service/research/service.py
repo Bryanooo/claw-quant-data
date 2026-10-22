@@ -23,6 +23,8 @@ from service.research.technical_indicators import (
     niumen_breakout_series as _niumen_breakout_series,
     parabolic_sar as _parabolic_sar,
     relative_risk_metrics as _relative_risk_metrics,
+    rolling_pstdev_series,
+    sma_series as _sma_series,
 )
 from service.research.volume_price import (
     transaction_cost_series as _transaction_cost_series,
@@ -1339,10 +1341,11 @@ def _timeframe_analysis(
     )
     chart_start = max(0, len(prices) - chart_points)
     chart = []
+    boll_average_series = _sma_series(closes, 20)
+    boll_deviation_series = rolling_pstdev_series(closes, 20)
     for index in range(chart_start, len(prices)):
-        window = closes[max(0, index - 19):index + 1]
-        average = mean(window) if len(window) == 20 else None
-        deviation = pstdev(window) if len(window) == 20 else None
+        average = boll_average_series[index]
+        deviation = boll_deviation_series[index]
         chart.append({
             "trade_date": prices[index].get("trade_date"),
             "open": _round(opens[index]), "high": _round(highs[index]),
@@ -2149,6 +2152,7 @@ class ResearchService:
         as_of: date | None = None,
         include_external: bool = True,
         include_realtime: bool = True,
+        include_chart_alias: bool = True,
     ) -> dict[str, Any]:
         effective_as_of = as_of or business_now().date()
         basic = self._ensure_stock(ts_code)
@@ -2328,10 +2332,11 @@ class ResearchService:
         niumen_series = _niumen_breakout_series(highs, lows, closes)
         niumen_summary = _niumen_breakout_lines(highs, lows, closes)
         chart_rows = []
+        boll_average_series = _sma_series(closes, 20)
+        boll_deviation_series = rolling_pstdev_series(closes, 20)
         for index in range(chart_start, len(prices)):
-            boll_window = closes[max(0, index - 19):index + 1]
-            boll_average = mean(boll_window) if len(boll_window) == 20 else None
-            boll_deviation = pstdev(boll_window) if len(boll_window) == 20 else None
+            boll_average = boll_average_series[index]
+            boll_deviation = boll_deviation_series[index]
             chart_rows.append({
                 "trade_date": prices[index].get("trade_date"),
                 "open": _round(opens[index]),
@@ -2649,10 +2654,17 @@ class ResearchService:
                     "adjusted_observations": len(adjusted_closes),
                     "adjusted_return_pct": _round(_pct_change(adjusted_closes[-1], adjusted_closes[0])) if len(adjusted_closes) > 1 else None,
                 },
-                "chart": {
-                    "price_basis": adjustment_meta["price_basis"],
-                    "points": chart_rows,
-                },
+                # The alias repeats the daily chart verbatim.  Chart-heavy
+                # clients (dashboard) request the canonical timeframe payload
+                # only and skip this copy to halve the response size.
+                **(
+                    {"chart": {
+                        "price_basis": adjustment_meta["price_basis"],
+                        "points": chart_rows,
+                    }}
+                    if include_chart_alias
+                    else {}
+                ),
                 "indicator_contract": {
                     "formula_version": common_indicators["formula_version"],
                     "parameters": common_indicators["parameters"],
@@ -2694,6 +2706,7 @@ class ResearchService:
                 },
                 "include_external": include_external,
                 "include_realtime": include_realtime,
+                "chart_alias_included": include_chart_alias,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": [
                     {"dataset": "stock_daily", "returned": source_price_count},

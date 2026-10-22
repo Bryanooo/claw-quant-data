@@ -254,3 +254,15 @@ def test_both_calendars_highlight_the_local_current_date():
     assert '" today"' in script
     assert ".day.today" in css
     assert ".day b em" in css
+
+
+def test_sidebar_nav_scrolls_when_items_exceed_viewport():
+    css = (ROOT / "service/dashboard/dashboard.css").read_text()
+
+    nav_rule = next(
+        line for line in css.splitlines() if line.startswith(".sidebar nav {")
+    )
+    assert "overflow-y: auto" in nav_rule
+    assert "min-height: 0" in nav_rule
+    assert "flex: 1 1 auto" in nav_rule
+

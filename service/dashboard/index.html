@@ -7,7 +7,7 @@
   <title>Claw Quant · 数据控制台</title>
   <link rel="icon" type="image/png" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
   <link rel="apple-touch-icon" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261021-interface-inventory-13" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261022-interface-inventory-14" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -61,6 +61,7 @@
           <div class="stock-identity-actions"><button id="stockWatchToggle" class="stock-watch-toggle">☆ 加入自选</button><div class="stock-quote"><strong id="stockClose">—</strong><span id="stockChange">—</span><small id="stockDate">—</small></div></div>
         </section>
 
+        <section id="stockModuleMarket" class="stock-module" data-stock-module-panel="market">
         <section class="card stock-chart-card">
           <div class="stock-chart-toolbar">
             <div class="timeframe-switch" role="group" aria-label="K线周期"><button class="active" data-stock-timeframe="1d">日 K</button><button data-stock-timeframe="1w">周 K</button><button data-stock-timeframe="1mo">月 K</button></div>
@@ -90,6 +91,7 @@
           <article><span>BIAS / PPO</span><strong id="stockBiasPpo">—</strong><small id="stockBiasPpoDetail">—</small></article>
           <article><span>波动挤压</span><strong id="stockSqueeze">—</strong><small id="stockSqueezeDetail">—</small></article>
           <article><span>PVT / VROC / Force</span><strong id="stockVolumeMomentum">—</strong><small id="stockVolumeMomentumDetail">—</small></article>
+        </section>
         </section>
 
         <nav class="stock-module-tabs" id="stockModuleTabs" role="tablist" aria-label="研究模块">
@@ -175,7 +177,7 @@
       <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">INTERFACE INVENTORY</p><h2>接口依赖明细</h2><p>以接口为中心的数据依赖清单：每个接口展示采集状态、频率、关联任务、输出数据集、数据库表与可采集字段；点行展开血缘与运行状态，供给策略判定也合并在这里。</p></div><div class="view-switch"><button id="interfaceViewTable" class="active" data-interface-view="table">接口视角</button><button id="interfaceViewLineage" data-interface-view="lineage">字段血缘</button></div></div>
         <div id="interfaceTableView">
           <div class="mapping-toolbar"><div><strong>接口清单</strong><small id="interfaceResult">读取中…</small></div><div class="filters"><select id="interfaceSource"><option value="">全部来源</option><option value="tushare">Tushare</option><option value="financial_data">蚂蚁</option><option value="public">公开来源</option></select><select id="interfaceAssetClass"><option value="">全部类型</option><option value="stock">股票（A股）</option><option value="hk_stock">港股</option><option value="us_stock">美股</option><option value="fund">基金</option><option value="index_etf">指数·ETF·板块</option><option value="bond">债券</option><option value="derivatives">期权·期货</option><option value="forex">外汇</option><option value="macro">宏观</option><option value="altdata">另类数据</option><option value="info">资讯·公告</option><option value="chain">产业链·关联</option><option value="quote">行情快照</option><option value="factor">因子库</option><option value="other">其他</option></select><select id="interfaceStatus"><option value="">全部状态</option><option value="active">在用</option><option value="paused">停采·存量</option><option value="no_permission">无权限</option><option value="not_scheduled">未启用</option><option value="realtime_required">在用·实时</option><option value="ant_primary">在用·主供</option><option value="public_registered">登记能力</option></select><select id="interfaceCategory"><option value="">全部分类</option></select><select id="interfaceCadence"><option value="">全部频率</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="hourly">每小时</option><option value="manual">按需</option><option value="on_demand">按需</option><option value="realtime">实时</option><option value="unscheduled">未纳入调度</option></select><input id="interfaceSearch" placeholder="搜索接口、任务、数据集或表"/><button id="interfaceQuery">筛选</button></div></div>
-          <div class="table-wrap"><table class="source-mapping-table interface-table"><thead><tr><th>接口标识</th><th>来源</th><th>状态</th><th>采集频率</th><th>获取方式 / 关联任务</th><th>输出数据集</th><th>数据库表</th><th>字段数</th></tr></thead><tbody id="interfaceRows"></tbody></table></div>
+          <div class="table-wrap"><table class="source-mapping-table interface-table"><thead><tr><th>接口标识</th><th>资产类型</th><th>来源</th><th>状态</th><th>采集频率</th><th>获取方式 / 关联任务</th><th>输出数据集</th><th>数据库表</th><th>字段数</th></tr></thead><tbody id="interfaceRows"></tbody></table></div>
           <footer><span id="interfaceTotalHint" class="muted"></span><span class="pager"><button id="interfacePrev">上一页</button><span id="interfacePage">第 1 页</span><button id="interfaceNext">下一页</button></span></footer>
         </div>
         <div id="fieldLineageView" class="hidden">
@@ -205,6 +207,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261021-interface-inventory-13" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261022-interface-inventory-14" defer></script>
 </body>
 </html>

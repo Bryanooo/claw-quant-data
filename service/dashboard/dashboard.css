@@ -490,13 +490,14 @@ dialog::backdrop { background: rgba(3,8,13,.62); }
 footer .pager { display: inline-flex; align-items: center; gap: 10px; }
 .interface-table { table-layout: fixed; width: 100%; }
 .interface-table th:nth-child(1) { width: 16%; }
-.interface-table th:nth-child(2) { width: 8%; }
-.interface-table th:nth-child(3) { width: 10%; }
-.interface-table th:nth-child(4) { width: 8%; }
-.interface-table th:nth-child(5) { width: 13%; }
-.interface-table th:nth-child(6) { width: 15%; }
-.interface-table th:nth-child(7) { width: 15%; }
-.interface-table th:nth-child(8) { width: 6%; }
+.interface-table th:nth-child(2) { width: 9%; }
+.interface-table th:nth-child(3) { width: 7%; }
+.interface-table th:nth-child(4) { width: 9%; }
+.interface-table th:nth-child(5) { width: 7%; }
+.interface-table th:nth-child(6) { width: 14%; }
+.interface-table th:nth-child(7) { width: 14%; }
+.interface-table th:nth-child(8) { width: 18%; }
+.interface-table th:nth-child(9) { width: 6%; }
 .interface-table .table-code { display: inline-block; text-align: left; }
 
 /* ---- 数据依赖页 · 接口中文名称 ---- */
@@ -508,8 +509,8 @@ footer .pager { display: inline-flex; align-items: center; gap: 10px; }
 .derivation-table td { vertical-align: top; }
 .cov-range { display: block; color: var(--muted); font-size: 10px; }
 
-/* ---- 数据依赖页 · 资产类型标签 ---- */
-.asset-tag { display: block; margin-top: 2px; color: var(--subtle); font-size: 10px; }
+/* ---- 数据依赖页 · 资产类型列 ---- */
+.asset-badge { display: inline-block; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-soft); color: var(--muted); font-size: 10px; line-height: 1.5; white-space: nowrap; }
 
 /* ---- 个股研究 · 研究模块页签 ---- */
 .stock-module-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 16px; padding: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel-soft); }
@@ -517,6 +518,10 @@ footer .pager { display: inline-flex; align-items: center; gap: 10px; }
 .stock-module-tabs button:hover { color: var(--text); background: var(--panel); }
 .stock-module-tabs button.active { background: var(--accent); color: #fff; }
 .stock-module { display: grid; gap: 16px; }
+/* 行情因子面板复用 K 线卡片与因子网格，抵消卡片自身外边距避免双倍间距 */
+#stockModuleMarket { gap: 0; }
+#stockModuleMarket > .stock-chart-card { margin-bottom: 18px; }
+#stockModuleMarket > .stock-factor-grid { margin-bottom: 18px; }
 .module-loading { padding: 26px; border: 1px dashed var(--line-strong); border-radius: 13px; color: var(--muted); text-align: center; background: var(--panel-soft); }
 .module-note { margin: 6px 0 0; color: var(--subtle); font-size: 11px; }
 .module-section { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }

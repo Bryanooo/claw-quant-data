@@ -3096,13 +3096,18 @@ class ResearchService:
             basic = identity.get(code)
             if not basic:
                 continue
+            close = _number(row.get("close"))
+            pre_close = _number(row.get("pre_close"))
+            pct_change = _number(row.get("pct_chg"))
+            if pct_change is None and close is not None and pre_close:
+                pct_change = round((close / pre_close - 1) * 100, 4)
             items.append({
                 "ts_code": code,
                 "name": basic.get("name"),
                 "fund_type": basic.get("fund_type"),
                 "management": basic.get("management"),
-                "close": _number(row.get("close")),
-                "pct_change": _number(row.get("pct_change")),
+                "close": close,
+                "pct_change": pct_change,
                 "amount": _number(row.get("amount")),
                 "volume": _number(row.get("vol")),
             })
@@ -3113,6 +3118,7 @@ class ResearchService:
                 "as_of": str(effective_as_of),
                 "listed_exchange_funds": len(identity),
                 "matched": len(items),
+                "amount_unit": "thousand_cny",
                 "generated_at": datetime.now(timezone.utc),
             },
         }

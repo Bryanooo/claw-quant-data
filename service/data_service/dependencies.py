@@ -80,10 +80,15 @@ _TUSHARE_CATEGORY_ASSET_CLASS: list[tuple[str, str]] = [
     ("外汇数据", ASSET_CLASS_FOREX),
     ("宏观经济", ASSET_CLASS_MACRO),
     ("量化因子库", ASSET_CLASS_FACTOR),
-    ("大模型语料", ASSET_CLASS_OTHER),
+    ("大模型语料", ASSET_CLASS_INFO),
     ("自选组合", ASSET_CLASS_OTHER),
     ("项目扩展接口", ASSET_CLASS_OTHER),
 ]
+
+# 个别接口按名称覆盖分类：语料类里货币政策执行报告属于宏观文档。
+_TUSHARE_API_ASSET_CLASS: dict[str, str] = {
+    "monetary_policy": ASSET_CLASS_MACRO,
+}
 
 _ANT_SEGMENT_ASSET_CLASS = {
     "stock": ASSET_CLASS_STOCK,
@@ -113,7 +118,9 @@ _PUBLIC_SOURCE_ASSET_CLASS = {
 }
 
 
-def _tushare_asset_class(category: str) -> str:
+def _tushare_asset_class(category: str, api_name: str = "") -> str:
+    if api_name in _TUSHARE_API_ASSET_CLASS:
+        return _TUSHARE_API_ASSET_CLASS[api_name]
     for prefix, asset_class in _TUSHARE_CATEGORY_ASSET_CLASS:
         if category.startswith(prefix):
             return asset_class
@@ -259,7 +266,8 @@ def _tushare_compilation() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
                          or display_contract.get("category", "")),
             "asset_class": _tushare_asset_class(
                 (display_contract.get("category_path")
-                 or display_contract.get("category", ""))
+                 or display_contract.get("category", "")),
+                api_name,
             ),
             "status": status,
             "permission": permission.get("status", "未知"),

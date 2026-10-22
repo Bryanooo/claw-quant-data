@@ -171,18 +171,20 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert 'id="stockWatchlist"' in html
     assert 'id="stockWatchToggle"' in html
     assert "牛门线与确认线按交易日定义" in html
-    # 个股研究升级：研究模块页签（筹码/基本面/事件/板块/产业链，懒加载）
+    # 个股研究升级：研究模块页签（行情因子/筹码/基本面/事件/板块/产业链，懒加载）
     assert 'id="stockModuleTabs"' in html
-    for module in ("chips", "fundamentals", "events", "sectors", "chain"):
+    for module in ("market", "chips", "fundamentals", "events", "sectors", "chain"):
         assert f'data-stock-module="{module}"' in html
         assert f'data-stock-module-panel="{module}"' in html
     assert "resetStockModules" in script
     assert "selectStockModule" in script
     assert 'industry-chain' in script
-    # 数据依赖页：资产类型筛选与标签
+    # 数据依赖页：资产类型筛选独立列
     assert 'id="interfaceAssetClass"' in html
     assert "assetClassLabels" in script
-    assert "asset-tag" in css
+    assert "<th>资产类型</th>" in html
+    assert "asset-badge" in script
+    assert ".asset-badge" in css
     assert "/api/v1/research/stocks/search" in script
     assert "/api/v1/research/watchlist" in script
     assert 'method:"POST"' in script

@@ -176,8 +176,9 @@ function renderInterfaceRows(){
     const taskCell=x.tasks?.length?`${taskLinks}${x.source!=="tushare"?`<span class="acquisition-tag ${esc(x.acquisition_kind)}">${esc(acquisitionLabels[x.acquisition_kind]||x.acquisition_kind)}</span>`:""}`:(x.source==="tushare"?'<span class="muted">未调度</span>':`<span class="acquisition-tag ${esc(x.acquisition_kind)}">${esc(acquisitionLabels[x.acquisition_kind]||x.acquisition_kind)}</span>`);
     const datasetCell=x.source==="financial_data"&&!x.datasets?.length?'<span class="muted">不落业务表</span>':datasetChips(x.datasets);
     const tableCell=x.tables?.length?`<button class="table-code link" data-goto-coverage="${esc(x.tables[0])}" title="在覆盖审计中查看 ${esc(x.tables[0])}">${esc(x.tables[0])}</button>${x.tables.length>1?`<span class="dataset-more">+${x.tables.length-1}</span>`:""}`:(x.source==="financial_data"?'<span class="muted">仅请求证据</span>':'<span class="muted">—</span>');
-    return `<tr class="interface-row" data-interface-source="${esc(x.source)}" data-interface-key="${esc(x.key)}"><td><code class="route-code" title="${esc(x.key)}">${esc(shortRoute(x.key))}</code>${x.title?`<small class="iface-name">${esc(x.title)}</small>`:""}<small class="asset-tag">${esc(assetClassLabels[x.asset_class]||x.asset_class||"其他")}</small></td><td>${esc(interfaceSourceLabels[x.source]||x.source)}</td><td>${statusPill}</td><td>${esc(cadence)}</td><td>${taskCell}</td><td>${datasetCell}</td><td>${tableCell}</td><td>${x.field_count==null?"—":fmt(x.field_count)}</td></tr>${state.interfaces.expanded===`${x.source}/${x.key}`?'<tr class="interface-detail-row"><td colspan="8" id="interfaceDetailCell">加载中…</td></tr>':""}`;
-  }).join("")||'<tr><td colspan="8" class="empty-row">没有匹配接口</td></tr>';
+    const assetCell=`<td><span class="asset-badge" title="资产类型">${esc(assetClassLabels[x.asset_class]||x.asset_class||"其他")}</span></td>`;
+    return `<tr class="interface-row" data-interface-source="${esc(x.source)}" data-interface-key="${esc(x.key)}"><td><code class="route-code" title="${esc(x.key)}">${esc(shortRoute(x.key))}</code>${x.title?`<small class="iface-name">${esc(x.title)}</small>`:""}</td>${assetCell}<td>${esc(interfaceSourceLabels[x.source]||x.source)}</td><td>${statusPill}</td><td>${esc(cadence)}</td><td>${taskCell}</td><td>${datasetCell}</td><td>${tableCell}</td><td>${x.field_count==null?"—":fmt(x.field_count)}</td></tr>${state.interfaces.expanded===`${x.source}/${x.key}`?'<tr class="interface-detail-row"><td colspan="9" id="interfaceDetailCell">加载中…</td></tr>':""}`;
+  }).join("")||'<tr><td colspan="9" class="empty-row">没有匹配接口</td></tr>';
   $("interfaceTotalHint").textContent=`共 ${fmt(items.length)} 条 · 每行可展开查看字段清单、血缘与运行状态`;
   $("interfacePage").textContent=`第 ${state.interfaces.page} / ${pages} 页`;
   updateStripActive();
@@ -412,7 +413,7 @@ function renderStockFactors(timeframe,points){
 
 function stockWatchlistContains(code){return state.stock.watchlist.some(item=>item.ts_code===code);}
 
-const stockModulePanels={chips:"stockModuleChips",fundamentals:"stockModuleFundamentals",events:"stockModuleEvents",sectors:"stockModuleSectors",chain:"stockModuleChain"};
+const stockModulePanels={market:"stockModuleMarket",chips:"stockModuleChips",fundamentals:"stockModuleFundamentals",events:"stockModuleEvents",sectors:"stockModuleSectors",chain:"stockModuleChain"};
 const stockModuleEndpoints={chips:"chips",fundamentals:"fundamentals?periods=8&include_external=true",events:"events",sectors:"sector-context",chain:"industry-chain"};
 function stockSelectedCode(){return state.stock.selected?.ts_code||state.stock.selected?.code;}
 function selectStockModule(name){
@@ -439,7 +440,7 @@ async function fetchStockModule(name,code,key,panel){
 function resetStockModules(){
   state.stock.modules={};state.stock.moduleBusy={};state.stock.module="market";
   document.querySelectorAll("[data-stock-module]").forEach(button=>button.classList.toggle("active",button.dataset.stockModule==="market"));
-  Object.values(stockModulePanels).forEach(id=>{const panel=$(id);panel.classList.add("hidden");panel.innerHTML="";});
+  Object.entries(stockModulePanels).forEach(([name,id])=>{const panel=$(id);if(!panel)return;if(name==="market"){panel.classList.remove("hidden");return;}panel.classList.add("hidden");panel.innerHTML="";});
 }
 const moduleCard=(label,value,detail="")=>`<article class="module-card"><span>${esc(label)}</span><strong>${value}</strong>${detail?`<small>${detail}</small>`:""}</article>`;
 const moduleTable=(headers,rows,emptyText="暂无数据")=>`<div class="table-wrap module-table"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.length?rows.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="${headers.length}" class="empty-row">${esc(emptyText)}</td></tr>`}</tbody></table></div>`;
@@ -544,7 +545,7 @@ function renderStockChainModule(data,meta){
   const m=membership[0];
   const nodeRows=rows.map(row=>{const nodes=row.constituents||[];return [esc(row.node_name||"—"),esc(row.stream_level_desc||"—"),esc(row.parent_node_symbol||"—"),esc(row.is_leaf_node||"—"),nodes.length?`<span class="dataset-more">${nodes.length} 家</span>`:"—"];});
   const currentNode=rows.find(row=>row.node_symbol===m.node_symbol)||rows.find(row=>row.node_name===m.node_name)||{};
-  const constituents=(currentNode.constituents||[]).slice(0,40).map(item=>`<tr><td><code>${esc(item.stock_symbol||"—")}</code></td><td>${esc(item.stock_name||"—")}</td><td title="${esc(item.reason||"")}">${esc(String(item.reason||"—").slice(0,40))}</td></tr>`);
+  const constituents=(currentNode.constituents||[]).slice(0,40).map(item=>[`<code>${esc(item.stock_symbol||"—")}</code>`,esc(item.stock_name||"—"),`<span title="${esc(item.reason||"")}">${esc(String(item.reason||"—").slice(0,40))}</span>`]);
   return `${moduleSection("归属产业链（蚂蚁查询穿透）",`<div class="module-card-grid">${moduleCard("产业链",esc(m.chain_name||"—"))}${moduleCard("节点",esc(m.node_name||"—"))}${moduleCard("上中下游",esc(m.stream_level_desc||"—"))}</div>${m.reason?`<p class="module-note">归属理由：${esc(m.reason)}</p>`:""}`,"经 QueryBroker 调用蚂蚁接口，结果缓存 24 小时，不落业务表")}
   ${nodeRows.length?moduleSection("产业链结构",moduleTable(["节点","环节","上级节点","节点类型","成分股"],nodeRows)):""}
   ${constituents.length?moduleSection("本节点成分股",moduleTable(["代码","名称","关联理由"],constituents)):""}`;

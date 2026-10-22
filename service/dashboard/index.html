@@ -7,7 +7,7 @@
   <title>Claw Quant · 数据控制台</title>
   <link rel="icon" type="image/png" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
   <link rel="apple-touch-icon" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261022-perf-16" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261022-factor-1" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -17,7 +17,12 @@
       <p class="nav-group">工作台</p>
       <button class="nav active" data-view="overview"><span>⌂</span><b>运营总览</b></button>
       <button class="nav" data-view="today"><span>◷</span><b>今日交付</b></button>
+      <div class="nav-group-label">研究</div>
       <button class="nav" data-view="stock"><span>⌁</span><b>个股研究</b></button>
+      <button class="nav" data-view="market"><span>◉</span><b>大盘研究</b></button>
+      <button class="nav" data-view="etf"><span>◈</span><b>ETF 研究</b></button>
+      <button class="nav" data-view="sector"><span>⬡</span><b>板块研究</b></button>
+      <button class="nav" data-view="factors"><span>ƒ</span><b>量化因子</b></button>
       <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
       <button class="nav" data-view="calendar"><span>▦</span><b>数据日历</b></button>
       <p class="nav-group">治理</p>
@@ -107,6 +112,73 @@
         <section id="stockModuleEvents" class="stock-module hidden" data-stock-module-panel="events"></section>
         <section id="stockModuleSectors" class="stock-module hidden" data-stock-module-panel="sectors"></section>
         <section id="stockModuleChain" class="stock-module hidden" data-stock-module-panel="chain"></section>
+      </div>
+    </section>
+
+    <section class="view hidden" data-panel="market">
+      <div class="research-index-chips" id="marketIndexChips" role="group" aria-label="切换指数"></div>
+      <div id="marketWorkspace" class="hidden">
+        <section class="card stock-identity-card">
+          <div class="stock-identity"><div class="stock-avatar" id="marketAvatar">◉</div><div><div class="stock-name-line"><h2 id="marketName">—</h2><code id="marketCode">—</code></div><p id="marketMeta">—</p></div></div>
+          <div class="stock-identity-actions"><div class="stock-quote"><strong id="marketClose">—</strong><span id="marketChange">—</span><small id="marketDate">—</small></div></div>
+        </section>
+        <nav class="stock-module-tabs" id="marketModuleTabs" role="tablist" aria-label="大盘研究模块">
+          <button class="active" data-market-module="valuation">行情与估值</button>
+          <button data-market-module="funds">资金面</button>
+        </nav>
+        <div class="stock-module" id="marketModuleValuation" data-market-module-panel="valuation">
+          <section class="card stock-chart-card"><div class="card-head"><h3 id="marketChartTitle">日 K 与均线</h3></div><svg id="marketPriceChart" viewBox="0 0 1200 430" role="img" aria-label="指数K线"></svg></section>
+          <section class="card"><div class="card-head"><h3>技术状态</h3><p id="marketTrendSummary"></p></div><div id="marketIndicatorGrid" class="stock-factor-grid"></div></section>
+          <section class="card"><div class="card-head"><h3>估值分位</h3><p id="marketValuationNote">基于近两年指数估值序列</p></div><div id="marketValuationGrid" class="valuation-grid"></div></section>
+        </div>
+        <div class="stock-module hidden" id="marketModuleFunds" data-market-module-panel="funds">
+          <p class="research-module-note">两融余额（元→亿元）、北向资金与大盘主力净流入（万元→亿元），单位统一为亿元。</p>
+          <div id="marketFundsGrid" class="funds-grid"></div>
+        </div>
+      </div>
+      <div id="marketLoading" class="stock-empty"><div class="stock-empty-mark">◉</div><h2>正在加载大盘数据</h2><p>指数行情、估值分位与全市场资金面。</p></div>
+    </section>
+
+    <section class="view hidden" data-panel="etf">
+      <section class="card">
+        <div class="card-head"><div><p class="eyebrow">ETF LAB</p><h2>场内基金排行</h2><p id="etfDirectoryMeta">按最新交易日成交额排序</p></div><input id="etfSearch" autocomplete="off" placeholder="搜索名称或代码" aria-label="搜索 ETF"/></div>
+        <div class="table-wrap"><table><thead><tr><th>名称</th><th>代码</th><th>最新价</th><th>涨跌幅</th><th>成交额（万）</th><th>类型</th></tr></thead><tbody id="etfRows"></tbody></table></div>
+      </section>
+      <div id="etfWorkspace" class="hidden">
+        <section class="card stock-identity-card">
+          <div class="stock-identity"><div class="stock-avatar" id="etfAvatar">◈</div><div><div class="stock-name-line"><h2 id="etfName">—</h2><code id="etfCode">—</code></div><p id="etfMeta">—</p></div></div>
+          <div class="stock-identity-actions"><div class="stock-quote"><strong id="etfClose">—</strong><span id="etfChange">—</span><small id="etfDate">—</small></div></div>
+        </section>
+        <nav class="stock-module-tabs" id="etfModuleTabs" role="tablist" aria-label="ETF 研究模块">
+          <button class="active" data-etf-module="quotes">行情与净值</button>
+          <button data-etf-module="shares">份额与申赎</button>
+        </nav>
+        <div class="stock-module" id="etfModuleQuotes" data-etf-module-panel="quotes">
+          <section class="card stock-chart-card"><div class="card-head"><h3>日 K 与均线</h3></div><svg id="etfPriceChart" viewBox="0 0 1200 430" role="img" aria-label="ETF K线"></svg></section>
+          <section class="card"><div class="card-head"><h3>技术状态</h3><p id="etfTrendSummary"></p></div><div id="etfIndicatorGrid" class="stock-factor-grid"></div></section>
+          <section class="card"><div class="card-head"><h3>净值与溢价</h3><p id="etfPremiumNote">二级市场收盘价相对单位净值的偏离</p></div><div class="valuation-grid" id="etfNavGrid"></div></section>
+        </div>
+        <div class="stock-module hidden" id="etfModuleShares" data-etf-module-panel="shares">
+          <div id="etfSharesGrid" class="valuation-grid"></div>
+          <section class="card"><div class="card-head"><h3>近期份额变动（申赎估计）</h3><p>份额增量≈净申购，减量≈净赎回；单位亿份</p></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>份额变动（亿份）</th></tr></thead><tbody id="etfFlowRows"></tbody></table></div></section>
+        </div>
+      </div>
+    </section>
+
+    <section class="view hidden" data-panel="sector">
+      <section class="card">
+        <div class="card-head"><div><p class="eyebrow">SECTOR LAB</p><h2>板块列表</h2><p id="sectorDirectoryMeta">同花顺行业与概念指数</p></div>
+          <div class="sector-toolbar"><div class="timeframe-switch" role="group" aria-label="板块数据源"><button class="active" data-sector-source="ths">同花顺</button><button data-sector-source="dc">东财</button></div><input id="sectorSearch" autocomplete="off" placeholder="搜索板块" aria-label="搜索板块"/></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>板块</th><th>代码</th><th>收盘</th><th>涨跌幅</th><th>成交量</th><th>资金净流（亿）</th><th>领涨股</th></tr></thead><tbody id="sectorRows"></tbody></table></div>
+      </section>
+      <div id="sectorWorkspace" class="hidden">
+        <section class="card stock-identity-card">
+          <div class="stock-identity"><div class="stock-avatar" id="sectorAvatar">⬡</div><div><div class="stock-name-line"><h2 id="sectorName">—</h2><code id="sectorCode">—</code></div><p id="sectorMeta">—</p></div></div>
+          <div class="stock-identity-actions"><div class="stock-quote"><strong id="sectorClose">—</strong><span id="sectorChange">—</span><small id="sectorDate">—</small></div></div>
+        </section>
+        <section class="card stock-chart-card"><div class="card-head"><h3>板块日 K 与均线</h3></div><svg id="sectorPriceChart" viewBox="0 0 1200 430" role="img" aria-label="板块K线"></svg></section>
+        <section class="card"><div class="card-head"><h3>成分股</h3><p id="sectorMembersMeta">点击成分股跳转个股研究</p></div><div id="sectorMemberChips" class="peer-chips"></div></section>
       </div>
     </section>
 
@@ -201,12 +273,23 @@
       <section class="card"><div class="card-head"><div><p class="eyebrow">PUBLIC API CATALOG</p><h2>对外服务目录</h2><p id="serviceSummary">这里只列出供用户和 Agent 调用的稳定 REST 服务；上游供应商请到“数据依赖”查看。</p></div><div class="filters"><select id="serviceLayer"><option value="">全部层级</option><option value="research">研究层</option><option value="standard">标准层</option><option value="raw">审计层</option></select><input id="serviceSearch" placeholder="搜索服务、路径或数据集"/><button id="serviceQuery">查询</button></div></div><div class="table-wrap"><table><thead><tr><th>层级 / 服务</th><th>对外接口</th><th>提供的数据</th><th>数据形态</th><th>读取策略</th></tr></thead><tbody id="serviceRows"></tbody></table></div><footer><button id="servicePrev">上一页</button><span id="servicePage">第 1 页</span><button id="serviceNext">下一页</button></footer></section>
     </section>
 
+    <section class="view hidden" data-panel="factors">
+      <section class="card">
+        <div class="card-head">
+          <div><p class="eyebrow">FACTOR CATALOG</p><h2>量化因子目录</h2><p id="factorSummary">读取中…</p></div>
+          <input id="factorSearch" autocomplete="off" placeholder="搜索因子、指标或说明" aria-label="搜索因子"/>
+        </div>
+        <div id="factorStrip" class="source-strip"></div>
+      </section>
+      <div id="factorCatalog"></div>
+    </section>
+
     <section class="view hidden" data-panel="investment">
       <section class="card"><div class="card-head"><div><p class="eyebrow">MARKET EVENTS</p><h2>投资日历</h2></div><input id="investmentMonth" type="month" /></div><div class="weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div id="investmentGrid" class="calendar"></div><div id="investmentEvents" class="issue-list"></div></section>
     </section>
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261022-perf-16" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261022-factor-1" defer></script>
 </body>
 </html>

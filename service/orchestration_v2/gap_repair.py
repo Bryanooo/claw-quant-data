@@ -49,21 +49,30 @@ def current_problem_partitions(
     ) as cursor:
         cursor.execute(
             """
-            WITH ranked AS (
+            -- evidence 是 jsonb 大字段（个别审计行可达数十 MB），必须先用
+            -- MATERIALIZED 求值一次 rule_revision 再与分区表连接；
+            -- 否则每命中一行分区都会重新 detoast 一次 evidence，整表连接会退化到分钟级。
+            WITH audit_rev AS MATERIALIZED (
+                SELECT audit_id,
+                       finished_at,
+                       COALESCE((evidence->>'rule_revision')::INTEGER, 1)
+                           AS rule_revision
+                FROM sys_data_coverage_audit
+            ),
+            ranked AS (
                 SELECT partition.dataset_name,
                        partition.partition_date,
                        partition.status,
-                       COALESCE((audit.evidence->>'rule_revision')::INTEGER,1)
-                           AS rule_revision,
+                       audit_rev.rule_revision,
                        row_number() OVER (
                            PARTITION BY partition.dataset_name,
                                         partition.partition_date,
-                                        COALESCE((audit.evidence->>'rule_revision')::INTEGER,1)
-                           ORDER BY audit.finished_at DESC NULLS LAST,
+                                        audit_rev.rule_revision
+                           ORDER BY audit_rev.finished_at DESC NULLS LAST,
                                     partition.audit_id DESC
                        ) AS position
                 FROM sys_data_coverage_partition AS partition
-                JOIN sys_data_coverage_audit AS audit USING (audit_id)
+                JOIN audit_rev USING (audit_id)
             )
             SELECT dataset_name,
                    rule_revision,
@@ -85,11 +94,23 @@ def current_problem_partitions(
         }
         cursor.execute(
             """
+            WITH latest_state AS (
+                SELECT DISTINCT ON (dataset_name, observation_end)
+                       dataset_name,
+                       observation_end,
+                       data_status,
+                       ready
+                FROM orchestration_v2.dataset_state
+                WHERE observation_end IS NOT NULL
+                ORDER BY dataset_name,
+                         observation_end,
+                         source_execution_id DESC,
+                         updated_at DESC
+            )
             SELECT dataset_name, observation_end AS partition_date
-            FROM orchestration_v2.dataset_state
+            FROM latest_state
             WHERE data_status='empty_verified'
               AND ready
-              AND observation_end IS NOT NULL
             """
         )
         verified_empty_dates: dict[str, set[date]] = defaultdict(set)

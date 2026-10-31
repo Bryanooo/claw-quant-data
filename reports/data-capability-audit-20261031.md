@@ -131,11 +131,16 @@ V2 active 任务定义 **205** 个：
 - **原因 2**：审计 horizon 跟到"最后一次发布状态"（W43 = 至 10-25），未发布的周不在审计范围 → 缺口不可见
 - **原因 3**：weekly cadence 被归为 event_driven，失去 freshness SLA
 
-### ④ 控制台两个面板互相矛盾
+### ④ 控制台两个面板口径不一致（2026-10-31 已修复）
 
 - `/ops/coverage`：`with_gaps = 4`（cyq_chips / factor_value / local_factor_snapshot / us_daily）
 - `/ops/data-health` 与 `/system/overview`：`datasets_with_gaps = 2`（只算 cyq_chips / local_factor_snapshot）
-- **原因**：health/issues 只统计 `scheduled=true` 的数据集；us_daily、factor_value 的覆盖规则是 `scheduled=false`，被排除
+- **原因**：health 把 `DEFERRED_RESEARCH_DATASETS`（`us_daily`、`factor_value`）且当前没有活跃任务的
+  数据集从「运行范围」里剔除，只报剩下的部分，字段名却没有体现这个范围，于是看起来像与 coverage 打架
+- **修复**：summary 增加 `coverage_scope`（总 / 已审计 / 运行范围 / 延后数据集清单）与
+  `deferred_*`、`total_*` 三组字段。实测 `total_datasets_with_gaps = 4`、
+  `total_missing_partitions = 9255`、`total_partial_partitions = 2034`，与 `/ops/coverage` 逐项对齐；
+  报警语义不变（延后的两个仍不进 issues）
 
 ### ⑤ 任务"成功"但数据不更新（静默空采）
 
@@ -187,7 +192,7 @@ V2 active 任务定义 **205** 个：
 |---|---|---|
 | P0 | `cyq_perf` 恢复日频增量采集（或 T+1 补采当周） | 筹码因子现在恒定滞后一周，控制台不报警 |
 | P0 | 「空采 = 成功」改为可重试 | 7 个数据集 19:15 抓取早于上游发布，`rows_fetched=0` 仍判终态成功，数据停在 9 月底 |
-| P0 | 统一控制台口径 | `ops/coverage` 的 with_gaps=4 与 `data-health` 的 =2 互相矛盾；接口视图 cadence 应回读 V2 `schedule.mode` |
+| P0 | ~~统一控制台口径~~（2026-10-31 已修复） | `ops/coverage` 的 with_gaps=4 与 `data-health` 的 =2 口径已对齐（新增 `coverage_scope` / `total_*`）；接口视图 cadence 回读 V2 `schedule.mode` 仍未做 |
 | P1 | `ant_*` 6 个数据集移出覆盖规则 | query_through 不落库，恒定 empty 只会制造噪音 attention |
 | P1 | evidence payload 瘦身 | 见第六节 ⑦，属结构性隐患 |
 | P2 | 33 个 disabled 任务逐个定调 | 要么恢复调度，要么在控制台明确标 deferred，不要留「显示 scheduled、实际 disabled」的错位 |

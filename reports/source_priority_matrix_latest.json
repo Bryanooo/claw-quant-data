@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-18T12:44:24.183754+00:00",
+  "generated_at": "2026-10-31T13:24:23.125273+00:00",
   "policy": "local canonical DB first; quota source only by explicit policy",
   "summary": {
     "routes": 163,
@@ -7,8 +7,8 @@
     "financial_data_first": 106,
     "financial_data_required_now": 106,
     "active_implicit_fallbacks": 0,
-    "active_canonical_fallbacks": 29,
-    "local_first_canonical_fallback_ready": 29,
+    "active_canonical_fallbacks": 0,
+    "local_canonical_fallback_disabled": 29,
     "local_overlap_adapter_pending": 28,
     "financial_data_realtime_required": 4,
     "financial_data_primary_no_local_canonical": 102
@@ -2766,7 +2766,7 @@
           }
         ],
         "current_token_ready": false,
-        "rationale": "蚂蚁数据源 是支付宝口径；Tushare 热榜的数据源和排名方法不同。"
+        "rationale": "蚂蚁是支付宝口径；Tushare 热榜的数据源和排名方法不同。"
       }
     },
     {
@@ -2800,7 +2800,7 @@
           }
         ],
         "current_token_ready": false,
-        "rationale": "蚂蚁数据源 是支付宝散户关注度；Tushare 热榜不能复现该口径。"
+        "rationale": "蚂蚁是支付宝散户关注度；Tushare 热榜不能复现该口径。"
       }
     },
     {
@@ -2896,10 +2896,10 @@
         "us_basic",
         "sge_basic"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -2959,13 +2959,13 @@
         "us_tradecal",
         "fut_trade_cal"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/common/trading-day",
         "equivalence_class": "financial_data_only",
@@ -3114,13 +3114,13 @@
       "local_datasets": [
         "fund_div"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_fund_cash_dividends",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/fund/dividend",
         "equivalence_class": "tushare_direct",
@@ -3144,13 +3144,13 @@
       "local_datasets": [
         "fund_basic"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_common_profile_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/fund/fund-archive",
         "equivalence_class": "financial_data_only",
@@ -3202,10 +3202,10 @@
       "local_datasets": [
         "fund_company"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -3244,13 +3244,13 @@
       "local_datasets": [
         "fund_manager"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_fund_manager_tenures",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/fund/fund-manager",
         "equivalence_class": "tushare_direct",
@@ -3336,13 +3336,13 @@
         "fund_nav",
         "fund_daily"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_bounded_nav_range",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/fund/net-value",
         "equivalence_class": "financial_data_only",
@@ -3418,10 +3418,10 @@
       "local_datasets": [
         "fund_adj"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -3448,13 +3448,13 @@
       "local_datasets": [
         "fund_portfolio"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_quarterly_stock_holdings",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/fund/stock-portfolio",
         "equivalence_class": "tushare_direct",
@@ -3548,10 +3548,10 @@
         "fund_nav",
         "index_daily"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -3597,10 +3597,10 @@
         "fund_daily",
         "fund_nav"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -4003,13 +4003,13 @@
         "index_weight",
         "index_member_all"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_sh_sz_weighted_constituents",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/index_fnd/index-constituents-list-weight",
         "equivalence_class": "financial_data_only",
@@ -4235,13 +4235,13 @@
       "local_datasets": [
         "index_basic"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_sh_sz_index_profile",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/index_fnd/index-profile-basic-info",
         "equivalence_class": "tushare_direct",
@@ -4284,7 +4284,7 @@
           }
         ],
         "current_token_ready": false,
-        "rationale": "anns_d 提供 A 股公告 PDF，不能完整覆盖 蚂蚁数据源 的 A 股与港股合同。"
+        "rationale": "anns_d 提供 A 股公告 PDF，不能完整覆盖蚂蚁的 A 股与港股合同。"
       }
     },
     {
@@ -4327,10 +4327,10 @@
       "local_datasets": [
         "report_rc"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -4439,10 +4439,10 @@
         "us_trycr",
         "us_tycr"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -4590,7 +4590,7 @@
           }
         ],
         "current_token_ready": false,
-        "rationale": "Tushare 没有与 蚂蚁数据源 长尾宏观指标库等价的语义检索目录。"
+        "rationale": "Tushare 没有与蚂蚁长尾宏观指标库等价的语义检索目录。"
       }
     },
     {
@@ -4604,10 +4604,10 @@
         "fund_nav",
         "financial_indicator"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -4801,10 +4801,10 @@
         "moneyflow_ind_ths",
         "moneyflow_mkt_dc"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -4911,13 +4911,13 @@
         "cb_daily",
         "forex_daily"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_daily_unadjusted",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/quote/kline-batch",
         "equivalence_class": "tushare_derived",
@@ -5010,10 +5010,10 @@
         "tdx_member",
         "index_member_all"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5107,10 +5107,10 @@
         "tdx_index",
         "index_classify"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5158,10 +5158,10 @@
         "margin",
         "margin_detail"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5380,10 +5380,10 @@
       "local_datasets": [
         "index_dailybasic"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5476,10 +5476,10 @@
       "local_datasets": [
         "block_trade"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5537,10 +5537,10 @@
         "dc_member",
         "tdx_member"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5585,13 +5585,13 @@
       "local_datasets": [
         "stock_daily_basic"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_daily_core_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock/daily-valuation-indicators",
         "equivalence_class": "tushare_direct",
@@ -5644,13 +5644,13 @@
         "stk_alert",
         "stock_st"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_risk_alerts",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock/risk-alerts",
         "equivalence_class": "tushare_direct",
@@ -5755,10 +5755,10 @@
         "hk_hold",
         "stock_hsgt"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5792,10 +5792,10 @@
         "index_member_all",
         "index_weight"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5828,13 +5828,13 @@
       "local_datasets": [
         "stock_suspend"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_suspensions",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock/suspend-resumption",
         "equivalence_class": "tushare_direct",
@@ -5861,10 +5861,10 @@
         "stk_factor",
         "stk_factor_pro"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -5922,10 +5922,10 @@
         "stock_daily",
         "adj_factor"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -6072,13 +6072,13 @@
       "local_datasets": [
         "balancesheet"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_balance_core_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/balance-sheet",
         "equivalence_class": "tushare_direct",
@@ -6114,10 +6114,10 @@
       "local_datasets": [
         "broker_recommend"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -6144,13 +6144,13 @@
       "local_datasets": [
         "repurchase"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_repurchase_plan_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/buyback-plans",
         "equivalence_class": "tushare_direct",
@@ -6342,13 +6342,13 @@
       "local_datasets": [
         "dividend"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_core_dividend_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/dividend-details",
         "equivalence_class": "financial_data_only",
@@ -6372,10 +6372,10 @@
       "local_datasets": [
         "dividend"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -6464,10 +6464,10 @@
       "local_datasets": [
         "stk_rewards"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -6556,13 +6556,13 @@
       "local_datasets": [
         "financial_indicator"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_core_financial_metrics",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/growth-rates-acc",
         "equivalence_class": "tushare_direct",
@@ -6600,10 +6600,10 @@
         "cashflow",
         "financial_indicator"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -6768,13 +6768,13 @@
       "local_datasets": [
         "stk_holdernumber"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_holder_count_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/holder-count",
         "equivalence_class": "financial_data_only",
@@ -6867,13 +6867,13 @@
         "income",
         "cashflow"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_cumulative_core_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/income-cashflow-acc",
         "equivalence_class": "tushare_direct",
@@ -6928,10 +6928,10 @@
         "income",
         "cashflow"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -6989,10 +6989,10 @@
         "stock_basic",
         "index_classify"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -7198,13 +7198,13 @@
       "local_datasets": [
         "fina_mainbz"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_business_segments",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/main-business-business",
         "equivalence_class": "financial_data_only",
@@ -7221,13 +7221,13 @@
       "local_datasets": [
         "fina_mainbz"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_business_segments",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/main-business-industry",
         "equivalence_class": "tushare_derived",
@@ -7251,13 +7251,13 @@
       "local_datasets": [
         "fina_mainbz"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_business_segments",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/main-business-product",
         "equivalence_class": "financial_data_only",
@@ -7281,13 +7281,13 @@
       "local_datasets": [
         "fina_mainbz"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_business_segments",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/main-business-region",
         "equivalence_class": "financial_data_only",
@@ -7311,13 +7311,13 @@
       "local_datasets": [
         "financial_indicator"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_core_ttm_financials",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/metrics-ttm",
         "equivalence_class": "tushare_derived",
@@ -7371,13 +7371,13 @@
       "local_datasets": [
         "forecast"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_core_forecast_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/performance-forecast",
         "equivalence_class": "tushare_direct",
@@ -7401,13 +7401,13 @@
       "local_datasets": [
         "express"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_cumulative_preliminary_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/prelim-acc",
         "equivalence_class": "tushare_direct",
@@ -7431,10 +7431,10 @@
       "local_datasets": [
         "express"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -7461,10 +7461,10 @@
       "local_datasets": [
         "express"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -7575,13 +7575,13 @@
       "local_datasets": [
         "share_float"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_restricted_releases",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/restricted-release-calendar",
         "equivalence_class": "financial_data_only",
@@ -7832,13 +7832,13 @@
         "top10_holders",
         "top10_floatholders"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_major_shareholders",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/shareholder-list",
         "equivalence_class": "financial_data_only",
@@ -7958,13 +7958,13 @@
         "stock_basic",
         "stock_company"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_identity_fields",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_fnd/stock-basic-info",
         "equivalence_class": "financial_data_only",
@@ -8006,10 +8006,10 @@
       "local_datasets": [
         "fund_portfolio"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "adapter_required",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
       "dependency_class": "local_overlap_adapter_pending",
       "requires_financial_data": false,
       "public_access": "local_dataset_or_explicit_provider_gateway",
@@ -8195,13 +8195,13 @@
         "pledge_detail",
         "pledge_stat"
       ],
-      "financial_data_role": "quota_fallback_after_local_miss",
+      "financial_data_role": "fallback_disabled",
       "adapter_status": "partial_ready_a_share_pledge_events",
       "local_scope": "only requests whose market, asset, period and fields are covered by the listed canonical datasets",
-      "reason": "已有定时入库的规范数据集；先验证本地切片，只有缺失或不新鲜且规范适配器已通过契约测试时才允许消耗 蚂蚁数据源 额度",
-      "dependency_class": "local_first_canonical_fallback_ready",
+      "reason": "Tushare 等价数据集已定时入库；查询回退已停用，不再消耗蚂蚁额度（适配器保留为能力记录，仅供显式请求使用）",
+      "dependency_class": "local_canonical_fallback_disabled",
       "requires_financial_data": false,
-      "public_access": "canonical_api_with_bounded_fallback",
+      "public_access": "local_dataset_only",
       "provider_equivalence": {
         "route": "/api/v1/stock_sh_equity/freeze-pledge",
         "equivalence_class": "financial_data_only",
@@ -8459,7 +8459,7 @@
           }
         ],
         "current_token_ready": false,
-        "rationale": "Tushare 有正文，但不能用 蚂蚁数据源 的 feed_id 读取同一篇内容。"
+        "rationale": "Tushare 有正文，但不能用蚂蚁的 feed_id 读取同一篇内容。"
       }
     },
     {

@@ -68,12 +68,12 @@ def main() -> None:
         "",
         "## 汇总",
         "",
-        "| Financial Data 路由 | 当前依赖 Financial Data | 实时必须依赖 | 无本地规范等价 | 本地优先且可回退 | 本地重叠但适配待完成 |",
+        "| Financial Data 路由 | 当前依赖 Financial Data | 实时必须依赖 | 无本地规范等价 | 本地优先但回退禁用 | 本地重叠但适配待完成 |",
         "|---:|---:|---:|---:|---:|---:|",
         f"| {summary['routes']} | {summary['financial_data_required_now']} | "
         f"{summary['financial_data_realtime_required']} | "
         f"{summary['financial_data_primary_no_local_canonical']} | "
-        f"{summary['local_first_canonical_fallback_ready']} | "
+        f"{summary['local_canonical_fallback_disabled']} | "
         f"{summary['local_overlap_adapter_pending']} |",
         "",
         "> “无本地规范等价”描述的是当前系统状态，不等同于已经证明 Tushare 完全没有"

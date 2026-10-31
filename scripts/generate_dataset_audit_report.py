@@ -179,26 +179,27 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
         job_stats = {row["api_name"]: dict(row) for row in cursor.fetchall()}
         cursor.execute(
             """
-            WITH ranked AS (
+            WITH audit_rev AS MATERIALIZED (
+                SELECT audit_id,
+                       finished_at,
+                       COALESCE((evidence->>'rule_revision')::INTEGER, 1)
+                           AS rule_revision
+                FROM sys_data_coverage_audit
+            ),
+            ranked AS (
                 SELECT partition.dataset_name,
                        partition.partition_date,
                        partition.status,
-                       COALESCE(
-                           (audit.evidence->>'rule_revision')::INTEGER,
-                           1
-                       ) AS rule_revision,
+                       audit_rev.rule_revision,
                        row_number() OVER (
                            PARTITION BY partition.dataset_name,
                                         partition.partition_date,
-                                        COALESCE(
-                                            (audit.evidence->>'rule_revision')::INTEGER,
-                                            1
-                                        )
-                           ORDER BY audit.finished_at DESC NULLS LAST,
+                                        audit_rev.rule_revision
+                           ORDER BY audit_rev.finished_at DESC NULLS LAST,
                                     partition.audit_id DESC
                        ) AS position
                 FROM sys_data_coverage_partition AS partition
-                JOIN sys_data_coverage_audit AS audit USING (audit_id)
+                JOIN audit_rev USING (audit_id)
             )
             SELECT dataset_name,
                    rule_revision,
@@ -225,9 +226,14 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
             )
         cursor.execute(
             """
+            WITH audit_rev AS MATERIALIZED (
+                SELECT audit_id,
+                       COALESCE((evidence->>'rule_revision')::INTEGER, 1)
+                           AS rule_revision
+                FROM sys_data_coverage_audit
+            )
             SELECT partition.dataset_name,
-                   COALESCE((audit.evidence->>'rule_revision')::INTEGER, 1)
-                       AS rule_revision,
+                   audit_rev.rule_revision,
                    min(partition.partition_date) FILTER (
                        WHERE partition.status IN ('present','observed_only','partial')
                    ) AS first_observed_partition,
@@ -235,9 +241,8 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
                        WHERE partition.status IN ('present','observed_only','partial')
                    ) AS last_observed_partition
             FROM sys_data_coverage_partition AS partition
-            JOIN sys_data_coverage_audit AS audit USING (audit_id)
-            GROUP BY partition.dataset_name,
-                     COALESCE((audit.evidence->>'rule_revision')::INTEGER, 1)
+            JOIN audit_rev USING (audit_id)
+            GROUP BY partition.dataset_name, audit_rev.rule_revision
             """
         )
         observed_bounds_by_revision = {

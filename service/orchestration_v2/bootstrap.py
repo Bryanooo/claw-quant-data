@@ -179,8 +179,9 @@ def task_documents(
         producer_outputs[task.task_key] = task.output_datasets
 
     result = tuple(documents)
-    if len(result) != 215:
-        raise RuntimeError(f"compiled V2 task baseline drifted: {len(result)} != 215")
+    expected = len(acquisition_task_blueprints()) + len(transformation_task_blueprints())
+    if len(result) != expected or len({item.task_key for item in result}) != expected:
+        raise RuntimeError("compiled V2 task baseline has missing or duplicate definitions")
     return result
 
 

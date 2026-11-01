@@ -13,6 +13,53 @@ from service.data_service.lineage import (
 from service.research.catalog import DERIVED_ENDPOINTS
 
 
+# The ``domain`` labels on research endpoints grew organically (个股/基本面/估值/
+# 技术面/资金… all describe stock research; 板块/行业 overlap).  Normalise them
+# into a small, stable category vocabulary so the console can group and filter
+# without leaking internal taxonomy noise.
+_DOMAIN_TO_CATEGORY: dict[str, str] = {
+    "个股研究": "个股研究",
+    "基本面": "个股研究",
+    "估值": "个股研究",
+    "技术面": "个股研究",
+    "资金": "个股研究",
+    "股东回报": "个股研究",
+    "微观结构": "个股研究",
+    "市场": "个股研究",
+    "市场研究": "个股研究",
+    "风险": "个股研究",
+    "板块": "板块·行业研究",
+    "板块研究": "板块·行业研究",
+    "行业": "板块·行业研究",
+    "行业研究": "板块·行业研究",
+    "ETF": "ETF研究",
+    "ETF研究": "ETF研究",
+    "指数": "指数研究",
+    "指数研究": "指数研究",
+    "宏观": "宏观研究",
+    "宏观研究": "宏观研究",
+    "事件": "事件研究",
+    "事件研究": "事件研究",
+    "关系发现": "关系发现",
+    "量化研究": "量化与能力",
+    "能力发现": "量化与能力",
+    "质量与可用性": "量化与能力",
+    "跨资产研究": "跨资产研究",
+}
+
+_LAYER_CATEGORY = {
+    "raw": "原始审计",
+    "standard": "标准数据",
+}
+
+
+def _normalize_category(layer: str, domain: str | None) -> str:
+    if layer in _LAYER_CATEGORY:
+        return _LAYER_CATEGORY[layer]
+    return _DOMAIN_TO_CATEGORY.get(domain or "", domain or "其他")
+
+
+
 RAW_ENDPOINTS = (
     {
         "method": "GET",
@@ -237,6 +284,16 @@ STANDARD_ENDPOINTS = (
 RESEARCH_ENDPOINTS = (
     *DERIVED_ENDPOINTS,
     {
+        "method": "GET", "path": "/api/v1/research/factors/catalog",
+        "name": "统一研究特征目录", "domain": "量化研究",
+        "description": "正式特征身份、11类用途、唯一来源、别名和可用性；不供给内部对照值。",
+    },
+    {
+        "method": "GET", "path": "/api/v1/research/factors/{ts_code}",
+        "name": "日频研究特征", "domain": "量化研究",
+        "description": "按名称选择已存储的因子及技术指标；共用值仅一个位置，缺失不回退供应商。",
+    },
+    {
         "method": "GET",
         "path": "/api/v1/research/stocks/{ts_code}/snapshot",
         "name": "个股快照",
@@ -400,6 +457,7 @@ def build_data_service_catalog(
     raw_interfaces: list[dict[str, Any]],
     datasets: list[dict[str, Any]],
     interfaces: list[dict[str, Any]],
+    dataset_columns: dict[str, list[dict]] | None = None,
 ) -> dict[str, Any]:
     """Build one truthful view without coupling the dashboard to registries."""
 
@@ -407,6 +465,7 @@ def build_data_service_catalog(
         item["name"]: list(item.get("source_ids") or ["tushare"])
         for item in datasets
     }
+    columns_by_table = dataset_columns or {}
 
     raw_endpoints = [
         {
@@ -420,6 +479,7 @@ def build_data_service_catalog(
             "dependency_scope": "request_selected_interface",
             "runtime_external_query": False,
             "lineage_status": "complete",
+            "category": _normalize_category("raw", None),
         }
         for item in RAW_ENDPOINTS
     ]
@@ -428,7 +488,10 @@ def build_data_service_catalog(
         lineage = CANONICAL_ENDPOINT_LINEAGE.get(item["path"])
         if lineage is not None:
             standard_endpoints.append(
-                endpoint_with_sources(item, lineage, dataset_sources)
+                {
+                    **endpoint_with_sources(item, lineage, dataset_sources),
+                    "category": _normalize_category("standard", None),
+                }
             )
             continue
         if item["path"] == "/api/v1/data/interfaces":
@@ -453,6 +516,7 @@ def build_data_service_catalog(
                 "dependency_scope": scope,
                 "runtime_external_query": False,
                 "lineage_status": "complete",
+                "category": _normalize_category("standard", None),
             }
         )
 
@@ -464,13 +528,30 @@ def build_data_service_catalog(
     directly_queryable = sum(bool(item.get("records_url")) for item in interfaces)
 
     research_items = [
-        endpoint_with_sources(
-            {**item, "status": "available"},
-            research_endpoint_lineage(item["path"]),
-            dataset_sources,
-        )
+        {
+            **endpoint_with_sources(
+                {**item, "status": "available"},
+                research_endpoint_lineage(item["path"]),
+                dataset_sources,
+            ),
+            "category": _normalize_category("research", item.get("domain")),
+        }
         for item in RESEARCH_ENDPOINTS
     ]
+    name_to_columns = {
+        item["name"]: columns_by_table.get(item.get("table"), [])
+        for item in datasets
+    }
+    for endpoint in research_items:
+        local = endpoint.get("local_datasets") or []
+        fields: list[dict] = []
+        seen: set[str] = set()
+        for name in local:
+            for column in name_to_columns.get(name, []):
+                if column["name"] not in seen:
+                    seen.add(column["name"])
+                    fields.append(column)
+        endpoint["fields"] = fields
     layers = [
         {
             "id": "raw",
@@ -507,7 +588,10 @@ def build_data_service_catalog(
                 "canonical_endpoints": len(CANONICAL_ENDPOINTS),
             },
             "endpoints": standard_endpoints,
-            "items": datasets,
+            "items": [
+                {**item, "columns": columns_by_table.get(item.get("table"), [])}
+                for item in datasets
+            ],
         },
         {
             "id": "research",

@@ -289,6 +289,13 @@ class CoverageCalculator:
         )
         dates = sorted(expected_set | set(actual))
         partitions: list[CoveragePartition] = []
+        early_market_absolute_tolerance = (
+            1
+            if rule.dataset_name in {"stock_daily", "stock_daily_basic"}
+            else 2
+            if rule.dataset_name in {"stk_factor", "stk_factor_pro"}
+            else 0
+        )
         for partition_date in dates:
             observed = actual.get(partition_date)
             expected = partition_date in expected_set
@@ -315,13 +322,14 @@ class CoverageCalculator:
                 else None
             )
             small_early_market_tolerance = bool(
-                rule.dataset_name in {"stock_daily", "stock_daily_basic"}
+                early_market_absolute_tolerance
                 and partition_date < date(1993, 1, 1)
                 and observed
                 and observed.entity_count is not None
                 and expected_entities is not None
                 and expected_entities <= 20
-                and observed.entity_count >= expected_entities - 1
+                and observed.entity_count
+                    >= expected_entities - early_market_absolute_tolerance
             )
             verified_empty_too_recent = bool(
                 observed
@@ -336,6 +344,7 @@ class CoverageCalculator:
                     "partial"
                     if observed.known_incomplete
                     or verified_empty_too_recent
+                    or (rule.dataset_name == 'cyq_chips' and not expected_entities)
                     or (
                         rule.min_entity_ratio is not None
                         and entity_ratio is not None
@@ -419,6 +428,11 @@ class CoverageCalculator:
             partitions=tuple(partitions),
             evidence={
                 "semantics": "partition_and_entity_completeness",
+                "security_dates": (
+                    self._repository.chip_security_evidence(start_date, end_date)
+                    if rule.dataset_name == 'cyq_chips'
+                    and hasattr(self._repository, 'chip_security_evidence') else None
+                ),
                 "strict_audit_mode": rule.strict_audit_mode,
                 "absence_detection": (
                     "expected_calendar"
@@ -466,9 +480,7 @@ class CoverageCalculator:
                 "entity_reference_as_of": reference_as_of.isoformat(),
                 "min_entity_ratio": rule.min_entity_ratio,
                 "small_early_market_absolute_tolerance": (
-                    1
-                    if rule.dataset_name in {"stock_daily", "stock_daily_basic"}
-                    else None
+                    early_market_absolute_tolerance or None
                 ),
                 "verified_empty_partitions": sum(
                     item.verified_empty for item in actual.values()

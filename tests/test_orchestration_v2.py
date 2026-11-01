@@ -1,4 +1,5 @@
 from datetime import date
+import inspect
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,7 @@ from service.orchestration_v2.catalog import (
     transformation_task_blueprints,
 )
 from service.orchestration_v2.bootstrap import endpoint_contracts, task_documents
-from service.orchestration_v2.runtime import merge_frozen_scope
+from service.orchestration_v2.runtime import force_acquisition, merge_frozen_scope
 from service.orchestration_v2.transformations import (
     SUPPORTED_TRANSFORMATION_TASK_KEYS,
 )
@@ -356,12 +357,25 @@ def test_transient_recovery_rejects_unbounded_policy_before_database_access():
         repository.recover_transient_attention_executions(limit=5001)
 
 
+def test_incomplete_transform_retry_cannot_reuse_failed_snapshot():
+    source = inspect.getsource(OrchestrationV2Repository.retry_attention_executions)
+    assert 'frozen_scope["reuse_existing_snapshot"] = False' in source
+
+
 def test_quota_guarded_recovery_policy_is_explicit():
-    from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+    from service.orchestration_v2.recovery_policy import (
+        QUOTA_GUARDED_DATASETS,
+        SERIALIZED_ACQUISITION_TASKS,
+    )
 
     assert QUOTA_GUARDED_DATASETS == frozenset(
         {"cyq_perf", "factor_value", "index_weight", "us_daily"}
     )
+    assert SERIALIZED_ACQUISITION_TASKS == QUOTA_GUARDED_DATASETS | {
+        "cyq_chips",
+    }
+    source = inspect.getsource(OrchestrationV2Repository.claim_next)
+    assert "SERIALIZED_ACQUISITION_TASKS" in source
 
 
 def test_governed_technical_history_can_reconcile_legacy_input_states():
@@ -376,6 +390,30 @@ def test_governed_technical_history_can_reconcile_legacy_input_states():
     }
 
     assert allow_transform_owned_historical_validation(document, execution)
+
+
+def test_no_mature_partition_is_a_preflight_condition_not_missing_audit():
+    from service.orchestration_v2.audit_runtime import (
+        TaskAuditNoMatureExpectedPartitionError,
+        TaskAuditNotImplementedError,
+    )
+
+    assert issubclass(
+        TaskAuditNoMatureExpectedPartitionError,
+        TaskAuditNotImplementedError,
+    )
+
+
+def test_field_level_repair_can_force_acquire_past_partition_preflight():
+    assert force_acquisition({
+        "purpose": "repair",
+        "frozen_scope": {"force_acquire": True},
+    })
+    assert force_acquisition({"purpose": "daily", "frozen_scope": {}})
+    assert not force_acquisition({
+        "purpose": "repair",
+        "frozen_scope": {"force_acquire": False},
+    })
 
 
 def test_resource_deferral_records_the_claimed_attempt_after_refunding_budget():
@@ -516,7 +554,14 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
             dependency_outputs = set().union(
                 *(outputs_by_task[key] for key in task.dependency_task_keys)
             )
-            assert set(task.input_datasets) <= dependency_outputs
+            from service.orchestration_v2.scheduling import TRANSFORMATION_AUXILIARY_INPUTS
+            assert set(task.input_datasets) <= dependency_outputs | set(
+                TRANSFORMATION_AUXILIARY_INPUTS.get(task.task_key, ())
+            )
+        # Derived tasks may form an explicit DAG.  Make an earlier
+        # transformation's outputs visible to the later transformation just
+        # as the production compiler does.
+        outputs_by_task[task.task_key] = set(task.output_datasets)
 
 
 def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
@@ -567,16 +612,17 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
         for output in document.output_datasets
         if output not in known_datasets
     }
-    assert len(planned_outputs) == 12
-    technical_snapshot = by_key["technical_factor_snapshot"]
+    assert len(planned_outputs) == 11
+    assert "technical_factor_snapshot" not in by_key
+    technical_snapshot = by_key["local_factor_snapshot"]
     assert technical_snapshot.input_datasets == (
-        "stock_daily", "adj_factor", "stock_basic"
+        "stock_daily", "adj_factor", "daily_basic", "index_daily", "stock_basic"
     )
     assert [item.task_key for item in technical_snapshot.dependencies] == [
-        "daily", "adj_factor", "stock_basic"
+        "daily", "adj_factor", "daily_basic", "index_daily", "stock_basic"
     ]
     assert technical_snapshot.scope_contract["implementation_version"] == (
-        "technical-factor-snapshot-v4"
+            "unified-features-quality-v5"
     )
     fama_french = by_key["fama_french_daily"]
     assert fama_french.input_datasets == (
@@ -623,5 +669,12 @@ def test_us_daily_claim_waits_for_shared_hourly_slot():
     source = inspect.getsource(OrchestrationV2Repository.claim_next)
 
     assert "queued.task_key='us_daily'" in source
+
+
+def test_financial_data_scheduled_tasks_share_a_serial_claim_gate():
+    source = inspect.getsource(OrchestrationV2Repository.claim_next)
+
+    assert r"queued.task_key LIKE 'ant\\_%%'" in source
+    assert r"active.task_key LIKE 'ant\\_%%'" in source
     assert "sys_tushare_rate_limit" in source
     assert "INTERVAL '15 seconds'" in source

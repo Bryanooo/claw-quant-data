@@ -17,6 +17,7 @@ from service.data_service.models import (
     RecordNotFoundError,
 )
 from service.data_service.registry import DatasetRegistry
+from service.research.local_factors.ownership import INTERNAL_DATASETS
 from service.data_service.source_policy import (
     dataset_fallback_routes,
     dataset_fallback_status,
@@ -76,11 +77,53 @@ class DataService:
         external_research=None,
     ):
         self._repository = repository
-        self._registry = registry
+        # Collection/audit retain the full registry; public data readers do not.
+        self._registry = DatasetRegistry(
+            item for item in registry.list()
+            if item.name not in INTERNAL_DATASETS and item.table not in INTERNAL_DATASETS
+        )
         self._external_research = external_research
 
     def list_datasets(self) -> list[dict]:
         return [self._dataset_summary(item) for item in self._registry.list()]
+
+    def dataset_columns_map(self) -> dict[str, list[dict]]:
+        """Map every registered dataset table to its physical columns.
+
+        A single information_schema scan is used so the catalog can attach
+        field definitions to the standard layer without N+1 per-dataset reads.
+        Both the canonical ``table`` and the ``read_table`` view map to the
+        same columns so callers can join on either key.
+        """
+        table_keys: dict[str, str] = {}
+        for item in self._registry.list():
+            for key in {item.table, item.read_table}:
+                if key:
+                    table_keys[key] = item.read_table or item.table
+        if not table_keys:
+            return {}
+        placeholders = ", ".join(["%s"] * len(set(table_keys.values())))
+        rows = self._repository._database.fetch_all(
+            f"""
+            SELECT table_name, column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name IN ({placeholders})
+            ORDER BY table_name, ordinal_position
+            """,
+            tuple(sorted(set(table_keys.values()))),
+        )
+        grouped: dict[str, list[dict]] = {}
+        for row in rows:
+            grouped.setdefault(row["table_name"], []).append({
+                "name": row["column_name"],
+                "type": row["data_type"],
+                "nullable": row["is_nullable"] == "YES",
+            })
+        # Resolve every alias (table and read_table) to its column list.
+        resolved: dict[str, list[dict]] = {}
+        for key, read_key in table_keys.items():
+            resolved[key] = grouped.get(read_key, [])
+        return resolved
 
     def describe_dataset(self, name: str) -> dict:
         dataset = self._registry.get(name)
@@ -122,6 +165,10 @@ class DataService:
         filter_mode: str = "standard",
         cursor: str | None = None,
     ) -> dict:
+        if name == "tushare_raw" and (
+            not exact_filters.get("api_name") or exact_filters.get("api_name") in INTERNAL_DATASETS
+        ):
+            raise InvalidQueryError("raw queries require a non-internal api_name; factor_value is comparison-only")
         dataset = self._registry.get(name)
         self._validate_filters(
             dataset,
@@ -1298,6 +1345,7 @@ class DataService:
             "fallback_source_ids": ["financial_data"] if fallback_routes else [],
             "fallback_status": dataset_fallback_status(dataset.name),
             "date_column": dataset.date_column,
+            "table": dataset.table,
         }
 
     @staticmethod

@@ -10,8 +10,14 @@ LATE_REPAIR_MINUTE = 58
 LATE_PUBLISHED_DATASETS = frozenset({
     "ccass_hold",
     "etf_share_size",
+    # Provider factor snapshots are published progressively after the close.
+    # The first daily pass can be verified-empty or only partially cover the
+    # stock/fund universe, so bounded fresh executions must revisit them.
+    "fund_factor_pro",
     "margin",
     "margin_detail",
+    "stk_factor",
+    "stk_factor_pro",
 })
 
 

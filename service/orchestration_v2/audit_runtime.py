@@ -38,6 +38,16 @@ class TaskAuditNotImplementedError(RuntimeError):
     """A planned output has no executable audit implementation yet."""
 
 
+class TaskAuditNoMatureExpectedPartitionError(TaskAuditNotImplementedError):
+    """A bounded scope is not yet an independently mature aggregate period.
+
+    This is a preflight result, not an acquisition failure.  Repair workflows
+    must still execute their bounded provider request so that transport proof
+    can certify the exact slice; genuinely missing audit implementations keep
+    raising :class:`TaskAuditNotImplementedError` and remain fail-closed.
+    """
+
+
 AuditHandler = Callable[
     [
         DatasetAuditContract,
@@ -159,7 +169,7 @@ class TaskAuditRuntime:
             and result.expected_partitions == 0
         ):
             if not transport_verified:
-                raise TaskAuditNotImplementedError(
+                raise TaskAuditNoMatureExpectedPartitionError(
                     f"{contract.dataset_name} scope {start_date}..{end_date} "
                     "contains no mature expected partition"
                 )
@@ -219,7 +229,7 @@ class TaskAuditRuntime:
             "verified": result.status in {"complete", "empty", "gaps"},
             "audit_status": result.status,
             "audit_mode": contract.audit_mode,
-            "rule_revision": contract.rule_revision,
+            "rule_revision": result.evidence.get('rule_revision', contract.rule_revision),
             "expected_partitions": result.expected_partitions,
             "present_partitions": result.present_partitions,
             "missing_partitions": result.missing_partitions,
@@ -232,7 +242,7 @@ class TaskAuditRuntime:
             observation_start=start_date,
             observation_end=end_date,
             observation_period=observation_key,
-            contract_version=f"coverage-rule:{contract.rule_revision}",
+            contract_version=f"coverage-rule:{validation['rule_revision']}",
             expectation_status="expected",
             data_status=status,
             expected_count=result.expected_partitions,
@@ -266,6 +276,16 @@ class TaskAuditRuntime:
                 f"no executable coverage rule for {contract.dataset_name}"
             ) from exc
         running_contract = coverage_rule_audit_contract(rule)
+        # Existing chip jobs retain their acquisition checkpoints. Allow only
+        # this audited, strictly stronger coverage migration; all other drift
+        # still fails closed. Evidence records the running rule revision.
+        if (contract.dataset_name == 'cyq_chips'
+                and contract.rule_revision == 2
+                and contract.min_entity_ratio == 0.90
+                and contract.model_copy(update={
+                    'rule_revision': 3, 'min_entity_ratio': 1.0,
+                }) == running_contract):
+            contract = running_contract
         if running_contract != contract:
             raise TaskAuditContractDriftError(
                 f"audit contract drift for {contract.dataset_name}: "

@@ -68,6 +68,12 @@ def classify_failure(exc: Exception) -> str:
     """Return a stable operator-facing failure category."""
     name = type(exc).__name__.lower()
     message = str(exc).lower()
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if getattr(exc, 'provider_error_code', None) == 'QUOTA_EXCEEDED':
+        return 'quota'
+    if status_code == 429 or "429 client error" in message:
+        return "rate_limited"
     if "ratelimit" in name or "quota" in message or "频率" in message:
         return "quota"
     if isinstance(exc, TimeoutError) or "timeout" in name or "timed out" in message:

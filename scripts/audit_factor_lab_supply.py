@@ -43,7 +43,7 @@ DOMAINS = {
         "moneyflow", "margin", "margin_detail", "margin_secs", "hk_hold",
         "stock_hsgt", "hsgt_top10", "ggt_top10", "block_trade", "top_list",
         "top_inst", "cyq_chips", "cyq_perf", "stk_factor",
-        "stk_factor_pro", "factor_value", "fama_french_daily",
+        "stk_factor_pro", "fama_french_daily",
         "technical_factor_snapshot",
     ),
     "etf": (

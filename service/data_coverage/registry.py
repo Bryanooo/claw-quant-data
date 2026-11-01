@@ -201,25 +201,50 @@ _EXPLICIT_RULES = [
             "technical_factor_snapshot",
             CoverageStrategy.TRADING_DAILY,
             collection_api_name=None,
-            entity_reference="stock_basic",
+            entity_reference="stock_daily",
             min_entity_ratio=1.0,
-            # This is a forward-maintained research snapshot introduced with
-            # the V2 derived workflow, not a historical price table.  The
-            # chart/research APIs reproduce historical factors directly from
-            # daily bars; manufacturing one persisted snapshot for every day
-            # since 1990 would duplicate that data and turn pre-launch dates
-            # into false coverage incidents.
-            availability_start=date(2026, 10, 9),
+            # This compatibility view is now published by the unified local
+            # factor task for governed history as well as routine dates. Its
+            # expectation boundary must match that producer; otherwise the
+            # first requested historical date is rejected as "not mature"
+            # after the rows have already been correctly calculated.
+            availability_start=date(2016, 1, 4),
             grace_days=1,
             default_lookback_days=120,
             scheduled=False,
             require_transport_proof=False,
-            revision=2,
+            revision=4,
+            required_values=(("audit_status", "ready"),),
             description=(
                 "自派生快照功能启用日开始，由 stock_daily 与 adj_factor 的同一"
                 "交易日就绪状态触发；"
                 "必须为当日上市股票全集写入一行，不可计算也必须记录明确原因"
             ),
+        ),
+        _rule(
+            "local_factor_snapshot",
+            CoverageStrategy.TRADING_DAILY,
+            collection_api_name=None,
+            entity_reference="stock_daily",
+            min_entity_ratio=1.0,
+            availability_start=date(2016, 1, 4),
+            grace_days=1,
+            default_lookback_days=120,
+            scheduled=False,
+            require_transport_proof=False,
+            revision=3,
+            required_values=(("schema_version", "local-272-v4"), ("audit_status", "ready")),
+            description=(
+                "按交易日核对当日A股行情全集；每只证券必须写入一个272位版本化"
+                "因子数组，历史不足或财务输入缺失以ready_mask显式标记，不得静默丢行"
+            ),
+        ),
+        _rule(
+            "valuation_percentile_snapshot", CoverageStrategy.TRADING_DAILY,
+            collection_api_name=None, entity_column=None,
+            availability_start=date(2026, 10, 30), scheduled=False,
+            required_values=(("formula_version", "group-valuation-v1"), ("audit_status", "ready")),
+            description="两指定指数的同日估值分布；仅ready分区可验收，partial诊断不能算完成",
         ),
         _rule(
             "fama_french_daily",
@@ -603,10 +628,10 @@ _EXPLICIT_RULES = [
             "cyq_chips",
             CoverageStrategy.TRADING_DAILY,
             entity_reference="stock_daily",
-            min_entity_ratio=0.90,
+            min_entity_ratio=1.0,
             availability_start=date(2018, 1, 2),
             scheduled=False,
-            revision=2,
+            revision=3,
             description=(
                 "2018 年起按 SSE 交易日和当日实际有行情的证券截面审计筹码分布；"
                 "该接口按股票展开，缺口只进入显式、额度评估后的批量修复"
@@ -667,9 +692,9 @@ _EXPLICIT_RULES = [
             min_entity_ratio=1.0,
             availability_start=date(2026, 8, 28),
             scheduled=False,
-            revision=3,
+            revision=4,
             description=(
-                "按 SSE 交易日检查完整受控因子集合；日期存在但缺少任一已知因子"
+                "按 SSE 交易日检查官方声明的 272 个受控因子；日期存在但缺少任一因子"
                 "仍是部分分区，避免把额度中断后的半成品判为完整"
             ),
         ),

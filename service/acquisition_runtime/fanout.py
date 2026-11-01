@@ -13,6 +13,7 @@ from service.acquisition_runtime.models import (
     InvalidTaskParametersError,
     max_attempts_for_cadence,
 )
+from service.acquisition_runtime.factor_value_contract import governed_factor_names
 from service.db import query
 
 
@@ -181,7 +182,8 @@ _DEFINITIONS = (
 FANOUT_DEFINITIONS = {item.api_name: item for item in _DEFINITIONS}
 
 
-def list_fanout_values(source: str, *, as_of: date | None = None) -> list[str]:
+def list_fanout_values(source: str, *, as_of: date | None = None,
+                      active_since: date | None = None) -> list[str]:
     """Return an allow-listed point-in-time universe for one V2 acquire node."""
 
     statements = {
@@ -230,7 +232,15 @@ def list_fanout_values(source: str, *, as_of: date | None = None) -> list[str]:
     except KeyError as exc:
         raise ValueError(f"unsupported fan-out universe: {source}") from exc
     params = (as_of, as_of, as_of) if source in {"stock", "convertible_bond", "fund"} else None
-    return [str(row[next(iter(row))]) for row in query(statement, params)]
+    if active_since is not None:
+        if source != 'stock' or as_of is None or active_since > as_of:
+            raise ValueError('active_since requires an ordered stock date window')
+        # A stock delisted during the window still owes its earlier sessions.
+        params = (as_of, as_of, active_since)
+    values = [str(row[next(iter(row))]) for row in query(statement, params)]
+    if source == "factor_name":
+        return governed_factor_names(values)
+    return values
 
 
 def _canonical(value: Any) -> str:

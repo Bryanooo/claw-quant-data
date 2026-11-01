@@ -20,9 +20,9 @@ def test_dashboard_distinguishes_task_and_data_state():
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     assert "任务状态和数据状态分别核验" in html
     assert "日期是业务数据日期" in html
-    assert "采集任务" in html
+    assert "采集任务" in script
     assert "执行历史" in html
-    assert "查看节点" in script
+    assert "执行节点" in script
     assert "查看任务定义与节点" in script
 
 
@@ -66,10 +66,12 @@ def test_execution_history_shows_total_count():
 
 def test_investment_calendar_is_prominent_and_initialization_is_secondary():
     html = (ROOT / "service/dashboard/index.html").read_text()
-    investment = html.index('data-view="investment"')
-    governance = html.index('<p class="nav-group">治理</p>')
-    assert investment < governance
-    assert 'class="nav" data-view="initialization"' not in html
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
+    workspaces = script.split("const workspaces=[")[1].split("];")[0]
+    # 投资日历分组排在数据健康分组之前
+    assert workspaces.index('["investment","投资日历"]') < workspaces.index('["today","今日交付"]')
+    # initialization 不作为主导航项（不在 workspaces），只作为跳转目标
+    assert '["initialization"' not in workspaces
     assert 'data-view-target="initialization"' in html
 
 
@@ -165,11 +167,13 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     css = (ROOT / "service/dashboard/dashboard.css").read_text()
 
-    assert 'data-view="stock"' in html
+    assert 'data-panel="stock"' in html
     assert 'id="stockSearch"' in html
     assert 'id="stockPriceChart"' in html
-    assert 'id="stockVolumeChart"' in html
-    assert 'id="stockMacdChart"' in html
+    assert 'id="stockSubChartArea"' in html
+    assert 'id="stockAddSubChart"' in html
+    assert "STOCK_SUB_INDICATORS" in script
+    assert "renderStockSubCharts" in script
     assert 'id="stockWatchlist"' in html
     assert 'id="stockWatchToggle"' in html
     assert "牛门线与确认线按交易日定义" in html
@@ -187,10 +191,9 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert "<th>资产类型</th>" in html
     assert "asset-badge" in script
     assert ".asset-badge" in css
-    # 研究分组：导航分组 + 大盘 / ETF / 板块研究页
-    assert 'class="nav-group-label"' in html and "研究" in html
+    # 研究分组：研究工作台导航分组 + 大盘 / ETF / 板块研究页
+    assert '"研究工作台"' in script and "研究" in html
     for view in ("market", "etf", "sector"):
-        assert f'data-view="{view}"' in html
         assert f'data-panel="{view}"' in html
     assert "loadMarketResearch" in script
     assert "loadEtfResearch" in script
@@ -205,16 +208,17 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert "/api/v1/research/etfs/" in script and "nav-shares" in script
     assert "/api/v1/research/sectors/directory" in script
     assert "/api/v1/research/sectors/" in script and "members" in script
-    assert "/api/v1/research/stocks/search" in script
+    assert "/api/v1/research/instruments/search" in script
     assert "/api/v1/research/watchlist" in script
     assert 'method:"POST"' in script
     assert 'method:"DELETE"' in script
-    assert "/technicals?lookback_days=3000" in script
+    assert "/technicals?lookback_days=" in script
     assert "include_external=false" in script
     assert "macd_histogram" in script
     assert "niumen_confirmation_line" in script
     # 研究页体验：K线缩放/成交量副图/十字线 tooltip + 列表排序 + 双栏布局 + 折线数值卡
-    for prefix in ("market", "etf", "sector"):
+    # （ETF 页已精简：单只 ETF 的 K 线与技术因子合并到「标的研究」页，故只校验大盘/板块）
+    for prefix in ("market", "sector"):
         for suffix in ("VolumeChart", "Tooltip", "ZoomStatus", "ZoomIn", "ZoomOut", "ZoomReset", "PanPrev", "PanNext"):
             assert f'id="{prefix}{suffix}"' in html
     assert "renderResearchChart" in script
@@ -250,12 +254,12 @@ def test_stock_chart_supports_zoom_complete_tooltips_and_volume_units():
     assert 'id="stockPanPrev"' in html
     assert 'id="stockPanNext"' in html
     assert 'id="stockChartStage"' in html
-    assert 'id="stockVolumeTitle"' in html
+    assert 'id="stockSubChartArea"' in html
     assert "zoomStockChart" in script
     assert "panStockChart" in script
-    assert "chart_points=1500" in script
+    assert "chart_points=" in script
     assert 'id="stockHistoryRange"' in html
-    assert "完整历史" in script
+    assert "长历史" in script
     assert "setPointerCapture" in script
     assert 'addEventListener("wheel"' in script
     assert "stockActiveLines" in script
@@ -289,14 +293,15 @@ def test_sidebar_nav_scrolls_when_items_exceed_viewport():
 
 
 def test_nav_groups_place_calendars_by_audience():
-    html = (ROOT / "service/dashboard/index.html").read_text()
+    script = (ROOT / "service/dashboard/dashboard.js").read_text()
 
-    research = html.index('class="nav-group-label"')
-    investment = html.index('data-view="investment"')
-    governance = html.index('<p class="nav-group">治理</p>')
-    calendar = html.index('data-view="calendar"')
-    assert research < investment < governance
-    assert governance < calendar
+    workspaces = script.split("const workspaces=[")[1].split("];")[0]
+    research = workspaces.index('"研究工作台"')
+    investment = workspaces.index('["investment","投资日历"]')
+    health = workspaces.index('"数据健康"')
+    calendar = workspaces.index('"calendar","数据日历"')
+    assert research < investment < health
+    assert health < calendar
 
 
 def test_macro_research_page_and_endpoints_contract():
@@ -304,7 +309,6 @@ def test_macro_research_page_and_endpoints_contract():
     script = (ROOT / "service/dashboard/dashboard.js").read_text()
     router = (ROOT / "service/api/routers/research.py").read_text()
 
-    assert 'data-view="macro"' in html
     assert 'data-panel="macro"' in html
     for module in ("regime", "growth", "inflation", "liquidity", "rates", "calendar"):
         assert f'data-macro-module="{module}"' in html

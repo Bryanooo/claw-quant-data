@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from service.api.dependencies import RawArchiveServiceDependency
 from service.api.schemas import (
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/v1/audit/raw", tags=["audit"])
 
 @router.get("/interfaces", response_model=list[RawInterfaceSummary])
 def list_raw_interfaces(service: RawArchiveServiceDependency) -> list[dict]:
-    return service.list_interfaces()
+    return [item for item in service.list_interfaces() if item.get("api_name") != "factor_value"]
 
 
 @router.get("/{api_name}/requests", response_model=RawRequestPageResponse)
@@ -54,6 +54,8 @@ def list_raw_records(
     offset: int = Query(default=0, ge=0),
     include_total: bool = False,
 ) -> dict:
+    if api_name == "factor_value":
+        raise HTTPException(status_code=404, detail="internal comparison dataset")
     return service.list_records(
         api_name,
         request_hash=request_hash,
@@ -78,4 +80,6 @@ def raw_lineage(
     service: RawArchiveServiceDependency,
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> dict:
+    if api_name == "factor_value":
+        raise HTTPException(status_code=404, detail="internal comparison dataset")
     return service.lineage(api_name, record_hash, limit=limit)

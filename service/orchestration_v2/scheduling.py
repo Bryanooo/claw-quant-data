@@ -6,13 +6,17 @@ from datetime import date, timedelta
 from typing import Any
 
 from service.config import APP_REVISION
+from service.clock import business_now
 from service.db import query
 from service.orchestration_v2.catalog import (
     acquisition_task_blueprints,
     transformation_task_blueprints,
 )
 from service.orchestration_v2.contracts import ExecutionRequest
-from service.orchestration_v2.contracts import NEXT_MORNING_TASKS
+from service.orchestration_v2.contracts import (
+    NEXT_MORNING_TASKS,
+    US_COMPLETED_SESSION_TASKS,
+)
 from service.orchestration_v2.repository import OrchestrationV2Repository
 from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
 from service.orchestration_v2.transformations import (
@@ -20,14 +24,11 @@ from service.orchestration_v2.transformations import (
 )
 
 
-US_COMPLETED_SESSION_TASKS = frozenset({
-    "us_daily",
-    "us_tbr",
-    "us_tltr",
-    "us_trltr",
-    "us_trycr",
-    "us_tycr",
-})
+# These inputs have financial/event periods, not the daily bar observation key.
+TRANSFORMATION_AUXILIARY_INPUTS = {
+    "local_factor_snapshot": ("income", "balancesheet", "cashflow", "financial_indicator", "dividend"),
+    "valuation_percentile_snapshot": ("index_weight",),
+}
 
 
 def _routine_scope(cadence: str, as_of_date: date) -> tuple[str, date, date, date]:
@@ -91,10 +92,12 @@ def dispatch_ready_transformations(
             continue
         eligible += 1
         try:
-            states = store.latest_common_ready_input_states(
-                blueprint.input_datasets
-            )
-            missing = sorted(set(blueprint.input_datasets) - set(states))
+            if blueprint.task_key == 'valuation_percentile_snapshot':
+                dispatch_group_weight_refresh(store, as_of=business_now().date())
+            auxiliary_names = TRANSFORMATION_AUXILIARY_INPUTS.get(blueprint.task_key, ())
+            daily_inputs = tuple(name for name in blueprint.input_datasets if name not in auxiliary_names)
+            states = store.latest_common_ready_input_states(daily_inputs)
+            missing = sorted(set(daily_inputs) - set(states))
             if missing:
                 waiting[blueprint.task_key] = missing
                 continue
@@ -110,10 +113,19 @@ def dispatch_ready_transformations(
                 for state in states.values()
                 if state.get("observation_end") is not None
             )
+            auxiliary = {}
+            auxiliary_names = TRANSFORMATION_AUXILIARY_INPUTS.get(blueprint.task_key, ())
+            if auxiliary_names:
+                auxiliary = store.auxiliary_input_revision(auxiliary_names, end)
+                if auxiliary["pending_count"]:
+                    waiting[blueprint.task_key] = ["auxiliary_input_repairs_pending"]
+                    continue
             input_identity = ",".join(
                 f"{name}:{state['dataset_state_id']}:{state['revision']}"
                 for name, state in sorted(states.items())
             )
+            if auxiliary:
+                input_identity += f":aux:{auxiliary['revision_digest']}"
             _row, was_created = store.create_execution(ExecutionRequest(
                 task_key=blueprint.task_key,
                 purpose="daily",
@@ -131,6 +143,7 @@ def dispatch_ready_transformations(
                 frozen_scope={
                     "dispatch": "v2_dependency_transformation",
                     "implementation_version": blueprint.implementation_version,
+                    "auxiliary_input_revision": auxiliary,
                     "input_dataset_states": {
                         name: {
                             "dataset_state_id": state["dataset_state_id"],
@@ -152,6 +165,60 @@ def dispatch_ready_transformations(
         "waiting": waiting,
         "errors": errors,
     }
+
+
+def dispatch_group_weight_refresh(store, *, as_of: date):
+    """One bounded V2 execution for the last closed month, never all indices.
+
+    A failed/empty monthly refresh stays visible; idempotency prevents endless
+    resubmission. This is not an Ant request and does not enable old fanouts.
+    """
+    end = as_of.replace(day=1) - timedelta(days=1)
+    start = end.replace(day=1)
+    rows = query(
+        "SELECT index_code,max(trade_date) AS latest FROM tushare_current_index_weight "
+        "WHERE index_code=ANY(%s) AND trade_date<=%s GROUP BY index_code",
+        (['000300.SH', '000688.SH'], as_of),
+    )
+    latest = {row['index_code']: row['latest'] for row in rows}
+    if all(latest.get(code) is not None and latest[code] >= start
+           for code in ('000300.SH', '000688.SH')):
+        return None
+    return store.create_execution(ExecutionRequest(
+        task_key='index_weight', purpose='repair', trigger_source='dependency',
+        idempotency_key=f'v2:group-weight-refresh:{start}:{end}:v1',
+        observation_key=f'history:{start}:{end}',
+        observation_start=start, observation_end=end,
+        frozen_scope={'recovery_scope': 'quota_guarded_history',
+                      'fanout_values': ['000300.SH', '000688.SH'],
+                      'dispatch': 'group_valuation_monthly_dependency'},
+    ))
+
+
+def dispatch_weekly_reference_profiles(as_of: date, *, repository=None):
+    from service.orchestration_v2.automation_status import WEEKLY_REFERENCE_PROFILES
+    store = repository or OrchestrationV2Repository()
+    active = store.active_task_keys()
+    week = (as_of - timedelta(days=as_of.weekday())).isoformat()
+    created = existing = 0
+    errors = {}
+    for key in WEEKLY_REFERENCE_PROFILES:
+        if key not in active:
+            continue
+        try:
+            _, added = store.create_execution(ExecutionRequest(
+                task_key=key, purpose='daily', trigger_source='schedule',
+                idempotency_key=f'v2:reference-weekly:{key}:{week}:v1',
+                observation_key=f'snapshot:{as_of}', observation_start=as_of, observation_end=as_of,
+                frozen_scope={'reference_profile': key, 'profile_version': 1,
+                              'dispatch': 'bounded_weekly_reference', 'collection_week': week},
+            ))
+        except Exception as exc:
+            errors[key] = f'{type(exc).__name__}: {exc}'
+            continue
+        created += int(added)
+        existing += int(not added)
+    return {'created': created, 'existing': existing, 'errors': errors}
 
 
 def dispatch_daily_acquisitions(
@@ -361,10 +428,17 @@ def dispatch_latest_daily_acquisitions(
             delayed = dates[2] if len(dates) > 2 else target
     else:
         target = next((item for item in dates if item < as_of_date), dates[0])
-        # A next-morning dataset for the latest open day is not necessarily
-        # published during a weekend/holiday. Keep those tasks on the prior
-        # closed trading day until the next business publication morning.
-        delayed = next((item for item in dates if item < target), target)
+        # Next-morning datasets publish on the following *calendar* morning,
+        # not the following trading day (verified live: etf_share_size,
+        # margin and margin_detail expose Friday's partition by Saturday).
+        # Once the 09:15 release gate has passed, a weekend/holiday may
+        # therefore attempt the most recently closed day instead of staying
+        # pinned to the day before it.
+        delayed = (
+            target
+            if next_morning_released
+            else next((item for item in dates if item < target), target)
+        )
     us_rows = query(
         "SELECT cal_date FROM tushare_norm_us_tradecal WHERE is_open=1 "
         "AND cal_date < %s ORDER BY cal_date DESC LIMIT 1",

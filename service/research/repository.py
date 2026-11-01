@@ -60,6 +60,35 @@ class ResearchRepository:
             ),
         )
 
+    def search_etfs(self, query: str, *, limit: int = 20) -> list[dict]:
+        """Search exchange-traded funds by code or name (fund_basic market='E')."""
+
+        normalized = query.strip()
+        pattern = f"%{normalized}%"
+        prefix = f"{normalized}%"
+        return self._database.fetch_all(
+            """
+            SELECT ts_code, name, management, fund_type, market, benchmark
+            FROM tushare_norm_fund_basic
+            WHERE market = 'E'
+              AND (ts_code ILIKE %s OR name ILIKE %s)
+            ORDER BY
+                CASE
+                    WHEN upper(ts_code)=upper(%s) OR name=%s THEN 0
+                    WHEN ts_code ILIKE %s OR name ILIKE %s THEN 1
+                    ELSE 2
+                END,
+                ts_code
+            LIMIT %s
+            """,
+            (
+                pattern, pattern,
+                normalized, normalized,
+                prefix, prefix,
+                limit,
+            ),
+        )
+
     def stock_watchlist(self) -> list[dict]:
         """Return durable dashboard favourites with security-master metadata."""
 
@@ -509,6 +538,85 @@ class ResearchRepository:
             (ts_codes, as_of),
         )
         return {row["ts_code"]: row for row in rows}
+
+    def index_valuation_members(self, code: str, *, as_of: date) -> list[dict]:
+        return self._database.fetch_all(
+            """SELECT w.con_code AS ts_code, w.weight, w.trade_date, s.name,
+                      s.list_date, s.delist_date
+               FROM tushare_current_index_weight w
+               LEFT JOIN stock_basic s ON s.ts_code=w.con_code
+               WHERE w.index_code=%s AND w.trade_date=(
+                   SELECT max(trade_date) FROM tushare_current_index_weight
+                   WHERE index_code=%s AND trade_date<=%s)
+               ORDER BY w.con_code""", (code, code, as_of),
+        )
+
+    def group_valuation_rows(self, codes: list[str], *, as_of: date) -> list[dict]:
+        # The caller selects one exact date across all members, never latest per stock.
+        return self._database.fetch_all(
+            """SELECT ts_code, trade_date, pe, pe_ttm, pb, ps_ttm, dv_ttm, total_mv
+               FROM tushare_current_daily_basic
+               WHERE ts_code=ANY(%s) AND trade_date=%s""", (codes, as_of),
+        )
+
+    def group_financial_rows(self, codes: list[str], *, report_period: date,
+                             as_of: date) -> list[dict]:
+        return self._database.fetch_all(
+            """SELECT DISTINCT ON (ts_code) ts_code, end_date, ann_date,
+                      roe, roic, grossprofit_margin, netprofit_margin, debt_to_assets
+               FROM fina_indicator
+               WHERE ts_code=ANY(%s) AND end_date=%s AND ann_date<=%s
+               ORDER BY ts_code, ann_date DESC, report_type""",
+            (codes, report_period, as_of),
+        )
+
+    def group_aggregate_inputs(self, codes: list[str], *, report_period: date,
+                               as_of: date) -> list[dict]:
+        """Cumulative reporting periods; net assets exclude minority interests."""
+        annual = date(report_period.year - 1, 12, 31)
+        prior = date(report_period.year - 1, report_period.month, report_period.day)
+        return self._database.fetch_all(
+            """WITH profits AS (
+                SELECT DISTINCT ON (ts_code,end_date) ts_code,end_date,n_income_attr_p
+                FROM income WHERE ts_code=ANY(%s) AND end_date=ANY(%s)
+                  AND COALESCE(f_ann_date,ann_date)<=%s
+                  AND report_type IN ('1','4','5')
+                ORDER BY ts_code,end_date,COALESCE(f_ann_date,ann_date) DESC,
+                         report_type DESC
+            ), equity AS (
+                SELECT DISTINCT ON (ts_code) ts_code,
+                       total_hldr_eqy_inc_min_int-minority_int AS parent_equity
+                FROM balancesheet WHERE ts_code=ANY(%s) AND end_date=%s
+                  AND COALESCE(f_ann_date,ann_date)<=%s
+                  AND report_type IN ('1','4','5')
+                ORDER BY ts_code,COALESCE(f_ann_date,ann_date) DESC,report_type DESC
+            )
+            SELECT d.ts_code,d.total_mv, e.parent_equity,
+                   CASE WHEN %s THEN c.n_income_attr_p
+                        ELSE a.n_income_attr_p+c.n_income_attr_p-p.n_income_attr_p
+                   END AS net_income_ttm
+            FROM tushare_current_daily_basic d
+            LEFT JOIN profits c ON c.ts_code=d.ts_code AND c.end_date=%s
+            LEFT JOIN profits a ON a.ts_code=d.ts_code AND a.end_date=%s
+            LEFT JOIN profits p ON p.ts_code=d.ts_code AND p.end_date=%s
+            LEFT JOIN equity e ON e.ts_code=d.ts_code
+            WHERE d.ts_code=ANY(%s) AND d.trade_date=%s""",
+            (codes, [report_period, annual, prior], as_of, codes, report_period,
+             as_of, report_period.month == 12, report_period, annual, prior, codes, as_of),
+        )
+
+    def group_calendar(self, start: date, end: date) -> list[dict]:
+        return self._database.fetch_all(
+            "SELECT cal_date,is_open FROM trade_cal WHERE exchange='SSE' "
+            "AND cal_date BETWEEN %s AND %s ORDER BY cal_date", (start, end),
+        )
+
+    def stored_group_valuation(self, code: str, trade_date: date) -> list[dict]:
+        return self._database.fetch_all(
+            "SELECT trade_date,formula_version,audit_status,computed_at,source_execution_id,"
+            "snapshots->%s AS snapshot FROM valuation_percentile_snapshot "
+            "WHERE trade_date=%s AND snapshots ? %s", (code, trade_date, code),
+        )
 
     def macro_series(self, *, as_of: date, limit: int = 24) -> dict[str, list[dict]]:
         """Return bounded, normalized macro series with explicit observation dates."""
@@ -1064,6 +1172,42 @@ class ResearchRepository:
                 baseline_rank,
                 baseline_rank,
             ),
+        )
+
+    def etf_share_series(
+        self,
+        *,
+        ts_codes: list[str],
+        as_of: date,
+        lookback_days: int,
+    ) -> list[dict]:
+        """Return the daily governed share observations for tracked ETFs.
+
+        One row per (ts_code, trade_date) in ascending date order.  ``total_share``
+        is expressed in ten-thousand shares, ``nav`` is the per-unit NAV, and
+        ``total_size`` is the market size in ten-thousand RMB (share × NAV).  The
+        caller derives day-over-day creations/redemptions from this series.
+
+        ``amount`` is the secondary-market turnover in thousand CNY and ``vol`` the
+        traded volume, both joined from ``fund_daily``; they are reference metrics
+        (trading activity) and are unrelated to the primary-market share change.
+        """
+
+        if not ts_codes:
+            return []
+        return self._database.fetch_all(
+            """
+            SELECT s.ts_code, s.trade_date, s.total_share, s.total_size, s.nav,
+                   s.close, f.amount, f.vol
+            FROM tushare_norm_etf_share_size AS s
+            LEFT JOIN tushare_norm_fund_daily AS f
+              ON f.ts_code = s.ts_code AND f.trade_date = s.trade_date
+            WHERE s.ts_code = ANY(%s)
+              AND s.trade_date <= %s
+              AND s.trade_date >= %s - (%s * INTERVAL '1 day')
+            ORDER BY s.ts_code, s.trade_date
+            """,
+            (ts_codes, as_of, as_of, lookback_days),
         )
 
     def index_period_returns(

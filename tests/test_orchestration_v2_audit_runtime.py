@@ -8,6 +8,7 @@ from service.data_coverage.models import (
     CoverageStrategy,
 )
 from service.orchestration_v2.audit_runtime import (
+    TaskAuditNoMatureExpectedPartitionError,
     TaskAuditContractDriftError,
     TaskAuditNotImplementedError,
     TaskAuditRuntime,
@@ -236,7 +237,10 @@ def test_expected_partition_cannot_succeed_with_zero_expectations():
     runtime._calculator = calculator
     document = TaskDefinitionDocument.model_validate(acquisition_definition())
 
-    with pytest.raises(TaskAuditNotImplementedError, match="no mature expected"):
+    with pytest.raises(
+        TaskAuditNoMatureExpectedPartitionError,
+        match="no mature expected",
+    ):
         runtime.audit_output(
             document,
             dataset_name="stock_daily_basic",

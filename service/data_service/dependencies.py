@@ -454,9 +454,27 @@ def field_lineage() -> list[dict[str, Any]]:
     return lineage_rows
 
 
-@lru_cache(maxsize=1)
-def dependency_summary() -> dict[str, Any]:
-    items = interface_inventory()
+def task_asset_classes() -> dict[str, str]:
+    """Map every acquisition task_key to its asset class.
+
+    Derived from the same compiler as the interface inventory: each interface
+    row carries its ``asset_class`` and the task_keys that collect it.  A task
+    spanning multiple interfaces keeps the first (most specific) class.
+    """
+
+    mapping: dict[str, str] = {}
+    for item in interface_inventory():
+        asset_class = item.get("asset_class", ASSET_CLASS_OTHER)
+        for task in item.get("tasks", []):
+            task_key = task.get("task_key")
+            if task_key:
+                mapping.setdefault(task_key, asset_class)
+    return mapping
+
+
+def dependency_summary(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    if items is None:
+        items = interface_inventory()
     by_source: dict[str, int] = {}
     by_status: dict[str, int] = {}
     by_asset_class: dict[str, int] = {}
@@ -550,6 +568,7 @@ def merge_runtime(
     items: list[dict[str, Any]],
     execution_states: dict[str, dict[str, Any]],
     dataset_states: dict[str, dict[str, Any]],
+    automation_states: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Attach latest execution + dataset readiness onto inventory rows.
 
@@ -559,6 +578,13 @@ def merge_runtime(
     merged: list[dict[str, Any]] = []
     for item in items:
         row = dict(item)
+        row['automation'] = [
+            {'task_key': task['task_key'], **(
+                automation_states.get(task['task_key'], {'state': 'not_published', 'label': '无已发布任务', 'automatic': False})
+                if automation_states is not None else
+                {'state': 'unknown', 'label': '调度状态未核实', 'automatic': None})}
+            for task in row['tasks']
+        ]
         runtime: dict[str, Any] | None = None
         if row["tasks"] and row["source"] in {"tushare", "financial_data"}:
             states = [

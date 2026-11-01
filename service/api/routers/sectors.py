@@ -89,6 +89,28 @@ def sector_research_pack(
     )
 
 
+@router.get("/{provider}/{sector_code}/valuation-distribution")
+def sector_valuation_distribution(
+    provider: str, sector_code: str, trade_date: date,
+    service: ResearchServiceDependency,
+    report_period: date | None = None,
+) -> dict:
+    return service.group_valuation(
+        sector_code.upper(), provider=provider.lower(), trade_date=trade_date,
+        report_period=report_period,
+    )
+
+
+@router.get("/{provider}/{sector_code}/valuation-distribution/history")
+def sector_valuation_distribution_history(
+    provider: str, sector_code: str, start: date, end: date,
+    service: ResearchServiceDependency,
+) -> dict:
+    return service.group_valuation_history(
+        sector_code.upper(), provider=provider.lower(), start=start, end=end,
+    )
+
+
 @router.get("/{provider}/{sector_code}/fundamentals")
 def sector_fundamentals(
     provider: str,

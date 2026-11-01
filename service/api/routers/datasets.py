@@ -93,6 +93,13 @@ def list_datasets(
     return service.list_datasets()
 
 
+@router.get("/factor-catalog")
+def get_factor_catalog() -> dict:
+    """量化因子目录：因子清单、含义、来源接口与本地采集日期范围。"""
+    from service.data_service.factor_catalog import factor_catalog
+    return factor_catalog()
+
+
 @router.get("/freshness", response_model=list[FreshnessItem])
 def get_freshness(
     service: DataServiceDependency,

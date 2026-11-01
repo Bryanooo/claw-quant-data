@@ -15,6 +15,19 @@ from typing import Any
 COMMON_INDICATOR_FORMULA_VERSION = "common-technicals-v1"
 
 
+class PrimitiveCache:
+    """Calculation-scoped cache; keys include the complete input and parameters."""
+
+    def __init__(self):
+        self._values = {}
+
+    def series(self, function, values, window):
+        key = (function.__name__, window, tuple(values))
+        if key not in self._values:
+            self._values[key] = function(values, window)
+        return self._values[key]
+
+
 # Parameters are expressed in bars, not calendar days.  The profile keeps the
 # familiar A-share daily settings while preventing a misleading 250-month
 # moving average from appearing merely because the same function is reused for
@@ -285,6 +298,7 @@ def parameterized_indicator_pack(
     volumes: list[float],
     *,
     timeframe: str,
+    primitive_cache: PrimitiveCache | None = None,
 ) -> dict[str, Any]:
     """Return common indicator families under a frequency-aware contract.
 
@@ -346,8 +360,9 @@ def parameterized_indicator_pack(
             },
         }
 
-    sma = {window: _sma_series(closes, window) for window in profile["sma"]}
-    ema = {window: _ema_series(closes, window) for window in profile["ema"]}
+    cache = primitive_cache or PrimitiveCache()
+    sma = {window: cache.series(_sma_series, closes, window) for window in profile["sma"]}
+    ema = {window: cache.series(_ema_series, closes, window) for window in profile["ema"]}
     rsi = {window: _rsi_series(closes, window) for window in profile["rsi"]}
     roc = {window: _roc_series(closes, window) for window in profile["roc"]}
     cci = {
@@ -364,7 +379,7 @@ def parameterized_indicator_pack(
         for window, values in atr.items()
     }
     tsi = _tsi_series(closes)
-    bollinger_middle = _sma_series(closes, 20)
+    bollinger_middle = cache.series(_sma_series, closes, 20)
     bollinger_std = rolling_pstdev_series(closes, 20)
     bollinger_upper = [
         middle + 2 * deviation
@@ -491,6 +506,8 @@ def common_indicator_pack(
     lows: list[float],
     closes: list[float],
     volumes: list[float],
+    *,
+    primitive_cache: PrimitiveCache | None = None,
 ) -> dict[str, Any]:
     """Return one auditable common-indicator contract and aligned series.
 
@@ -510,8 +527,9 @@ def common_indicator_pack(
             "latest": {},
         }
 
-    ema = {window: _ema_series(closes, window) for window in (12, 20, 26, 50, 200)}
-    sma = {window: _sma_series(closes, window) for window in (3, 6, 12, 20, 24)}
+    cache = primitive_cache or PrimitiveCache()
+    ema = {window: cache.series(_ema_series, closes, window) for window in (12, 20, 26, 50, 200)}
+    sma = {window: cache.series(_sma_series, closes, window) for window in (3, 6, 12, 20, 24)}
 
     bias: dict[int, list[float | None]] = {}
     for window in (6, 12, 24):
@@ -532,6 +550,14 @@ def common_indicator_pack(
     ppo_histogram = [
         value - signal if value is not None and signal is not None else None
         for value, signal in zip(ppo, ppo_signal)
+    ]
+    # Compute the absolute-price MACD family once in the shared technical
+    # product.  Downstream local factors reuse these persisted values instead
+    # of maintaining a second implementation of the same 12/26/9 formula.
+    macd_dif = [fast - slow for fast, slow in zip(ema[12], ema[26])]
+    macd_dea = _ema_series(macd_dif, 9)
+    macd_histogram = [
+        2 * (dif - dea) for dif, dea in zip(macd_dif, macd_dea)
     ]
 
     true_ranges = [
@@ -638,6 +664,10 @@ def common_indicator_pack(
         "ppo": ppo,
         "ppo_signal": ppo_signal,
         "ppo_histogram": ppo_histogram,
+        "macd_dif_12_26": macd_dif,
+        "macd_dea_9": macd_dea,
+        "macd_histogram_12_26_9": macd_histogram,
+        "sma_20": sma[20],
         "natr_14": natr14,
         "keltner_middle": keltner_middle,
         "keltner_upper": keltner_upper,
@@ -682,6 +712,7 @@ def common_indicator_pack(
             "bias_windows": [6, 12, 24],
             "bbi_windows": [3, 6, 12, 24],
             "ppo": [12, 26, 9],
+            "macd": [12, 26, 9],
             "natr": 14,
             "keltner": {"ema": 20, "atr": 20, "multiplier": 2.0},
             "ttm_squeeze": {"bollinger": [20, 2.0], "keltner": [20, 1.5]},

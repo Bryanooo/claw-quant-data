@@ -97,7 +97,7 @@ FACTOR_INPUT_BUNDLES: tuple[dict[str, Any], ...] = (
             "moneyflow", "margin", "margin_detail", "margin_secs", "hk_hold",
             "stock_hsgt", "hsgt_top10", "ggt_top10", "block_trade",
             "top_list", "top_inst", "cyq_chips", "cyq_perf", "stk_factor",
-            "stk_factor_pro", "factor_value", "fama_french_daily",
+            "stk_factor_pro", "fama_french_daily",
             "technical_factor_snapshot",
         ),
         "point_in_time": False,
@@ -137,6 +137,23 @@ FACTOR_INPUT_BUNDLES: tuple[dict[str, Any], ...] = (
                 "coverage_mode": "stock_daily_sessions",
             },
             "technical_factor_snapshot": {"required": False, "absence_semantics": "forward_materialization_not_historical"},
+        },
+    },
+    {
+        "id": "local_factors_272@v1",
+        "required": False,
+        "description": (
+            "Versioned locally calculated 272-factor arrays with per-value "
+            "readiness and separate provider-comparison evidence."
+        ),
+        "datasets": ("local_factor_snapshot",),
+        "point_in_time": True,
+        "dataset_policies": {
+            "local_factor_snapshot": {
+                "required": False,
+                "absence_semantics": "forward_materialization_not_historical",
+                "coverage_mode": "stock_daily_sessions",
+            },
         },
     },
     {

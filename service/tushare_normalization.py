@@ -610,6 +610,37 @@ class TushareNormalizer:
             contract_complete=not strict_contract or not missing,
         )
 
+    def count_request_business_rows(self, api_name: str, request_hash: str) -> int:
+        """Count durable unique business identities for one logical request.
+
+        Page-level upserts may encounter the same entity more than once when
+        an upstream offset snapshot changes while it is being read.  Summing
+        attempted writes would then overstate completeness.  The normalized
+        table is the durable truth, so completion evidence uses its distinct
+        business identity instead.
+        """
+
+        contract = self._registry.get(api_name)
+        identities = contract.business_identity_fields or contract.identity_fields
+        if not identities:
+            return 0
+        statement = sql.SQL(
+            "SELECT count(*) FROM ("
+            "SELECT DISTINCT {identities} FROM {table} "
+            "WHERE _request_hash=%s"
+            ") AS durable_scope"
+        ).format(
+            identities=sql.SQL(", ").join(map(sql.Identifier, identities)),
+            table=sql.Identifier(contract.table_name),
+        )
+        connection = get_conn()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(statement, (request_hash,))
+                return int(cursor.fetchone()[0])
+        finally:
+            connection.close()
+
     def resolve_superseded_scope(
         self,
         api_name: str,

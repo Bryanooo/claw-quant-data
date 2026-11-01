@@ -9,6 +9,9 @@ import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
 
+from service.acquisition_runtime.factor_value_contract import (
+    FACTOR_VALUE_EXPECTED_COUNT,
+)
 from service.config import DB_CONFIG
 from service.data_coverage.models import (
     ActualPartition,
@@ -19,7 +22,56 @@ from service.data_coverage.models import (
 from service.data_service.models import DateStorage
 
 
+# Upper bound for the per-day security detail copied into the audit evidence.
+# The full breakdown is already materialized per partition in
+# ``sys_data_coverage_partition.evidence``; the audit row only needs a rollup.
+SECURITY_DATE_SAMPLE = 5
+
+
+def compact_audit_evidence(evidence: dict) -> dict:
+    """Replace the per-day security breakdown with a rollup summary.
+
+    ``cyq_chips`` audits one row per trading day per security. Keeping the whole
+    ``security_dates`` list in the audit evidence made a single row reach tens of
+    megabytes; because every partition/audit join then re-detoasted that JSONB,
+    a full-table join regressed from ~100 ms to minutes. The per-date detail is
+    preserved in the partition ledger, so the audit row keeps only counts and a
+    small head/tail sample for provenance.
+    """
+    days = evidence.get("security_dates")
+    if not days:
+        return evidence
+    missing_days = [day for day in days if day.get("status") == "missing"]
+    compact = {key: value for key, value in evidence.items() if key != "security_dates"}
+    compact["security_dates_summary"] = {
+        "audited_days": len(days),
+        "verified_days": len(days) - len(missing_days),
+        "missing_days": len(missing_days),
+        "missing_security_rows": sum(
+            len(day.get("missing_codes") or []) for day in missing_days
+        ),
+        "first_date": days[0].get("trade_date"),
+        "last_date": days[-1].get("trade_date"),
+        "missing_sample": [
+            {"trade_date": day.get("trade_date"),
+             "missing_count": len(day.get("missing_codes") or [])}
+            for day in missing_days[:SECURITY_DATE_SAMPLE]
+        ],
+        "detail_location": "sys_data_coverage_partition.evidence",
+        "detail_truncated": True,
+    }
+    return compact
+
+
+
 class CoverageRepository:
+    def chip_security_evidence(self, start_date, end_date):
+        from service.data_coverage.chip_securities import audit_security_dates, summarize_day
+        with self._connection() as connection, connection.cursor(
+            cursor_factory=psycopg2.extras.RealDictCursor
+        ) as cursor:
+            return [summarize_day(row) for row in audit_security_dates(cursor, start_date, end_date)]
+
     def __init__(self, connection_factory: Callable[..., Any] = psycopg2.connect):
         self._connection_factory = connection_factory
 
@@ -299,14 +351,22 @@ class CoverageRepository:
         current_empty_dates = verified_empty_transport_dates or set()
         collection_api_name = rule.collection_api_name or rule.dataset_name
         date_expression = self._date_expression(rule)
+        feature_quality = rule.dataset_name in {"local_factor_snapshot", "technical_factor_snapshot"}
         entity_expression = (
             sql.SQL("count(DISTINCT {})").format(sql.Identifier(rule.entity_column))
             if rule.entity_column
             else sql.SQL("NULL::bigint")
         )
+        if feature_quality:
+            # Keep physical rows visible as present-but-partial. Only audited
+            # entities contribute to completeness; do not turn partial values
+            # into a fictitious entirely missing partition.
+            entity_expression = sql.SQL("count(DISTINCT CASE WHEN audit_status='ready' THEN {} END)").format(sql.Identifier(rule.entity_column))
+        required_values = tuple((column,value) for column,value in rule.required_values
+                                if not (feature_quality and column == "audit_status"))
         required_predicate = sql.SQL("").join(
             sql.SQL(" AND {} = %s").format(sql.Identifier(column))
-            for column, _value in rule.required_values
+            for column, _value in required_values
         )
         statement = sql.SQL(
             """
@@ -334,7 +394,7 @@ class CoverageRepository:
                 (
                     start_date,
                     end_date,
-                    *(value for _column, value in rule.required_values),
+                    *(value for _column, value in required_values),
                 ),
             )
             partitions = [
@@ -377,14 +437,19 @@ class CoverageRepository:
                               OR daily.trade_date <=
                                  to_date(stock.delist_date, 'YYYYMMDD')
                           )
+                          {source_required_predicate}
                         GROUP BY daily.trade_date
                         """
                     ).format(
                         source=sql.Identifier(rule.table),
                         entity=sql.Identifier(rule.entity_column or "ts_code"),
                         source_date=sql.Identifier(rule.date_column),
+                        source_required_predicate=sql.SQL("").join(
+                            sql.SQL(" AND source.{} = %s").format(sql.Identifier(column))
+                            for column, _value in rule.required_values
+                        ),
                     ),
-                    (start_date, end_date),
+                    (start_date, end_date, *(value for _column, value in rule.required_values)),
                 )
                 matched_entities = {
                     row["partition_date"]: int(row["matched_entities"])
@@ -434,6 +499,16 @@ class CoverageRepository:
                 for row in cursor.fetchall()
                 if row["partition_date"] is not None
             }
+            if feature_quality:
+                # Feature rows carry their own per-entity readiness evidence.
+                # Reusing a previous derived dataset_state as an independent
+                # incompleteness signal creates a circular latch: after an
+                # applicability-rule upgrade, no later physical re-audit can
+                # ever retire the old partial state.  The entity count above
+                # remains fail-closed (only explicitly ready rows count), so
+                # clearing this stale control-plane hint cannot hide a real
+                # missing or partial security.
+                incomplete_dates.clear()
             transport_proof_dates: set[date] = set()
             if rule.require_transport_proof or incomplete_dates:
                 # A verified V2 execution certifies its complete logical
@@ -827,6 +902,8 @@ class CoverageRepository:
 
     def expected_entity_count(self, rule: CoverageRule, partition_date: date) -> int | None:
         """Estimate the point-in-time universe for supported reference tables."""
+        if rule.entity_reference == "factor_catalog":
+            return FACTOR_VALUE_EXPECTED_COUNT
         if rule.entity_reference == "index_daily_adjacent":
             with self._connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
@@ -942,11 +1019,6 @@ class CoverageRepository:
                 SELECT count(DISTINCT ts_code)::bigint
                 FROM tushare_norm_cb_daily WHERE trade_date=%s
             """,
-            "factor_catalog": """
-                SELECT count(DISTINCT factor_name)::bigint
-                FROM tushare_norm_factor_value
-                WHERE factor_name IS NOT NULL AND factor_name<>''
-            """,
         }
         statement = statements.get(rule.entity_reference)
         if not statement:
@@ -954,7 +1026,7 @@ class CoverageRepository:
         params = (
             (partition_date, partition_date)
             if rule.entity_reference == "stock_basic"
-            else (() if rule.entity_reference == "factor_catalog" else (partition_date,))
+            else (partition_date,)
         )
         with self._connection() as connection, connection.cursor() as cursor:
             cursor.execute(statement, params)
@@ -968,6 +1040,8 @@ class CoverageRepository:
         dates = sorted(set(partition_dates))
         if not dates or not rule.entity_reference:
             return {}
+        if rule.entity_reference == "factor_catalog":
+            return {item: FACTOR_VALUE_EXPECTED_COUNT for item in dates}
         result: dict[date, int | None] = {}
         early_dates = (
             [item for item in dates if item < date(1993, 1, 1)]
@@ -1067,15 +1141,6 @@ class CoverageRepository:
                 LEFT JOIN tushare_norm_cb_daily AS universe
                   ON universe.trade_date=target.partition_date
                 GROUP BY target.partition_date
-            """,
-            "factor_catalog": """
-                SELECT target.partition_date, catalog.entity_count
-                FROM unnest(%s::date[]) AS target(partition_date)
-                CROSS JOIN (
-                    SELECT count(DISTINCT factor_name)::bigint AS entity_count
-                    FROM tushare_norm_factor_value
-                    WHERE factor_name IS NOT NULL AND factor_name<>''
-                ) AS catalog
             """,
         }
         statement = statements.get(rule.entity_reference)
@@ -1221,7 +1286,7 @@ class CoverageRepository:
                     result.partial_partitions,
                     result.coverage_ratio,
                     result.status,
-                    psycopg2.extras.Json(result.evidence),
+                    psycopg2.extras.Json(compact_audit_evidence(result.evidence)),
                 ),
             )
             audit_id = int(cursor.fetchone()[0])
@@ -1241,6 +1306,10 @@ class CoverageRepository:
                 (result.dataset_name, result.start_date, result.end_date),
             )
             if result.partitions:
+                security_evidence = {
+                    item['trade_date']: item
+                    for item in (result.evidence.get('security_dates') or [])
+                }
                 values = [
                     (
                         result.dataset_name,
@@ -1252,7 +1321,8 @@ class CoverageRepository:
                         item.entity_coverage_ratio,
                         item.expected,
                         psycopg2.extras.Json(
-                            {"semantics": "partition_and_entity_completeness"}
+                            {"semantics": "partition_and_entity_completeness",
+                             **security_evidence.get(str(item.partition_date), {})}
                         ),
                         audit_id,
                     )

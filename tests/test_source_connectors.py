@@ -111,6 +111,8 @@ def test_financial_data_usage_discloses_audited_research_scope():
             }
 
         def fetch_all(self, *_args):
+            if 'ant_request_budget' in _args[0]:
+                return [{'category':'research','units':4}]
             return [{
                 "route": "/api/v1/quote/basic-snapshot",
                 "batches": 2,
@@ -123,7 +125,8 @@ def test_financial_data_usage_discloses_audited_research_scope():
     )
     result = source_routes.financial_data_usage(request, limit=20)
 
-    assert result["persistence"] == "request_metadata_only"
+    assert result["persistence"] == "request_metadata_and_short_lived_shared_cache"
+    assert result['budget']['reserved_for_intraday_expansion'] == 271
     assert result["summary"]["latest_status"] == "success"
     assert result["research_integration"]["route_count"] == 7
     assert len(result["research_integration"]["contracts"]) == 3

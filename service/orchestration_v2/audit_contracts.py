@@ -32,6 +32,7 @@ _PLANNED_DERIVED_AUDITS: dict[str, tuple[str, str]] = {
     "adjusted_price_return": ("expected_partition", "day"),
     "canonical_period_bars": ("dependency_scoped", "dependency"),
     "technical_factor_snapshot": ("expected_partition", "day"),
+    "local_factor_snapshot": ("expected_partition", "day"),
     "valuation_percentile_snapshot": ("expected_partition", "day"),
     "market_breadth": ("expected_partition", "day"),
     "sector_breadth": ("expected_partition", "day"),

@@ -32,10 +32,15 @@ MAX_INLINE_DURABLE_WAIT_SECONDS = 15.0
 INTERFACE_DAILY_QUOTAS = {
     "major_news": 35,
     "cyq_perf": 18_000,
-    # The provider enforces 1,000 calls per Shanghai day. One complete market
-    # date currently needs about 202 factor-name requests. Keep ten percent in
-    # reserve for operator probes and contract drift; the durable limiter will
-    # defer unfinished request checkpoints to the next day without retrying.
+    # Observed provider wall: 100,000/day; preserve headroom for probes.
+    "cyq_chips": 90_000,
+    # Live provider response on 2026-10-22 23:48 CST: "抱歉，您访问接口
+    # (factor_value)频率超限(1000次/天)" — the provider enforces exactly 1,000
+    # calls per Shanghai day (the wall was hit after ~902 collected + 100
+    # probe calls). One complete market date currently needs about 272
+    # factor-name requests. Keep ten percent in reserve for operator probes
+    # and contract drift; the durable limiter will defer unfinished request
+    # checkpoints to the next day without retrying.
     "factor_value": 900,
 }
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -177,6 +182,30 @@ def reserve_tushare_request(
     if wait:
         sleep(wait)
     return quota_wait + wait
+
+
+def mark_daily_quota_exhausted(api_name: str) -> None:
+    """Persist an observed provider limit for sibling processes too.
+
+    Provider usage can include calls outside this application's counter.
+    Never infer provider reset from the local counter being below budget.
+    """
+    limit = INTERFACE_DAILY_QUOTAS.get(api_name)
+    if limit is None:
+        return
+    connection = psycopg2.connect(**DB_CONFIG)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""INSERT INTO sys_tushare_hourly_quota
+                (api_name,window_started_at,reservations)
+                VALUES (%s,NOW(),%s)
+                ON CONFLICT (api_name) DO UPDATE SET
+                  window_started_at=NOW(),
+                  reservations=GREATEST(sys_tushare_hourly_quota.reservations,EXCLUDED.reservations),
+                  updated_at=NOW()""", (api_name,limit))
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def _reserve_daily_quota(

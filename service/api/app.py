@@ -21,6 +21,7 @@ from service.api.routers import (
     derivations,
     health,
     initialization,
+    intraday,
     investment_calendar,
     interfaces,
     normalization,
@@ -219,6 +220,7 @@ def create_app(
     application.include_router(normalization.router, prefix="/api")
     application.include_router(raw_archive.router, prefix="/api")
     application.include_router(research.router, prefix="/api")
+    application.include_router(intraday.router, prefix="/api")
     application.include_router(stocks.router, prefix="/api")
     application.include_router(system.router, prefix="/api")
     application.include_router(sectors.router, prefix="/api")

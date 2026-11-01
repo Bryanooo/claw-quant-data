@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from service.data_service.models import InvalidQueryError
 from service.research.service import (
     ResearchService,
     _adjust_ohlcv,
@@ -121,6 +122,26 @@ class FakeRepository:
 
     def backfill_statuses(self):
         return {"analyst": {"status": "running", "active": 2}}
+
+    def search_stocks(self, query, *, limit=20):
+        return [
+            {
+                "ts_code": "300750.SZ", "symbol": "300750", "name": "宁德时代",
+                "fullname": "宁德时代新能源科技股份有限公司", "area": "福建",
+                "industry": "电池", "market": "创业板", "exchange": "SZSE",
+                "list_status": "L", "list_date": date(2018, 6, 11),
+                "delist_date": None,
+            }
+        ]
+
+    def search_etfs(self, query, *, limit=20):
+        return [
+            {
+                "ts_code": "510300.SH", "name": "沪深300ETF",
+                "management": "华泰柏瑞", "fund_type": "指数型",
+                "market": "E", "benchmark": "000300.SH",
+            }
+        ]
 
     def stock_watchlist(self):
         return list(self.watchlist)
@@ -335,6 +356,28 @@ class FakeRepository:
             },
         ]
 
+    def etf_share_series(self, *, ts_codes, as_of, lookback_days):
+        base = date(2026, 9, 14)
+        seq = [
+            (base, 10000.0, 40000.0, 4.0, 3.99, 400000.0),
+            (base + timedelta(days=1), 11000.0, 44000.0, 4.0, 3.98, 420000.0),
+            (base + timedelta(days=2), 12000.0, 48000.0, 4.0, 3.97, 440000.0),
+            (base + timedelta(days=3), 30000.0, 120000.0, 4.0, 3.96, 600000.0),
+        ]
+        return [
+            {
+                "ts_code": "510300.SH",
+                "trade_date": day,
+                "total_share": share,
+                "total_size": size,
+                "nav": nav,
+                "close": close,
+                "amount": amount_k,
+            }
+            for day, share, size, nav, close, amount_k in seq
+            if "510300.SH" in ts_codes
+        ]
+
     def index_period_returns(self, *_args, **_kwargs):
         return {
             "000905.SH": {
@@ -368,6 +411,27 @@ def _daily_rows(ts_code, count=300, start=date(2025, 7, 1), base=10):
             }
         )
     return list(reversed(rows))
+
+
+def test_search_instruments_merges_stocks_and_etfs_with_asset_type():
+    repository = FakeRepository()
+    service = ResearchService(FakeDataService({}), repository)
+
+    result = service.search_instruments("300")
+    assert result["meta"]["stocks"] == 1
+    assert result["meta"]["etfs"] == 1
+    assert result["data"][0]["asset_type"] == "stock"
+    assert result["data"][0]["ts_code"] == "300750.SZ"
+    assert result["data"][1]["asset_type"] == "etf"
+    assert result["data"][1]["ts_code"] == "510300.SH"
+    assert result["data"][1]["management"] == "华泰柏瑞"
+
+
+def test_search_instruments_rejects_empty_query():
+    repository = FakeRepository()
+    service = ResearchService(FakeDataService({}), repository)
+    with pytest.raises(InvalidQueryError):
+        service.search_instruments("   ")
 
 
 def test_stock_watchlist_service_is_idempotent_and_reports_storage_state():
@@ -963,18 +1027,57 @@ def test_etf_flow_and_state_team_views_keep_identity_evidence_explicit():
     )
 
 
+def test_etf_flow_series_computes_share_and_flow_dual_series():
+    service = ResearchService(FakeDataService({}), FakeRepository())
+
+    result = service.etf_flow_series(
+        lookback_days=30, min_flow_yi=5.0, streak_days=3, as_of=date(2026, 9, 18)
+    )
+
+    series = {item["ts_code"]: item for item in result["data"]["series"]}
+    points = series["510300.SH"]["points"]
+    assert len(points) == 4
+    # 首日无前值，不产生净申赎
+    assert points[0]["share_change_wan"] is None
+    assert points[0]["flow_yi"] is None
+    # 连续净申购：份额变化 + 金额参考
+    assert points[1]["share_change_wan"] == 1000.0
+    assert points[1]["flow_yi"] == 0.4
+    assert points[2]["share_change_wan"] == 1000.0
+    assert points[3]["share_change_wan"] == 18000.0
+    assert points[3]["flow_yi"] == 7.2
+    # 单日异常 + 连续趋势
+    assert points[3]["spike"] is True
+    assert points[3]["streak_days"] == 3
+    # 成交额（二级市场）独立于份额变化，首日即有值（千元 / 100000 = 亿元）
+    assert points[0]["amount_yi"] == 4.0
+    assert points[3]["amount_yi"] == 6.0
+    # 篮子聚合到同一交易日
+    basket = result["data"]["basket"]
+    assert basket[-1]["flow_yi"] == 7.2
+    assert basket[-1]["amount_yi"] == 6.0
+    assert basket[-1]["spike"] is True
+    # 信号同时覆盖单日异常与连续趋势
+    types = {(s["type"], s["ts_code"]) for s in result["data"]["signals"]}
+    assert ("single_day_spike", "510300.SH") in types
+    assert ("consecutive_trend", "510300.SH") in types
+    # 元信息口径声明
+    assert result["meta"]["universe_size"] == 13
+    assert result["meta"]["latest_data_date"] == date(2026, 9, 17)
+
+
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 24
-    assert catalog["summary"]["derived_endpoints"] == 20
+    assert catalog["summary"]["agent_endpoints"] == 45
+    assert catalog["summary"]["derived_endpoints"] == 41
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 6
-    assert catalog["summary"]["baseline_techniques"] == 79
-    assert catalog["summary"]["currently_served"] == 71
+    assert catalog["summary"]["baseline_techniques"] == 97
+    assert catalog["summary"]["currently_served"] == 89
     assert catalog["summary"]["planned_from_existing_sources"] == 0
     assert catalog["summary"]["external_or_constrained"] == 8
-    assert len(catalog["techniques"]["served"]) == 71
+    assert len(catalog["techniques"]["served"]) == 89
     assert len(catalog["techniques"]["gaps"]) == 8
     screening = next(
         item for item in catalog["techniques"]["served"]

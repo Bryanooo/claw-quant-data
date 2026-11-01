@@ -189,14 +189,16 @@ def financial_data_usage(
         *TECHNICAL_ROUTES.values(),
         *REALTIME_ROUTES.values(),
     })
+    from service.source_connectors.ant_budget import budget_snapshot
     return {
         "source_id": "financial_data",
-        "persistence": "request_metadata_only",
+        "persistence": "request_metadata_and_short_lived_shared_cache",
         "status_scope": (
             "batch; individual routes may legitimately return no rows inside "
             "a successful batch"
         ),
         "summary": summary,
+        "budget": budget_snapshot(database),
         "routes": routes,
         "research_integration": {
             "route_count": len(research_routes),

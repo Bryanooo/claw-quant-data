@@ -26,6 +26,17 @@ NEXT_MORNING_TASKS = frozenset({
 })
 NEXT_MORNING_TASK_RELEASE_TIME = time(9, 15)
 
+# These tasks publish the most recently completed US market session.  Their
+# business data date is deliberately not the current SSE session date.
+US_COMPLETED_SESSION_TASKS = frozenset({
+    "us_daily",
+    "us_tbr",
+    "us_tltr",
+    "us_trltr",
+    "us_trycr",
+    "us_tycr",
+})
+
 
 class WorkflowKind(StrEnum):
     ACQUISITION = "acquisition"

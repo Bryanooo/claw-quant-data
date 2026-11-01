@@ -33,6 +33,10 @@ _ALGORITHM_NOTES = {
         "与参数化指标，并叠加严格的 20/60 交易日成交成本线；当日证券主数据与行情、"
         "复权因子同批冻结，避免新上市/退市证券因竞态被遗漏。"
     ),
+    "local_factor_snapshot": (
+        "统一日频研究特征：技术指标和272因子由同一任务原子发布，7个同公式值只存一次；"
+        "technical_factor_snapshot仅为查询视图。factor_value保留内部抽检、不对外供给。"
+    ),
     "fama_french_daily": (
         "A 股 Fama-French 三因子（MKT/SMB/HML）：剔除 ST 与上市不足 60 个交易日的"
         "新股，按市值中位数×账面市值比 2×3 分组，市值加权构建组合收益，"
@@ -45,6 +49,7 @@ _ALGORITHM_NOTES = {
 
 _FREQUENCY_NOTES = {
     "technical_factor_snapshot": "每个交易日 · 输入日频数据就绪后自动派发",
+    "local_factor_snapshot": "每个交易日 · 行情/复权/估值/指数/证券主数据就绪后自动派发",
     "fama_french_daily": "每个交易日 · 输入日频数据就绪后自动派发",
     "ggt_monthly": "每月（聚合日频港股通成交）",
 }

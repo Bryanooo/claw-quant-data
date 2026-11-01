@@ -21,6 +21,7 @@ def main() -> int:
             "worker-v2-backfill",
             "worker-v2-derived",
             "auditor",
+            "intraday-worker",
         ),
         required=True,
     )

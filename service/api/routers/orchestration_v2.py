@@ -7,6 +7,12 @@ from fastapi import APIRouter, HTTPException, Query
 
 from service.api.dependencies import OrchestrationV2RepositoryDependency
 from service.orchestration_v2.catalog import task_baseline_summary
+from service.orchestration_v2.consistency import (
+    cadence_drift,
+    consistency_report,
+    derivation_rollout_drift,
+    endpoint_registry_drift,
+)
 from service.orchestration_v2.contracts import DATASET_NAME_PATTERN, TASK_KEY_PATTERN
 from service.clock import business_today
 
@@ -60,6 +66,33 @@ def summary(repository: OrchestrationV2RepositoryDependency) -> dict:
         "control_plane": repository.control_plane_summary(),
         "activation": "active",
     }
+
+
+@router.get("/consistency")
+def consistency(repository: OrchestrationV2RepositoryDependency) -> dict:
+    """Cross-check the control plane against the registry it was compiled from.
+
+    Definitions, endpoint contracts and the flat registry all describe the
+    same facts but were never compared, so a drift can leave the console
+    advertising a schedule the scheduler never dispatches.
+    """
+
+    return consistency_report(repository)
+
+
+@router.get("/consistency/cadence")
+def consistency_cadence(repository: OrchestrationV2RepositoryDependency) -> dict:
+    return cadence_drift(repository)
+
+
+@router.get("/consistency/endpoints")
+def consistency_endpoints(repository: OrchestrationV2RepositoryDependency) -> dict:
+    return endpoint_registry_drift(repository)
+
+
+@router.get("/consistency/derivations")
+def consistency_derivations(repository: OrchestrationV2RepositoryDependency) -> dict:
+    return derivation_rollout_drift(repository)
 
 
 @router.get("/definitions")

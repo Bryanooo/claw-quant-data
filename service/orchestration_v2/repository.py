@@ -21,10 +21,14 @@ from service.orchestration_v2.contracts import (
     ExecutionStatus,
     NEXT_MORNING_TASK_RELEASE_TIME,
     NEXT_MORNING_TASKS,
+    US_COMPLETED_SESSION_TASKS,
     TaskDefinitionDocument,
     canonical_digest,
 )
-from service.orchestration_v2.recovery_policy import QUOTA_GUARDED_DATASETS
+from service.orchestration_v2.recovery_policy import (
+    QUOTA_GUARDED_DATASETS,
+    SERIALIZED_ACQUISITION_TASKS,
+)
 
 
 class OrchestrationV2Repository:
@@ -37,6 +41,16 @@ class OrchestrationV2Repository:
         "task_execution_event",
         "dataset_state",
     })
+
+    def automation_states(self) -> dict[str, dict]:
+        from service.orchestration_v2.automation_status import task_automation
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("SELECT task_key,definition FROM orchestration_v2.task_definition WHERE lifecycle_status='active'")
+            definitions = {row['task_key']: row['definition'] for row in cursor.fetchall()}
+        return {key: {**task_automation(key, document, definitions.keys()),
+                      'definition_status': 'active',
+                      'schedule_mode': document['schedule']['mode']}
+                for key, document in definitions.items()}
 
     def __init__(
         self,
@@ -283,6 +297,15 @@ class OrchestrationV2Repository:
                        workflow_kind, definition_digest, app_revision, image_digest,
                        definition->'input_datasets' AS input_datasets,
                        definition->'output_datasets' AS output_datasets,
+                       ARRAY(
+                         SELECT DISTINCT endpoint.source_id
+                         FROM orchestration_v2.acquisition_endpoint endpoint
+                         WHERE endpoint.acquisition_endpoint_id IN (
+                           SELECT value::bigint FROM jsonb_array_elements_text(
+                             COALESCE(task_definition.definition->'acquisition_endpoint_ids','[]'::jsonb)
+                           )
+                         ) ORDER BY endpoint.source_id
+                       ) AS source_ids,
                        definition->'scope_contract'->>'cadence' AS cadence,
                        definition->'schedule'->>'mode' AS schedule_mode,
                        definition->'schedule'->>'expression' AS schedule_expression,
@@ -291,6 +314,25 @@ class OrchestrationV2Repository:
                 FROM orchestration_v2.task_definition
                 """ + where + " ORDER BY task_definition_id DESC LIMIT %s",
                 tuple(params),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def execution_output_states(self, execution_ids: list[int]) -> list[dict]:
+        """Read published evidence for the bounded execution list, not whole history."""
+        if not execution_ids:
+            return []
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (source_execution_id,dataset_name,observation_key)
+                       source_execution_id,dataset_name,observation_key,
+                       observation_start,observation_end,data_status,ready,
+                       validation_event_id,published_at
+                FROM orchestration_v2.dataset_state
+                WHERE source_execution_id=ANY(%s)
+                ORDER BY source_execution_id,dataset_name,observation_key,revision DESC
+                LIMIT 201
+                """, (execution_ids,),
             )
             return [dict(row) for row in cursor.fetchall()]
 
@@ -436,6 +478,16 @@ class OrchestrationV2Repository:
                 FROM orchestration_v2.task_execution_event
                 WHERE task_execution_id=%s
                   AND event_type='node.acquire.request_completed'
+                  AND sequence_number > COALESCE((
+                      SELECT MAX(reset_event.sequence_number)
+                      FROM orchestration_v2.task_execution_event AS reset_event
+                      WHERE reset_event.task_execution_id=%s
+                        AND reset_event.event_type='execution.operator_retry'
+                        AND COALESCE(
+                              (reset_event.payload->>'reset_data_nodes')::BOOLEAN,
+                              false
+                            )
+                  ), 0)
                   AND payload->>'completion_status' IN ('complete','empty')
                   AND COALESCE(
                           (payload->'completion_evidence'->>'verified')::BOOLEAN,
@@ -444,7 +496,7 @@ class OrchestrationV2Repository:
                 ORDER BY COALESCE(payload->>'request_key', event_id::TEXT),
                          sequence_number DESC
                 """,
-                (execution_id,),
+                (execution_id, execution_id),
             )
             return [dict(row["payload"] or {}) for row in cursor.fetchall()]
 
@@ -613,6 +665,36 @@ class OrchestrationV2Repository:
             )
             return {row["dataset_name"]: dict(row) for row in cursor.fetchall()}
 
+    def auxiliary_input_revision(self, dataset_names: tuple[str, ...], observation_end) -> dict:
+        """Track non-daily inputs without pretending their periods match bars.
+
+        Coalesce a batch of financial repairs into one recomputation after the
+        relevant writers drain. Readiness remains the output auditor's decision.
+        """
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""
+                SELECT md5(COALESCE(string_agg(
+                    dataset_state_id::text || ':' || revision::text || ':' || ready::text,
+                    ',' ORDER BY dataset_state_id), '')) AS revision_digest
+                FROM orchestration_v2.dataset_state
+                WHERE dataset_name=ANY(%s)
+                  AND (observation_start IS NULL OR observation_start<=%s)
+            """, (list(dataset_names), observation_end))
+            result = dict(cursor.fetchone())
+            cursor.execute("""
+                SELECT count(*) AS pending_count
+                FROM orchestration_v2.task_execution AS execution
+                JOIN orchestration_v2.task_definition AS definition
+                    USING (task_definition_id)
+                WHERE definition.definition->'output_datasets' ?| %s
+                  AND execution.status IN
+                      ('created','queued','running','validating','publishing',
+                       'waiting_dependency','retrying')
+                  AND (execution.observation_start IS NULL OR execution.observation_start<=%s)
+            """, (list(dataset_names), observation_end))
+            result.update(dict(cursor.fetchone()))
+            return result
+
     def today_delivery(self, observation_date) -> dict:
         """Return today's due V2 tasks and their validated data state."""
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
@@ -719,6 +801,17 @@ class OrchestrationV2Repository:
                 (observation_date,),
             )
             trade_day = bool(cursor.fetchone()["trade_day"])
+            cursor.execute(
+                """
+                SELECT cal_date
+                FROM tushare_norm_us_tradecal
+                WHERE is_open=1 AND cal_date<%s
+                ORDER BY cal_date DESC LIMIT 1
+                """,
+                (observation_date,),
+            )
+            us_row = cursor.fetchone()
+            us_completed_session = us_row["cal_date"] if us_row else None
         now = business_now()
         for item in items:
             next_morning_release = datetime.combine(
@@ -737,7 +830,14 @@ class OrchestrationV2Repository:
                     if item["task_key"] in NEXT_MORNING_TASKS
                     else first_schedule
                 )
-                if not trade_day:
+                if (
+                    item["task_key"] in US_COMPLETED_SESSION_TASKS
+                    and us_completed_session != observation_date
+                ):
+                    item["status"] = "not_due"
+                    item["not_due_reason"] = "different_market_calendar"
+                    item["expected_observation_date"] = us_completed_session
+                elif not trade_day:
                     item["status"] = "not_due"
                     item["not_due_reason"] = "non_trading_day"
                 elif observation_date > now.date() or (
@@ -1069,6 +1169,219 @@ class OrchestrationV2Repository:
             )
             return {row[0] for row in cursor.fetchall()}
 
+    def endpoint_registry_pairs(self) -> list[dict]:
+        """Join the flat registry against the versioned contract layer.
+
+        Both are compiled from the same code registry but neither is
+        cross-checked, so the pair is exposed here for drift auditing.  The
+        contract cadence is read back through the task that consumes the
+        endpoint because the endpoint row itself carries no cadence.
+
+        Endpoints of an equivalent group are alternatives or frequency
+        variants of one logical product and share a single task, so a cadence
+        is only comparable for an endpoint that is the sole member of its
+        task; comparing group members would report their deliberate variation
+        as drift.
+        """
+
+        if not self.schema_exists():
+            return []
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT COALESCE(registry.source_id, endpoint.source_id) AS source_id,
+                       COALESCE(registry.endpoint_key, endpoint.endpoint_key)
+                           AS endpoint_key,
+                       registry.acquisition_mode,
+                       registry.cadence AS registry_cadence,
+                       endpoint.acquisition_endpoint_id IS NOT NULL AS governed,
+                       contract_cadence.cadence AS contract_cadence
+                FROM public.sys_source_endpoint registry
+                FULL OUTER JOIN orchestration_v2.acquisition_endpoint endpoint
+                    ON endpoint.source_id = registry.source_id
+                   AND endpoint.endpoint_key = registry.endpoint_key
+                   AND endpoint.lifecycle_status = 'active'
+                LEFT JOIN LATERAL (
+                    SELECT definition->'scope_contract'->>'cadence' AS cadence
+                    FROM orchestration_v2.task_definition definition
+                    WHERE definition.lifecycle_status = 'active'
+                      AND jsonb_array_length(
+                            definition.definition->'acquisition_endpoint_ids'
+                          ) = 1
+                      AND definition.definition->'acquisition_endpoint_ids'->0
+                          = to_jsonb(endpoint.acquisition_endpoint_id)
+                    ORDER BY definition.task_definition_id DESC
+                    LIMIT 1
+                ) contract_cadence ON TRUE
+                ORDER BY 1 NULLS LAST, 2 NULLS LAST
+                """
+            )
+            rows = []
+            for row in cursor.fetchall():
+                item = dict(row)
+                item["registered"] = item["source_id"] is not None
+                item["governed"] = bool(item["governed"])
+                rows.append(item)
+            return rows
+
+    def execution_activity_by_task(self, *, since) -> dict[str, dict]:
+        """Recent execution evidence per task, independent of any definition.
+
+        The scheduler decides dispatching from the code blueprint, not from
+        ``task_definition.schedule``.  Comparing the two therefore needs a
+        factual record of what actually ran, not another declarative field.
+
+        Only routine runs (``purpose='daily'`` dispatched by the scheduler)
+        count as "the scheduler is dispatching this".  Initialization,
+        backfill and repair runs are one-off operator or recovery work and
+        must not make a stopped task look scheduled.
+        """
+
+        if not self.schema_exists():
+            return {}
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute(
+                """
+                SELECT task_key,
+                       count(*) FILTER (WHERE routine) AS routine_total,
+                       count(*) FILTER (WHERE routine AND status = 'success')
+                           AS routine_succeeded,
+                       max(finished_at) FILTER (WHERE routine) AS routine_last_finished
+                FROM (
+                    SELECT task_key, status, finished_at,
+                           purpose = 'daily'
+                               AND trigger_source IN ('schedule', 'dependency')
+                               AS routine
+                    FROM orchestration_v2.task_execution
+                    WHERE created_at >= %s
+                ) recent
+                GROUP BY task_key
+                """,
+                (since,),
+            )
+            return {
+                row["task_key"]: {
+                    "total": int(row["routine_total"] or 0),
+                    "succeeded": int(row["routine_succeeded"] or 0),
+                    "last_finished": row["routine_last_finished"],
+                }
+                for row in cursor.fetchall()
+            }
+
+    def field_lineage_rows(self) -> list[dict] | None:
+        """Return persisted field lineage reshaped like the compiler output.
+
+        ``None`` means the lineage table is absent or unsynced; callers fall
+        back to the code compiler rather than showing an empty inventory,
+        because an unsynced table must not look like "no lineage exists".
+        """
+
+        if not self.schema_exists():
+            return None
+        try:
+            with self._connection() as connection, self._dict_cursor(connection) as cursor:
+                cursor.execute(
+                    """
+                    SELECT source_id, table_name, field_name, interface_key,
+                           field_type, description
+                    FROM orchestration_v2.field_lineage
+                    ORDER BY table_name, field_name, interface_key
+                    """
+                )
+                rows = [dict(row) for row in cursor.fetchall()]
+        except Exception:  # pragma: no cover - table not migrated yet
+            return None
+        if not rows:
+            return None
+        tables: dict[tuple[str, str], dict] = {}
+        for row in rows:
+            key = (row["source_id"], row["table_name"])
+            entry = tables.setdefault(key, {
+                "table": row["table_name"],
+                "source": row["source_id"],
+                "interfaces": [],
+                "fields": [],
+            })
+            if row["interface_key"] not in entry["interfaces"]:
+                entry["interfaces"].append(row["interface_key"])
+            field = next(
+                (item for item in entry["fields"] if item["name"] == row["field_name"]),
+                None,
+            )
+            if field is None:
+                field = {
+                    "name": row["field_name"],
+                    "type": row["field_type"],
+                    "description": row["description"],
+                    "from_interfaces": [],
+                }
+                entry["fields"].append(field)
+            if row["interface_key"] not in field["from_interfaces"]:
+                field["from_interfaces"].append(row["interface_key"])
+        return [tables[key] for key in sorted(tables)]
+
+    def interface_registry_detail(self, source_id: str, interface_key: str) -> dict | None:
+        """Return one persisted interface detail row, or ``None`` if absent."""
+
+        if not self.schema_exists():
+            return None
+        try:
+            with self._connection() as connection, self._dict_cursor(connection) as cursor:
+                cursor.execute(
+                    """
+                    SELECT payload
+                    FROM orchestration_v2.interface_registry
+                    WHERE source_id = %s AND interface_key = %s
+                    """,
+                    (source_id, interface_key),
+                )
+                row = cursor.fetchone()
+        except Exception:  # pragma: no cover - table not migrated yet
+            return None
+        if not row:
+            return None
+        payload = row["payload"]
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        return payload if isinstance(payload, dict) else None
+
+    def interface_registry_rows(self) -> list[dict] | None:
+        """Return the persisted interface inventory reshaped like the compiler.
+
+        ``None`` means the registry table is absent or unsynced; callers fall
+        back to the code compiler rather than showing an empty inventory,
+        because an unsynced table must not look like "no interfaces exist".
+        """
+
+        if not self.schema_exists():
+            return None
+        try:
+            with self._connection() as connection, self._dict_cursor(connection) as cursor:
+                cursor.execute(
+                    """
+                    SELECT source_id, interface_key, payload
+                    FROM orchestration_v2.interface_registry
+                    ORDER BY source_id, interface_key
+                    """
+                )
+                rows = [dict(row) for row in cursor.fetchall()]
+        except Exception:  # pragma: no cover - table not migrated yet
+            return None
+        if not rows:
+            return None
+        items: list[dict] = []
+        for row in rows:
+            payload = row.get("payload")
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if not isinstance(payload, dict):
+                continue
+            item = dict(payload)
+            item.setdefault("source", row["source_id"])
+            item.setdefault("key", row["interface_key"])
+            items.append(item)
+        return items
+
     def publish_definition(
         self,
         definition_id: int,
@@ -1119,6 +1432,7 @@ class OrchestrationV2Repository:
                 """
                 SELECT * FROM orchestration_v2.task_definition
                 WHERE task_key=%s AND lifecycle_status='active'
+                FOR UPDATE
                 """,
                 (request.task_key,),
             )
@@ -1128,7 +1442,12 @@ class OrchestrationV2Repository:
             cursor.execute(
                 """
                 SELECT * FROM orchestration_v2.task_execution
-                WHERE task_key=%s AND observation_key=%s
+                WHERE task_key=%s AND (
+                    observation_key=%s OR (
+                        task_key='local_factor_snapshot'
+                        AND observation_start=%s AND observation_end=%s
+                    )
+                )
                   AND status IN (
                     'created','queued','running','waiting_dependency','retrying',
                     'validating','publishing'
@@ -1137,7 +1456,8 @@ class OrchestrationV2Repository:
                 LIMIT 1
                 FOR UPDATE
                 """,
-                (request.task_key, request.observation_key),
+                (request.task_key, request.observation_key,
+                 request.observation_start, request.observation_end),
             )
             active_scope = cursor.fetchone()
             if active_scope:
@@ -1146,7 +1466,7 @@ class OrchestrationV2Repository:
                 "initialization", "backfill", "repair"
             }
             resource_class = (
-                "v2-backfill"
+                ("factor-backfill" if request.task_key == "local_factor_snapshot" else "v2-backfill")
                 if historical
                 else definition["definition"]["resource"]["resource_class"]
             )
@@ -1638,6 +1958,69 @@ class OrchestrationV2Repository:
                 int(row["task_execution_id"]) for row in cursor.fetchall()
             )
 
+    def active_recovery_scopes(self) -> list[dict]:
+        """Read actual active ranges, never infer coverage from task names."""
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""
+                SELECT task_execution_id, task_key, observation_key,
+                       observation_start, observation_end, status
+                FROM orchestration_v2.task_execution
+                WHERE status IN ('created','queued','running','waiting_dependency',
+                                 'retrying','validating','publishing')
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def factor_input_issues(self, trade_date) -> list[dict]:
+        """Bounded persisted evidence; never recompute factors for the dashboard."""
+        from service.research.local_factors.catalog import FACTOR_SCHEMA_VERSION
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""
+                SELECT problem.key AS factor, problem.value AS reason,
+                       count(*) AS affected_securities
+                FROM local_factor_snapshot snapshot
+                CROSS JOIN LATERAL jsonb_each_text(
+                    COALESCE(snapshot.audit_evidence->'unresolved','{}'::jsonb)
+                ) problem
+                WHERE trade_date=%s AND schema_version=%s
+                GROUP BY problem.key,problem.value
+                ORDER BY count(*) DESC,problem.key LIMIT 8
+            """, (trade_date, FACTOR_SCHEMA_VERSION))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def latest_chip_history_window(self) -> dict | None:
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""
+                SELECT execution.*, EXISTS (
+                    SELECT 1 FROM orchestration_v2.dataset_state state
+                    WHERE state.source_execution_id=execution.task_execution_id
+                      AND state.dataset_name='cyq_chips' AND state.ready
+                      AND state.validation_summary->>'rule_revision'='3'
+                      AND state.observation_start<=execution.observation_start
+                      AND state.observation_end>=execution.observation_end
+                ) AS certified
+                FROM orchestration_v2.task_execution execution
+                WHERE task_key='cyq_chips'
+                  AND frozen_scope->>'recovery_scope'='bounded_fanout_history'
+                  AND frozen_scope->>'history_order'='newest_first'
+                  AND observation_start IS NOT NULL
+                ORDER BY observation_start, task_execution_id DESC LIMIT 1
+            """)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def transient_recovery_rounds(self) -> dict[int, int]:
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""
+                SELECT e.task_execution_id, count(*) AS rounds
+                FROM orchestration_v2.task_execution_event e
+                JOIN orchestration_v2.task_execution t USING (task_execution_id)
+                WHERE t.status='attention'
+                  AND e.event_type='execution.auto_retry_transient'
+                GROUP BY e.task_execution_id
+            """)
+            return {int(row['task_execution_id']): int(row['rounds'])
+                    for row in cursor.fetchall()}
+
     def reconcile_redundant_pending_executions(self, *, limit: int = 1000) -> int:
         """Retire an older pending scope already covered by a newer one.
 
@@ -2039,6 +2422,37 @@ class OrchestrationV2Repository:
             )
             for candidate in cursor.fetchall():
                 execution_id = int(candidate["task_execution_id"])
+                reset_data_nodes = candidate.get("final_error_category") in {
+                    "data_incomplete", "completeness_guard",
+                }
+                node_status = dict(candidate.get("node_status") or {})
+                current_node_key = candidate.get("current_node_key")
+                frozen_scope = dict(candidate.get("frozen_scope") or {})
+                if reset_data_nodes:
+                    producer_node = (
+                        "acquire"
+                        if "acquire" in node_status
+                        else "transform"
+                        if "transform" in node_status
+                        else current_node_key
+                    )
+                    node_order = (
+                        "condition", "scope_plan", "acquire", "merge",
+                        "transform", "validate", "publish",
+                    )
+                    producer_index = node_order.index(producer_node)
+                    for node_key in tuple(node_status):
+                        if (
+                            node_key in node_order
+                            and node_order.index(node_key) >= producer_index
+                        ):
+                            node_status[node_key] = "pending"
+                    current_node_key = producer_node
+                    if producer_node == "transform":
+                        # An incomplete result must not be attached again as
+                        # though this were merely publication reconciliation.
+                        # Inputs may have been repaired since the failed run.
+                        frozen_scope["reuse_existing_snapshot"] = False
                 cursor.execute(
                     """
                     UPDATE orchestration_v2.task_execution
@@ -2050,12 +2464,21 @@ class OrchestrationV2Repository:
                         ),
                         final_error_category=NULL, final_error_message=NULL,
                         final_error_detail='{}'::jsonb,
+                        current_node_key=%s,
+                        node_status=%s::jsonb,
+                        frozen_scope=%s::jsonb,
                         lease_owner=NULL, lease_token=NULL,
                         lease_expires_at=NULL, updated_at=NOW()
                     WHERE task_execution_id=%s AND status='attention'
                     RETURNING *
                     """,
-                    (minimum_max_attempts, execution_id),
+                    (
+                        minimum_max_attempts,
+                        current_node_key,
+                        psycopg2.extras.Json(node_status),
+                        psycopg2.extras.Json(frozen_scope),
+                        execution_id,
+                    ),
                 )
                 row = cursor.fetchone()
                 if not row:
@@ -2073,6 +2496,7 @@ class OrchestrationV2Repository:
                     payload={
                         "reason": reason,
                         "minimum_max_attempts": minimum_max_attempts,
+                        "reset_data_nodes": reset_data_nodes,
                     },
                     evidence_references=[],
                 )
@@ -2280,6 +2704,10 @@ class OrchestrationV2Repository:
             raise ValueError("lease_seconds must be positive")
         lease_token = secrets.token_hex(24)
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            # Serialize only the short claim transaction, not execution.
+            # Row SKIP LOCKED alone cannot protect a provider-wide NOT EXISTS
+            # predicate when two workers claim different rows concurrently.
+            cursor.execute("SELECT pg_advisory_xact_lock(73124, 1)")
             cursor.execute(
                 """
                 WITH task_recency AS (
@@ -2296,6 +2724,34 @@ class OrchestrationV2Repository:
                       AND queued.eligible_at <= NOW()
                       AND queued.attempt_count < queued.max_attempts
                       AND queued.resource_class = ANY(%s)
+                      -- The mutex is symmetric across routine and historical
+                      -- pools. A daily arrival must not overlap an already
+                      -- running full-market factor transform either.
+                      AND NOT (
+                        queued.task_key='local_factor_snapshot'
+                        AND EXISTS (
+                          SELECT 1 FROM orchestration_v2.task_execution busy
+                          WHERE busy.task_key=queued.task_key
+                            AND busy.status IN ('running','validating','publishing')
+                        )
+                      )
+                      -- Historical factors run only overnight, with one full
+                      -- hour of headroom before the daytime collection window.
+                      AND (queued.resource_class <> 'factor-backfill' OR (
+                        ((NOW() AT TIME ZONE 'Asia/Shanghai')::time >= TIME '21:00'
+                         OR (NOW() AT TIME ZONE 'Asia/Shanghai')::time < TIME '06:00')
+                        AND NOT EXISTS (
+                          SELECT 1 FROM orchestration_v2.task_execution routine
+                          WHERE routine.resource_class='derived'
+                            AND routine.status IN ('queued','retrying','running','validating','publishing')
+                            AND routine.eligible_at <= NOW()
+                        )
+                        AND NOT EXISTS (
+                          SELECT 1 FROM orchestration_v2.task_execution active_factor
+                          WHERE active_factor.task_key='local_factor_snapshot'
+                            AND active_factor.status IN ('running','validating','publishing')
+                        )
+                      ))
                       -- factor_value needs about 202 calls for one complete
                       -- market date and has a 1,000-call daily allowance.
                       -- Let the 19:15 routine partition reserve its calls
@@ -2328,6 +2784,26 @@ class OrchestrationV2Repository:
                           FROM orchestration_v2.task_execution AS active
                           WHERE active.task_key=queued.task_key
                             AND active.task_execution_id<>queued.task_execution_id
+                            AND active.status IN (
+                              'running','validating','publishing'
+                            )
+                        )
+                      )
+                      -- Financial Data scheduled pulls share one provider
+                      -- quota and some full-market routes perform dozens of
+                      -- protocol requests inside a single acquire node.  A
+                      -- task-level serial gate prevents distinct ant_* tasks
+                      -- from stampeding the same credential.  The task still
+                      -- owns its entire market sweep and validation lifecycle;
+                      -- this does not create child executions.
+                      AND NOT (
+                        queued.task_key LIKE 'ant\\_%%' ESCAPE '\\'
+                        AND EXISTS (
+                          SELECT 1
+                          FROM orchestration_v2.task_execution AS active
+                          WHERE active.task_execution_id<>
+                                queued.task_execution_id
+                            AND active.task_key LIKE 'ant\\_%%' ESCAPE '\\'
                             AND active.status IN (
                               'running','validating','publishing'
                             )
@@ -2372,7 +2848,7 @@ class OrchestrationV2Repository:
                 (
                     list(classes),
                     list(classes),
-                    list(sorted(QUOTA_GUARDED_DATASETS)),
+                    list(sorted(SERIALIZED_ACQUISITION_TASKS)),
                     list(sorted(QUOTA_GUARDED_DATASETS)),
                     worker_id,
                     lease_token,

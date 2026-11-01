@@ -49,6 +49,13 @@ class FinancialDataProtocolError(RuntimeError):
     """The upstream response violates the documented common-query protocol."""
 
 
+class FinancialDataQuotaExceeded(requests.HTTPError):
+    """A business quota is exhausted, not a transient requests-per-second cap."""
+    provider_error_code = 'QUOTA_EXCEEDED'
+    defer_without_failure = True
+    retry_after_seconds = 86400
+
+
 def validate_common_query(payload: Mapping[str, Any]) -> dict[str, Any]:
     mode = payload.get("mode")
     requests_payload = payload.get("requests")
@@ -98,6 +105,29 @@ class FinancialDataConnector:
         self._archive = archive
 
     def _post(self, payload: dict[str, Any]) -> Mapping[str, Any]:
+        from service.source_connectors.ant_budget import cached_directory, reserve, finish
+        payload = validate_common_query(payload)
+        if not self._api_key:
+            raise FinancialDataConfigurationError('ANT_DATA_API_KEY is not configured')
+        # Local absence is not permission to spend quota on suspension fallback.
+        if any(item.get('url') == '/api/v1/stock/suspend-resumption' for item in payload['requests']):
+            raise FinancialDataConfigurationError('停复牌使用本地 Tushare 数据；蚂蚁自动回退已停用')
+        with cached_directory(payload) as (cached, save):
+            if cached is not None:
+                return cached
+            request_id = reserve(payload)
+            try:
+                response = self._send(payload)
+            except Exception as exc:
+                upstream = getattr(exc, 'response', None)
+                finish(request_id, 'failed', getattr(upstream, 'status_code', None),
+                       quota_exhausted=isinstance(exc, FinancialDataQuotaExceeded))
+                raise
+            finish(request_id, 'success' if response.get('status') == 'SUCCESS' else 'upstream_failed', 200)
+            save(response)
+            return response
+
+    def _send(self, payload: dict[str, Any]) -> Mapping[str, Any]:
         if not self._api_key:
             raise FinancialDataConfigurationError(
                 "ANT_DATA_API_KEY is not configured (legacy FINANCIAL_DATA_API_KEY is also supported)"
@@ -118,6 +148,23 @@ class FinancialDataConnector:
             ),
             allow_redirects=False,
         )
+        if response.status_code == 429:
+            try:
+                error_body = response.json()
+            except ValueError:
+                error_body = {}
+            issues = error_body.get('issues', []) if isinstance(error_body, Mapping) else []
+            if isinstance(issues, list) and any(
+                isinstance(issue, Mapping) and issue.get('code') == 'QUOTA_EXCEEDED'
+                for issue in issues
+            ):
+                # Do not copy arbitrary upstream text (or echoed credentials)
+                # into execution logs. Preserve the proven business code only.
+                raise FinancialDataQuotaExceeded(
+                    'Financial Data QUOTA_EXCEEDED: 上游账户调用额度耗尽；'
+                    '请等待额度恢复或联系提供方扩容，立即重试无效。',
+                    response=response,
+                )
         response.raise_for_status()
         try:
             value = response.json()
@@ -158,7 +205,12 @@ class FinancialDataConnector:
                 "scheduled-pull allow-list"
             )
         try:
-            rows, evidence = run_scheduled_pull(spec, self._transport)
+            from service.source_connectors.ant_budget import budget_scope
+            category = ('rankings' if not spec.symbol_keyed else
+                        'weekly' if request.endpoint_key in {'stock_fnd.equity-structure', 'stock_fnd.free-float'}
+                        else 'monthly_rotation')
+            with budget_scope(category):
+                rows, evidence = run_scheduled_pull(spec, self._transport)
         except Exception as exc:
             if self._archive is not None:
                 try:

@@ -137,22 +137,26 @@ _DERIVED_TASKS = (
         85,
     ),
     TransformationTaskBlueprint(
-        "technical_factor_snapshot",
-        ("stock_daily", "adj_factor", "stock_basic"),
-        ("technical_factor_snapshot",),
-        ("daily", "adj_factor", "stock_basic"),
-        90,
-        # v4 freezes the same-day security master alongside bars and factors,
-        # so newly listed and final-day delisted securities cannot be omitted
-        # because the derived task raced a weekly reference refresh.
-        "technical-factor-snapshot-v4",
+        "local_factor_snapshot",
+        (
+            "stock_daily", "adj_factor", "daily_basic", "index_daily",
+            "stock_basic",
+        ),
+        ("local_factor_snapshot", "technical_factor_snapshot"),
+        (
+            "daily", "adj_factor", "daily_basic", "index_daily",
+            "stock_basic",
+        ),
+        89,
+        "unified-features-quality-v5",
     ),
     TransformationTaskBlueprint(
         "valuation_percentile_snapshot",
-        ("stock_daily_basic", "index_member_all"),
+        ("daily_basic", "index_weight"),
         ("valuation_percentile_snapshot",),
-        ("daily_basic", "index_member_all"),
+        ("daily_basic",),
         80,
+        "group-valuation-v1",
     ),
     TransformationTaskBlueprint(
         "fama_french_daily",

@@ -13,6 +13,9 @@ from typing import Any
 from service.clock import business_now
 from service.data_service.models import InvalidQueryError, RecordNotFoundError
 from service.research.catalog import capability_catalog
+from service.research.group_valuation import (
+    summarize_valuation, summarize_financials, aggregate_valuation, number as finite_number,
+)
 from service.research.technical_indicators import (
     aroon as _aroon,
     common_indicator_pack as _common_indicator_pack,
@@ -279,6 +282,27 @@ def _stochastic(
         k = 2 / 3 * k + 1 / 3 * rsv
         d = 2 / 3 * d + 1 / 3 * k
     return k, d, 3 * k - 2 * d
+
+
+def _stochastic_series(
+    highs: list[float], lows: list[float], closes: list[float], window: int = 9
+) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Return per-bar K/D/J series using the same 9-period recursive smoothing as
+    ``_stochastic`` (2/3 smoothing, seed 50), so the last values match the summary."""
+    k_series: list[float | None] = [None] * len(closes)
+    d_series: list[float | None] = [None] * len(closes)
+    j_series: list[float | None] = [None] * len(closes)
+    k = d = 50.0
+    for index in range(window - 1, len(closes)):
+        highest = max(highs[index - window + 1:index + 1])
+        lowest = min(lows[index - window + 1:index + 1])
+        rsv = 50.0 if highest == lowest else (closes[index] - lowest) / (highest - lowest) * 100
+        k = 2 / 3 * k + 1 / 3 * rsv
+        d = 2 / 3 * d + 1 / 3 * k
+        k_series[index] = k
+        d_series[index] = d
+        j_series[index] = 3 * k - 2 * d
+    return k_series, d_series, j_series
 
 
 def _williams_r(
@@ -1232,6 +1256,8 @@ def _timeframe_analysis(
     chart_points: int,
     turnover_rows: list[dict] | None = None,
     transaction_cost_amount_factor: float | None = None,
+    common_indicators: dict | None = None,
+    parameterized_indicators: dict | None = None,
 ) -> dict[str, Any]:
     """Calculate one consistent technical contract for any OHLCV instrument."""
 
@@ -1247,10 +1273,15 @@ def _timeframe_analysis(
     highs = [float(_number(row.get("high"))) for row in prices]
     lows = [float(_number(row.get("low"))) for row in prices]
     volumes = [_number(row.get("vol")) or 0 for row in prices]
-    common_indicators = _common_indicator_pack(highs, lows, closes, volumes)
-    parameterized_indicators = _parameterized_indicator_pack(
-        opens, highs, lows, closes, volumes, timeframe=timeframe
-    )
+    # The stock response exposes both a compatibility summary and a daily
+    # timeframe. Reuse packs from these exact adjusted bars within this request;
+    # never share them across dates, instruments, or resampled frequencies.
+    if common_indicators is None:
+        common_indicators = _common_indicator_pack(highs, lows, closes, volumes)
+    if parameterized_indicators is None:
+        parameterized_indicators = _parameterized_indicator_pack(
+            opens, highs, lows, closes, volumes, timeframe=timeframe
+        )
     parameterized_latest = parameterized_indicators["latest"]
     common_series = common_indicators["series"]
     common_latest = common_indicators["latest"]
@@ -1283,6 +1314,7 @@ def _timeframe_analysis(
     available_trend_windows = sum(ma[window] is not None for window in trend_windows)
     atr14 = mean(true_ranges[-14:]) if len(true_ranges) >= 14 else None
     kdj_k, kdj_d, kdj_j = _stochastic(highs, lows, closes)
+    kdj_k_series, kdj_d_series, kdj_j_series = _stochastic_series(highs, lows, closes)
     adx14, plus_di14, minus_di14 = _adx(highs, lows, closes)
     obv_series = _obv(closes, volumes)
     typical = [(3 * close + low + opened + high) / 6 for opened, high, low, close in zip(opens, highs, lows, closes)]
@@ -1338,6 +1370,12 @@ def _timeframe_analysis(
             "reason": "Niumen windows are defined in trading days and are only calculated from daily bars",
         }
     )
+    turnover_by_day: dict[date, float] = {}
+    for row in turnover_rows or []:
+        observed = _day(row.get("trade_date"))
+        value = _number(row.get("turnover_rate"))
+        if observed is not None and value is not None:
+            turnover_by_day[observed] = value
     chart_start = max(0, len(prices) - chart_points)
     chart = []
     boll_average_series = _sma_series(closes, 20)
@@ -1350,9 +1388,18 @@ def _timeframe_analysis(
             "open": _round(opens[index]), "high": _round(highs[index]),
             "low": _round(lows[index]), "close": _round(closes[index]),
             "volume": _round(volumes[index]),
+            "turnover_rate": _round(
+                turnover_by_day.get(_day(prices[index].get("trade_date")))
+            ),
+            "pct_chg": _round((closes[index] / closes[index - 1] - 1) * 100)
+            if index > 0 and closes[index - 1] else None,
             "macd": _round(macd_line[index]),
             "macd_signal": _round(signal_line[index]),
             "macd_histogram": _round(macd_line[index] - signal_line[index]),
+            "kdj_k": _round(kdj_k_series[index]),
+            "kdj_d": _round(kdj_d_series[index]),
+            "kdj_j": _round(kdj_j_series[index]),
+            "obv": _round(obv_series[index]),
             "ma_5": _round(ma_series.get(5, [None] * len(prices))[index]),
             "ma_10": _round(ma_series.get(10, [None] * len(prices))[index]),
             "ma_20": _round(ma_series.get(20, [None] * len(prices))[index]),
@@ -1675,6 +1722,25 @@ def _prior_year(value: date) -> date:
         return value.replace(year=value.year - 1, day=28)
 
 
+# 宽基 ETF 国家队监控宇宙。标的为中央汇金/汇金资管近年披露增持的主要宽基，
+# 覆盖沪深300/上证50/中证500/中证1000/科创50/创业板指六大指数。
+WIDE_BASE_ETF_UNIVERSE: tuple[dict[str, str], ...] = (
+    {"ts_code": "510300.SH", "name": "华泰柏瑞沪深300ETF", "index_code": "000300.SH", "index_name": "沪深300"},
+    {"ts_code": "510330.SH", "name": "华夏沪深300ETF", "index_code": "000300.SH", "index_name": "沪深300"},
+    {"ts_code": "510310.SH", "name": "易方达沪深300ETF", "index_code": "000300.SH", "index_name": "沪深300"},
+    {"ts_code": "159919.SZ", "name": "嘉实沪深300ETF", "index_code": "000300.SH", "index_name": "沪深300"},
+    {"ts_code": "510050.SH", "name": "华夏上证50ETF", "index_code": "000016.SH", "index_name": "上证50"},
+    {"ts_code": "510500.SH", "name": "南方中证500ETF", "index_code": "000905.SH", "index_name": "中证500"},
+    {"ts_code": "512100.SH", "name": "南方中证1000ETF", "index_code": "000852.SH", "index_name": "中证1000"},
+    {"ts_code": "159845.SZ", "name": "华夏中证1000ETF", "index_code": "000852.SH", "index_name": "中证1000"},
+    {"ts_code": "560010.SH", "name": "广发中证1000ETF", "index_code": "000852.SH", "index_name": "中证1000"},
+    {"ts_code": "159629.SZ", "name": "富国中证1000ETF", "index_code": "000852.SH", "index_name": "中证1000"},
+    {"ts_code": "588000.SH", "name": "华夏上证科创板50成份ETF", "index_code": "000688.SH", "index_name": "科创50"},
+    {"ts_code": "588080.SH", "name": "易方达上证科创板50成份ETF", "index_code": "000688.SH", "index_name": "科创50"},
+    {"ts_code": "159915.SZ", "name": "易方达创业板ETF", "index_code": "399006.SZ", "index_name": "创业板指"},
+)
+
+
 class ResearchService:
     """High-level calculations whose formulas remain stable across clients."""
 
@@ -1690,6 +1756,130 @@ class ResearchService:
             self._repository.backfill_statuses(), readiness=readiness
         )
 
+    def group_valuation(self, code: str, *, trade_date: date,
+                        provider: str | None = None,
+                        report_period: date | None = None) -> dict:
+        """Explicit trade date prevents silent lag and mixed-date aggregates."""
+        warnings = []
+        membership_conflicts = []
+        if report_period and report_period > trade_date:
+            raise InvalidQueryError('report_period must not be later than trade_date')
+        if report_period and (report_period.month, report_period.day) not in {
+            (3, 31), (6, 30), (9, 30), (12, 31),
+        }:
+            raise InvalidQueryError('report_period must be a calendar quarter end')
+        if provider is None:
+            rows = self._repository.index_valuation_members(code, as_of=trade_date)
+            membership_conflicts = [
+                {'ts_code': r['ts_code'], 'name': r.get('name'),
+                 'reason': 'delisted_by_requested_date', 'delist_date': r['delist_date']}
+                for r in rows if _day(r.get('delist_date'))
+                and _day(r['delist_date']) <= trade_date
+            ]
+            if membership_conflicts:
+                warnings.append('index snapshot contains delisted securities; refresh membership, do not impute prices')
+            members = {r['ts_code']: finite_number(r.get('weight')) for r in rows}
+            membership_date = max((r['trade_date'] for r in rows), default=None)
+            weight_sum = sum(v for v in members.values() if v is not None and v > 0)
+            if not 99 <= weight_sum <= 101:
+                warnings.append('index weights do not sum to approximately 100%')
+            if membership_date and (trade_date - _day(membership_date)).days > 55:
+                warnings.append('membership snapshot exceeds 55-day freshness policy')
+        else:
+            result = self._data.sector_members(provider, code, as_of=trade_date, limit=5000)
+            members = {r['ts_code']: None for r in result['data']}
+            membership_date = result['meta'].get('membership_effective_date')
+            if result['meta'].get('has_more'):
+                warnings.append('membership truncated')
+            warnings.append('sector historical membership validity is not independently certified')
+        if not members:
+            raise RecordNotFoundError('no membership snapshot available by requested date')
+        data = summarize_valuation(members, self._repository.group_valuation_rows(
+            list(members), as_of=trade_date), trade_date)
+        if data['missing_codes']:
+            warnings.append('some members have no valuation row on requested date')
+        if any(m['missing_codes'] for m in data['metrics'].values()):
+            warnings.append('some metric inputs are missing')
+        if report_period:
+            data['financials'] = summarize_financials(
+                members, self._repository.group_financial_rows(
+                    list(members), report_period=report_period, as_of=trade_date),
+                report_period, trade_date,
+            )
+            if any(m['missing_codes'] for m in data['financials']['metrics'].values()):
+                warnings.append('same-period disclosed financial inputs are incomplete')
+            data['aggregate_valuation'] = aggregate_valuation(
+                members, self._repository.group_aggregate_inputs(
+                    list(members), report_period=report_period, as_of=trade_date),
+            )
+            if any(v['status'] != 'computed' for v in data['aggregate_valuation'].values()):
+                warnings.append('aggregate valuation denominators incomplete or nonpositive')
+        return {'data': data, 'meta': {
+            'code': code, 'provider': provider or 'tushare_index_weight',
+            'trade_date': trade_date, 'membership_date': membership_date,
+            'membership_conflicts': membership_conflicts,
+            'quality': {'status': 'warning' if warnings else 'computed',
+                        'warnings': warnings, 'independently_audited': False},
+            'methodology': 'exact-date observations; positive ratios only; dividend yield allows zero; weighted means renormalize valid positive weights; no imputation',
+            'limitations': ['not supplier index valuation; aggregate valuation uses explicit common report period',
+                            'positive PE coverage is not a verified profitability rate',
+                            'stored revisions do not certify historical publication-time availability'],
+            'source_datasets': ['daily_basic', 'index_weight' if provider is None else provider + '_member'] + (['financial_indicator', 'income', 'balancesheet'] if report_period else []),
+        }}
+
+    def stored_group_valuation(self, code: str, *, trade_date: date) -> dict:
+        rows = self._repository.stored_group_valuation(code, trade_date)
+        if not rows:
+            raise RecordNotFoundError('no materialized group valuation for requested date')
+        row = rows[0]
+        return {'data': row['snapshot'], 'meta': {
+            key: row[key] for key in ('trade_date', 'formula_version', 'audit_status',
+                                      'computed_at', 'source_execution_id')
+        }}
+
+    def group_valuation_history(self, code: str, *, start: date, end: date,
+                                provider: str | None = None) -> dict:
+        if start > end or (end - start).days > 30:
+            raise InvalidQueryError('history requires an ordered window of at most 31 calendar days')
+        calendar = self._repository.group_calendar(start, end)
+        if len(calendar) != (end - start).days + 1:
+            raise InvalidQueryError('SSE calendar coverage incomplete for requested window')
+        results = []
+        for day in calendar:
+            if day['is_open'] != 1:
+                continue
+            try:
+                item = self.group_valuation(code, trade_date=day['cal_date'], provider=provider)
+                # Keep daily evidence compact; detail remains available by date.
+                for metric in item['data']['metrics'].values():
+                    metric.pop('member_percentiles', None)
+                results.append(item)
+            except RecordNotFoundError as exc:
+                results.append({'data': None, 'meta': {'trade_date': day['cal_date'],
+                    'quality': {'status': 'missing', 'warnings': [str(exc)]}}})
+        window_percentiles = {}
+        latest = results[-1] if results else None
+        for field in ('pe', 'pe_ttm', 'pb', 'ps_ttm', 'dv_ttm'):
+            values = [item['data']['metrics'][field]['median'] for item in results
+                      if item['data'] and item['meta']['quality']['status'] == 'computed'
+                      and item['data']['metrics'][field]['median'] is not None]
+            current = (latest['data']['metrics'][field]['median']
+                       if latest and latest['data'] and latest['meta']['quality']['status'] == 'computed'
+                       else None)
+            window_percentiles[field] = {
+                'valid_days': len(values),
+                'latest_median_percentile': 100 * (
+                    sum(v < current for v in values) + .5 * sum(v == current for v in values)
+                ) / len(values) if values and current is not None else None,
+            }
+        return {'data': results, 'meta': {
+            'start': start, 'end': end, 'expected_trading_days': len(results),
+            'window_percentiles': window_percentiles,
+            'percentile_policy': 'requested window only; warning/missing days excluded; not long-term valuation percentile',
+            'methodology': 'membership selected separately as of each trading day; gaps retained; no present-day constituents projected backward',
+            'independently_audited': False,
+        }}
+
     def search_stocks(self, query: str, *, limit: int = 20) -> dict[str, Any]:
         """Return a bounded security-master lookup for human-facing clients."""
 
@@ -1704,6 +1894,40 @@ class ResearchService:
                 "limit": limit,
                 "returned": len(rows),
                 "dataset": "stock_basic",
+            },
+        }
+
+    def search_instruments(
+        self, query: str, *, limit: int = 20
+    ) -> dict[str, Any]:
+        """Unified security-master search across stocks and exchange-traded funds.
+
+        Each hit carries an ``asset_type`` discriminator (``"stock"`` or
+        ``"etf"``) so the dashboard can route to the right technicals
+        contract.  Stocks are ranked first, then ETFs, then by code.
+        """
+
+        normalized = query.strip()
+        if not normalized:
+            raise InvalidQueryError("instrument search query must not be empty")
+        stock_rows = self._repository.search_stocks(normalized, limit=limit)
+        etf_rows = self._repository.search_etfs(normalized, limit=limit)
+        merged = [
+            {"asset_type": "stock", **row}
+            for row in stock_rows
+        ] + [
+            {"asset_type": "etf", **row}
+            for row in etf_rows
+        ]
+        return {
+            "data": merged[:limit],
+            "meta": {
+                "query": normalized,
+                "limit": limit,
+                "returned": len(merged[:limit]),
+                "stocks": len(stock_rows),
+                "etfs": len(etf_rows),
+                "datasets": ["stock_basic", "fund_basic"],
             },
         }
 
@@ -2688,6 +2912,8 @@ class ResearchService:
                         prices, timeframe="1d", chart_points=chart_points,
                         turnover_rows=turnover_rows,
                         transaction_cost_amount_factor=10.0,
+                        common_indicators=common_indicators,
+                        parameterized_indicators=parameterized_indicators,
                     ),
                     "1w": _timeframe_analysis(
                         weekly_prices, timeframe="1w", chart_points=chart_points
@@ -2826,7 +3052,7 @@ class ResearchService:
                 prices, timeframe="1d", chart_points=chart_points,
                 turnover_rows=turnover_rows,
                 transaction_cost_amount_factor=(
-                    10.0 if normalized_type == "stock" else None
+                    10.0 if normalized_type in {"stock", "fund", "etf"} else None
                 ),
             ),
             "1w": _timeframe_analysis(weekly, timeframe="1w", chart_points=chart_points),
@@ -5131,6 +5357,197 @@ class ResearchService:
         )
         return flow_view
 
+    def etf_flow_series(
+        self,
+        *,
+        lookback_days: int = 120,
+        min_flow_yi: float = 5.0,
+        streak_days: int = 3,
+        as_of: date | None = None,
+    ) -> dict[str, Any]:
+        """Return the daily share-change, net-flow and turnover series.
+
+        ``share_change_wan`` is the primary signal (primary-market net
+        creation/redemption in ten-thousand shares); ``flow_yi`` is the net
+        creation/redemption amount (share change × NAV, in RMB 100m), and
+        ``amount_yi`` is the secondary-market turnover (RMB 100m) joined from
+        ``fund_daily``.  A point is flagged ``spike`` when the absolute
+        single-day flow reaches ``min_flow_yi``, and ``streak_days`` counts
+        consecutive same-direction observations so a sustained accumulation can
+        be told apart from a one-off creation.
+        """
+
+        effective_as_of = as_of or business_now().date()
+        ts_codes = [item["ts_code"] for item in WIDE_BASE_ETF_UNIVERSE]
+        meta_by_code = {item["ts_code"]: item for item in WIDE_BASE_ETF_UNIVERSE}
+
+        rows = self._repository.etf_share_series(
+            ts_codes=ts_codes,
+            as_of=effective_as_of,
+            lookback_days=lookback_days,
+        )
+        by_code: dict[str, list[dict]] = defaultdict(list)
+        for row in rows:
+            by_code[row["ts_code"]].append(row)
+
+        series: list[dict[str, Any]] = []
+        basket: dict[date, dict[str, Any]] = defaultdict(
+            lambda: {"share_change_wan": 0.0, "flow_yi": 0.0, "amount_yi": 0.0,
+                     "spike": False}
+        )
+        signals: list[dict[str, Any]] = []
+
+        for ts_code in ts_codes:
+            meta = meta_by_code[ts_code]
+            points: list[dict[str, Any]] = []
+            previous_share: float | None = None
+            direction_streak = 0
+            previous_direction = 0
+            for row in by_code.get(ts_code, []):
+                share = _number(row.get("total_share"))
+                nav = _number(row.get("nav"))
+                if nav is None and share is not None:
+                    size = _number(row.get("total_size"))
+                    if size is not None:
+                        nav = size / share
+                trade_date = _day(row.get("trade_date"))
+
+                amount_yi: float | None = None
+                amount_k = _number(row.get("amount"))
+                if amount_k is not None:
+                    amount_yi = amount_k / 100000
+
+                share_change: float | None = None
+                flow: float | None = None
+                pct: float | None = None
+                direction = 0
+                if share is not None and previous_share is not None:
+                    share_change = share - previous_share
+                    flow = share_change * nav / 10000 if nav is not None else None
+                    pct = _pct_change(share, previous_share)
+                    direction = 1 if share_change > 0 else -1 if share_change < 0 else 0
+
+                if direction != 0 and direction == previous_direction:
+                    direction_streak += 1
+                elif direction != 0:
+                    direction_streak = 1
+                else:
+                    direction_streak = 0
+                previous_direction = direction
+
+                spike = flow is not None and abs(flow) >= min_flow_yi
+                streak = direction_streak if direction_streak >= streak_days else 0
+
+                points.append({
+                    "trade_date": trade_date,
+                    "total_share_wan": _round(share),
+                    "nav": _round(nav, 6),
+                    "share_change_wan": _round(share_change),
+                    "share_change_pct": _round(pct),
+                    "flow_yi": _round(flow),
+                    "amount_yi": _round(amount_yi),
+                    "spike": spike,
+                    "streak_days": streak,
+                })
+
+                if trade_date is not None and share_change is not None:
+                    bucket = basket[trade_date]
+                    bucket["share_change_wan"] += share_change
+                    bucket["flow_yi"] += flow or 0.0
+                    bucket["amount_yi"] += amount_yi or 0.0
+                    if spike:
+                        bucket["spike"] = True
+                        signals.append({
+                            "type": "single_day_spike",
+                            "trade_date": trade_date,
+                            "ts_code": ts_code,
+                            "name": meta["name"],
+                            "index_name": meta["index_name"],
+                            "share_change_wan": _round(share_change),
+                            "flow_yi": _round(flow),
+                            "direction": "creation" if direction > 0 else "redemption",
+                        })
+                    if streak == streak_days and direction != 0:
+                        signals.append({
+                            "type": "consecutive_trend",
+                            "trade_date": trade_date,
+                            "ts_code": ts_code,
+                            "name": meta["name"],
+                            "index_name": meta["index_name"],
+                            "streak_days": streak,
+                            "direction": "creation" if direction > 0 else "redemption",
+                        })
+
+                previous_share = share
+
+            series.append({
+                "ts_code": ts_code,
+                "name": meta["name"],
+                "index_code": meta["index_code"],
+                "index_name": meta["index_name"],
+                "points": points,
+            })
+
+        basket_points = [
+            {
+                "trade_date": trade_date,
+                "share_change_wan": _round(bucket["share_change_wan"]),
+                "flow_yi": _round(bucket["flow_yi"]),
+                "amount_yi": _round(bucket["amount_yi"]),
+                "spike": bucket["spike"],
+            }
+            for trade_date, bucket in sorted(basket.items())
+        ]
+
+        seen: set[tuple[str, str, str]] = set()
+        deduped: list[dict[str, Any]] = []
+        for signal in signals:
+            key = (signal["type"], str(signal["trade_date"]), signal["ts_code"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(signal)
+        deduped.sort(key=lambda item: item["trade_date"], reverse=True)
+
+        latest = max(
+            (p["trade_date"] for p in basket_points if p["trade_date"]), default=None
+        )
+
+        return {
+            "data": {
+                "series": series,
+                "basket": basket_points,
+                "signals": deduped,
+            },
+            "meta": {
+                "as_of": effective_as_of,
+                "universe_size": len(ts_codes),
+                "min_flow_yi": min_flow_yi,
+                "streak_days": streak_days,
+                "latest_data_date": latest,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": (
+                    "share_change_wan = total_share_t - total_share_{t-1} (primary "
+                    "signal); flow_yi = share_change_wan × nav / 10000 (net "
+                    "creation/redemption amount, RMB 100m); amount_yi = fund_daily "
+                    "turnover / 100000 (secondary-market trading amount, RMB 100m); "
+                    "spike flags |flow| >= min_flow_yi; streak flags >= streak_days "
+                    "consecutive same-direction changes"
+                ),
+                "provenance": ["etf_share_size", "fund_daily"],
+                "quality": {
+                    "status": "ready" if series else "warning",
+                    "etfs_analyzed": len(series),
+                    "warnings": [
+                        "share change identifies primary-market creations/redemptions only",
+                        "flow_yi is a NAV-multiplied net creation/redemption amount, not an exchange cash-flow ledger",
+                        "amount_yi is secondary-market turnover and reflects trading activity, not creation/redemption direction",
+                        "investor identity requires official announcements or periodic holder disclosures",
+                    ],
+                },
+            },
+        }
+
     def sector_rotation(
         self,
         provider: str,
@@ -5214,6 +5631,82 @@ class ResearchService:
                         ]
                     ),
                 },
+            },
+        }
+
+    def alipay_hot_plates(
+        self,
+        *,
+        as_of: date | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Alipay (Ant) hot-plate ranking, sourced from the daily scheduled pull.
+
+        This is a distinct provider from Tushare's hot boards: the Ant ranking
+        is Alipay's own popularity metric (``ant_norm_hot_plate_rank``), not a
+        price-derived sector index.  Missing rows surface as an empty list with
+        a ``stale``/``empty`` quality status rather than being silently filled.
+        """
+
+        effective_as_of = as_of or business_now().date()
+        rows = self._load_many(
+            "ant_hot_plate_rank",
+            filters={},
+            max_records=500,
+        )
+        ranked = sorted(
+            rows,
+            key=lambda row: (_day(row.get("trade_date")) or date.min, int(row.get("rank") or 0)),
+        )
+        latest_date = max(
+            (_day(row.get("trade_date")) for row in rows if _day(row.get("trade_date")) is not None),
+            default=None,
+        )
+        latest = [
+            row for row in ranked
+            if latest_date is not None and _day(row.get("trade_date")) == latest_date
+        ]
+        latest.sort(key=lambda row: int(row.get("rank") or 0))
+        items = [
+            {
+                "rank": int(row.get("rank") or 0),
+                "symbol": row.get("symbol"),
+                "plate_name": row.get("plate_name"),
+                "pct_chg": _number(row.get("pct_chg")),
+                "pct_chg_abs": _number(row.get("pct_chg_abs")),
+                "pct_chg_1m": _number(row.get("pct_chg_1m")),
+                "pct_chg_3m": _number(row.get("pct_chg_3m")),
+                "main_net_inflow": _number(row.get("main_net_inflow")),
+                "main_net_inflow_1w": _number(row.get("main_net_inflow_1w")),
+            }
+            for row in latest[:limit]
+        ]
+        lag_days = (
+            (effective_as_of - latest_date).days
+            if latest_date is not None
+            else None
+        )
+        status = (
+            "empty"
+            if not items
+            else "ready"
+            if lag_days is not None and lag_days <= 2
+            else "stale"
+        )
+        return {
+            "data": {
+                "items": items,
+                "trade_date": latest_date.isoformat() if latest_date else None,
+            },
+            "meta": {
+                "provider": "financial_data",
+                "as_of": effective_as_of,
+                "effective_date": latest_date.isoformat() if latest_date else None,
+                "lag_days": lag_days,
+                "status": status,
+                "generated_at": datetime.now(timezone.utc),
+                "methodology": "Alipay (Ant) hot-plate popularity ranking, daily scheduled pull",
+                "provenance": ["ant_norm_hot_plate_rank"],
             },
         }
 

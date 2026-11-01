@@ -41,8 +41,10 @@ def _filtered_items(
     status: str | None,
     category: str | None,
     query: str | None,
+    items: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    items = interface_inventory()
+    if items is None:
+        items = interface_inventory()
     tokens = (query or "").strip().lower()
     if tokens:
         matched = []
@@ -70,8 +72,13 @@ def _filtered_items(
 
 
 @router.get("/summary")
-def get_dependency_summary() -> dict:
-    return dependency_summary()
+def get_dependency_summary(
+    repository: OrchestrationV2RepositoryDependency,
+) -> dict:
+    persisted = repository.interface_registry_rows()
+    summary = dependency_summary(persisted)
+    summary["source"] = "database" if persisted is not None else "compiled"
+    return summary
 
 
 @router.get("/interfaces")
@@ -84,9 +91,20 @@ def list_dependency_interfaces(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
 ) -> dict:
-    items = _filtered_items(source=source, status=status, category=category, query=q)
+    # Prefer the persisted inventory so the answer is queryable and auditable;
+    # fall back to the compiler when the table is not synced yet, because an
+    # unsynced table must not read as "no interfaces exist".
+    persisted = repository.interface_registry_rows()
+    items = _filtered_items(
+        source=source, status=status, category=category, query=q,
+        items=persisted,
+    )
     execution_states, dataset_states, runtime_available = _runtime_maps(repository)
-    merged = merge_runtime(items, execution_states, dataset_states)
+    try:
+        automation_states = repository.automation_states()
+    except Exception:
+        automation_states = None
+    merged = merge_runtime(items, execution_states, dataset_states, automation_states)
     total = len(merged)
     start = (page - 1) * page_size
     return {
@@ -94,6 +112,7 @@ def list_dependency_interfaces(
         "page": page,
         "page_size": page_size,
         "runtime_available": runtime_available,
+        "source": "database" if persisted is not None else "compiled",
         "items": merged[start : start + page_size],
     }
 
@@ -101,9 +120,14 @@ def list_dependency_interfaces(
 @router.get("/interfaces/{source}/detail")
 def get_dependency_interface(
     source: str,
+    repository: OrchestrationV2RepositoryDependency,
     key: str = Query(..., description="Interface key, e.g. adj_factor or /api/v1/quote/basic-snapshot"),
 ) -> dict:
-    detail = interface_detail(source, key)
+    # Prefer the persisted detail so the answer is queryable and auditable;
+    # fall back to the compiler when the row is not synced yet.
+    detail = repository.interface_registry_detail(source, key)
+    if detail is None:
+        detail = interface_detail(source, key)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"unknown interface: {source}/{key}")
     return {"interface": detail}
@@ -111,11 +135,16 @@ def get_dependency_interface(
 
 @router.get("/field-lineage")
 def get_field_lineage(
+    repository: OrchestrationV2RepositoryDependency,
     q: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
 ) -> dict:
-    items = field_lineage()
+    # Prefer the persisted lineage so the answer is queryable and auditable;
+    # fall back to the compiler when the table is not synced yet, because an
+    # unsynced table must not read as "this column has no source".
+    persisted = repository.field_lineage_rows()
+    items = persisted if persisted is not None else field_lineage()
     tokens = (q or "").strip().lower()
     if tokens:
         matched = []
@@ -129,4 +158,10 @@ def get_field_lineage(
         items = matched
     total = len(items)
     start = (page - 1) * page_size
-    return {"total": total, "page": page, "page_size": page_size, "items": items[start : start + page_size]}
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "source": "database" if persisted is not None else "compiled",
+        "items": items[start : start + page_size],
+    }

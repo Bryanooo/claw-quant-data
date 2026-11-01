@@ -130,6 +130,36 @@ def test_closed_day_keeps_next_morning_tasks_on_prior_open_day(monkeypatch):
     assert by_task["margin_detail"].observation_key == "2026-10-08"
 
 
+def test_closed_day_dispatches_prior_open_day_once_release_gate_opens(monkeypatch):
+    repository = _Repository()
+    def calendar_query(statement, _params):
+        if "us_tradecal" in statement:
+            return [{"cal_date": date(2026, 10, 9)}]
+        return [
+            {"cal_date": date(2026, 10, 9)},
+            {"cal_date": date(2026, 10, 8)},
+            {"cal_date": date(2026, 9, 30)},
+        ]
+
+    monkeypatch.setattr(scheduling, "query", calendar_query)
+    monkeypatch.setattr(scheduling, "is_trade_day", lambda _value: True)
+
+    result = scheduling.dispatch_latest_daily_acquisitions(
+        date(2026, 10, 11),
+        include_current_daily=True,
+        next_morning_released=True,
+        repository=repository,
+    )
+
+    assert result["target_date"] == "2026-10-09"
+    assert result["delayed_target_date"] == "2026-10-09"
+    assert result["superseded_not_due"] == 0
+    assert result["requeued_after_release"] == 4
+    by_task = {item.task_key: item for item in repository.requests}
+    assert by_task["margin"].observation_key == "2026-10-09"
+    assert by_task["etf_share_size"].observation_key == "2026-10-09"
+
+
 def test_open_day_dispatches_previous_day_after_next_morning_release(monkeypatch):
     repository = _Repository()
     def calendar_query(statement, _params):

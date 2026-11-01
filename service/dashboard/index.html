@@ -7,34 +7,13 @@
   <title>Claw Quant · 数据控制台</title>
   <link rel="icon" type="image/png" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
   <link rel="apple-touch-icon" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261023-research-3" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261030-workspaces" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
     <div class="brand"><img src="/dashboard-assets/claw-quant-icon.png?v=20261021" alt="Claw Quant" /><div><strong>Claw Quant</strong><small>Data Operations</small></div></div>
     <button id="sidebarToggle" class="icon-button" title="收起侧栏">☰</button>
-    <nav>
-      <p class="nav-group">工作台</p>
-      <button class="nav active" data-view="overview"><span>⌂</span><b>运营总览</b></button>
-      <button class="nav" data-view="today"><span>◷</span><b>今日交付</b></button>
-      <div class="nav-group-label">研究</div>
-      <button class="nav" data-view="stock"><span>⌁</span><b>个股研究</b></button>
-      <button class="nav" data-view="market"><span>◉</span><b>大盘研究</b></button>
-      <button class="nav" data-view="etf"><span>◈</span><b>ETF 研究</b></button>
-      <button class="nav" data-view="sector"><span>⬡</span><b>板块研究</b></button>
-      <button class="nav" data-view="macro"><span>≋</span><b>宏观研究</b></button>
-      <button class="nav" data-view="factors"><span>ƒ</span><b>量化因子</b></button>
-      <button class="nav" data-view="investment"><span>☆</span><b>投资日历</b></button>
-      <p class="nav-group">治理</p>
-      <button class="nav" data-view="tasks"><span>⌘</span><b>采集任务</b></button>
-      <button class="nav" data-view="executions"><span>≡</span><b>执行历史</b></button>
-      <button class="nav" data-view="coverage"><span>✓</span><b>覆盖审计</b></button>
-      <button class="nav" data-view="calendar"><span>▦</span><b>数据日历</b></button>
-      <p class="nav-group">资产</p>
-      <button class="nav" data-view="services"><span>◇</span><b>服务目录</b></button>
-      <button class="nav" data-view="sources"><span>⇄</span><b>数据依赖</b></button>
-      <button class="nav" data-view="derivations"><span>∑</span><b>数据派生</b></button>
-    </nav>
+    <nav id="primaryNavigation" aria-label="主导航"></nav>
     <div class="sidebar-foot"><span class="dot"></span><span id="engineLabel">数据服务运行中</span></div>
   </aside>
 
@@ -44,13 +23,14 @@
       <div class="actions"><span id="updatedAt">正在连接…</span><button id="themeToggle">◐</button><button id="refreshButton" class="primary">刷新</button></div>
     </header>
     <div id="notice" class="notice hidden"></div>
+    <div id="workspaceNavigation" class="workspace-navigation hidden" aria-label="工作区导航"></div>
 
     <section class="view hidden" data-panel="stock">
       <section class="card stock-search-card">
-        <div class="stock-search-copy"><p class="eyebrow">EQUITY LAB</p><h2>股票 K 线与技术因子</h2><p>输入股票代码、名称或拼音简码，从本地已校验行情中生成统一复权口径的日 / 周 / 月 K 线。</p></div>
+        <div class="stock-search-copy"><p class="eyebrow">INSTRUMENT LAB</p><h2>标的 K 线与技术因子</h2><p>输入股票或 ETF 代码、名称、拼音简码，从本地已校验行情中生成统一复权口径的日 / 周 / 月 K 线。ETF 展示行情与技术因子，净值与份额走专属模块。</p></div>
         <div class="stock-search-area">
-          <div class="stock-search-box"><input id="stockSearch" autocomplete="off" placeholder="例如：宁德时代、300750、NDSD" aria-label="搜索股票"/><button id="stockSearchButton" class="primary">搜索</button><div id="stockSuggestions" class="stock-suggestions hidden"></div></div>
-          <div class="stock-examples"><span>快速查看</span><button data-stock-example="300750.SZ">宁德时代</button><button data-stock-example="600519.SH">贵州茅台</button><button data-stock-example="000001.SZ">平安银行</button></div>
+          <div class="stock-search-box"><input id="stockSearch" autocomplete="off" placeholder="例如：宁德时代、300750、沪深300ETF、510300、NDSD" aria-label="搜索股票或ETF"/><button id="stockSearchButton" class="primary">搜索</button><div id="stockSuggestions" class="stock-suggestions hidden"></div></div>
+          <div class="stock-examples"><span>快速查看</span><button data-stock-example="300750.SZ">宁德时代</button><button data-stock-example="600519.SH">贵州茅台</button><button data-stock-example="510300.SH">沪深300ETF</button><button data-stock-example="588000.SH">科创50ETF</button></div>
         </div>
       </section>
 
@@ -71,16 +51,16 @@
         <section class="card stock-chart-card">
           <div class="stock-chart-toolbar">
             <div class="timeframe-switch" role="group" aria-label="K线周期"><button class="active" data-stock-timeframe="1d">日 K</button><button data-stock-timeframe="1w">周 K</button><button data-stock-timeframe="1mo">月 K</button></div>
-            <div class="stock-chart-controls"><label>初始窗口 <select id="stockPoints"><option value="90">90 根</option><option value="180" selected>180 根</option><option value="250">250 根</option></select></label><div class="stock-zoom-controls" role="group" aria-label="K线缩放"><button id="stockZoomOut" title="缩小，显示更多K线">−</button><button id="stockZoomIn" title="放大，显示更少K线">＋</button><button id="stockZoomReset" title="回到最新区间">最新</button></div><span id="stockZoomStatus" class="stock-zoom-status">—</span><button id="stockReload">刷新行情</button></div>
+            <div class="stock-chart-controls"><label>分析历史 <select id="stockHistory"><option value="250">近 250 交易日</option><option value="500" selected>近 500 交易日</option><option value="1200">近 1200 交易日</option><option value="3000">近 3000 交易日</option></select></label><label>初始窗口 <select id="stockPoints"><option value="90">90 根</option><option value="180" selected>180 根</option><option value="250">250 根</option></select></label><div class="stock-zoom-controls" role="group" aria-label="K线缩放"><button id="stockZoomOut" title="缩小，显示更多K线">−</button><button id="stockZoomIn" title="放大，显示更少K线">＋</button><button id="stockZoomReset" title="回到最新区间">最新</button></div><span id="stockZoomStatus" class="stock-zoom-status">—</span><button id="stockReload">刷新行情</button></div>
           </div>
           <div class="stock-overlay-legend" id="stockOverlayLegend">
-            <button data-stock-overlay="ma_5"><i style="--line-color:#9b7bd4"></i>MA5</button><button data-stock-overlay="ma_10"><i style="--line-color:#d19b3f"></i>MA10</button><button class="active" data-stock-overlay="ma_20"><i style="--line-color:#348fcb"></i>MA20</button><button class="active" data-stock-overlay="ma_60"><i style="--line-color:#7b8794"></i>MA60</button><button data-stock-overlay="ma_120"><i style="--line-color:#4d8d7c"></i>MA120</button><button data-stock-overlay="ma_250"><i style="--line-color:#6a7480"></i>MA250</button><button data-stock-overlay="ema_20"><i style="--line-color:#35a78a"></i>EMA20</button><button data-stock-overlay="ema_50"><i style="--line-color:#2f6f9f"></i>EMA50</button><button data-stock-overlay="ema_200"><i style="--line-color:#17666f"></i>EMA200</button><button data-stock-overlay="bbi"><i style="--line-color:#945ca8"></i>BBI</button><button data-stock-overlay="bollinger"><i style="--line-color:#8795a1"></i>BOLL</button><button data-stock-overlay="keltner"><i style="--line-color:#4d91a8"></i>Keltner</button><button class="active daily-only" data-stock-overlay="cost_20"><i style="--line-color:#b96a93"></i>成本20</button><button class="active daily-only" data-stock-overlay="cost_60"><i style="--line-color:#8753a6"></i>成本60</button><button class="active daily-only" data-stock-overlay="niumen_line"><i style="--line-color:#e07a35"></i>牛门线</button><button class="active daily-only" data-stock-overlay="niumen_confirmation_line"><i style="--line-color:#c94848"></i>确认线</button><button class="daily-only" data-stock-overlay="niumen_signal_ma_10"><i style="--line-color:#e7a85c"></i>信号MA10</button>
+            <button data-stock-overlay="ma_5"><i style="--line-color:#9b7bd4"></i>MA5</button><button data-stock-overlay="ma_10"><i style="--line-color:#d19b3f"></i>MA10</button><button class="active" data-stock-overlay="ma_20"><i style="--line-color:#348fcb"></i>MA20</button><button class="active" data-stock-overlay="ma_60"><i style="--line-color:#7b8794"></i>MA60</button><button data-stock-overlay="ma_120"><i style="--line-color:#4d8d7c"></i>MA120</button><button data-stock-overlay="ma_250"><i style="--line-color:#6a7480"></i>MA250</button><button data-stock-overlay="ema_12"><i style="--line-color:#35a78a"></i>EMA12</button><button data-stock-overlay="ema_26"><i style="--line-color:#2f6f9f"></i>EMA26</button><button data-stock-overlay="ema_20"><i style="--line-color:#35a78a"></i>EMA20</button><button data-stock-overlay="ema_50"><i style="--line-color:#2f6f9f"></i>EMA50</button><button data-stock-overlay="ema_200"><i style="--line-color:#17666f"></i>EMA200</button><button data-stock-overlay="bbi"><i style="--line-color:#945ca8"></i>BBI</button><button data-stock-overlay="bollinger"><i style="--line-color:#8795a1"></i>BOLL</button><button data-stock-overlay="keltner"><i style="--line-color:#4d91a8"></i>Keltner</button><button class="active daily-only" data-stock-overlay="cost_20"><i style="--line-color:#b96a93"></i>成本20</button><button class="active daily-only" data-stock-overlay="cost_60"><i style="--line-color:#8753a6"></i>成本60</button><button class="active daily-only" data-stock-overlay="niumen_line"><i style="--line-color:#e07a35"></i>牛门线</button><button class="active daily-only" data-stock-overlay="niumen_confirmation_line"><i style="--line-color:#c94848"></i>确认线</button><button class="daily-only" data-stock-overlay="niumen_signal_ma_10"><i style="--line-color:#e7a85c"></i>信号MA10</button>
           </div>
           <div id="stockDailyNote" class="stock-method-note">牛门线与确认线按交易日定义，仅在日 K 展示；成本线使用成交额 / 成交量的严格滚动口径。</div>
           <div class="stock-pan-row"><span>历史浏览</span><button id="stockPanPrev" title="向前浏览更早K线">←</button><input id="stockPan" type="range" min="0" max="0" value="0" aria-label="平移K线可视区间"/><button id="stockPanNext" title="向后浏览更新K线">→</button><small id="stockHistoryRange">可直接左右拖动 K 线；滚轮缩放</small></div>
           <div id="stockChartStage" class="stock-chart-stage"><svg id="stockPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" aria-label="股票K线图"></svg><div id="stockTooltip" class="stock-tooltip hidden"></div></div>
-          <div class="stock-subchart"><div><strong id="stockVolumeTitle">成交量（手）</strong><small id="stockVolumeLabel">—</small></div><svg id="stockVolumeChart" viewBox="0 0 1200 128" preserveAspectRatio="none" aria-label="成交量图"></svg></div>
-          <div class="stock-subchart macd-pane"><div><strong>MACD (12, 26, 9)</strong><small id="stockMacdLabel">DIF — · DEA —</small></div><svg id="stockMacdChart" viewBox="0 0 1200 150" preserveAspectRatio="none" aria-label="MACD图"></svg></div>
+          <div id="stockSubChartArea" class="stock-subchart-area"></div>
+          <div class="stock-subchart-actions"><button id="stockAddSubChart" type="button">＋ 添加副图</button><small>副图指标可切换；悬停 / 点击任意图表，主图与副图十字光标联动</small></div>
         </section>
 
         <section class="stock-factor-grid">
@@ -102,17 +82,19 @@
 
         <nav class="stock-module-tabs" id="stockModuleTabs" role="tablist" aria-label="研究模块">
           <button class="active" data-stock-module="market">行情因子</button>
-          <button data-stock-module="chips">筹码分布</button>
-          <button data-stock-module="fundamentals">基本面</button>
-          <button data-stock-module="events">公司事件</button>
-          <button data-stock-module="sectors">板块 · 同行</button>
-          <button data-stock-module="chain">产业链</button>
+          <button data-stock-module="chips" data-stock-only>筹码分布</button>
+          <button data-stock-module="fundamentals" data-stock-only>基本面</button>
+          <button data-stock-module="events" data-stock-only>公司事件</button>
+          <button data-stock-module="sectors" data-stock-only>板块 · 同行</button>
+          <button data-stock-module="chain" data-stock-only>产业链</button>
+          <button data-stock-module="navshares" data-etf-only class="hidden">净值与份额</button>
         </nav>
         <section id="stockModuleChips" class="stock-module hidden" data-stock-module-panel="chips"></section>
         <section id="stockModuleFundamentals" class="stock-module hidden" data-stock-module-panel="fundamentals"></section>
         <section id="stockModuleEvents" class="stock-module hidden" data-stock-module-panel="events"></section>
         <section id="stockModuleSectors" class="stock-module hidden" data-stock-module-panel="sectors"></section>
         <section id="stockModuleChain" class="stock-module hidden" data-stock-module-panel="chain"></section>
+        <section id="stockModuleNavShares" class="stock-module hidden" data-stock-module-panel="navshares"></section>
       </div>
     </section>
 
@@ -150,6 +132,64 @@
     </section>
 
     <section class="view hidden" data-panel="etf">
+    <section class="card etf-flow-series-card">
+      <div class="card-head etf-flow-head">
+        <div>
+          <p class="eyebrow">NATIONAL TEAM FLOW</p>
+          <h2>宽基 ETF 国家队资金流</h2>
+          <p id="etfFlowSeriesMeta">13 只主要宽基的份额变化（主）与金额变化（参考）双维度日频观测</p>
+        </div>
+        <div class="etf-flow-toolbar">
+          <div class="timeframe-switch etf-flow-range" role="group" aria-label="时间窗口">
+            <button data-etf-flow-window="30">30日</button>
+            <button data-etf-flow-window="60" class="active">60日</button>
+            <button data-etf-flow-window="120">120日</button>
+            <button data-etf-flow-window="250">250日</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="etf-flow-picker">
+        <div class="etf-flow-picker-bar">
+          <span class="etf-flow-picker-label">观察口径</span>
+          <span id="etfFlowSelectedLabel" class="etf-flow-picker-selected">全部宽基（13 只）</span>
+          <div class="etf-flow-picker-actions">
+            <button class="quiet-action" data-etf-flow-select-all type="button">全选</button>
+            <button class="quiet-action" data-etf-flow-clear-selection type="button">清空</button>
+          </div>
+        </div>
+        <div class="etf-flow-picker-groups" id="etfFlowGroups"></div>
+        <div class="etf-flow-picker-members" id="etfFlowMembers"></div>
+      </div>
+
+      <div id="etfFlowSummary" class="valuation-grid etf-flow-summary"></div>
+
+      <div class="etf-flow-legend">
+        <span><i class="etf-swatch etf-swatch-share"></i>份额变化（亿份 · 柱）</span>
+        <span><i class="etf-swatch etf-swatch-flow"></i>净流入 / 净流出（亿元 · 折线）</span>
+        <span><i class="etf-swatch etf-swatch-cum"></i>累计净申赎（亿份）</span>
+        <span><i class="etf-swatch etf-swatch-turnover"></i>成交额（亿元 · 二级市场）</span>
+        <span><i class="etf-swatch etf-swatch-spike"></i>单日异常（|净流入| ≥ 5 亿）</span>
+        <span class="etf-flow-hint">点击图表查看单日详情</span>
+      </div>
+
+      <div class="etf-flow-chart-stage" id="etfFlowChartStage">
+        <svg id="etfFlowSeriesChart" viewBox="0 0 1200 452" preserveAspectRatio="none" role="img" aria-label="宽基ETF份额、金额、累计净申赎与成交额"></svg>
+        <div id="etfFlowTooltip" class="stock-tooltip hidden"></div>
+      </div>
+
+      <div id="etfFlowDetail" class="etf-flow-detail hidden"></div>
+
+      <div id="etfFlowSinglePanel" class="etf-flow-single hidden"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>类型</th><th>标的</th><th>方向</th><th>份额变化（亿份）</th><th>净流入/流出（亿元）</th></tr></thead>
+          <tbody id="etfFlowSeriesSignals"></tbody>
+        </table>
+      </div>
+      <p class="muted etf-flow-methodology">口径：份额变化 = 当日总份额 − 前一日总份额（主信号，单位亿份）；净流入/流出 = 份额变化 × 单位净值（一级市场申赎金额，单位亿元）；成交额 = 二级市场每日买卖成交金额（单位亿元）。申赎数据反映一级市场行为，不构成对具体投资者的身份认定。</p>
+    </section>
       <div class="research-split">
         <div class="research-split-list">
           <section class="card">
@@ -158,30 +198,15 @@
           </section>
         </div>
         <div class="research-split-detail">
-          <div id="etfEmpty" class="stock-empty"><div class="stock-empty-mark">◈</div><h2>选择一只 ETF</h2><p>在左侧列表点击任意场内基金，这里会展示 K 线、技术状态与净值/份额详情。</p></div>
+          <div id="etfEmpty" class="stock-empty"><div class="stock-empty-mark">◈</div><h2>选择一只 ETF</h2><p>在左侧列表点击任意场内基金，这里展示净值 / 溢价与份额 / 申赎。K 线与技术因子请到「个股研究 → 标的研究」查看。</p></div>
           <div id="etfWorkspace" class="hidden">
             <section class="card stock-identity-card">
               <div class="stock-identity"><div class="stock-avatar" id="etfAvatar">◈</div><div><div class="stock-name-line"><h2 id="etfName">—</h2><code id="etfCode">—</code></div><p id="etfMeta">—</p></div></div>
               <div class="stock-identity-actions"><div class="stock-quote"><strong id="etfClose">—</strong><span id="etfChange">—</span><small id="etfDate">—</small></div></div>
             </section>
-            <nav class="stock-module-tabs" id="etfModuleTabs" role="tablist" aria-label="ETF 研究模块">
-              <button class="active" data-etf-module="quotes">行情与净值</button>
-              <button data-etf-module="shares">份额与申赎</button>
-            </nav>
-            <div class="stock-module" id="etfModuleQuotes" data-etf-module-panel="quotes">
-              <section class="card stock-chart-card">
-                <div class="card-head"><h3>日 K 与均线</h3></div>
-                <div class="chart-toolbar"><span class="chart-zoom-status" id="etfZoomStatus"></span><div class="timeframe-switch" role="group" aria-label="K线缩放"><button id="etfZoomIn" type="button">放大</button><button id="etfZoomOut" type="button">缩小</button><button id="etfZoomReset" type="button">重置</button><button id="etfPanPrev" type="button">‹</button><button id="etfPanNext" type="button">›</button></div></div>
-                <div class="stock-chart-stage"><svg id="etfPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" role="img" aria-label="ETF K线"></svg><div id="etfTooltip" class="stock-tooltip hidden"></div></div>
-                <svg id="etfVolumeChart" class="research-volume-chart" viewBox="0 0 1200 96" preserveAspectRatio="none" role="img" aria-label="ETF 成交量"></svg>
-              </section>
-              <section class="card"><div class="card-head"><h3>技术状态</h3><p id="etfTrendSummary"></p></div><div id="etfIndicatorGrid" class="stock-factor-grid"></div></section>
-              <section class="card"><div class="card-head"><h3>净值与溢价</h3><p id="etfPremiumNote">二级市场收盘价相对单位净值的偏离</p></div><div class="valuation-grid" id="etfNavGrid"></div></section>
-            </div>
-            <div class="stock-module hidden" id="etfModuleShares" data-etf-module-panel="shares">
-              <div id="etfSharesGrid" class="valuation-grid"></div>
-              <section class="card"><div class="card-head"><h3>近期份额变动（申赎估计）</h3><p>份额增量≈净申购，减量≈净赎回；单位亿份</p></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>份额变动（亿份）</th></tr></thead><tbody id="etfFlowRows"></tbody></table></div></section>
-            </div>
+            <section class="card"><div class="card-head"><h3>净值与溢价</h3><p id="etfPremiumNote">二级市场收盘价相对单位净值的偏离</p></div><div class="valuation-grid" id="etfNavGrid"></div></section>
+            <div id="etfSharesGrid" class="valuation-grid"></div>
+            <section class="card"><div class="card-head"><h3>近期份额变动（申赎估计）</h3><p>份额增量≈净申购，减量≈净赎回；单位亿份</p></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>份额变动（亿份）</th></tr></thead><tbody id="etfFlowRows"></tbody></table></div></section>
           </div>
         </div>
       </div>
@@ -195,6 +220,10 @@
               <div class="sector-toolbar"><div class="timeframe-switch" role="group" aria-label="板块数据源"><button class="active" data-sector-source="ths">同花顺</button><button data-sector-source="dc">东财</button></div><input id="sectorSearch" autocomplete="off" placeholder="搜索板块" aria-label="搜索板块"/></div>
             </div>
             <div class="table-wrap"><table><thead><tr id="sectorHeadRow"><th data-research-sort="sector" data-sort-key="name" class="sortable">板块 / 代码</th><th class="sortable" data-research-sort="sector" data-sort-key="pct_change">涨跌幅</th><th class="sortable" data-research-sort="sector" data-sort-key="volume">成交量</th><th class="sortable" data-research-sort="sector" data-sort-key="net_amount">资金净流（亿）</th><th>领涨股</th></tr></thead><tbody id="sectorRows"></tbody></table></div>
+          </section>
+          <section class="card">
+            <div class="card-head"><div><p class="eyebrow">ALIPAY HOT PLATES</p><h2>支付宝热门板块</h2><p id="alipayHotMeta">支付宝人气榜（蚂蚁数据源，独立于同花顺/东财口径）</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>#</th><th>板块</th><th>涨跌幅</th><th>主力净流入（亿）</th></tr></thead><tbody id="alipayHotRows"></tbody></table></div>
           </section>
         </div>
         <div class="research-split-detail">
@@ -260,6 +289,25 @@
       <div id="macroLoading" class="stock-empty"><div class="stock-empty-mark">≋</div><h2>宏观研究</h2><p>增长、通胀、流动性、全球利率与官方发布日历。</p></div>
     </section>
 
+    <section class="view hidden" data-panel="intraday">
+      <section class="card intraday-hero">
+        <div><p class="eyebrow">INTRADAY OBSERVATION</p><h2>盘中市场信号</h2><p>每15分钟批量采集一次，依次完成质量检查、指标计算、信号分析和结论保存。剩余额度保留给盘中扩容，不自动用于历史补采。这里只给出观察结论，不直接生成交易指令。</p></div>
+        <div class="intraday-actions"><span id="intradayAsOf" class="count-badge">等待首次采集</span><button id="intradayRun" class="primary">立即采集一轮</button></div>
+      </section>
+      <div class="intraday-pipeline" aria-label="盘中分析流程">
+        <article><b>1</b><span>数据采集</span><small>宽基 · 行业 · 资金 · 自选</small></article><article><b>2</b><span>质量检查</span><small>标的覆盖 · 时间新鲜度</small></article><article><b>3</b><span>指标计算</span><small>涨跌 · 反弹 · 广度 · 资金</small></article><article><b>4</b><span>信号分析</span><small>急跌 · 反转 · 普涨 · 轮动</small></article><article><b>5</b><span>结论留痕</span><small>证据 · 质量 · 规则版本</small></article>
+      </div>
+      <section id="intradayMarket" class="card intraday-market loading">
+        <div class="intraday-market-state"><span id="intradayState">等待数据</span><strong id="intradayScore">—</strong><small>信号强度</small></div>
+        <div class="intraday-market-copy"><h2 id="intradayConclusion">尚未生成盘中结论</h2><p id="intradayQuality">采集服务启动后，这里会展示最新一轮结果。</p><div id="intradayEvidence" class="intraday-evidence"></div></div>
+      </section>
+      <div class="metrics compact intraday-run-metrics"><article><span>最近轮次</span><strong id="intradayRunStatus">—</strong><small id="intradayRunTime">—</small></article><article><span>外层调用</span><strong id="intradayOuterCalls">—</strong><small>common_query 请求</small></article><article><span>内部子请求</span><strong id="intradaySubrequests">—</strong><small>按最保守口径记录</small></article><article><span>本轮数据量</span><strong id="intradayRows">—</strong><small>获取 / 保存</small></article></div>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">MARKET PROXIES</p><h2>指数与宽基ETF观察</h2><p>同一市场结论下，展示指数与宽基ETF自身的相对强弱和趋势状态。</p></div></div><div id="intradayEtfs" class="intraday-signal-grid"></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">WATCHLIST OBSERVATION</p><h2>自选股信号观察</h2><p>只有主动开启观察的自选股才进入盘中采集范围。个股结论同时参考市场状态。</p></div></div><div id="intradayWatchlist" class="table-wrap"></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">30-DAY STOCK VALIDATION</p><h2>30只随机个股验证汇总</h2><p>固定随机样本；逐只核对覆盖天数、检查点，以及上涨、震荡、下跌和相对强弱信号。</p></div></div><div id="intradayStockHistory" class="table-wrap"></div></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">SIGNAL HISTORY</p><h2>30日市场状态轨迹</h2><p>展示最近30个历史交易日的四个日内检查点，便于识别趋势和盘中事件变化。</p></div></div><div id="intradayHistory" class="intraday-history"></div></section>
+    </section>
+
     <section class="view" data-panel="overview">
       <section class="card system-overview-card">
         <div class="system-overview-head">
@@ -302,7 +350,7 @@
     </section>
 
     <section class="view hidden" data-panel="tasks">
-      <section class="card"><div class="card-head"><div><p class="eyebrow">TASK DEFINITIONS</p><h2>采集任务</h2><p>任务是长期定义，实例是某次运行。可按执行周期、类型和生命周期筛选。</p></div></div><div class="list-toolbar"><div class="filters"><select id="taskCadence"><option value="">全部周期</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="dependency">依赖触发</option><option value="manual">按需</option></select><select id="taskKind"><option value="">全部类型</option><option value="acquisition">原生采集</option><option value="transformation">派生计算</option></select><select id="taskLifecycle"><option value="active">当前启用</option><option value="draft">草稿</option><option value="retired">已停用</option><option value="">全部版本</option></select><input id="taskSearch" placeholder="搜索任务、输入或输出数据集"/><button id="taskQuery">筛选</button></div><span id="taskResultCount" class="muted"></span></div><div class="table-wrap"><table><thead><tr><th>任务定义</th><th>周期 / 调度</th><th>类型 / 版本</th><th>数据流</th><th>节点</th><th></th></tr></thead><tbody id="taskRows"></tbody></table></div><footer><button id="taskPrev">上一页</button><span id="taskPage">第 1 页</span><button id="taskNext">下一页</button></footer></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">TASK DEFINITIONS</p><h2>任务与数据链路</h2><p>任务是长期定义，实例是某次运行。从来源追踪到实例与验收证据，可按来源、执行周期、类型筛选。</p></div></div><div class="list-toolbar"><div class="filters"><select id="taskSource" aria-label="数据来源"><option value="">全部来源</option><option value="tushare">Tushare</option><option value="financial_data">Financial Data</option><option value="chinabond">中债</option><option value="chinamoney">中国货币网</option><option value="derived">本地派生</option></select><select id="taskCadence"><option value="">全部周期</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="dependency">依赖触发</option><option value="manual">按需</option></select><select id="taskKind"><option value="">全部类型</option><option value="acquisition">原生采集</option><option value="transformation">派生计算</option></select><select id="taskAssetClass"><option value="">全部资产类别</option><option value="stock">股票</option><option value="hk_stock">港股</option><option value="us_stock">美股</option><option value="fund">基金</option><option value="index_etf">指数·ETF·板块</option><option value="bond">债券</option><option value="derivatives">期权·期货</option><option value="forex">外汇</option><option value="macro">宏观</option><option value="altdata">另类数据</option><option value="info">资讯·公告</option><option value="chain">产业链·关联</option><option value="quote">行情快照</option><option value="factor">因子库</option><option value="other">其他</option></select><select id="taskLifecycle"><option value="active">当前启用</option><option value="draft">草稿</option><option value="retired">已停用</option><option value="">全部版本</option></select><input id="taskSearch" placeholder="搜索任务、输入或输出数据集"/><button id="taskQuery">筛选</button></div><span id="taskResultCount" class="muted"></span></div><div class="table-wrap"><table><thead><tr><th>任务定义</th><th>周期 / 调度</th><th>类型 / 版本</th><th>数据流</th><th>节点</th><th></th></tr></thead><tbody id="taskRows"></tbody></table></div><footer><button id="taskPrev">上一页</button><span id="taskPage">第 1 页</span><button id="taskNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="executions">
@@ -326,7 +374,7 @@
       <section class="card source-overview"><div class="source-overview-head"><div><p class="eyebrow">UPSTREAM REGISTRY</p><h2>数据源总览</h2><p>系统优先读取已落库且通过校验的数据，确实缺失时才查询外部数据源。</p></div><div class="source-kpis"><span><b id="sourceOverviewSources">—</b> 个数据源</span><span><b id="sourceOverviewInterfaces">—</b> 项接口</span><span><b id="sourceOverviewDatasets">—</b> 个数据集</span></div></div><div id="sourceStrip" class="source-strip"></div></section>
       <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">INTERFACE INVENTORY</p><h2>接口依赖明细</h2><p>以接口为中心的数据依赖清单：每个接口展示采集状态、频率、关联任务、输出数据集、数据库表与可采集字段；点行展开血缘与运行状态，供给策略判定也合并在这里。</p></div><div class="view-switch"><button id="interfaceViewTable" class="active" data-interface-view="table">接口视角</button><button id="interfaceViewLineage" data-interface-view="lineage">字段血缘</button></div></div>
         <div id="interfaceTableView">
-          <div class="mapping-toolbar"><div><strong>接口清单</strong><small id="interfaceResult">读取中…</small></div><div class="filters"><select id="interfaceSource"><option value="">全部来源</option><option value="tushare">Tushare</option><option value="financial_data">蚂蚁</option><option value="public">公开来源</option></select><select id="interfaceAssetClass"><option value="">全部类型</option><option value="stock">股票（A股）</option><option value="hk_stock">港股</option><option value="us_stock">美股</option><option value="fund">基金</option><option value="index_etf">指数·ETF·板块</option><option value="bond">债券</option><option value="derivatives">期权·期货</option><option value="forex">外汇</option><option value="macro">宏观</option><option value="altdata">另类数据</option><option value="info">资讯·公告</option><option value="chain">产业链·关联</option><option value="quote">行情快照</option><option value="factor">因子库</option><option value="other">其他</option></select><select id="interfaceStatus"><option value="">全部状态</option><option value="active">在用</option><option value="paused">停采·存量</option><option value="no_permission">无权限</option><option value="not_scheduled">未启用</option><option value="realtime_required">在用·实时</option><option value="ant_primary">在用·主供</option><option value="public_registered">登记能力</option></select><select id="interfaceCategory"><option value="">全部分类</option></select><select id="interfaceCadence"><option value="">全部频率</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="hourly">每小时</option><option value="manual">按需</option><option value="on_demand">按需</option><option value="realtime">实时</option><option value="unscheduled">未纳入调度</option></select><input id="interfaceSearch" placeholder="搜索接口、任务、数据集或表"/><button id="interfaceQuery">筛选</button></div></div>
+          <div class="mapping-toolbar"><div><strong>接口清单</strong><small id="interfaceResult">读取中…</small></div><div class="filters"><select id="interfaceSource"><option value="">全部来源</option><option value="tushare">Tushare</option><option value="financial_data">蚂蚁</option><option value="public">公开来源</option></select><select id="interfaceAssetClass"><option value="">全部类型</option><option value="stock">股票（A股）</option><option value="hk_stock">港股</option><option value="us_stock">美股</option><option value="fund">基金</option><option value="index_etf">指数·ETF·板块</option><option value="bond">债券</option><option value="derivatives">期权·期货</option><option value="forex">外汇</option><option value="macro">宏观</option><option value="altdata">另类数据</option><option value="info">资讯·公告</option><option value="chain">产业链·关联</option><option value="quote">行情快照</option><option value="factor">因子库</option><option value="other">其他</option></select><select id="interfaceStatus"><option value="">全部状态</option><option value="active">接口已接入</option><option value="automatic">自动入口已配置</option><option value="no_automatic">无自动入口</option><option value="paused">停采·存量</option><option value="no_permission">无权限</option><option value="not_scheduled">未接入调度</option><option value="realtime_required">在用·实时</option><option value="ant_primary">在用·主供</option><option value="public_registered">登记能力</option></select><select id="interfaceCategory"><option value="">全部分类</option></select><select id="interfaceCadence"><option value="">全部频率</option><option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="quarterly">每季</option><option value="hourly">每小时</option><option value="manual">按需</option><option value="on_demand">按需</option><option value="realtime">实时</option><option value="unscheduled">未纳入调度</option></select><input id="interfaceSearch" placeholder="搜索接口、任务、数据集或表"/><button id="interfaceQuery">筛选</button></div></div>
           <div class="table-wrap"><table class="source-mapping-table interface-table"><thead><tr><th>接口标识</th><th>资产类型</th><th>来源</th><th>状态</th><th>采集频率</th><th>获取方式 / 关联任务</th><th>输出数据集</th><th>数据库表</th><th>字段数</th></tr></thead><tbody id="interfaceRows"></tbody></table></div>
           <footer><span id="interfaceTotalHint" class="muted"></span><span class="pager"><button id="interfacePrev">上一页</button><span id="interfacePage">第 1 页</span><button id="interfaceNext">下一页</button></span></footer>
         </div>
@@ -348,18 +396,26 @@
       <section class="card source-mapping"><div class="card-head"><div><p class="eyebrow">ON-DEMAND ANALYTICS</p><h2>即时计算指标（研究层）</h2><p id="ondemandResult">读取中…</p></div></div><div class="table-wrap"><table class="source-mapping-table"><thead><tr><th>指标</th><th>领域</th><th>说明</th><th>计算方式</th><th>接口</th></tr></thead><tbody id="ondemandRows"></tbody></table></div><footer><span id="ondemandTotalHint" class="muted"></span><span class="pager"><button id="ondemandPrev">上一页</button><span id="ondemandPage">第 1 页</span><button id="ondemandNext">下一页</button></span></footer></section>
     </section>
     <section class="view hidden" data-panel="services">
-      <section class="card"><div class="card-head"><div><p class="eyebrow">PUBLIC API CATALOG</p><h2>对外服务目录</h2><p id="serviceSummary">这里只列出供用户和 Agent 调用的稳定 REST 服务；上游供应商请到“数据依赖”查看。</p></div><div class="filters"><select id="serviceLayer"><option value="">全部层级</option><option value="research">研究层</option><option value="standard">标准层</option><option value="raw">审计层</option></select><input id="serviceSearch" placeholder="搜索服务、路径或数据集"/><button id="serviceQuery">查询</button></div></div><div class="table-wrap"><table><thead><tr><th>层级 / 服务</th><th>对外接口</th><th>提供的数据</th><th>数据形态</th><th>读取策略</th></tr></thead><tbody id="serviceRows"></tbody></table></div><footer><button id="servicePrev">上一页</button><span id="servicePage">第 1 页</span><button id="serviceNext">下一页</button></footer></section>
+      <section class="card"><div class="card-head"><div><p class="eyebrow">PUBLIC API CATALOG</p><h2>对外服务目录</h2><p id="serviceSummary">这里只列出供用户和 Agent 调用的稳定 REST 服务；上游供应商请到“数据依赖”查看。</p></div><div class="filters"><select id="serviceLayer"><option value="">全部层级</option><option value="research">研究层</option><option value="standard">标准层</option><option value="raw">审计层</option></select><select id="serviceCategory"><option value="">全部业务分类</option></select><input id="serviceSearch" placeholder="搜索服务、路径或数据集"/><button id="serviceQuery">查询</button></div></div><div class="table-wrap"><table><thead><tr><th>业务分类 / 服务</th><th>对外接口</th><th>提供的数据</th><th>数据形态</th><th>读取策略</th></tr></thead><tbody id="serviceRows"></tbody></table></div><footer><button id="servicePrev">上一页</button><span id="servicePage">第 1 页</span><button id="serviceNext">下一页</button></footer></section>
     </section>
 
     <section class="view hidden" data-panel="factors">
       <section class="card">
         <div class="card-head">
           <div><p class="eyebrow">FACTOR CATALOG</p><h2>量化因子目录</h2><p id="factorSummary">读取中…</p></div>
-          <input id="factorSearch" autocomplete="off" placeholder="搜索因子、指标或说明" aria-label="搜索因子"/>
+          <div class="filters">
+            <input id="factorSearch" autocomplete="off" placeholder="搜索名称、别名、来源" aria-label="搜索因子"/>
+            <select id="factorCategory" aria-label="研究分类"><option value="">全部研究分类</option></select>
+            <select id="factorOrigin" aria-label="计算来源"><option value="">全部来源</option><option value="local">本地计算</option><option value="provider">Tushare 直接提供</option></select>
+            <select id="factorPackage" aria-label="因子系列"><option value="">全部系列</option><option>Alpha101</option><option>Style171</option><option>Technical</option><option>Chip</option></select>
+            <select id="factorReadiness" aria-label="可用状态"><option value="">全部可用状态</option><option value="has_values">有计算值</option><option value="missing">无计算值</option><option value="not_audited">待审计</option></select>
+          </div>
         </div>
         <div id="factorStrip" class="source-strip"></div>
       </section>
       <div id="factorCatalog"></div>
+      <footer><button id="factorPrev">上一页</button><span id="factorPage"></span><button id="factorNext">下一页</button></footer>
+      <section class="card"><details><summary>其他供应商因子数据（未混计正式特征）</summary><div id="factorProviderInventory"></div></details></section>
     </section>
 
     <section class="view hidden" data-panel="investment">
@@ -368,6 +424,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261023-research-1" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261030-governance" defer></script>
 </body>
 </html>

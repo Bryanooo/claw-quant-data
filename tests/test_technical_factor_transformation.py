@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
 from service.orchestration_v2.transformations import (
     FORMULA_VERSION,
     build_technical_factor_snapshot_row,
@@ -43,6 +45,14 @@ def test_snapshot_row_materializes_exact_niumen_and_cost_contracts():
     assert result["common_indicator_status"] == "ready"
     assert result["ema_200"] is not None
     assert result["natr_14"] is not None
+    assert result["macd_dif_12_26"] is not None
+    assert result["macd_dea_9"] is not None
+    assert result["macd_histogram_12_26_9"] == pytest.approx(
+        2 * (result["macd_dif_12_26"] - result["macd_dea_9"])
+    )
+    assert result["sma_20"] == pytest.approx(259.5)
+    assert result["return_5d"] is not None
+    assert result["alpha101_101"] is not None
     assert result["unavailable_reasons"] == []
     assert result["formula_version"] == FORMULA_VERSION
     assert result["source_execution_id"] == 9

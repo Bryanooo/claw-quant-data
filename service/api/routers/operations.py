@@ -5,7 +5,7 @@ the console.  A task is a versioned definition; an execution is one concrete
 run of that definition.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -21,6 +21,20 @@ from service.orchestration_v2.late_repair import (
 
 
 router = APIRouter(prefix="/v1/ops", tags=["operations"])
+
+
+@router.get("/factors/validation")
+def factor_validation(trade_date: date | None = None) -> dict:
+    """Operator comparison evidence, not a provider-value supply endpoint."""
+    from service.research.local_factors.service import factor_validation_payload
+    return factor_validation_payload(trade_date=trade_date)
+
+
+@router.get("/factors/reference-plan")
+def factor_reference_plan(trade_date: date) -> dict:
+    """Preview reference-only requests without consuming provider quota."""
+    from service.research.local_factors.reference_sampling import reference_sample_plan
+    return reference_sample_plan(trade_date)
 
 
 class RetryExecutionRequest(BaseModel):
@@ -46,6 +60,28 @@ def _page(items: list[dict], *, limit: int, id_field: str) -> dict:
 
 def _resolution(execution: dict) -> dict:
     if execution.get("status") != "attention":
+        eligible_at = execution.get("eligible_at")
+        if isinstance(eligible_at, str):
+            try:
+                eligible_at = datetime.fromisoformat(eligible_at)
+            except ValueError:
+                eligible_at = None
+        if (
+            execution.get("status") in {"queued", "retrying"}
+            and eligible_at is not None
+            and eligible_at > business_now()
+        ):
+            return {
+                "action": "wait_schedule",
+                "resolution_state": "scheduled",
+                "retryable": False,
+                "eligible_at": eligible_at.isoformat(),
+                "guidance": (
+                    "已按安全时间窗预约执行，将在 "
+                    f"{eligible_at.strftime('%m-%d %H:%M')} 自动开始；"
+                    "这不是失败，也不需要人工重试"
+                ),
+            }
         return {"action": "view", "retryable": False, "guidance": "查看节点与事件证据"}
     if execution.get("is_current_scope_execution") is False:
         latest_id = execution.get("latest_scope_execution_id")
@@ -124,7 +160,29 @@ def tasks(
         workflow_kind=workflow_kind,
         cadence=cadence,
     )
+    try:
+        automation = repository.automation_states()
+    except Exception:
+        automation = {}
+    try:
+        from service.data_service.dependencies import task_asset_classes
+        asset_classes = task_asset_classes()
+    except Exception:
+        asset_classes = {}
+    for item in items:
+        item['automation'] = (automation.get(item['task_key'])
+                              if item.get('lifecycle_status') == 'active' else None)
+        item['asset_class'] = asset_classes.get(item['task_key'])
     return _page(items, limit=limit, id_field="task_definition_id")
+
+
+@router.get("/automation-audit")
+def automation_audit(repository: OrchestrationV2RepositoryDependency) -> dict:
+    states = repository.automation_states()
+    return {'items': [{'task_key': key, **value} for key, value in sorted(states.items())],
+            'configured_automatic': sum(value['automatic'] for value in states.values()),
+            'without_automatic_entry': [key for key, value in sorted(states.items()) if not value['automatic']],
+            'notice': '配置状态不等于进程健康、执行成功或数据完整；需结合实例与数据审计'}
 
 
 @router.get("/tasks/{definition_id}")
@@ -136,6 +194,39 @@ def task_detail(
     if definition is None:
         raise HTTPException(status_code=404, detail="task definition not found")
     return {"task": definition}
+
+
+@router.get("/tasks/{definition_id}/relationships")
+def task_relationships(
+    definition_id: int,
+    repository: OrchestrationV2RepositoryDependency,
+) -> dict:
+    task = repository.get_definition(definition_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="task definition not found")
+    endpoints = []
+    for endpoint_id in task["definition"].get("acquisition_endpoint_ids", []):
+        endpoint = repository.get_endpoint(endpoint_id)
+        if endpoint:
+            # Never expose credentials, request payloads or arbitrary provider
+            # configuration through a navigation endpoint.
+            endpoints.append({key: endpoint.get(key) for key in (
+                "acquisition_endpoint_id", "source_id", "endpoint_key", "acquisition_mode",
+            )})
+    instances = repository.list_executions(task_key=task["task_key"], limit=10)
+    ids = [item["task_execution_id"] for item in instances]
+    states = repository.execution_output_states(ids)
+    return {
+        "task": task,
+        "sources": endpoints,
+        "recent_executions": [{key: item.get(key) for key in (
+            "task_execution_id", "task_definition_id", "definition_version", "status",
+            "observation_start", "observation_end", "purpose", "current_node_key",
+        )} for item in instances],
+        "published_states": states[:200],
+        "states_truncated": len(states) > 200,
+        "semantics": "最近10次实例（含历史版本）的发布证据，不代表全历史完整性；任务与数据分别验收。",
+    }
 
 
 @router.get("/executions")
@@ -202,4 +293,18 @@ def retry_execution(
     )
     if not retried:
         raise HTTPException(status_code=409, detail="execution state changed; refresh and retry")
-    return {"execution": retried[0], "message": "execution queued for retry"}
+    # A fan-out execution can freeze thousands of request checkpoints.  The
+    # action response must stay small; callers that need the full scope and
+    # node evidence can explicitly load the execution-detail endpoint.
+    updated = retried[0]
+    return {
+        "execution": {
+            key: updated.get(key)
+            for key in (
+                "task_execution_id", "task_key", "status",
+                "current_node_key", "attempt_count", "max_attempts",
+                "eligible_at", "updated_at",
+            )
+        },
+        "message": "execution queued for retry",
+    }

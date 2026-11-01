@@ -1,9 +1,12 @@
 """HTTP contracts for the read-only V2 orchestration operations API."""
 
+from datetime import timedelta
+
 from fastapi.testclient import TestClient
 
 from service.api.app import create_app
 from service.api.dependencies import get_orchestration_v2_repository
+from service.clock import business_now
 
 
 class DummyDatabase:
@@ -332,6 +335,10 @@ def test_attention_execution_retry_requires_confirmation_request():
         )
     assert response.status_code == 202
     assert response.json()["execution"]["status"] == "retrying"
+    assert set(response.json()["execution"]) == {
+        "task_execution_id", "task_key", "status", "current_node_key",
+        "attempt_count", "max_attempts", "eligible_at", "updated_at",
+    }
     assert repository.calls[-1] == (
         "retry",
         {"ids": (19,), "reason": "confirmed after provider recovery"},
@@ -383,3 +390,24 @@ def test_scheduled_late_publication_is_waiting_not_manual_retry():
     assert retry.status_code == 409
     assert "无需人工重复提交" in retry.json()["error"]["message"]
     assert all(call[0] != "retry" for call in repository.calls)
+
+
+def test_future_eligible_retry_is_presented_as_scheduled_not_failed():
+    client, repository = make_client()
+    eligible_at = business_now() + timedelta(hours=2)
+    repository.get_execution = lambda execution_id: {
+        "task_execution_id": execution_id,
+        "task_key": "factor_value",
+        "status": "retrying",
+        "attempt_count": 0,
+        "eligible_at": eligible_at,
+        "node_status": {},
+    }
+    with client:
+        detail = client.get("/api/v1/ops/executions/19")
+
+    resolution = detail.json()["execution"]["resolution"]
+    assert resolution["action"] == "wait_schedule"
+    assert resolution["resolution_state"] == "scheduled"
+    assert resolution["retryable"] is False
+    assert resolution["eligible_at"] == eligible_at.isoformat()

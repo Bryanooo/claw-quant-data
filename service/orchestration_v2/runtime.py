@@ -8,9 +8,14 @@ become scheduler-visible child executions.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime, timedelta
 from threading import Event, Thread
+from time import sleep
 from typing import Any
+import os
+import hashlib
+import json
 
 from service.acquisition_runtime.models import TaskExecutionResult
 from service.acquisition_runtime.models import BatchChildSpec
@@ -21,7 +26,7 @@ from service.acquisition_runtime.fanout import (
 )
 from service.clock import business_now
 from service.acquisition_runtime.registry import TASKS
-from service.acquisition_runtime.reliability import classify_failure
+from service.acquisition_runtime.reliability import classify_failure, historical_resume_at
 from service.db import query
 from service.history_recovery import (
     MARKET_WIDE_FANOUT_OVERRIDES,
@@ -30,7 +35,10 @@ from service.history_recovery import (
 from service.tushare_catalog import TushareInterfaceCatalog
 from service.tushare_policy import TusharePolicyRegistry
 from service.tushare_scheduling import parameters_for_policy
-from service.orchestration_v2.audit_runtime import TaskAuditRuntime
+from service.orchestration_v2.audit_runtime import (
+    TaskAuditNoMatureExpectedPartitionError,
+    TaskAuditRuntime,
+)
 from service.orchestration_v2.contracts import (
     ExecutionStatus,
     TaskDefinitionDocument,
@@ -45,6 +53,125 @@ def merge_frozen_scope(
     """Refresh node-owned scope fields without losing campaign lineage."""
 
     return {**(existing or {}), **planned}
+
+
+def run_acquisition_request(spec, *, on_retry, wait=sleep):
+    """Absorb brief transport failures within the same idempotent request.
+
+    Three attempts total; quota, contracts and storage errors remain the
+    responsibility of the durable workflow. No additional task is created.
+    """
+    for attempt in range(1, 4):
+        try:
+            with durable_job_execution():
+                return TASKS.run(spec.task_name, spec.parameters)
+        except Exception as exc:
+            from collectors.base import classify_tushare_error, CollectorRateLimitError
+            classified = classify_tushare_error(exc)
+            if isinstance(classified, CollectorRateLimitError):
+                from service.tushare_rate_limit import (
+                    TushareRateSlotDeferredError, mark_daily_quota_exhausted,
+                )
+                api = getattr(spec, 'api_name', None) or spec.parameters.get('api_name')
+                if api:
+                    if '次/天' in str(exc):
+                        mark_daily_quota_exhausted(api)
+                    raise TushareRateSlotDeferredError(api, classified.retry_after_seconds) from exc
+            category = classify_failure(exc)
+            status = getattr(getattr(exc, 'response', None), 'status_code', None)
+            if (attempt == 3 or category not in {'network', 'timeout'}
+                    or (status is not None and 400 <= status < 500)):
+                raise
+            delay = 2 ** (attempt - 1)
+            on_retry(attempt, category, delay)
+            wait(delay)
+
+
+def acquisition_results(specs, execution, run_request):
+    """Bounded chip-only sliding window; drain successes before failure.
+
+    Each collector owns its connection/session and retains the shared database
+    rate limiter. No child executions and no unbounded future queue are created.
+    The caller persists each yielded success before we replace its slot.
+    """
+    concurrency = 1
+    if execution.get("task_key") == "cyq_chips":
+        concurrency = max(1, min(2, int(os.getenv("CYQ_CHIPS_CONCURRENCY", "2"))))
+    if concurrency == 1:
+        for spec in specs:
+            check_history_window(execution)
+            yield spec, run_request(spec)
+        return
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        remaining = iter(specs)
+        pending = {}
+        failure = None
+
+        def fill_slots():
+            nonlocal failure
+            while len(pending) < concurrency and failure is None:
+                try:
+                    spec = next(remaining)
+                except StopIteration:
+                    break
+                try:
+                    check_history_window(execution)
+                except Exception as exc:
+                    failure = exc
+                    break
+                pending[pool.submit(run_request, spec)] = spec
+
+        fill_slots()
+        while pending:
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            successes = []
+            for future in done:
+                spec = pending.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    failure = failure or exc
+                else:
+                    successes.append((spec, result))
+            yield from successes
+            # Stop submitting after an observed failure, but persist successes
+            # from already in-flight requests before handing off the retry.
+            fill_slots()
+        if failure is not None:
+            raise failure
+
+
+def force_acquisition(execution: dict[str, Any]) -> bool:
+    """Return whether preflight is forbidden from short-circuiting acquire.
+
+    Daily work always obtains fresh transport evidence.  A repair can opt into
+    the same behaviour when it fixes response fields or another condition
+    that a partition-level audit cannot observe.  The flag is frozen into the
+    durable execution, so retries keep the original operator intent.
+    """
+
+    return execution.get("purpose") == "daily" or (
+        execution.get("frozen_scope") or {}
+    ).get("force_acquire") is True
+
+
+class HistoricalWindowDeferred(RuntimeError):
+    """Safe request-boundary yield, not a failed transport attempt."""
+
+    defer_without_failure = True
+
+    def __init__(self, resume_at, now):
+        self.retry_after_seconds = max(1, int((resume_at - now).total_seconds()))
+        super().__init__(f"历史采集等待安全窗口，恢复时间 {resume_at.isoformat()}")
+
+
+def check_history_window(execution: dict[str, Any]) -> None:
+    now = business_now()
+    resume_at = historical_resume_at(
+        execution.get("purpose"), resource_class=execution.get("resource_class"), now=now,
+    )
+    if resume_at is not None:
+        raise HistoricalWindowDeferred(resume_at, now)
 
 
 class V2RuntimeError(RuntimeError):
@@ -77,6 +204,7 @@ def require_publishable_transformation(result: dict[str, Any]) -> None:
         raise V2TransformationNotPublishableError(
             f"{result.get('dataset', 'transformation')} output is not publishable: "
             f"status={result.get('status', 'unknown')}"
+            + (f"; reasons={result['reasons']}" if result.get('reasons') else '')
         )
 
 
@@ -94,6 +222,7 @@ def allow_transform_owned_historical_validation(
     return (
         document.task_key in {
             "fama_french_daily",
+            "local_factor_snapshot",
             "technical_factor_snapshot",
         }
         and execution.get("purpose") in {"initialization", "backfill", "repair"}
@@ -230,13 +359,21 @@ class OrchestrationV2Runtime:
                 # prevented the request that would provide the evidence.
                 # Historical work may still short-circuit when its full
                 # logical period is already certified.
-                if execution["purpose"] == "daily":
+                if force_acquisition(execution):
                     ready_before_acquire = False
                 else:
-                    preflight = self._audit_outputs(document, execution)
-                    ready_before_acquire = all(
-                        update.ready for _, update, _ in preflight
-                    )
+                    try:
+                        preflight = self._audit_outputs(document, execution)
+                    except TaskAuditNoMatureExpectedPartitionError:
+                        # A quarterly/monthly scope can be requested before
+                        # the aggregate period reaches its independent audit
+                        # maturity.  That is precisely when a repair request
+                        # and its exhaustive transport proof are needed.
+                        ready_before_acquire = False
+                    else:
+                        ready_before_acquire = all(
+                            update.ready for _, update, _ in preflight
+                        )
                 acquisition_evidence = self._verified_acquisition_evidence(
                     execution_id
                 )
@@ -307,14 +444,33 @@ class OrchestrationV2Runtime:
                         },
                     )
 
-                for spec in specs:
+                def execute_request(spec):
+                    # Completed request evidence is already durable. Yield
+                    # before the next request rather than interrupting a write.
+                    check_history_window(execution)
+                    if document.task_key == 'factor_reference_sample':
+                        from service.orchestration_v2.factor_reference import acquire_reference
+                        return acquire_reference(spec)
                     # V2 owns the durable retryable execution. Mark the
                     # collector call accordingly so long
                     # interface windows release the worker instead of sleeping
                     # in-process and dragging the token-wide reservation into
                     # the future.
-                    with durable_job_execution():
-                        result = TASKS.run(spec.task_name, spec.parameters)
+                    return run_acquisition_request(
+                        spec,
+                        on_retry=lambda attempt, category, delay: self._repository.append_event(
+                            execution_id,
+                            event_type="node.acquire.transport_retry",
+                            node_key="acquire",
+                            attempt_number=int(execution["attempt_count"]),
+                            payload={"request_key": spec.idempotency_key,
+                                     "api_name": spec.api_name,
+                                     "request_attempt": attempt,
+                                     "error_category": category,
+                                     "backoff_seconds": delay},
+                        ),
+                    )
+                for spec, result in acquisition_results(specs, execution, execute_request):
                     outcome = self._normalize_outcome(result)
                     if outcome.completion_status not in {"complete", "empty"}:
                         raise V2RuntimeError(
@@ -363,6 +519,31 @@ class OrchestrationV2Runtime:
                     },
                     collected=bool(specs),
                 )
+
+                if any(node.key == "merge" for node in document.nodes):
+                    self._complete_node(
+                        execution,
+                        node_status,
+                        "merge",
+                        worker_id,
+                        lease_token,
+                        {
+                            "strategy": "canonical_source_precedence",
+                            "selected_sources": sorted({
+                                item.get("completion_evidence", {}).get(
+                                    "source_id"
+                                )
+                                or item.get("source_id")
+                                for item in acquisition_evidence
+                                if (
+                                    item.get("completion_evidence", {}).get(
+                                        "source_id"
+                                    )
+                                    or item.get("source_id")
+                                )
+                            }),
+                        },
+                    )
 
                 execution = self._repository.transition_execution(
                     execution_id,
@@ -497,11 +678,20 @@ class OrchestrationV2Runtime:
                     lease_token,
                     {"purpose": execution["purpose"], "eligible": True},
                 )
+                # Monthly/event inputs are validated by the transform against
+                # its observation date, not a fictitious same-day dataset state.
+                auxiliary_names = ('index_weight',) if document.task_key == 'valuation_percentile_snapshot' else ()
+                daily_inputs = tuple(name for name in document.input_datasets if name not in auxiliary_names)
+                if auxiliary_names:
+                    auxiliary = self._repository.auxiliary_input_revision(
+                        auxiliary_names, execution['observation_end'])
+                    if auxiliary['pending_count']:
+                        raise V2DependencyNotReadyError('index membership repairs still running')
                 input_states = self._repository.ready_input_states(
-                    tuple(document.input_datasets),
+                    daily_inputs,
                     str(execution["observation_key"]),
                 )
-                missing = sorted(set(document.input_datasets) - set(input_states))
+                missing = sorted(set(daily_inputs) - set(input_states))
                 transform_owned_history = bool(
                     missing
                     and allow_transform_owned_historical_validation(
@@ -574,6 +764,7 @@ class OrchestrationV2Runtime:
                     document.task_key,
                     observation_date,
                     source_execution_id=execution_id,
+                    frozen_scope=frozen_scope,
                 )
                 require_publishable_transformation(transform_result)
                 self._complete_node(
@@ -765,6 +956,9 @@ class OrchestrationV2Runtime:
         *,
         transport_evidence: list[dict[str, Any]] | None = None,
     ) -> list[tuple[Any, Any, dict[str, Any]]]:
+        if document.task_key == "factor_reference_sample":
+            from service.orchestration_v2.factor_reference import audit_sample
+            return audit_sample(execution)
         start = execution.get("observation_start")
         end = execution.get("observation_end")
         if start is None or end is None:
@@ -792,6 +986,9 @@ class OrchestrationV2Runtime:
         document: TaskDefinitionDocument,
         execution: dict,
     ):
+        if document.task_key == "factor_reference_sample":
+            from service.orchestration_v2.factor_reference import plan_requests
+            return plan_requests(execution)
         endpoints = [
             self._repository.get_endpoint(endpoint_id)
             for endpoint_id in document.acquisition_endpoint_ids
@@ -812,25 +1009,42 @@ class OrchestrationV2Runtime:
         # Prefer the endpoint whose name is the task identity. For equivalent
         # normal/VIP endpoints, prefer the non-VIP route and retain provider
         # fallback work for the later multi-source runtime phase.
+        preferred_source = (
+            "chinamoney" if document.task_key == "cn_lpr" else None
+        )
         selected = sorted(
             runnable,
             key=lambda item: (
+                bool(
+                    preferred_source
+                    and item["source_id"] != preferred_source
+                ),
                 item["endpoint_key"] != document.task_key,
                 item["endpoint_key"].endswith("_vip"),
                 item["source_id"] != "tushare",
                 item["acquisition_endpoint_id"],
             ),
         )[0]
-        if selected["source_id"] == "financial_data":
+        if selected["source_id"] in {
+            "financial_data", "chinabond", "chinamoney",
+        }:
             # 蚂蚁数据源 scheduled pulls are partition-free: the acquire node
             # resolves route parameters (market-wide ranking or local
             # security-master symbol batches) inside the connector, so one
             # source_endpoint job covers the whole observation period.
+            endpoint_parameters = (
+                {
+                    "start_date": execution["observation_start"].isoformat(),
+                    "end_date": execution["observation_end"].isoformat(),
+                }
+                if selected["source_id"] == "chinamoney"
+                else {}
+            )
             payload = {
-                "source_id": "financial_data",
+                "source_id": selected["source_id"],
                 "endpoint_key": selected["endpoint_key"],
                 "acquisition_mode": "scheduled_pull",
-                "parameters": {},
+                "parameters": endpoint_parameters,
                 "complete": True,
                 "resume": True,
             }
@@ -838,7 +1052,7 @@ class OrchestrationV2Runtime:
                 task_name="source_endpoint",
                 parameters=payload,
                 idempotency_key=(
-                    f"v2:financial:{selected['endpoint_key']}:"
+                    f"v2:{selected['source_id']}:{selected['endpoint_key']}:"
                     f"{execution['observation_key']}"
                 ),
                 api_name=selected["endpoint_key"],
@@ -847,35 +1061,11 @@ class OrchestrationV2Runtime:
                 expected_for=execution["observation_end"],
                 handler=TASKS.handler_metadata("source_endpoint", payload),
                 priority=30,
-                resource_class=selected["resource_class"] or "generic",
-            ),)
-        if selected["source_id"] == "chinabond":
-            # 官方公开源 scheduled pulls are partition-free the same way: the
-            # connector resolves its own rolling window (default 14 days) and
-            # upserts by (curve_date, curve_name), so one source_endpoint job
-            # covers the whole observation period.
-            payload = {
-                "source_id": "chinabond",
-                "endpoint_key": selected["endpoint_key"],
-                "acquisition_mode": "scheduled_pull",
-                "parameters": {},
-                "complete": True,
-                "resume": True,
-            }
-            return (BatchChildSpec(
-                task_name="source_endpoint",
-                parameters=payload,
-                idempotency_key=(
-                    f"v2:chinabond:{selected['endpoint_key']}:"
-                    f"{execution['observation_key']}"
-                ),
-                api_name=selected["endpoint_key"],
-                cadence=selected.get("cadence") or "daily",
-                period_key=execution["observation_key"],
-                expected_for=execution["observation_end"],
-                handler=TASKS.handler_metadata("source_endpoint", payload),
-                priority=30,
-                resource_class=selected["resource_class"] or "generic",
+                # Resource scheduling belongs to the immutable task
+                # definition.  Acquisition endpoint rows intentionally do
+                # not carry this field, so looking it up on ``selected``
+                # made every Financial Data execution fail before transport.
+                resource_class=document.resource.resource_class,
             ),)
         if selected["source_id"] != "tushare":
             raise V2UnsupportedScopeError(
@@ -886,7 +1076,41 @@ class OrchestrationV2Runtime:
         end = execution["observation_end"]
         api_name = selected["endpoint_key"]
         policy = TusharePolicyRegistry().get(api_name)
-        if policy.parameter_strategy == "manual":
+        profile = (execution.get('frozen_scope') or {}).get('reference_profile')
+        if profile:
+            from service.orchestration_v2.automation_status import WEEKLY_REFERENCE_PROFILES
+            if profile != api_name or profile not in WEEKLY_REFERENCE_PROFILES:
+                raise V2UnsupportedScopeError('unknown or mismatched reference profile')
+            partitions = WEEKLY_REFERENCE_PROFILES[profile]
+            if profile in {'index_member_all', 'ci_index_member'}:
+                fanout = FANOUT_DEFINITIONS[profile]
+                values = list_fanout_values(fanout.source, as_of=end)
+                if not values or len(values) > 1000:
+                    raise V2UnsupportedScopeError('reference industry universe missing or exceeds 1000 partitions')
+                partitions = tuple({'is_new': 'Y', fanout.parameter_name: code}
+                                   for code in sorted(set(values)))
+            specs = []
+            for parameters in partitions:
+                partition_key = hashlib.sha256(json.dumps(parameters, sort_keys=True).encode()).hexdigest()[:24]
+                payload = {'api_name': api_name, 'parameters': dict(parameters),
+                           'complete': True, 'page_size': policy.page_size,
+                           'max_pages': policy.max_pages, 'resume': True}
+                specs.append(BatchChildSpec(
+                    task_name='tushare_interface', parameters=payload,
+                    idempotency_key=f"v2:reference:{api_name}:{execution['observation_key']}:{partition_key}",
+                    api_name=api_name, cadence='weekly', period_key=execution['observation_key'],
+                    expected_for=end, handler=TASKS.handler_metadata('tushare_interface', payload),
+                    priority=30, resource_class=document.resource.resource_class))
+            return tuple(specs)
+        # An explicitly frozen index universe is a governed acquisition scope,
+        # not an unparameterized manual request. Keep paging/windows inside
+        # the acquire node; never fan out the entire index catalogue here.
+        bounded_index_weights = (
+            api_name == "index_weight"
+            and bool((execution.get("frozen_scope") or {}).get("fanout_values"))
+            and "manual_parameters" not in (execution.get("frozen_scope") or {})
+        )
+        if policy.parameter_strategy == "manual" and not bounded_index_weights:
             frozen_scope = execution.get("frozen_scope") or {}
             if "manual_parameters" not in frozen_scope:
                 raise V2UnsupportedScopeError(
@@ -1093,7 +1317,12 @@ class OrchestrationV2Runtime:
         purpose: str,
         frozen_scope: dict[str, Any] | None = None,
     ) -> tuple[BatchChildSpec, ...]:
-        values = list_fanout_values(fanout.source, as_of=observation_end)
+        values = (
+            list_fanout_values(fanout.source, as_of=observation_end,
+                              active_since=observation_start)
+            if api_name == 'cyq_chips' and fanout.source == 'stock'
+            else list_fanout_values(fanout.source, as_of=observation_end)
+        )
         if not values:
             raise V2UnsupportedScopeError(
                 f"fan-out dependency {fanout.source} has no available values"
@@ -1115,6 +1344,18 @@ class OrchestrationV2Runtime:
                     + ", ".join(unknown[:10])
                 )
             values = list(dict.fromkeys(requested_values))
+
+        if api_name == "factor_value":
+            calendar = query(
+                "SELECT cal_date, is_open FROM trade_cal WHERE exchange='SSE' "
+                "AND cal_date BETWEEN %s AND %s",
+                (observation_start, observation_end),
+            )
+            if len(calendar) != (observation_end - observation_start).days + 1:
+                raise V2UnsupportedScopeError("factor_value requires complete SSE calendar coverage")
+            open_dates = {row["cal_date"] for row in calendar if row["is_open"] == 1}
+            if not open_dates:
+                return ()
 
         if api_name == "factor_value" and observation_start == observation_end:
             # A provider quota can stop an execution after some factor-name
@@ -1154,9 +1395,14 @@ class OrchestrationV2Runtime:
                 )
                 windows.append((cursor, window_end))
                 cursor = window_end + timedelta(days=1)
+        if api_name == "factor_value":
+            windows = [(day, day) for day in sorted(open_dates)]
+            scope_kind = "trade_date"
         policy = TusharePolicyRegistry().get(api_name)
         specs: list[BatchChildSpec] = []
         for window_start, window_end in windows:
+            if api_name == "factor_value" and window_start == window_end and window_end not in open_dates:
+                continue
             compact_start = window_start.strftime("%Y%m%d")
             compact_end = window_end.strftime("%Y%m%d")
             if scope_kind == "none":

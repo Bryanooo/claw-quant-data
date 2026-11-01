@@ -112,6 +112,20 @@ class CoverageService:
             audit = latest.get(rule.dataset_name)
             if audit and isinstance(audit.get("coverage_ratio"), Decimal):
                 audit["coverage_ratio"] = float(audit["coverage_ratio"])
+            if audit:
+                # The job may deliberately scan a broad common horizon (for
+                # example 1990..today), while an endpoint's documented data
+                # obligation starts much later.  Preserve the raw job bounds
+                # for lineage and expose the effective obligation separately
+                # so health views do not claim impossible pre-launch gaps.
+                raw_start = audit.get("start_date")
+                effective_start = raw_start
+                if rule.availability_start is not None:
+                    effective_start = max(
+                        value for value in (raw_start, rule.availability_start)
+                        if value is not None
+                    )
+                audit["effective_start_date"] = effective_start
             datasets.append(
                 {
                     "dataset": rule.dataset_name,

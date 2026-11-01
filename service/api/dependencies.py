@@ -28,6 +28,8 @@ from service.research.repository import ResearchRepository
 from service.research.external_provider import FinancialResearchEvidenceService
 from service.research.service import ResearchService
 from service.source_connectors.query_runtime import QUERY_BROKER
+from service.intraday.repository import IntradayRepository
+from service.intraday.service import IntradayObservationService
 
 
 def get_data_service(request: Request) -> DataService:
@@ -114,6 +116,12 @@ ResearchServiceDependency = Annotated[
     ResearchService,
     Depends(get_research_service),
 ]
+
+
+def get_intraday_observation_service(request: Request) -> IntradayObservationService:
+    return IntradayObservationService(
+        IntradayRepository(request.app.state.database)
+    )
 
 
 def get_investment_calendar_service(request: Request) -> InvestmentCalendarService:

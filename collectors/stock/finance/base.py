@@ -145,7 +145,7 @@ class BaseFinanceCollector(BaseCollector):
         if not pages:
             return pd.DataFrame(columns=self.CORE_FIELDS)
         result = pd.concat(pages, ignore_index=True)
-        result = result.drop_duplicates(subset=self.PK_COLUMNS, keep="last")
+        result = _select_latest_reports(result, self.PK_COLUMNS)
         logger.info("  [%s] %s complete: %s 行", self.INTERFACE_NAME, period, len(result))
         return result
 
@@ -162,6 +162,26 @@ class BaseFinanceCollector(BaseCollector):
     def save(self, df):
         """Deprecated compatibility alias for :meth:`store`."""
         return self.store(df)
+
+
+def _select_latest_reports(frame: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    """Select a whole revision, never synthesize a report from mixed revisions.
+
+    Provider/page order is not revision order. Prefer the latest disclosure,
+    then the update flag, then the richest row within that same revision.
+    A newer sparse revision must still supersede an older rich revision.
+    """
+    if not frame.duplicated(keys).any():
+        return frame
+    ranked = frame.copy()
+    dates = [pd.to_datetime(ranked[name], format='%Y%m%d', errors='coerce')
+             for name in ('ann_date', 'f_ann_date') if name in ranked]
+    ranked['_disclosed_at'] = pd.concat(dates, axis=1).max(axis=1) if dates else pd.NaT
+    ranked['_revision_flag'] = pd.to_numeric(ranked.get('update_flag', pd.Series(0, index=ranked.index)), errors='coerce').fillna(0)
+    ranked['_populated_fields'] = frame.notna().sum(axis=1)
+    ordering = ['_disclosed_at', '_revision_flag', '_populated_fields']
+    return (ranked.sort_values(ordering, kind='stable', na_position='first')
+            .drop_duplicates(keys, keep='last').drop(columns=ordering))
 
 
 def _to_val(value):

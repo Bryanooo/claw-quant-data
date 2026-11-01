@@ -30,6 +30,7 @@ def data_service_catalog(
             raw_interfaces=raw_service.list_interfaces(),
             datasets=data_service.list_datasets(),
             interfaces=interface_service.list_interfaces(),
+            dataset_columns=data_service.dataset_columns_map(),
         )
 
     return _CATALOG_CACHE.get_or_compute("catalog", build)

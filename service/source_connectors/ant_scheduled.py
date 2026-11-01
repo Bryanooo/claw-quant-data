@@ -25,8 +25,9 @@ from service.source_connectors.raw_archive import sha256_json
 CST = timezone(timedelta(hours=8))
 
 # Per-request symbol batch.  The common-query protocol accepts up to 100
-# requests per payload; 50 symbols per request keeps one full-market sweep
-# (~5800 A-share names) inside ~116 requests on a single payload.
+# requests per payload; 50 symbols per request keeps each upstream request
+# bounded while a full-market sweep is transparently split across protocol
+# payloads inside the same acquisition node.
 SYMBOLS_PER_REQUEST = 50
 MAX_REQUESTS_PER_PAYLOAD = 100
 
@@ -83,7 +84,7 @@ SCHEDULED_ROUTES: dict[str, ScheduledRouteSpec] = {
             endpoint_key="stock_fnd.free-float",
             route="/api/v1/stock_fnd/free-float",
             table="ant_norm_free_float",
-            title="自由流通股本（全市场事件史）",
+            title="自由流通股本（最新调整日快照，每周全市场）",
             cadence="weekly",
             symbol_keyed=True,
         ),
@@ -92,7 +93,7 @@ SCHEDULED_ROUTES: dict[str, ScheduledRouteSpec] = {
             route="/api/v1/stock_fnd/actual-controller",
             table="ant_norm_actual_controller",
             title="实际控制人",
-            cadence="monthly",
+            cadence="weekly",
             symbol_keyed=True,
         ),
         ScheduledRouteSpec(
@@ -100,15 +101,15 @@ SCHEDULED_ROUTES: dict[str, ScheduledRouteSpec] = {
             route="/api/v1/stock_fnd/controlling-shareholder",
             table="ant_norm_controlling_shareholder",
             title="控股股东",
-            cadence="monthly",
+            cadence="weekly",
             symbol_keyed=True,
         ),
         ScheduledRouteSpec(
             endpoint_key="stock_fnd.style-classification",
             route="/api/v1/stock_fnd/style-classification",
             table="ant_norm_style_classification",
-            title="股票风格规模分类",
-            cadence="monthly",
+            title="股票风格规模分类（最新快照，每周1/4轮换）",
+            cadence="weekly",
             symbol_keyed=True,
         ),
     )
@@ -354,44 +355,64 @@ def run_scheduled_pull(
                 "local stock_basic is empty; cannot enumerate symbols for "
                 f"{spec.route}"
             )
-        chunks = _chunked(symbols, SYMBOLS_PER_REQUEST)
-        if len(chunks) > MAX_REQUESTS_PER_PAYLOAD:
-            raise RuntimeError(
-                f"{spec.route} needs {len(chunks)} requests which exceeds the "
-                f"{MAX_REQUESTS_PER_PAYLOAD}-request payload bound"
-            )
-        payload = {
-            "mode": "data",
-            "requests": [
-                {"url": spec.route, "params": {"symbols": chunk}}
-                for chunk in chunks
-            ],
+        rotation = spec.endpoint_key in {
+            'stock_fnd.actual-controller','stock_fnd.controlling-shareholder',
+            'stock_fnd.style-classification',
         }
-        param_note = {"symbol_batches": len(chunks), "symbols": len(symbols)}
+        shard = (trade_date - date(2026, 1, 5)).days // 7 % 4
+        if rotation:
+            symbols = [symbol for symbol in symbols
+                       if int(hashlib.sha256(symbol.encode()).hexdigest(),16) % 4 == shard]
+        chunks = _chunked(symbols, SYMBOLS_PER_REQUEST)
+        request_batches = _chunked(chunks, MAX_REQUESTS_PER_PAYLOAD)
+        payloads = [
+            {
+                "mode": "data",
+                "requests": [
+                    {"url": spec.route, "params": {"symbols": chunk}}
+                    for chunk in request_batch
+                ],
+            }
+            for request_batch in request_batches
+        ]
+        param_note = {
+            "symbol_batches": len(chunks),
+            "protocol_payloads": len(payloads),
+            "symbols": len(symbols),
+            "rotation_shard": shard if rotation else None,
+            "rotation_shards": 4 if rotation else 1,
+            "scope": "weekly_shard_not_full_market" if rotation else "full_market",
+        }
     else:
-        payload = {
+        payloads = [{
             "mode": "data",
             "requests": [{
                 "url": spec.route,
                 "params": dict(_ROUTE_BASE_PARAMS.get(spec.route, {})),
             }],
-        }
-        param_note = {"symbol_batches": 0}
+        }]
+        param_note = {"symbol_batches": 0, "protocol_payloads": 1}
 
-    response = transport(payload)
     records: list[dict[str, Any]] = []
-    if spec.symbol_keyed:
-        # One result entry per request chunk; decode each independently.
-        results = response.get("results") or []
-        for item in results:
-            if not isinstance(item, Mapping):
-                continue
-            records.extend(tabular_rows(
-                {"status": response.get("status"), "results": [item]},
-                route=spec.route,
-            ))
-    else:
-        records.extend(tabular_rows(response, route=spec.route))
+    for payload in payloads:
+        response = transport(payload)
+        results = response.get('results')
+        if response.get('status') != 'SUCCESS' or not isinstance(results,list) or len(results)!=len(payload['requests']):
+            raise RuntimeError('Ant scheduled response is incomplete; cannot publish collection success')
+        if any(not isinstance(item,Mapping) or item.get('status','SUCCESS') != 'SUCCESS' for item in results):
+            raise RuntimeError('Ant scheduled response contains failed subrequests')
+        if spec.symbol_keyed:
+            # One result entry per request chunk; decode each independently.
+            results = response.get("results") or []
+            for item in results:
+                if not isinstance(item, Mapping):
+                    continue
+                records.extend(tabular_rows(
+                    {"status": response.get("status"), "results": [item]},
+                    route=spec.route,
+                ))
+        else:
+            records.extend(tabular_rows(response, route=spec.route))
 
     rows = [_row_from_record(spec, record, trade_date) for record in records]
     stored = store_rows(spec, rows)

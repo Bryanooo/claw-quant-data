@@ -299,6 +299,217 @@ RESEARCH_DATA_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
         "minimum_optional_ready": 1,
     },
+    {
+        "id": "instrument-search",
+        "path": "/api/v1/research/instruments/search",
+        "domain": "relationship_discovery",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency("fund_basic", "fund identity"),
+        ),
+    },
+    {
+        "id": "calendar",
+        "path": "/api/v1/research/calendar",
+        "domain": "market_research",
+        "dependencies": (
+            _dependency("trade_calendar", "trading sessions"),
+        ),
+    },
+    {
+        "id": "index-valuation",
+        "path": "/api/v1/research/indices/{ts_code}/valuation",
+        "domain": "index_research",
+        "dependencies": (
+            _dependency("index_basic", "index identity"),
+            _dependency("index_dailybasic", "index valuation history", history_days=750),
+        ),
+    },
+    {
+        "id": "index-valuation-distribution",
+        "path": "/api/v1/research/indices/{ts_code}/valuation-distribution",
+        "domain": "index_research",
+        "dependencies": (
+            _dependency("index_weight", "index membership and weight"),
+            _dependency("stock_daily_basic", "member valuation", history_days=60),
+        ),
+    },
+    {
+        "id": "index-valuation-distribution-snapshot",
+        "path": "/api/v1/research/indices/{ts_code}/valuation-distribution/snapshot",
+        "domain": "index_research",
+        "dependencies": (
+            _dependency("index_weight", "index membership and weight"),
+            _dependency("stock_daily_basic", "member valuation", history_days=60),
+        ),
+    },
+    {
+        "id": "index-valuation-distribution-history",
+        "path": "/api/v1/research/indices/{ts_code}/valuation-distribution/history",
+        "domain": "index_research",
+        "dependencies": (
+            _dependency("index_weight", "index membership and weight"),
+            _dependency("stock_daily_basic", "member valuation", history_days=60),
+            _dependency("trade_calendar", "session calendar"),
+        ),
+    },
+    {
+        "id": "market-funds",
+        "path": "/api/v1/research/market/funds",
+        "domain": "market_research",
+        "dependencies": (
+            _dependency("margin", "margin balance", history_days=120),
+            _dependency("moneyflow_hsgt", "northbound flow", history_days=120),
+            _dependency("moneyflow_mkt_dc", "market money flow", history_days=120),
+        ),
+    },
+    {
+        "id": "etf-directory",
+        "path": "/api/v1/research/etfs/directory",
+        "domain": "etf_research",
+        "dependencies": (
+            _dependency("fund_basic", "fund identity"),
+            _dependency("fund_daily", "ETF quotes", history_days=8),
+        ),
+    },
+    {
+        "id": "etf-nav-shares",
+        "path": "/api/v1/research/etfs/{ts_code}/nav-shares",
+        "domain": "etf_research",
+        "dependencies": (
+            _dependency("fund_basic", "fund identity"),
+            _dependency("fund_nav", "ETF NAV", history_days=400),
+            _dependency("fund_share", "ETF shares", history_days=400),
+            _dependency("fund_daily", "ETF quotes", history_days=400),
+        ),
+    },
+    {
+        "id": "etf-flow-series",
+        "path": "/api/v1/research/etfs/flow-series",
+        "domain": "etf_research",
+        "dependencies": (
+            _dependency("etf_share_size", "share creation/redemption", history_days=120),
+            _dependency("fund_basic", "fund classification"),
+            _dependency("fund_daily", "secondary turnover", history_days=120),
+        ),
+    },
+    {
+        "id": "sector-directory",
+        "path": "/api/v1/research/sectors/directory",
+        "domain": "industry_research",
+        "dependencies": (
+            _dependency("ths_index", "THS boards", required=False),
+            _dependency("industry_daily", "THS sector quotes", required=False, history_days=12),
+            _dependency("moneyflow_ind_ths", "THS sector flow", required=False, history_days=12),
+            _dependency("dc_index", "Eastmoney boards", required=False),
+            _dependency("moneyflow_ind_dc", "Eastmoney sector flow", required=False, history_days=12),
+        ),
+        "minimum_optional_ready": 1,
+    },
+    {
+        "id": "alipay-hot-plates",
+        "path": "/api/v1/research/sectors/alipay-hot-plates",
+        "domain": "industry_research",
+        "dependencies": (
+            _dependency("ant_hot_plate_rank", "Alipay hot-plate ranking"),
+        ),
+    },
+    {
+        "id": "sector-members",
+        "path": "/api/v1/research/sectors/{ts_code}/members",
+        "domain": "industry_research",
+        "dependencies": (
+            _dependency("ths_member", "THS membership", required=False),
+            _dependency("dc_member", "Eastmoney membership", required=False),
+        ),
+        "minimum_optional_ready": 1,
+    },
+    {
+        "id": "sector-valuation-distribution",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/valuation-distribution",
+        "domain": "industry_research",
+        "dependencies": (
+            _dependency("ths_member", "THS membership", required=False),
+            _dependency("dc_member", "Eastmoney membership", required=False),
+            _dependency("stock_daily_basic", "member valuation", history_days=60),
+        ),
+        "minimum_optional_ready": 1,
+    },
+    {
+        "id": "sector-valuation-distribution-history",
+        "path": "/api/v1/research/sectors/{provider}/{sector_code}/valuation-distribution/history",
+        "domain": "industry_research",
+        "dependencies": (
+            _dependency("ths_member", "THS membership", required=False),
+            _dependency("dc_member", "Eastmoney membership", required=False),
+            _dependency("stock_daily_basic", "member valuation", history_days=60),
+            _dependency("trade_calendar", "session calendar"),
+        ),
+        "minimum_optional_ready": 1,
+    },
+    {
+        "id": "stock-chips",
+        "path": "/api/v1/research/stocks/{ts_code}/chips",
+        "domain": "stock_flow",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency("cyq_perf", "chip cost trend", history_days=120),
+            _dependency("cyq_chips", "chip distribution", history_days=120),
+        ),
+    },
+    {
+        "id": "stock-events",
+        "path": "/api/v1/research/stocks/{ts_code}/events",
+        "domain": "event_research",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency("express", "performance express", required=False, history_days=365),
+            _dependency("forecast", "performance forecast", required=False, history_days=365),
+            _dependency("top_list", "dragon-tiger list", required=False, history_days=365),
+            _dependency("limit_list_d", "limit-up/down list", required=False, history_days=365),
+            _dependency("share_float", "share unlock", required=False, history_days=730),
+            _dependency("pledge_stat", "pledge statistics", required=False, history_days=365),
+            _dependency("stk_holdernumber", "holder count", required=False, history_days=365),
+            _dependency("block_trade", "block trades", required=False, history_days=365),
+        ),
+        "minimum_optional_ready": 1,
+    },
+    {
+        "id": "sector-context",
+        "path": "/api/v1/research/stocks/{ts_code}/sector-context",
+        "domain": "relationship_discovery",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+            _dependency("ths_member", "THS membership", required=False),
+            _dependency("industry_daily", "sector performance", required=False, history_days=60),
+            _dependency("moneyflow_cnt_ths", "sector money flow", required=False, history_days=60),
+        ),
+        "minimum_optional_ready": 1,
+    },
+    {
+        "id": "industry-chain",
+        "path": "/api/v1/research/stocks/{ts_code}/industry-chain",
+        "domain": "relationship_discovery",
+        "dependencies": (
+            _dependency("stock_basic", "security identity"),
+        ),
+    },
+    {
+        "id": "macro-rates",
+        "path": "/api/v1/research/macro/rates",
+        "domain": "macro_research",
+        "dependencies": (
+            _dependency("chinabond_yield_curve", "ChinaBond curve"),
+        ),
+    },
+    {
+        "id": "macro-schedule",
+        "path": "/api/v1/research/macro/schedule",
+        "domain": "macro_research",
+        "dependencies": (
+            _dependency("cn_schedule", "macro release schedule"),
+        ),
+    },
 )
 
 

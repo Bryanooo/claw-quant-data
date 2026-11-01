@@ -44,6 +44,19 @@ class FakeOrchestrationV2Repository:
             }
         }
 
+    def field_lineage_rows(self):
+        # No persisted lineage in this fixture, so the endpoint must fall back
+        # to the compiler instead of reporting an empty mapping.
+        return None
+
+    def interface_registry_rows(self):
+        # No persisted registry in this fixture, so the endpoint must fall back
+        # to the compiler instead of reporting an empty inventory.
+        return None
+
+    def interface_registry_detail(self, source_id: str, interface_key: str):
+        return None
+
 
 def _client() -> TestClient:
     application = create_app(database_factory=lambda: type("DB", (), {"close": lambda self: None})())
@@ -141,7 +154,7 @@ def test_field_lineage_maps_table_fields_to_interfaces():
 def test_summary_counts_are_consistent():
     summary = dependency_summary()
     assert summary["interfaces"] == 415
-    assert summary["datasets"] == 205
+    assert summary["datasets"] == 207
     assert summary["tasks"] == 200
     assert summary["by_source"]["tushare"] == 244
     # 194 Tushare + 7 reviewed 蚂蚁 scheduled-pull routes

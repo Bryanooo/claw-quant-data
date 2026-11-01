@@ -265,7 +265,7 @@ def _curated_datasets() -> list[DatasetSpec]:
         DatasetSpec(
             name="ant_free_float",
             table="ant_norm_free_float",
-            description="自由流通股本事件史（每周定采，蚂蚁独有）",
+            description="自由流通股本最新调整日快照（每周全市场采集，非完整事件史）",
             category="reference",
             primary_keys=("symbol", "adjustment_date"),
             exact_filters={"symbol": "symbol"},
@@ -279,7 +279,7 @@ def _curated_datasets() -> list[DatasetSpec]:
         DatasetSpec(
             name="ant_actual_controller",
             table="ant_norm_actual_controller",
-            description="实际控制人（每月定采，蚂蚁独有）",
+            description="实际控制人（每周1/4证券轮换，历史返回范围未确认）",
             category="reference",
             primary_keys=("symbol", "end_date"),
             exact_filters={"symbol": "symbol"},
@@ -293,7 +293,7 @@ def _curated_datasets() -> list[DatasetSpec]:
         DatasetSpec(
             name="ant_controlling_shareholder",
             table="ant_norm_controlling_shareholder",
-            description="控股股东（每月定采，蚂蚁独有）",
+            description="控股股东（每周1/4证券轮换，历史返回范围未确认）",
             category="reference",
             primary_keys=("symbol", "end_date"),
             exact_filters={"symbol": "symbol"},
@@ -307,7 +307,7 @@ def _curated_datasets() -> list[DatasetSpec]:
         DatasetSpec(
             name="ant_style_classification",
             table="ant_norm_style_classification",
-            description="股票风格规模分类（每月定采，蚂蚁独有）",
+            description="股票风格规模分类最新快照（每周1/4证券轮换，非完整历史）",
             category="reference",
             primary_keys=("symbol", "end_date"),
             exact_filters={"symbol": "symbol"},
@@ -399,6 +399,46 @@ def _curated_datasets() -> list[DatasetSpec]:
             merge_policy="deterministic_transformation",
             storage_semantics="materialized_snapshot",
             business_identity_fields=("snapshot_date", "ts_code"),
+        ),
+        DatasetSpec(
+            name="local_factor_snapshot",
+            table="local_factor_snapshot",
+            current_view="local_factor_current",
+            freshness_table="local_factor_current",
+            description=(
+                "本地272因子日快照：Alpha101及成长、流动性、动量、质量、"
+                "反转、风险、规模、价值因子；与供应商factor_value物理隔离"
+            ),
+            category="derived",
+            primary_keys=("schema_version", "trade_date", "ts_code"),
+            exact_filters={
+                "schema_version": "schema_version",
+                "ts_code": "ts_code",
+                "calculation_status": "calculation_status",
+            },
+            standard_filters=("schema_version", "ts_code", "calculation_status"),
+            date_column="trade_date",
+            availability_column="trade_date",
+            default_order=("trade_date", "ts_code"),
+            freshness_sla_hours=72,
+            freshness_policy="dependency_derived",
+            source="Claw Quant Derived",
+            source_ids=("tushare",),
+            merge_policy="deterministic_transformation",
+            storage_semantics="versioned_factor_array_snapshot",
+            business_identity_fields=("schema_version", "trade_date", "ts_code"),
+        ),
+        DatasetSpec(
+            name="valuation_percentile_snapshot",
+            table="valuation_percentile_snapshot",
+            description="沪深300与科创50同日估值分布（日常派生；partial不代表完整）",
+            category="derived", primary_keys=("trade_date",),
+            exact_filters={"audit_status": "audit_status"},
+            date_column="trade_date", availability_column="trade_date",
+            default_order=("trade_date",), source="Claw Quant Derived",
+            source_ids=("tushare",), merge_policy="deterministic_transformation",
+            storage_semantics="materialized_snapshot",
+            business_identity_fields=("trade_date",),
         ),
         DatasetSpec(
             name="fama_french_daily",

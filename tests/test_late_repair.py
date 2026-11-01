@@ -1,7 +1,10 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from service.orchestration_v2.late_repair import next_late_repair_at
+from service.orchestration_v2.late_repair import (
+    LATE_PUBLISHED_DATASETS,
+    next_late_repair_at,
+)
 
 
 TZ = ZoneInfo("Asia/Shanghai")
@@ -17,3 +20,11 @@ def test_next_late_repair_uses_the_nearest_post_close_window():
     assert next_late_repair_at(datetime(2026, 10, 1, 23, 59, tzinfo=TZ)) == (
         datetime(2026, 10, 2, 15, 58, tzinfo=TZ)
     )
+
+
+def test_progressively_published_factor_snapshots_are_repaired():
+    assert {
+        "fund_factor_pro",
+        "stk_factor",
+        "stk_factor_pro",
+    } <= LATE_PUBLISHED_DATASETS

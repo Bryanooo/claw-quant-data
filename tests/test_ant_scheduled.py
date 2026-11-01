@@ -10,6 +10,7 @@ from service.source_connectors.ant_scheduled import (
     _row_from_record,
     _row_hash,
     _TYPED_COLUMNS,
+    run_scheduled_pull,
 )
 from service.source_connectors.registry import SOURCE_REGISTRY
 
@@ -21,14 +22,24 @@ EXPECTED_TASKS = {
     "ant_hot_plate_rank": ("altdata.hot-plate-rank", "daily", "ant_hot_plate_rank"),
     "ant_equity_structure": ("stock_fnd.equity-structure", "weekly", "ant_equity_structure"),
     "ant_free_float": ("stock_fnd.free-float", "weekly", "ant_free_float"),
-    "ant_actual_controller": ("stock_fnd.actual-controller", "monthly", "ant_actual_controller"),
+    "ant_actual_controller": ("stock_fnd.actual-controller", "weekly", "ant_actual_controller"),
     "ant_controlling_shareholder": (
-        "stock_fnd.controlling-shareholder", "monthly", "ant_controlling_shareholder",
+        "stock_fnd.controlling-shareholder", "weekly", "ant_controlling_shareholder",
     ),
     "ant_style_classification": (
-        "stock_fnd.style-classification", "monthly", "ant_style_classification",
+        "stock_fnd.style-classification", "weekly", "ant_style_classification",
     ),
 }
+
+
+def test_snapshot_titles_match_collection_scope():
+    expected = {
+        "stock_fnd.free-float": "自由流通股本（最新调整日快照，每周全市场）",
+        "stock_fnd.style-classification": "股票风格规模分类（最新快照，每周1/4轮换）",
+    }
+    for endpoint_key, title in expected.items():
+        assert SCHEDULED_ROUTES[endpoint_key].title == title
+        assert SOURCE_REGISTRY.get_endpoint("financial_data", endpoint_key).title == title
 
 
 def test_scheduled_routes_are_registered_as_scheduled_pull_endpoints():
@@ -92,3 +103,38 @@ def test_row_normalization_and_hash_are_stable():
     assert row["payload"]["symbol"] == "300308"
     assert _row_hash(spec.table, row) == _row_hash(spec.table, dict(row))
     assert set(_TYPED_COLUMNS[spec.table]) <= set(row)
+
+
+def test_full_market_pull_splits_protocol_payloads_inside_one_node(monkeypatch):
+    spec = SCHEDULED_ROUTES["stock_fnd.equity-structure"]
+    monkeypatch.setattr(
+        "service.source_connectors.ant_scheduled.active_a_share_symbols",
+        lambda: [f"{value:06d}" for value in range(5_501)],
+    )
+    monkeypatch.setattr(
+        "service.source_connectors.ant_scheduled.store_rows",
+        lambda _spec, rows: len(rows),
+    )
+    payload_sizes = []
+
+    def transport(payload):
+        payload_sizes.append(len(payload["requests"]))
+        return {
+            "status": "SUCCESS",
+            "results": [
+                {
+                    "url": spec.route,
+                    "meta": {"fields": ["symbol"]},
+                    "data": [[request["params"]["symbols"][0]]],
+                }
+                for request in payload["requests"]
+            ],
+        }
+
+    rows, evidence = run_scheduled_pull(spec, transport)
+
+    assert payload_sizes == [100, 11]
+    assert len(rows) == 111
+    assert evidence["symbol_batches"] == 111
+    assert evidence["protocol_payloads"] == 2
+    assert evidence["symbols"] == 5_501

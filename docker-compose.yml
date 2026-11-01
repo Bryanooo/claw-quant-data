@@ -185,6 +185,27 @@ services:
       retries: 3
       start_period: 20s
 
+  worker-factor-backfill:
+    <<: *app-service
+    cpus: 1.0
+    mem_limit: 6g
+    environment:
+      <<: *app-environment
+      V2_JOB_POLL_INTERVAL_SECONDS: 30
+      V2_JOB_LEASE_SECONDS: 600
+      V2_JOB_RESOURCE_CLASSES: factor-backfill
+      V2_WORKER_COMPONENT: worker-v2-derived
+      OPENBLAS_NUM_THREADS: 1
+      OMP_NUM_THREADS: 1
+      PGOPTIONS: "-c max_parallel_workers_per_gather=0 -c work_mem=16MB -c statement_timeout=900000"
+    command: ["python", "-m", "service.orchestration_v2.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-derived", "--resource-class", "factor-backfill"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   auditor:
     <<: *app-service
     command:
@@ -193,6 +214,16 @@ services:
       - service.data_coverage.worker
     healthcheck:
       test: ["CMD", "python", "scripts/check_service_health.py", "--component", "auditor"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  intraday-worker:
+    <<: *app-service
+    command: ["python", "-m", "service.intraday.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "intraday-worker"]
       interval: 30s
       timeout: 10s
       retries: 3

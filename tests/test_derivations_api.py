@@ -21,7 +21,8 @@ def test_inventory_covers_every_transformation_blueprint():
 
 def test_status_partition_matches_implementation_registry():
     items = {item["key"]: item for item in derivation_inventory()}
-    assert items["technical_factor_snapshot"]["status"] == "implemented"
+    assert items["local_factor_snapshot"]["status"] == "implemented"
+    assert "technical_factor_snapshot" not in items
     assert items["fama_french_daily"]["status"] == "implemented"
     # Materialized through the collector runtime rather than V2 dispatch.
     assert items["ggt_monthly"]["status"] == "implemented"
@@ -41,7 +42,7 @@ def test_inputs_are_resolved_to_governed_datasets_or_derived_chains():
 
 def test_implemented_tasks_carry_algorithm_and_frequency_notes():
     items = {item["key"]: item for item in derivation_inventory()}
-    for key in ("technical_factor_snapshot", "fama_french_daily", "ggt_monthly"):
+    for key in ("local_factor_snapshot", "fama_french_daily", "ggt_monthly"):
         assert items[key]["algorithm"], key
         assert items[key]["frequency"], key
     planned = items["market_breadth"]

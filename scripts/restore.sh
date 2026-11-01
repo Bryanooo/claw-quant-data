@@ -48,9 +48,27 @@ docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
 PRODUCTION_DATABASE="$(docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
     exec -T postgres sh -c 'printf %s "$POSTGRES_DB"')"
 TARGET_DATABASE="${TARGET_DATABASE:-${PRODUCTION_DATABASE}}"
+RUNNING_SERVICES=()
 if [[ "${TARGET_DATABASE}" == "${PRODUCTION_DATABASE}" ]]; then
+    # Capture the actual running topology, including future writer pools.
+    # Leave only PostgreSQL online. On failure remain stopped for investigation.
+    SERVICE_LIST="$(docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" ps --status running --services)"
+    while IFS= read -r service; do
+        [[ -z "${service}" || "${service}" == "postgres" ]] && continue
+        RUNNING_SERVICES+=("${service}")
+    done <<< "${SERVICE_LIST}"
+    if [[ ${#RUNNING_SERVICES[@]} -gt 0 ]]; then
     docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
-        stop api worker-v2-routine worker-v2-backfill auditor scheduler
+        stop -t 3600 "${RUNNING_SERVICES[@]}"
+    fi
+    # Includes external clients: refusing recovery is safer than restoring
+    # while an unknown writer is still connected. Do not kill those sessions.
+    ACTIVE_CONNECTIONS="$(docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
+        exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$1" -Atc "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='\''client backend'\'';"' _ "${TARGET_DATABASE}")"
+    if [[ "${ACTIVE_CONNECTIONS}" != "0" ]]; then
+        printf '恢复已拒绝：目标库仍有客户端连接。服务保持停止，请排查后重新执行。\n' >&2
+        exit 1
+    fi
 else
     docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
         exec -T postgres sh -c \
@@ -96,8 +114,8 @@ docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
     'test "$(psql -U "$POSTGRES_USER" -d "$1" -Atc "$2")" = "5|0|3|1|t|t|t|t|t"' \
     _ "${TARGET_DATABASE}" "${VALIDATION_SQL}"
 
-if [[ "${TARGET_DATABASE}" == "${PRODUCTION_DATABASE}" ]]; then
+if [[ "${TARGET_DATABASE}" == "${PRODUCTION_DATABASE}" && ${#RUNNING_SERVICES[@]} -gt 0 ]]; then
     docker compose -p "${PROJECT_NAME}" -f "${PROJECT_DIR}/docker-compose.yml" \
-        up -d api worker-v2-routine worker-v2-backfill auditor scheduler
+        up -d --no-deps "${RUNNING_SERVICES[@]}"
 fi
 printf 'restore verified: %s -> %s\n' "${BACKUP_FILE}" "${TARGET_DATABASE}"

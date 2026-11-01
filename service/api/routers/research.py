@@ -2,19 +2,24 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from service.api.dependencies import ResearchServiceDependency, get_data_health_service
 from service.cache import TTLCache
 from service.data_health import DataHealthService
 from service.research.validation import validation_catalog
 from service.research.factor_inputs import factor_input_catalog
+from service.research.local_factors.service import (
+    factor_catalog_payload,
+    query_local_factor_values,
+)
 
 
 router = APIRouter(prefix="/v1/research", tags=["research"])
 
 _CAPABILITIES_CACHE = TTLCache(ttl_seconds=120, max_entries=2)
 _TECHNICALS_CACHE = TTLCache(ttl_seconds=60, max_entries=6)
+_INSTRUMENT_TECHNICALS_CACHE = TTLCache(ttl_seconds=60, max_entries=12)
 
 
 @router.get("/calendar")
@@ -48,6 +53,39 @@ def factor_inputs() -> dict:
     return factor_input_catalog()
 
 
+@router.get("/factors/local/catalog")
+@router.get("/factors/catalog")
+def local_factor_catalog(family: str | None = None) -> dict:
+    """Discover the versioned local 272-factor ABI and overlap policy."""
+
+    from service.data_service.factor_catalog import factor_catalog
+    result = factor_catalog()
+    if family:
+        result = {**result, "factors": [f for f in result["factors"] if f["family"].casefold() == family.casefold()]}
+        result["factor_count"] = len(result["factors"])
+    return result
+
+
+@router.get("/factors/local/{ts_code}")
+@router.get("/factors/{ts_code}")
+def local_factor_values(
+    ts_code: str,
+    factor: list[str] = Query(default=[]),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    limit: int = Query(default=500, ge=1, le=3000),
+) -> dict:
+    """Read selected factors directly from their array positions."""
+
+    try:
+        return query_local_factor_values(
+            ts_code, names=factor, start_date=start_date,
+            end_date=end_date, limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/readiness")
 def research_readiness(
     service: DataHealthService = Depends(get_data_health_service),
@@ -66,6 +104,17 @@ def search_stocks(
     """Search stocks by exchange code, short name, full name or pinyin initials."""
 
     return service.search_stocks(q, limit=limit)
+
+
+@router.get("/instruments/search")
+def search_instruments(
+    service: ResearchServiceDependency,
+    q: str = Query(min_length=1, max_length=80),
+    limit: int = Query(default=20, ge=1, le=30),
+) -> dict:
+    """Search stocks and exchange-traded funds in one unified lookup."""
+
+    return service.search_instruments(q, limit=limit)
 
 
 @router.get("/watchlist")
@@ -161,6 +210,29 @@ _MARKET_CACHE = TTLCache(ttl_seconds=120, max_entries=8)
 _DIRECTORY_CACHE = TTLCache(ttl_seconds=300, max_entries=8)
 
 
+@router.get("/indices/{ts_code}/valuation-distribution")
+def index_valuation_distribution(
+    ts_code: str, trade_date: date, service: ResearchServiceDependency,
+    report_period: date | None = None,
+) -> dict:
+    return service.group_valuation(ts_code.upper(), trade_date=trade_date,
+                                   report_period=report_period)
+
+
+@router.get("/indices/{ts_code}/valuation-distribution/snapshot")
+def stored_index_valuation_distribution(
+    ts_code: str, trade_date: date, service: ResearchServiceDependency,
+) -> dict:
+    return service.stored_group_valuation(ts_code.upper(), trade_date=trade_date)
+
+
+@router.get("/indices/{ts_code}/valuation-distribution/history")
+def index_valuation_distribution_history(
+    ts_code: str, start: date, end: date, service: ResearchServiceDependency,
+) -> dict:
+    return service.group_valuation_history(ts_code.upper(), start=start, end=end)
+
+
 @router.get("/indices/{ts_code}/valuation")
 def index_valuation(
     ts_code: str,
@@ -238,6 +310,20 @@ def sector_directory(
     return _DIRECTORY_CACHE.get_or_compute(key, build)
 
 
+@router.get("/sectors/alipay-hot-plates")
+def alipay_hot_plates(
+    service: ResearchServiceDependency,
+    limit: int = Query(default=50, ge=5, le=200),
+    as_of: date | None = None,
+) -> dict:
+    key = ("alipay-hot-plates", limit, str(as_of))
+
+    def build() -> dict:
+        return service.alipay_hot_plates(limit=limit, as_of=as_of)
+
+    return _MARKET_CACHE.get_or_compute(key, build)
+
+
 @router.get("/sectors/{ts_code}/members")
 def sector_members(
     ts_code: str,
@@ -301,14 +387,21 @@ def instrument_technicals(
     """Return one multi-timeframe contract for stock/index/ETF/sector/spot."""
 
     normalized_code = code if asset_type.lower() == "spot" else code.upper()
-    return service.instrument_technicals(
-        asset_type,
-        normalized_code,
-        lookback_days=lookback_days,
-        chart_points=chart_points,
-        benchmark=benchmark.upper() if benchmark else None,
-        provider=provider,
-        as_of=as_of,
+    # Include every semantic input: asset/provider and point-in-time boundaries
+    # must never share cached results accidentally. Single flight also prevents
+    # repeated clicks from starting duplicate DB reads and indicator calculations.
+    key = (
+        asset_type.lower(), normalized_code, lookback_days, chart_points,
+        benchmark.upper() if benchmark else None, provider, str(as_of),
+    )
+    return _INSTRUMENT_TECHNICALS_CACHE.get_or_compute(
+        key,
+        lambda: service.instrument_technicals(
+            asset_type, normalized_code, lookback_days=lookback_days,
+            chart_points=chart_points,
+            benchmark=benchmark.upper() if benchmark else None,
+            provider=provider, as_of=as_of,
+        ),
     )
 
 
@@ -504,6 +597,24 @@ def state_team_etf_signals(
         lookback_observations=lookback_observations,
         minimum_flow_yi=minimum_flow_yi,
         limit=limit,
+        as_of=as_of,
+    )
+
+
+@router.get("/etfs/flow-series")
+def etf_flow_series(
+    service: ResearchServiceDependency,
+    lookback_days: int = Query(default=120, ge=10, le=750),
+    min_flow_yi: float = Query(default=5.0, ge=0.0, le=100000.0),
+    streak_days: int = Query(default=3, ge=2, le=30),
+    as_of: date | None = None,
+) -> dict:
+    """Return the daily share-change and RMB-flow dual series for broad-base ETFs."""
+
+    return service.etf_flow_series(
+        lookback_days=lookback_days,
+        min_flow_yi=min_flow_yi,
+        streak_days=streak_days,
         as_of=as_of,
     )
 

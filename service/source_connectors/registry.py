@@ -223,26 +223,26 @@ _FINANCIAL_SCHEDULED_ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "endpoint_key": "stock_fnd.free-float",
         "route": "/api/v1/stock_fnd/free-float",
-        "title": "自由流通股本（全市场事件史）",
+        "title": "自由流通股本（最新调整日快照，每周全市场）",
         "cadence": "weekly",
     },
     {
         "endpoint_key": "stock_fnd.actual-controller",
         "route": "/api/v1/stock_fnd/actual-controller",
         "title": "实际控制人",
-        "cadence": "monthly",
+        "cadence": "weekly",
     },
     {
         "endpoint_key": "stock_fnd.controlling-shareholder",
         "route": "/api/v1/stock_fnd/controlling-shareholder",
         "title": "控股股东",
-        "cadence": "monthly",
+        "cadence": "weekly",
     },
     {
         "endpoint_key": "stock_fnd.style-classification",
         "route": "/api/v1/stock_fnd/style-classification",
-        "title": "股票风格规模分类",
-        "cadence": "monthly",
+        "title": "股票风格规模分类（最新快照，每周1/4轮换）",
+        "cadence": "weekly",
     },
 )
 

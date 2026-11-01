@@ -40,6 +40,9 @@ from service.orchestration_v2.scheduling import (
     dispatch_ready_transformations,
     is_trade_day,
 )
+from service.research.local_factors.provider_validation import (
+    revalidate_provider_pending_dates,
+)
 
 
 logger = logging.getLogger("scheduler-v2")
@@ -59,6 +62,8 @@ def run_scheduler_heartbeat() -> None:
 
 def run_v2_policy_dispatch() -> int:
     now = business_now()
+    from service.orchestration_v2.scheduling import dispatch_weekly_reference_profiles
+    reference = dispatch_weekly_reference_profiles(now.date())
     result = dispatch_due_acquisitions(
         now.date(),
         include_current_daily=now.hour >= 19,
@@ -66,6 +71,7 @@ def run_v2_policy_dispatch() -> int:
             now.time().replace(tzinfo=None) >= wall_time(9, 15)
         ),
     )
+    result["errors"].update({f'reference:{key}': value for key, value in reference['errors'].items()})
     if result["errors"]:
         raise RuntimeError(
             "V2 routine dispatch was incomplete: "
@@ -85,6 +91,13 @@ def run_data_coverage_dispatch() -> int:
     return int(result["created"])
 
 
+def run_financial_disclosure_refresh() -> int:
+    from service.orchestration_v2.financial_refresh import refresh_financial_disclosures
+    result = refresh_financial_disclosures(business_now().date(), OrchestrationV2Repository())
+    logger.info('Financial disclosure refresh: %s', result)
+    return int(result['created'])
+
+
 def run_v2_transformation_dispatch() -> int:
     result = dispatch_ready_transformations()
     if result["errors"]:
@@ -98,6 +111,28 @@ def run_v2_transformation_dispatch() -> int:
         len(result["waiting"]),
     )
     return int(result["created"])
+
+
+def run_factor_provider_revalidation() -> int:
+    """Refresh pending comparison evidence after Tushare publishes it."""
+
+    from service.orchestration_v2.factor_reference import dispatch_reference_sample
+    from service.clock import business_today
+    dispatch_reference_sample(OrchestrationV2Repository(), business_today())
+    result = revalidate_provider_pending_dates(limit=8)
+    if result["failed"]:
+        raise RuntimeError(
+            "factor provider revalidation was incomplete: "
+            + ", ".join(
+                f"{day}={message}" for day, message in result["failed"].items()
+            )
+        )
+    if result["completed"]:
+        logger.info(
+            "factor provider evidence refreshed for %s",
+            ",".join(result["completed"]),
+        )
+    return len(result["completed"])
 
 
 def run_coverage_rule_reconciler() -> int:
@@ -211,6 +246,11 @@ def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundSchedu
         timezone="Asia/Shanghai",
     )
     scheduler.add_job(
+        run_history_continuation, 'interval', minutes=1,
+        id='v2_history_continuation', name='已验收历史窗口自动接续',
+        replace_existing=True, coalesce=True, max_instances=1,
+    )
+    scheduler.add_job(
         run_scheduler_heartbeat, "interval", seconds=15,
         id="service_heartbeat", name="V2 调度器心跳", replace_existing=True,
         coalesce=True, max_instances=1, next_run_time=business_now(),
@@ -223,13 +263,26 @@ def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundSchedu
         next_run_time=business_now() + timedelta(seconds=5),
     )
     scheduler.add_job(
+        run_financial_disclosure_refresh, 'cron', hour=18, minute=20,
+        id='v2_financial_disclosure_refresh', name='最近两报告期财报披露滚动更新',
+        replace_existing=True, coalesce=True, max_instances=1,
+        misfire_grace_time=14400,
+    )
+    scheduler.add_job(
         run_v2_transformation_dispatch, "interval", minutes=2,
         id="v2_transformation_dispatch", name="V2 派生任务依赖派发",
         replace_existing=True, coalesce=True, max_instances=1,
         next_run_time=business_now() + timedelta(seconds=30),
     )
     scheduler.add_job(
-        run_data_coverage_dispatch, "cron", hour="9,20", minute=30,
+        run_factor_provider_revalidation, "interval", minutes=15,
+        id="factor_provider_revalidation",
+        name="本地因子供应商证据延迟复验",
+        replace_existing=True, coalesce=True, max_instances=1,
+        next_run_time=business_now() + timedelta(minutes=3),
+    )
+    scheduler.add_job(
+        run_data_coverage_dispatch, "cron", hour=20, minute=30,
         id="v2_coverage_dispatch", name="V2 全数据集严格审计",
         replace_existing=True, coalesce=True, max_instances=1,
         misfire_grace_time=3600,
@@ -262,6 +315,11 @@ def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundSchedu
     if set_active:
         _ACTIVE_SCHEDULER = scheduler
     return scheduler
+
+
+def run_history_continuation():
+    from service.orchestration_v2.history_continuation import advance_chip_history
+    return advance_chip_history(OrchestrationV2Repository())['created']
 
 
 def main() -> None:

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+import hashlib
+import json
 
 import psycopg2.extras
 
@@ -17,6 +19,9 @@ from service.research.fama_french import (
     FF3_FORMULA_VERSION,
     MIN_ELIGIBLE,
     daily_factors,
+)
+from service.research.local_factors.materializer import (
+    materialize_local_factor_snapshot,
 )
 from service.research.service import _adjust_ohlcv
 from service.research.technical_indicators import (
@@ -32,7 +37,7 @@ FORMULA_VERSION = (
     f"{COMMON_INDICATOR_FORMULA_VERSION}+parameterized-technicals-v1"
 )
 SUPPORTED_TRANSFORMATION_TASK_KEYS = frozenset(
-    {"technical_factor_snapshot", "fama_french_daily"}
+    {"local_factor_snapshot", "fama_french_daily", "valuation_percentile_snapshot"}
 )
 
 # A-share Fama-French universe rule: a name listed for fewer than this many
@@ -95,10 +100,12 @@ def build_technical_factor_snapshot_row(
     opens = [float(item["open"]) for item in usable]
     volumes = [float(_number(item.get("vol")) or 0) for item in usable]
     niumen = niumen_breakout_lines(highs, lows, closes)
-    common = common_indicator_pack(highs, lows, closes, volumes)
+    from service.research.technical_indicators import PrimitiveCache
+    primitive_cache = PrimitiveCache()
+    common = common_indicator_pack(highs, lows, closes, volumes, primitive_cache=primitive_cache)
     common_latest = common["latest"]
     parameterized = parameterized_indicator_pack(
-        opens, highs, lows, closes, volumes, timeframe="1d"
+        opens, highs, lows, closes, volumes, timeframe="1d", primitive_cache=primitive_cache
     )
     parameterized_latest = parameterized["latest"]
     costs = transaction_cost_lines(
@@ -186,6 +193,8 @@ def build_technical_factor_snapshot_row(
     events = niumen["events"]
     return {
         "snapshot_date": snapshot_date,
+        "source_value_digest": hashlib.sha256(
+            json.dumps(raw_bars, sort_keys=True, default=str).encode()).hexdigest(),
         "ts_code": ts_code,
         "source_trade_date": raw_bars[-1]["trade_date"] if raw_bars else None,
         "source_bar_count": len(raw_bars),
@@ -219,6 +228,20 @@ def build_technical_factor_snapshot_row(
         "ppo_12_26": common_latest.get("ppo"),
         "ppo_signal_9": common_latest.get("ppo_signal"),
         "ppo_histogram": common_latest.get("ppo_histogram"),
+        "macd_dif_12_26": common_latest.get("macd_dif_12_26"),
+        "macd_dea_9": common_latest.get("macd_dea_9"),
+        "macd_histogram_12_26_9": common_latest.get(
+            "macd_histogram_12_26_9"
+        ),
+        "sma_20": common_latest.get("sma_20"),
+        "return_5d": (
+            parameterized_latest["roc"].get("5") / 100
+            if parameterized_latest["roc"].get("5") is not None else None
+        ),
+        "alpha101_101": (
+            (closes[-1] - opens[-1]) / (highs[-1] - lows[-1] + 0.001)
+            if closes else None
+        ),
         "natr_14": common_latest.get("natr_14"),
         "keltner_middle_20": common_latest.get("keltner_middle"),
         "keltner_upper_20_2": common_latest.get("keltner_upper"),
@@ -304,15 +327,17 @@ def build_technical_factor_snapshot_row(
     }
 
 
-def materialize_technical_factor_snapshot(
+def build_technical_factor_rows(
     snapshot_date: date,
     *,
     source_execution_id: int | None = None,
-) -> dict[str, Any]:
-    """Atomically materialize all stocks listed on ``snapshot_date``."""
+    connection: Any = None,
+) -> list[dict[str, Any]]:
+    """Compute once in memory for the unified writer; never publish a table."""
 
     compact_date = snapshot_date.strftime("%Y%m%d")
-    connection = get_conn()
+    owns_connection = connection is None
+    connection = connection or get_conn()
     try:
         # The source query returns roughly 260 bars for every listed stock.
         # A server-side cursor keeps that million-row working set in
@@ -393,84 +418,13 @@ def materialize_technical_factor_snapshot(
                     )
                 )
 
-        with connection.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor
-        ) as cursor:
-            columns = tuple(rows[0]) if rows else ()
-            if rows:
-                values = [
-                    tuple(
-                        psycopg2.extras.Json(value)
-                        if column == "unavailable_reasons"
-                        else value
-                        for column, value in (
-                            (column, row[column]) for column in columns
-                        )
-                    )
-                    for row in rows
-                ]
-                updates = ", ".join(
-                    f"{column}=EXCLUDED.{column}"
-                    for column in columns
-                    if column not in {"snapshot_date", "ts_code"}
-                )
-                psycopg2.extras.execute_values(
-                    cursor,
-                    f"INSERT INTO technical_factor_snapshot ({', '.join(columns)}) VALUES %s "
-                    f"ON CONFLICT (snapshot_date, ts_code) DO UPDATE SET {updates}, computed_at=NOW()",
-                    values,
-                    page_size=1000,
-                )
-            cursor.execute(
-                """
-                DELETE FROM technical_factor_snapshot AS snapshot
-                WHERE snapshot.snapshot_date=%s
-                  AND NOT EXISTS (
-                      SELECT 1 FROM stock_basic AS stock
-                      WHERE stock.ts_code=snapshot.ts_code
-                        AND NULLIF(stock.list_date, '') IS NOT NULL
-                        AND stock.list_date <= %s
-                        AND (NULLIF(stock.delist_date, '') IS NULL OR stock.delist_date >= %s)
-                  )
-                """,
-                (snapshot_date, compact_date, compact_date),
-            )
-            cursor.execute(
-                """
-                SELECT count(*) AS total,
-                       count(*) FILTER (WHERE calculation_status='ready') AS ready,
-                       count(*) FILTER (WHERE calculation_status='partial') AS partial,
-                       count(*) FILTER (WHERE calculation_status='insufficient_history') AS insufficient_history,
-                       count(*) FILTER (WHERE calculation_status='missing_input') AS missing_input,
-                       count(*) FILTER (WHERE adjustment_status IN ('missing','stale','partial_history')) AS adjustment_incomplete,
-                       count(*) FILTER (WHERE niumen_line IS NOT NULL AND confirmation_line IS NOT NULL) AS niumen_ready,
-                       count(*) FILTER (WHERE cost_20_status='ready') AS cost_20_ready,
-                       count(*) FILTER (WHERE cost_60_status='ready') AS cost_60_ready,
-                       count(*) FILTER (WHERE common_indicator_status='ready') AS common_indicator_ready,
-                       count(*) FILTER (WHERE parameterized_indicator_status='ready') AS parameterized_indicator_ready,
-                       count(*) FILTER (WHERE ttm_squeeze_on) AS ttm_squeeze_on
-                FROM technical_factor_snapshot WHERE snapshot_date=%s
-                """,
-                (snapshot_date,),
-            )
-            summary = dict(cursor.fetchone())
-            if int(summary["total"]) != len(rows):
-                raise RuntimeError(
-                    "technical snapshot row count does not equal listed-stock universe"
-                )
-        connection.commit()
-        return {
-            "dataset": "technical_factor_snapshot",
-            "snapshot_date": snapshot_date.isoformat(),
-            "formula_version": FORMULA_VERSION,
-            "rows_written": len(rows),
-            **{key: int(value) for key, value in summary.items()},
-        }
+        return rows
     except Exception:
         connection.rollback()
         raise
     finally:
-        connection.close()
+        if owns_connection:
+            connection.close()
 
 
 def materialize_fama_french_daily(
@@ -693,13 +647,21 @@ def run_transformation(
     observation_date: date,
     *,
     source_execution_id: int | None = None,
+    frozen_scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from service.research.group_materializer import materialize_group_valuation
     handlers = {
-        "technical_factor_snapshot": materialize_technical_factor_snapshot,
+        "valuation_percentile_snapshot": materialize_group_valuation,
+        "local_factor_snapshot": materialize_local_factor_snapshot,
         "fama_french_daily": materialize_fama_french_daily,
     }
     try:
         handler = handlers[task_key]
     except KeyError as exc:
         raise LookupError(f"no code-owned transformation handler: {task_key}") from exc
-    return handler(observation_date, source_execution_id=source_execution_id)
+    kwargs: dict[str, Any] = {"source_execution_id": source_execution_id}
+    if task_key == "local_factor_snapshot":
+        kwargs["reuse_existing_snapshot"] = bool(
+            (frozen_scope or {}).get("reuse_existing_snapshot")
+        )
+    return handler(observation_date, **kwargs)

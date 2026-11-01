@@ -162,6 +162,27 @@ def test_coverage_overview_never_hides_unverified_behind_zero_missing():
     assert result["summary"]["with_gaps"] == 1
 
 
+def test_coverage_overview_exposes_effective_provider_history_boundary():
+    class Repository(CoverageOverviewRepository):
+        def latest_audits(self):
+            return {
+                "cyq_chips": {
+                    "status": "gaps",
+                    "start_date": date(1990, 1, 1),
+                    "end_date": date(2026, 10, 20),
+                    "coverage_ratio": 0.01,
+                    "missing_partitions": 0,
+                    "partial_partitions": 2105,
+                },
+            }
+
+    result = coverage_service.CoverageService(repository=Repository()).overview()
+    item = next(row for row in result["datasets"] if row["dataset"] == "cyq_chips")
+
+    assert item["latest"]["start_date"] == date(1990, 1, 1)
+    assert item["latest"]["effective_start_date"] == date(2018, 1, 2)
+
+
 def test_stock_daily_rules_limit_entity_ratio_to_reconstructable_history():
     for dataset_name in ("stock_daily", "stock_daily_basic"):
         rule = COVERAGE_RULES.get(dataset_name)
@@ -170,11 +191,19 @@ def test_stock_daily_rules_limit_entity_ratio_to_reconstructable_history():
         assert rule.revision == 2
 
 
-def test_technical_factor_snapshot_starts_at_derived_workflow_launch():
+def test_technical_factor_snapshot_matches_governed_history_boundary():
     rule = COVERAGE_RULES.get("technical_factor_snapshot")
 
-    assert rule.availability_start == date(2026, 10, 9)
-    assert rule.revision == 2
+    assert rule.availability_start == date(2016, 1, 4)
+    assert rule.revision == 4
+    assert rule.required_values == (("audit_status", "ready"),)
+
+
+def test_feature_quality_reaudit_is_not_latched_by_old_dataset_state():
+    source = inspect.getsource(CoverageRepository.actual_partitions)
+
+    assert "if feature_quality:" in source
+    assert "incomplete_dates.clear()" in source
 
 
 def test_fama_french_coverage_requires_current_formula_version():
@@ -316,7 +345,7 @@ def test_manual_all_dataset_audit_includes_unscheduled_rules():
         include_unscheduled=True,
     )
 
-    assert result["total"] == len(COVERAGE_RULES.list()) == 205
+    assert result["total"] == len(COVERAGE_RULES.list()) == 206
     assert {item[0] for item in repository.calls} == {
         rule.dataset_name for rule in COVERAGE_RULES.list()
     }
@@ -835,6 +864,43 @@ def test_tiny_early_stock_market_allows_one_legitimate_non_trading_symbol():
     assert result.partitions[0].entity_coverage_ratio == 0.875
 
 
+@pytest.mark.parametrize("dataset_name", ["stk_factor", "stk_factor_pro"])
+def test_tiny_early_factor_market_allows_two_authoritative_omissions(dataset_name):
+    repository = FakeCoverageRepository(
+        actual=[ActualPartition(date(1991, 2, 1), 3, 3)],
+        expected=[date(1991, 2, 1)],
+        expected_entities=5,
+    )
+    rule = COVERAGE_RULES.get(dataset_name)
+
+    result = CoverageCalculator(repository).audit(
+        rule,
+        date(1991, 2, 1),
+        date(1991, 2, 1),
+        as_of=date(1991, 2, 3),
+    )
+
+    assert result.status == "complete"
+    assert result.evidence["small_early_market_absolute_tolerance"] == 2
+
+
+def test_tiny_early_factor_market_still_rejects_three_missing_symbols():
+    repository = FakeCoverageRepository(
+        actual=[ActualPartition(date(1991, 2, 1), 2, 2)],
+        expected=[date(1991, 2, 1)],
+        expected_entities=5,
+    )
+
+    result = CoverageCalculator(repository).audit(
+        COVERAGE_RULES.get("stk_factor"),
+        date(1991, 2, 1),
+        date(1991, 2, 1),
+        as_of=date(1991, 2, 3),
+    )
+
+    assert result.status == "gaps"
+
+
 def test_explicit_incomplete_job_evidence_overrides_physical_rows():
     repository = FakeCoverageRepository(
         actual=[
@@ -920,7 +986,7 @@ def test_upstream_availability_boundary_does_not_create_fake_history_gaps():
 def test_every_public_dataset_has_an_explicit_coverage_classification():
     rules = COVERAGE_RULES.list()
 
-    assert len(rules) == len(DATASETS.list()) == 205
+    assert len(rules) == len(DATASETS.list()) == 206
     assert {item.dataset_name for item in rules} == {
         item.name for item in DATASETS.list()
     }
@@ -979,7 +1045,7 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert factor_value.entity_column == "factor_name"
     assert factor_value.entity_reference == "factor_catalog"
     assert factor_value.min_entity_ratio == 1.0
-    assert factor_value.revision == 3
+    assert factor_value.revision == 4
     assert COVERAGE_RULES.get("cn_gdp").strategy.value == "report_quarterly"
     assert COVERAGE_RULES.get("cn_gdp").availability_start == date(1992, 3, 31)
     assert COVERAGE_RULES.get("cn_pmi").strategy.value == "calendar_monthly"
@@ -1164,3 +1230,117 @@ def test_data_calendar_day_counts_strict_and_observed_states():
         "problems": 1,
         "active": 1,
     }
+
+
+def test_audit_evidence_keeps_only_a_security_date_rollup():
+    from service.data_coverage.repository import compact_audit_evidence
+
+    days = [
+        {"trade_date": "2026-10-20", "expected": 3, "present": 3,
+         "missing_codes": [], "status": "security_presence_verified"},
+        {"trade_date": "2026-10-21", "expected": 3, "present": 1,
+         "missing_codes": ["000001.SZ", "000002.SZ"], "status": "missing"},
+        {"trade_date": "2026-10-22", "expected": 3, "present": 3,
+         "missing_codes": [], "status": "security_presence_verified"},
+    ]
+    evidence = {
+        "semantics": "partition_and_entity_completeness",
+        "rule_revision": 3,
+        "security_dates": days,
+    }
+
+    compact = compact_audit_evidence(evidence)
+
+    assert "security_dates" not in compact
+    assert compact["rule_revision"] == 3
+    assert compact["semantics"] == "partition_and_entity_completeness"
+    assert compact["security_dates_summary"] == {
+        "audited_days": 3,
+        "verified_days": 2,
+        "missing_days": 1,
+        "missing_security_rows": 2,
+        "first_date": "2026-10-20",
+        "last_date": "2026-10-22",
+        "missing_sample": [{"trade_date": "2026-10-21", "missing_count": 2}],
+        "detail_location": "sys_data_coverage_partition.evidence",
+        "detail_truncated": True,
+    }
+    # The uncompacted evidence is what the partition ledger still consumes.
+    assert evidence["security_dates"] == days
+
+
+def test_audit_evidence_without_security_dates_is_untouched():
+    from service.data_coverage.repository import compact_audit_evidence
+
+    evidence = {"semantics": "partition_and_entity_completeness", "rule_revision": 2}
+
+    assert compact_audit_evidence(evidence) == evidence
+
+
+def test_save_audit_persists_the_compacted_evidence():
+    from service.data_coverage.models import CoverageAuditResult
+    from service.data_coverage.repository import CoverageRepository
+
+    statements: list[tuple[str, tuple]] = []
+
+    class Cursor:
+        def execute(self, statement, parameters=None):
+            statements.append((statement, parameters))
+
+        def fetchone(self):
+            return (7,)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    class Connection:
+        def cursor(self, *_args, **_kwargs):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    repository = CoverageRepository(connection_factory=lambda **_kwargs: Connection())
+    result = CoverageAuditResult(
+        dataset_name="cyq_chips",
+        strategy=CoverageStrategy.TRADING_DAILY.value,
+        start_date=date(2026, 10, 20),
+        end_date=date(2026, 10, 20),
+        status="gaps",
+        expected_partitions=1,
+        present_partitions=0,
+        missing_partitions=1,
+        observed_partitions=0,
+        coverage_ratio=0,
+        partitions=(),
+        evidence={
+            "semantics": "partition_and_entity_completeness",
+            "rule_revision": 3,
+            "security_dates": [
+                {"trade_date": "2026-10-20", "expected": 3, "present": 0,
+                 "missing_codes": ["000001.SZ"], "status": "missing"},
+            ],
+        },
+    )
+
+    repository.save_audit(None, result)
+
+    audit_insert = next(
+        parameters for statement, parameters in statements
+        if "INSERT INTO sys_data_coverage_audit" in statement
+    )
+    persisted = audit_insert[-1].adapted
+    assert "security_dates" not in persisted
+    assert persisted["security_dates_summary"]["missing_days"] == 1
+    assert persisted["rule_revision"] == 3
+
+

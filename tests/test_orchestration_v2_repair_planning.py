@@ -1,4 +1,5 @@
 from datetime import date
+import inspect
 
 import pytest
 
@@ -25,6 +26,15 @@ def test_standalone_gap_repair_module_imports_without_cycle():
     from service.orchestration_v2.gap_repair import plan_current_repairs
 
     assert callable(plan_current_repairs)
+
+
+def test_gap_repair_uses_only_latest_verified_empty_state():
+    from service.orchestration_v2.gap_repair import current_problem_partitions
+
+    source = inspect.getsource(current_problem_partitions)
+
+    assert "DISTINCT ON (dataset_name, observation_end)" in source
+    assert "source_execution_id DESC" in source
 
 
 def _contract(dataset: str, granularity: str = "day"):
@@ -398,6 +408,142 @@ def test_manual_snapshot_requires_and_freezes_explicit_parameters():
     assert specs[0].parameters["complete"] is True
 
 
+def test_index_weight_manual_policy_allows_explicit_bounded_universe(monkeypatch):
+    from tests.test_orchestration_v2 import acquisition_definition
+    from service.orchestration_v2.contracts import TaskDefinitionDocument
+    definition = acquisition_definition(task_key='index_weight', output_datasets=['index_weight'], acquisition_endpoint_ids=[7])
+    definition['validation_contract']['outputs'] = ['index_weight']
+    definition['validation_contract']['dataset_audits'][0]['dataset_name'] = 'index_weight'
+    class Repository:
+        def get_endpoint(self, _):
+            return dict(acquisition_endpoint_id=7, endpoint_key='index_weight', source_id='tushare', lifecycle_status='active')
+    monkeypatch.setattr('service.orchestration_v2.runtime.list_fanout_values', lambda *a, **kw: ['000300.SH','000688.SH'])
+    specs = OrchestrationV2Runtime(Repository())._plan_acquisition(
+        TaskDefinitionDocument.model_validate(definition), dict(
+            purpose='repair', observation_key='history:2026-10-01:2026-10-30',
+            observation_start=date(2026,10,1),observation_end=date(2026,10,30),
+            frozen_scope={'fanout_values':['000688.SH']}))
+    assert len(specs) == 1
+    assert specs[0].parameters['parameters']['index_code'] == '000688.SH'
+
+
+@pytest.mark.parametrize("source_id", ["financial_data", "chinabond"])
+def test_non_tushare_planning_uses_definition_resource_contract(source_id):
+    """Endpoint persistence must not duplicate task scheduling metadata."""
+
+    from tests.test_orchestration_v2 import acquisition_definition
+    from service.orchestration_v2.contracts import TaskDefinitionDocument
+
+    task_key = (
+        "ant_hot_stock_rank"
+        if source_id == "financial_data"
+        else "chinabond_yield_curve"
+    )
+    definition = acquisition_definition(
+        task_key=task_key,
+        output_datasets=[task_key],
+        acquisition_endpoint_ids=[7],
+    )
+    definition["resource"] = {
+        "resource_class": "public-query",
+        "priority": 40,
+    }
+    definition["validation_contract"]["outputs"] = [task_key]
+    definition["validation_contract"]["dataset_audits"][0][
+        "dataset_name"
+    ] = task_key
+    document = TaskDefinitionDocument.model_validate(definition)
+
+    class Repository:
+        @staticmethod
+        def get_endpoint(_endpoint_id):
+            # Acquisition endpoints deliberately have no resource_class.
+            return {
+                "acquisition_endpoint_id": 7,
+                "endpoint_key": (
+                    "altdata.hot-stock-rank"
+                    if source_id == "financial_data"
+                    else "yield_curve_history"
+                ),
+                "source_id": source_id,
+                "lifecycle_status": "active",
+            }
+
+    specs = OrchestrationV2Runtime(Repository())._plan_acquisition(document, {
+        "purpose": "daily",
+        "observation_key": "date:2026-10-29",
+        "observation_start": date(2026, 10, 29),
+        "observation_end": date(2026, 10, 29),
+        "frozen_scope": {},
+    })
+
+    assert len(specs) == 1
+    assert specs[0].resource_class == "public-query"
+
+
+def test_cn_lpr_prefers_official_chinamoney_source_with_bounded_period():
+    from tests.test_orchestration_v2 import acquisition_definition
+    from service.orchestration_v2.contracts import TaskDefinitionDocument
+
+    definition = acquisition_definition(
+        task_key="cn_lpr",
+        output_datasets=["cn_lpr"],
+        acquisition_endpoint_ids=[7, 8],
+    )
+    definition["validation_contract"]["outputs"] = ["cn_lpr"]
+    definition["validation_contract"]["dataset_audits"][0].update({
+        "dataset_name": "cn_lpr",
+        "period_granularity": "month",
+        "date_column": "date",
+    })
+    document = TaskDefinitionDocument.model_validate(definition)
+
+    class Repository:
+        @staticmethod
+        def get_endpoint(endpoint_id):
+            return {
+                7: {
+                    "acquisition_endpoint_id": 7,
+                    "endpoint_key": "lpr_history",
+                    "source_id": "chinamoney",
+                    "lifecycle_status": "active",
+                },
+                8: {
+                    "acquisition_endpoint_id": 8,
+                    "endpoint_key": "shibor_lpr",
+                    "source_id": "tushare",
+                    "lifecycle_status": "active",
+                },
+            }[endpoint_id]
+
+    specs = OrchestrationV2Runtime(Repository())._plan_acquisition(document, {
+        "purpose": "repair",
+        "observation_key": "2026-09",
+        "observation_start": date(2026, 9, 1),
+        "observation_end": date(2026, 9, 30),
+        "frozen_scope": {},
+    })
+
+    assert len(specs) == 1
+    assert specs[0].parameters["source_id"] == "chinamoney"
+    assert specs[0].parameters["parameters"] == {
+        "start_date": "2026-09-01",
+        "end_date": "2026-09-30",
+    }
+
+
+def test_operator_completeness_retry_discards_pre_reset_request_evidence():
+    source = inspect.getsource(
+        __import__(
+            "service.orchestration_v2.repository",
+            fromlist=["OrchestrationV2Repository"],
+        ).OrchestrationV2Repository.list_verified_acquisition_evidence
+    )
+
+    assert "reset_data_nodes" in source
+    assert "sequence_number > COALESCE" in source
+
+
 def test_dynamic_dependency_fanout_stays_inside_one_execution(monkeypatch):
     monkeypatch.setattr(
         "service.orchestration_v2.runtime.list_fanout_values",
@@ -470,10 +616,15 @@ def test_factor_value_fanout_resumes_only_missing_factors(monkeypatch):
         "service.orchestration_v2.runtime.list_fanout_values",
         lambda _source, as_of=None: ["alpha", "beta", "gamma"],
     )
-    monkeypatch.setattr(
-        "service.orchestration_v2.runtime.query",
-        lambda _statement, _params: [{"factor_name": "beta"}],
-    )
+    def _query(statement, _params):
+        # factor_value is calendar-gated before the missing-factor resume, so
+        # the trade-date lookup and the existing-factor lookup need different
+        # row shapes from the same stub.
+        if "trade_cal" in statement:
+            return [{"cal_date": date(2026, 10, 20), "is_open": 1}]
+        return [{"factor_name": "beta"}]
+
+    monkeypatch.setattr("service.orchestration_v2.runtime.query", _query)
 
     specs = OrchestrationV2Runtime._dynamic_fanout_specs(
         api_name="factor_value",

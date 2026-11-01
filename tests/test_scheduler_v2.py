@@ -10,9 +10,12 @@ def test_scheduler_contains_only_v2_control_jobs():
     scheduler = create_scheduler(set_active=False)
     ids = {job.id for job in scheduler.get_jobs()}
     assert ids == {
+        'v2_financial_disclosure_refresh',
+        'v2_history_continuation',
         "service_heartbeat",
         "v2_policy_dispatch",
         "v2_transformation_dispatch",
+        "factor_provider_revalidation",
         "v2_coverage_dispatch",
         "v2_coverage_rule_reconciler",
         "v2_transient_failure_reconciler",
@@ -21,13 +24,33 @@ def test_scheduler_contains_only_v2_control_jobs():
     }
 
 
+def test_factor_provider_revalidation_is_bounded(monkeypatch):
+    captured = {}
+
+    def revalidate(**kwargs):
+        captured.update(kwargs)
+        return {"eligible": 2, "completed": ["2026-10-26"], "failed": {}}
+
+    monkeypatch.setattr(
+        scheduler_module, "revalidate_provider_pending_dates", revalidate
+    )
+    assert scheduler_module.run_factor_provider_revalidation() == 1
+    assert captured == {"limit": 8}
+
+
 def test_ready_transformation_dispatch_freezes_exact_input_states():
     class Repository:
         def active_task_keys(self):
-            return {"technical_factor_snapshot"}
+            return {"local_factor_snapshot"}
+
+        def auxiliary_input_revision(self, names, end):
+            assert "balancesheet" in names
+            assert "financial_indicator" in names
+            assert "fina_indicator" not in names
+            return {"revision_digest": "financial-v1", "pending_count": 0}
 
         def latest_common_ready_input_states(self, names):
-            assert names == ("stock_daily", "adj_factor", "stock_basic")
+            assert names == ("stock_daily", "adj_factor", "daily_basic", "index_daily", "stock_basic")
             return {
                 "stock_daily": {
                     "dataset_state_id": 101,
@@ -50,6 +73,8 @@ def test_ready_transformation_dispatch_freezes_exact_input_states():
                     "observation_start": datetime(2026, 10, 9).date(),
                     "observation_end": datetime(2026, 10, 9).date(),
                 },
+                "daily_basic": {"dataset_state_id": 104, "revision": 1, "observation_key": "2026-10-09", "observation_start": datetime(2026, 10, 9).date(), "observation_end": datetime(2026, 10, 9).date()},
+                "index_daily": {"dataset_state_id": 105, "revision": 1, "observation_key": "2026-10-09", "observation_start": datetime(2026, 10, 9).date(), "observation_end": datetime(2026, 10, 9).date()},
             }
 
         def create_execution(self, request):
@@ -66,15 +91,58 @@ def test_ready_transformation_dispatch_freezes_exact_input_states():
         "waiting": {},
         "errors": {},
     }
-    assert repository.request.task_key == "technical_factor_snapshot"
+    assert repository.request.task_key == "local_factor_snapshot"
     assert repository.request.observation_key == "2026-10-09"
     assert repository.request.trigger_source.value == "dependency"
-    assert "technical-factor-snapshot-v4" in repository.request.idempotency_key
+    assert "unified-features-quality-v5" in repository.request.idempotency_key
+    assert ":aux:financial-v1" in repository.request.idempotency_key
     assert repository.request.frozen_scope["input_dataset_states"] == {
         "stock_daily": {"dataset_state_id": 101, "revision": 2},
         "adj_factor": {"dataset_state_id": 102, "revision": 3},
         "stock_basic": {"dataset_state_id": 103, "revision": 1},
+        "daily_basic": {"dataset_state_id": 104, "revision": 1},
+        "index_daily": {"dataset_state_id": 105, "revision": 1},
     }
+
+
+def test_financial_repairs_debounce_and_then_trigger_one_new_input_identity():
+    class Repository:
+        pending = 137
+        digest = "before"
+
+        def __init__(self):
+            self.requests = []
+            self.identities = set()
+
+        def active_task_keys(self):
+            return {"local_factor_snapshot"}
+
+        def latest_common_ready_input_states(self, names):
+            day = datetime(2026, 10, 21).date()
+            return {name: {"dataset_state_id": i, "revision": 1,
+                    "observation_key": day.isoformat(), "observation_start": day,
+                    "observation_end": day} for i, name in enumerate(names)}
+
+        def auxiliary_input_revision(self, names, end):
+            return {"revision_digest": self.digest, "pending_count": self.pending}
+
+        def create_execution(self, request):
+            fresh = request.idempotency_key not in self.identities
+            self.identities.add(request.idempotency_key)
+            self.requests.append(request)
+            return {"task_execution_id": len(self.requests)}, fresh
+
+    repository = Repository()
+    result = dispatch_ready_transformations(repository=repository)
+    assert result["waiting"] == {"local_factor_snapshot": ["auxiliary_input_repairs_pending"]}
+    assert not repository.requests
+    repository.pending = 0
+    assert dispatch_ready_transformations(repository=repository)["created"] == 1
+    assert dispatch_ready_transformations(repository=repository)["existing"] == 1
+    repository.digest = "after-financial-repair"
+    assert dispatch_ready_transformations(repository=repository)["created"] == 1
+    assert repository.requests[-1].observation_key == "2026-10-21"
+    assert len(repository.identities) == 2
 
 
 def test_transient_failure_reconciler_uses_bounded_policy(monkeypatch):

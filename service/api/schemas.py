@@ -776,6 +776,8 @@ class DataServiceEndpoint(ApiModel):
     description: str
     domain: str | None = None
     status: str | None = None
+    category: str | None = None
+    fields: list[dict[str, Any]] = Field(default_factory=list)
     data_origin: str
     local_datasets: list[str] = Field(default_factory=list)
     upstream_sources: list[str] = Field(default_factory=list)

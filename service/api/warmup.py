@@ -44,10 +44,12 @@ def warm_dashboard_caches(database: Any) -> None:
     request = _RequestStub(database)
 
     def build_catalog() -> dict:
+        data_service = get_data_service(request)
         return build_data_service_catalog(
             raw_interfaces=get_raw_archive_service(request).list_interfaces(),
-            datasets=get_data_service(request).list_datasets(),
+            datasets=data_service.list_datasets(),
             interfaces=get_interface_data_service(request).list_interfaces(),
+            dataset_columns=data_service.dataset_columns_map(),
         )
 
     def build_health() -> dict:

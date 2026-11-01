@@ -67,7 +67,7 @@ class InterfaceDataService:
         return [
             self._summary(contract)
             for contract in self._catalog.list()
-            if contract.collectable
+            if contract.collectable and contract.api_name != "factor_value"
         ]
 
     def describe_interface(self, api_name: str) -> dict:
@@ -198,6 +198,9 @@ class InterfaceDataService:
         ]
 
     def _require_collectable(self, api_name: str) -> TushareInterfaceContract:
+        if api_name == "factor_value":
+            from service.data_service.models import DatasetNotFoundError
+            raise DatasetNotFoundError("factor_value is internal comparison data")
         try:
             contract = self._catalog.get(api_name)
         except InterfaceNotFoundError as exc:

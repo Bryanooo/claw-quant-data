@@ -432,6 +432,21 @@ class CatalogRawCollector(BaseCollector):
                 fetched = self._last_fetch_count
                 signature = self._last_page_hash
                 if fetched == 0:
+                    durable_rows = stored_total
+                    count_durable = getattr(
+                        self.normalizer,
+                        "count_request_business_rows",
+                        None,
+                    )
+                    if (
+                        self.contract.implementation.get("mode") == "generic_raw"
+                        and int(self.normalization_evidence.get("normalized_rows", 0)) > 0
+                        and callable(count_durable)
+                    ):
+                        durable_rows = count_durable(
+                            self.API_NAME,
+                            _sha256(base_params),
+                        )
                     self.completion_evidence = self._completion_evidence(
                         verified=True,
                         mode="offset",
@@ -439,7 +454,8 @@ class CatalogRawCollector(BaseCollector):
                         page_size=requested_size,
                         pages_completed=pages,
                         rows_fetched=fetched_total,
-                        rows_stored=stored_total,
+                        rows_stored=durable_rows,
+                        rows_written_attempted=stored_total,
                         exhausted=True,
                     )
                     self._finish_checkpoint(
@@ -448,10 +464,10 @@ class CatalogRawCollector(BaseCollector):
                         offset,
                         pages,
                         fetched_total,
-                        stored_total,
+                        durable_rows,
                         previous_hash,
                     )
-                    return stored_total
+                    return durable_rows
                 if signature in seen_hashes:
                     raise PaginationStalledError(
                         f"{self.API_NAME} repeated earlier page content at offset {offset}; "

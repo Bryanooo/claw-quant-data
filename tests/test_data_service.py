@@ -151,6 +151,7 @@ def test_registry_exposes_every_collector_table():
     assert collector_tables | normalized_tables | {
         "tushare_current_daily_basic",
         "technical_factor_snapshot",
+        "local_factor_snapshot",
         "fama_french_daily",
         # 蚂蚁数据源 scheduled-pull standard tables (ant_norm_*)
         "ant_norm_hot_stock_rank",
@@ -162,7 +163,7 @@ def test_registry_exposes_every_collector_table():
         "ant_norm_style_classification",
         "public_norm_chinabond_yield_curve",
     } == registered_tables
-    assert len(DATASETS.list()) == 205
+    assert len(DATASETS.list()) == 206
 
 
 def test_normalized_dataset_exposes_versioned_storage_semantics():
@@ -248,7 +249,8 @@ def test_all_collectable_interfaces_have_a_public_data_path():
     service = InterfaceDataService(FakeRawRepository(), DATASETS)
     interfaces = service.list_interfaces()
 
-    assert len(interfaces) == 202
+    assert len(interfaces) == 201
+    assert "factor_value" not in {item["api_name"] for item in interfaces}
     assert all(item["datasets"] for item in interfaces)
     assert all(
         item["records_url"]

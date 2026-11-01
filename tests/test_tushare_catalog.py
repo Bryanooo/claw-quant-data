@@ -407,6 +407,50 @@ def test_offset_pagination_checkpoints_every_page(monkeypatch):
     assert collector.completion_evidence["rows_fetched"] == 3
 
 
+def test_offset_pagination_reports_durable_business_rows(monkeypatch):
+    monkeypatch.setattr(BaseCollector, "__init__", lambda self: None)
+    collector = CatalogRawCollector("fund_adj")
+    pages = {0: (2, "page-1"), 2: (2, "page-2"), 4: (0, "empty")}
+
+    class FakeNormalizer:
+        @staticmethod
+        def count_request_business_rows(api_name, request_hash):
+            assert api_name == "fund_adj"
+            assert len(request_hash) == 64
+            # Four attempted page writes contained one repeated business key.
+            return 3
+
+    collector.normalizer = FakeNormalizer()
+    collector.normalization_evidence["normalized_rows"] = 4
+
+    def fake_collect(**params):
+        collector._last_fetch_count, collector._last_page_hash = pages[params["offset"]]
+        return collector._last_fetch_count
+
+    monkeypatch.setattr(collector, "collect", fake_collect)
+    monkeypatch.setattr(collector, "_scope_lock", lambda *_args: nullcontext())
+    monkeypatch.setattr(
+        collector,
+        "_begin_checkpoint",
+        lambda *_args, **_kwargs: {
+            "next_offset": 0,
+            "pages_completed": 0,
+            "rows_fetched": 0,
+            "rows_stored": 0,
+            "last_page_hash": None,
+        },
+    )
+    monkeypatch.setattr(collector, "_save_checkpoint", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(collector, "_finish_checkpoint", lambda *_args: None)
+
+    rows = collector.collect_paginated(page_size=2, max_pages=5)
+
+    assert rows == 3
+    assert collector.completion_evidence["rows_fetched"] == 4
+    assert collector.completion_evidence["rows_stored"] == 3
+    assert collector.completion_evidence["rows_written_attempted"] == 4
+
+
 def test_offset_pagination_detects_repeated_pages(monkeypatch):
     monkeypatch.setattr(BaseCollector, "__init__", lambda self: None)
     collector = CatalogRawCollector("fund_adj")

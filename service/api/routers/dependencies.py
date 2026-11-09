@@ -105,6 +105,13 @@ def list_dependency_interfaces(
     except Exception:
         automation_states = None
     merged = merge_runtime(items, execution_states, dataset_states, automation_states)
+    try:
+        links = repository.published_endpoint_tasks()
+    except Exception:
+        links = None
+    for row in merged:
+        row['linked_tasks'] = (None if links is None else
+                               links.get((row['source'], row['key']), []))
     total = len(merged)
     start = (page - 1) * page_size
     return {
@@ -130,6 +137,12 @@ def get_dependency_interface(
         detail = interface_detail(source, key)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"unknown interface: {source}/{key}")
+    if source == "tushare":
+        try:
+            hit = repository.last_tushare_nonempty(key)
+            detail = {**detail, "collection_evidence": {"available": True, "last_nonempty": hit}}
+        except Exception:
+            detail = {**detail, "collection_evidence": {"available": False}}
     return {"interface": detail}
 
 

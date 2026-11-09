@@ -109,6 +109,8 @@ _COMPACT_DATE_TABLES = {
 }
 
 _PERIOD_DATE_OVERRIDES = {
+    # Pay observations are for a report period; ann_date identifies revisions.
+    "stk_rewards": ("end_date", DateStorage.DATE),
     "cn_gdp": ("quarter", DateStorage.QUARTER),
     "cn_cpi": ("month", DateStorage.MONTH),
     "cn_m": ("month", DateStorage.MONTH),
@@ -651,6 +653,8 @@ def _generated_dataset(
     return DatasetSpec(
         name=contract.table_name,
         table=contract.table_name,
+        current_view="canonical_stk_factor_pro" if contract.table_name == "stk_factor_pro" else None,
+        freshness_table="stk_factor_pro" if contract.table_name == "stk_factor_pro" else None,
         description=title.strip() or details,
         category=contract.resource_class.value,
         primary_keys=contract.primary_keys,

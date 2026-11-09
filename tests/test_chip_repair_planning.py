@@ -1,5 +1,13 @@
 from datetime import date
 from scripts.plan_chip_security_repairs import plan_month
+from scripts.chip_provider_gap_evidence import response_reason
+
+
+def test_missing_request_evidence_is_not_a_verified_empty_response():
+    assert response_reason({'rows_fetched':None,'completion_status':'complete'}) == 'provider_response_not_verified'
+    assert response_reason({'rows_fetched':0,'completion_status':'partial'}) == 'provider_response_not_verified'
+    assert response_reason({'rows_fetched':0,'completion_status':'complete'}) == 'provider_returned_empty'
+    assert response_reason({'rows_fetched':'0','completion_status':'empty'}) == 'provider_returned_empty'
 
 
 def test_active_window_splits_month_and_does_not_duplicate_security():

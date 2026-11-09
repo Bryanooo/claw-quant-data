@@ -34,6 +34,9 @@ def test_nonfinite_nonpositive_and_missing_are_not_imputed():
     assert metric['mean'] is None
     assert metric['nonpositive_excluded_codes'] == ['a', 'b']
     assert metric['missing_codes'] == ['c', 'd']
+    assert metric['unusable_field_codes'] == ['c', 'd']
+    assert metric['sample_status'] == 'no_valid_sample'
+    assert metric['missing_member_rows'] == []
     assert result['concentration']['market_cap_hhi'] is None
 
 

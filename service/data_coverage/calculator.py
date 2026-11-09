@@ -80,7 +80,7 @@ class CoverageCalculator:
         )
         reference_as_of = entity_reference_as_of or business_now().date()
         if rule.strategy == CoverageStrategy.NON_TEMPORAL:
-            snapshot = self._repository.snapshot_evidence(rule)
+            snapshot = self._repository.snapshot_evidence(rule, start_date=start_date, end_date=end_date)
             latest = snapshot["latest_success"]
             verified_empty = bool(
                 latest and latest.get("completion_status") == "empty_verified"
@@ -89,14 +89,14 @@ class CoverageCalculator:
                 snapshot["verified"]
                 and snapshot["unresolved_failures"] == 0
                 and snapshot["active_history_jobs"] == 0
-                and (snapshot["row_count"] > 0 or verified_empty)
+                and ((snapshot["row_count"] == 0) if verified_empty else snapshot["row_count"] > 0)
             )
             return CoverageAuditResult(
                 dataset_name=rule.dataset_name,
                 strategy=rule.strategy.value,
                 start_date=start_date,
                 end_date=end_date,
-                status="complete" if complete else "unverified",
+                status=("empty" if verified_empty else "complete") if complete else "unverified",
                 expected_partitions=1,
                 present_partitions=int(complete),
                 missing_partitions=0,
@@ -262,7 +262,7 @@ class CoverageCalculator:
                 )
 
         scope_evidence = (
-            self._repository.collection_scope_evidence(rule)
+            self._repository.collection_scope_evidence(rule, start_date=start_date, end_date=end_date)
             if rule.strategy == CoverageStrategy.OBSERVED_ONLY
             else None
         )
@@ -291,7 +291,7 @@ class CoverageCalculator:
         partitions: list[CoveragePartition] = []
         early_market_absolute_tolerance = (
             1
-            if rule.dataset_name in {"stock_daily", "stock_daily_basic"}
+            if rule.dataset_name in {"stock_daily", "stock_daily_basic", "daily_basic"}
             else 2
             if rule.dataset_name in {"stk_factor", "stk_factor_pro"}
             else 0
@@ -339,12 +339,26 @@ class CoverageCalculator:
                 >= reference_as_of
                 - timedelta(days=rule.verified_empty_min_age_days - 1)
             )
+            reference_required = partition_date in entity_dates and rule.min_entity_ratio is not None
+            unknown_reference = bool(reference_required and (not expected_entities or observed.entity_count is None))
+            problems = list(observed.issues) if observed else []
+            if observed and observed.known_incomplete and not problems:
+                problems.append("invalid_business_values" if observed.invalid_balance_rows or observed.invalid_value_rows else "transport_or_business_incomplete")
+            if unknown_reference:
+                problems.append("entity_reference_unavailable")
+            if entity_ratio is not None and rule.min_entity_ratio is not None and entity_ratio < rule.min_entity_ratio and not small_early_market_tolerance:
+                problems.append("ready_entity_coverage_below_threshold" if rule.dataset_name in {
+                    "local_factor_snapshot", "technical_factor_snapshot"} else "entity_coverage_below_threshold")
+            if verified_empty_too_recent:
+                problems.append("empty_response_not_mature")
+            if expected and not observed:
+                problems.append("missing_partition")
             if expected and observed:
                 status = (
                     "partial"
                     if observed.known_incomplete
                     or verified_empty_too_recent
-                    or (rule.dataset_name == 'cyq_chips' and not expected_entities)
+                    or unknown_reference
                     or (
                         rule.min_entity_ratio is not None
                         and entity_ratio is not None
@@ -381,6 +395,7 @@ class CoverageCalculator:
                     expected=expected,
                     expected_entity_count=expected_entities,
                     entity_coverage_ratio=entity_ratio,
+                    issues=tuple(problems),
                 )
             )
 
@@ -396,11 +411,15 @@ class CoverageCalculator:
             status = (
                 "empty"
                 if not observed_count
+                and scope_evidence.get("certified_zero_rows") is True
+                and scope_evidence.get("requested_scope_verified") is not False
                 and scope_evidence["verified_terminal_jobs"] > 0
                 and scope_evidence["active_jobs"] == 0
                 and scope_evidence["unresolved_failures"] == 0
                 else "unverified"
-                if scope_evidence["declared_jobs"] == 0
+                if (not observed_count and not scope_evidence.get("certified_zero_rows"))
+                or scope_evidence.get("requested_scope_verified") is False
+                or scope_evidence["declared_jobs"] == 0
                 or scope_evidence["active_jobs"] > 0
                 or scope_evidence["verified_terminal_jobs"] == 0
                 else "gaps"
@@ -492,6 +511,9 @@ class CoverageCalculator:
                 "known_incomplete_partitions": sum(
                     item.known_incomplete for item in actual.values()
                 ),
+                "invalid_value_rows": {str(day): item.invalid_value_rows for day,item in actual.items() if item.invalid_value_rows},
+                "invalid_balance_rows": {str(day): item.invalid_balance_rows for day,item in actual.items()
+                                         if item.invalid_balance_rows},
                 "v2_verified_transport_dates": sorted(
                     item.isoformat() for item in (verified_transport_dates or set())
                 ),
@@ -500,7 +522,12 @@ class CoverageCalculator:
                     for item in (verified_empty_transport_dates or set())
                 ),
                 "declared_scope_evidence": scope_evidence,
-                "warning": "entity completeness is only enforced when a non-empty point-in-time reference universe is available",
+                "empty_reason": ("verified_zero_response" if scope_evidence and scope_evidence.get("certified_zero_rows")
+                                 else "no_expected_partition") if status == "empty" else None,
+                "issues": [{"code": "request_evidence_does_not_establish_empty_partition"}]
+                    if scope_evidence and not observed_count and scope_evidence.get("requested_scope_verified")
+                    and not scope_evidence.get("certified_zero_rows") else [],
+                "warning": "missing required reference universes are partial, never certified complete",
             },
             partial_partitions=partial,
         )

@@ -147,12 +147,12 @@ def test_quarterly_verified_empty_uses_period_end_partition_key():
                     definition_digest, purpose, trigger_source, status,
                     idempotency_key, observation_key, observation_start,
                     observation_end, observation_period, scope_digest,
-                    attempt_count, max_attempts, finished_at
+                    attempt_count, max_attempts, finished_at, frozen_scope
                 )
                 SELECT task_definition_id, task_key, version,
                        definition_digest, 'repair', 'recovery', 'success',
                        %s, '1990-Q1', DATE '1990-01-01', DATE '1990-03-31',
-                       '1990-Q1', repeat('0', 64), 1, 3, now()
+                       '1990-Q1', repeat('0', 64), 1, 3, now(), '{"requests":[{"request_key":"quarter"}]}'::jsonb
                 FROM orchestration_v2.task_definition
                 WHERE task_key='income' AND lifecycle_status='active'
                 RETURNING task_execution_id
@@ -165,7 +165,7 @@ def test_quarterly_verified_empty_uses_period_end_partition_key():
                 INSERT INTO orchestration_v2.task_execution_event (
                     task_execution_id, sequence_number, event_type, node_key,
                     attempt_number, payload
-                ) VALUES (%s, 1, 'node.validate.completed', 'validate', 1, '{}')
+                ) VALUES (%s, 3, 'node.validate.completed', 'validate', 1, '{}')
                 RETURNING event_id
                 """,
                 (execution_id,),
@@ -188,14 +188,27 @@ def test_quarterly_verified_empty_uses_period_end_partition_key():
                 (execution_id, validation_event_id),
             )
 
-        partitions = CoverageRepository().actual_partitions(
-            COVERAGE_RULES.get("income"),
-            date(1990, 1, 1),
-            date(1990, 3, 31),
-        )
-        assert [(item.partition_date, item.verified_empty) for item in partitions] == [
-            (date(1990, 3, 31), True)
-        ]
+        def actual():
+            return CoverageRepository().actual_partitions(
+                COVERAGE_RULES.get("income"), date(1990, 1, 1), date(1990, 3, 31))
+
+        assert actual() == []  # A published empty state alone cannot prove any request.
+        with psycopg2.connect(**DB_CONFIG) as connection, connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO orchestration_v2.task_execution_event
+                (task_execution_id,sequence_number,event_type,node_key,attempt_number,payload) VALUES
+                (%s,1,'node.acquire.request_completed','acquire',1,
+                 '{"request_key":"quarter","completion_status":"empty","rows_fetched":0,"completion_evidence":{"verified":true}}'),
+                (%s,2,'node.acquire.completed','acquire',1,'{}')""", (execution_id,execution_id))
+        assert [(p.partition_date,p.verified_empty) for p in actual()] == [(date(1990,3,31), True)]
+        with psycopg2.connect(**DB_CONFIG) as connection, connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO orchestration_v2.task_execution_event
+                (task_execution_id,sequence_number,event_type,node_key,attempt_number,payload) VALUES
+                (%s,4,'node.acquire.request_completed','acquire',1,
+                 '{"request_key":"quarter","completion_status":"complete","rows_fetched":9,"completion_evidence":{"verified":true}}')
+            """, (execution_id,))
+        assert actual() == []  # A newer positive response cannot re-certify zero rows.
     finally:
         if execution_id is not None:
             with psycopg2.connect(**DB_CONFIG) as connection, connection.cursor() as cursor:

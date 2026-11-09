@@ -20,6 +20,7 @@ from service.orchestration_v2.repair_planning import (
     RepairInstanceProposal,
     plan_period_repairs,
 )
+from service.data_coverage.publication import NEXT_DAY_EMPTY_CONFIRMATION
 from service.orchestration_v2.service import OrchestrationV2Service
 from service.orchestration_v2.recovery_policy import (
     DEFERRED_RESEARCH_DATASETS,
@@ -98,24 +99,35 @@ def current_problem_partitions(
                 SELECT DISTINCT ON (dataset_name, observation_end)
                        dataset_name,
                        observation_end,
-                       data_status,
+                       data_status, observation_start, validation_summary,
                        ready
                 FROM orchestration_v2.dataset_state
                 WHERE observation_end IS NOT NULL
+                  AND (%s::date IS NULL OR observation_end >= %s)
+                  AND (%s::date IS NULL OR observation_end <= %s)
                 ORDER BY dataset_name,
                          observation_end,
                          source_execution_id DESC,
                          updated_at DESC
             )
-            SELECT dataset_name, observation_end AS partition_date
+            SELECT dataset_name, observation_end AS partition_date, data_status, ready,
+                   (observation_start = observation_end AND dataset_name = ANY(%s)
+                    AND ((data_status='empty_verified' AND NOT COALESCE(
+                         (validation_summary->'evidence'->>'empty_confirmed_after_window')::boolean, false))
+                         OR (data_status='indeterminate' AND validation_summary->'evidence'
+                             ->>'empty_confirmed_after_window' = 'false'))) AS recheck
             FROM latest_state
-            WHERE data_status='empty_verified'
-              AND ready
-            """
+            WHERE (data_status='empty_verified' AND ready) OR data_status='indeterminate'
+            """,
+            (start_date, start_date, end_date, end_date, sorted(NEXT_DAY_EMPTY_CONFIRMATION)),
         )
         verified_empty_dates: dict[str, set[date]] = defaultdict(set)
+        recheck_dates: dict[str, set[date]] = defaultdict(set)
         for row in cursor.fetchall():
-            verified_empty_dates[row["dataset_name"]].add(row["partition_date"])
+            if row["recheck"]:
+                recheck_dates[row["dataset_name"]].add(row["partition_date"])
+            elif row["ready"]:
+                verified_empty_dates[row["dataset_name"]].add(row["partition_date"])
 
     result: dict[str, dict[date, str]] = {}
     for rule in COVERAGE_RULES.list():
@@ -139,6 +151,8 @@ def current_problem_partitions(
                 and (end_date is None or value <= end_date)
             ):
                 problems[value] = "partial"
+        for value in recheck_dates[rule.dataset_name]:
+            problems[value] = "recheck_empty"
         if problems:
             result[rule.dataset_name] = problems
     return result
@@ -182,6 +196,30 @@ def plan_current_repairs(
         key=lambda item: (item.observation_start or date.min, item.task_key),
         reverse=True,
     ))
+
+
+def dispatch_overdue_empty_rechecks(repository, today: date, *, limit: int = 16) -> dict:
+    """Recover provisional dates that aged out of the seven-day late-feed scan.
+
+    One bounded backlog generation per task and date (not per wall day).
+    A failed generation stays actionable, not eligible for endless new tasks.
+    """
+    from datetime import timedelta
+    cutoff = today - timedelta(days=8)
+    proposals = plan_current_repairs(repository, end_date=cutoff,
+                                     included_datasets=NEXT_DAY_EMPTY_CONFIRMATION)
+    candidates = [p for p in proposals if p.reasons == ('recheck_empty',)
+                  and p.observation_start == p.observation_end]
+    if not candidates:
+        return {"created": 0, "existing": 0}
+    attempted = repository.overdue_empty_attempts({p.task_key for p in candidates})
+    return create_repair_executions(
+        repository, proposals=(p for p in reversed(candidates)
+                               if (p.task_key, p.observation_key) not in attempted),
+        limit=limit, purpose="backfill", trigger_source="schedule",
+        idempotency_prefix="v2:overdue-empty:v1",
+        frozen_scope_extra={"dispatch":"v2_overdue_empty_recheck"},
+    )
 
 
 def plan_quota_guarded_history_repairs(
@@ -257,6 +295,9 @@ def create_repair_executions(
             if idempotency_prefix
             else proposal.idempotency_key
         )
+        recheck_empty = "recheck_empty" in proposal.reasons
+        if recheck_empty:
+            base_idempotency_key += ":empty-window-v1"
         row, was_created = service.create_execution(ExecutionRequest(
             task_key=proposal.task_key,
             purpose=purpose,
@@ -276,6 +317,7 @@ def create_repair_executions(
                 "datasets": list(proposal.datasets),
                 "reasons": list(proposal.reasons),
                 **(frozen_scope_extra or {}),
+                **({"force_acquire": True} if recheck_empty else {}),
             },
             app_revision=actor_revision,
             image_digest=image_digest,

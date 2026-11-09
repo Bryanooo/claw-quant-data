@@ -120,7 +120,7 @@ _FINANCIAL_DATA_TASKS: tuple[dict[str, str], ...] = (
 
 _DERIVED_TASKS = (
     TransformationTaskBlueprint(
-        "ggt_monthly", ("ggt_daily",), ("ggt_monthly",), ("ggt_daily",), 80
+        "ggt_monthly", ("ggt_daily",), ("ggt_monthly",), ("ggt_daily",), 80, "ggt-db-month-v1"
     ),
     TransformationTaskBlueprint(
         "adjusted_price_return",
@@ -148,7 +148,7 @@ _DERIVED_TASKS = (
             "stock_basic",
         ),
         89,
-        "unified-features-quality-v5",
+        "unified-features-pit-v6",
     ),
     TransformationTaskBlueprint(
         "valuation_percentile_snapshot",
@@ -156,7 +156,7 @@ _DERIVED_TASKS = (
         ("valuation_percentile_snapshot",),
         ("daily_basic",),
         80,
-        "group-valuation-v1",
+        "group-valuation-v2-sample-contract",
     ),
     TransformationTaskBlueprint(
         "fama_french_daily",
@@ -171,7 +171,7 @@ _DERIVED_TASKS = (
         ("fama_french_daily",),
         ("daily", "daily_basic", "stock_st"),
         80,
-        "ff3-sh-sz-v2",
+        "ff3-sh-sz-v3",
     ),
     TransformationTaskBlueprint(
         "market_breadth",

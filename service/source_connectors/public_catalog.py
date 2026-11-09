@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from service.clock import business_today
+
 from service.source_connectors.contracts import AcquisitionMode, EndpointSpec, SourceKind, SourceSpec
 
 
@@ -45,7 +47,7 @@ class YieldCurve(Parameters):
             raise ValueError("query at most 360 days; split longer history explicitly")
         if first < date(2006, 3, 1):
             raise ValueError("earliest declared curve date is 2006-03-01")
-        if last > date.today():
+        if last > business_today():
             raise ValueError("future curve dates are unsupported")
         return self
 

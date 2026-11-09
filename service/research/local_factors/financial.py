@@ -211,7 +211,6 @@ class FinancialFactorEvaluator:
             + _safe_div(ttm("total_profit"), revenue_ttm)
             + _safe_div(ttm("net_profit"), operating_inflow + investing_inflow)
         )
-        total_expenses = ttm("sell_exp") + ttm("admin_exp") + ttm("fin_exp")
         total_expenses_q = current("sell_exp") + current("admin_exp") + current("fin_exp")
         total_expenses_yoy = year_ago("sell_exp") + year_ago("admin_exp") + year_ago("fin_exp")
         npm_q = _safe_div(current("net_profit"), current("revenue"))

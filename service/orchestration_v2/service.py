@@ -158,6 +158,22 @@ class OrchestrationV2Service:
             raise DefinitionPublishError(
                 "task dependency cycle: " + " -> ".join(cycle)
             )
+        # A generic compute node is not proof that this particular product
+        # has an executable handler or an independent output audit.
+        if document.workflow_kind.value == "transformation":
+            from service.orchestration_v2.transformations import SUPPORTED_TRANSFORMATION_TASK_KEYS
+            if document.task_key not in SUPPORTED_TRANSFORMATION_TASK_KEYS:
+                raise DefinitionPublishError(
+                    f"transformation implementation is not available: {document.task_key}")
+        from service.data_coverage.registry import COVERAGE_RULES
+        from service.data_coverage.models import CoverageRuleNotFoundError
+        for dataset in document.output_datasets:
+            if document.task_key == "factor_reference_sample" and dataset == document.task_key:
+                continue
+            try:
+                COVERAGE_RULES.get(dataset)
+            except CoverageRuleNotFoundError as exc:
+                raise DefinitionPublishError(f"output audit is not implemented: {dataset}") from exc
         return self._repository.publish_definition(
             definition_id,
             actor=actor,

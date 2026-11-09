@@ -1985,6 +1985,7 @@ class ResearchService:
             limit=limit,
             offset=0,
             include_total=False,
+            consolidated_financials=True,
         )["data"]
 
     def _load_many(
@@ -2017,6 +2018,7 @@ class ResearchService:
                 limit=limit,
                 offset=0 if use_cursor else offset,
                 include_total=False,
+                consolidated_financials=True,
                 filter_mode=filter_mode,
                 cursor=cursor if use_cursor else None,
             )
@@ -3232,14 +3234,8 @@ class ResearchService:
             "margin", filters={}, start=start, end=effective_as_of,
             max_records=5000,
         )
-        margin_by_day: dict[str, float] = {}
-        for row in margin_rows:
-            observed = _day(row.get("trade_date"))
-            balance = _number(row.get("rzye"))
-            if observed is None or balance is None:
-                continue
-            key = observed.isoformat()
-            margin_by_day[key] = margin_by_day.get(key, 0.0) + balance
+        from service.margin_quality import market_balances
+        balances = market_balances(margin_rows, days)
 
         hsgt_rows = self._load_many(
             "moneyflow_hsgt", filters={}, start=start, end=effective_as_of,
@@ -3266,14 +3262,14 @@ class ResearchService:
         return {
             "data": {
                 "as_of": str(effective_as_of),
-                # margin rzye is CNY yuan; moneyflow series are CNY 10k.
+                # Margin and DC market flow are yuan; HSGT flow is CNY 10k.
                 "margin_balance": {
                     "unit": "亿元",
-                    "series": [
-                        (day, _round(value / 1e8, 2))
-                        for day, value in sorted(margin_by_day.items())
-                    ][-days:],
+                    "field": "rzrqye", "label": "融资融券余额合计",
+                    "series": balances['series']['rzrqye'],
                 },
+                "financing_balance": {"unit":"亿元", "field":"rzye", "label":"融资余额", "series":balances['series']['rzye']},
+                "securities_lending_balance": {"unit":"亿元", "field":"rqye", "label":"融券余额", "series":balances['series']['rqye']},
                 "north_money": {
                     "unit": "亿元",
                     "series": [
@@ -3283,8 +3279,9 @@ class ResearchService:
                 },
                 "market_flow": {
                     "unit": "亿元",
+                    "source_unit": "元",
                     "series": [
-                        (day, _round(value / 1e4, 2))
+                        (day, _round(value / 1e8, 2))
                         for day, value in flow_series
                     ][-days:],
                 },
@@ -3293,10 +3290,12 @@ class ResearchService:
                 "window_days": days,
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": [
-                    {"dataset": "margin", "days": len(margin_by_day)},
+                    {"dataset": "margin", "days": len(balances['series']['rzrqye'])},
                     {"dataset": "moneyflow_hsgt", "days": len(north_series)},
                     {"dataset": "moneyflow_mkt_dc", "days": len(flow_series)},
                 ],
+                "margin_quality": {"status":balances['status'],"incomplete_dates":balances['incomplete_dates'],
+                    "policy":"All expected exchanges, finite nonnegative balances and sum identity required; partial dates omitted, never zero-filled."},
             },
         }
 
@@ -4377,6 +4376,9 @@ class ResearchService:
         net_amounts = [_number(row.get("net_mf_amount")) for row in money]
         clean_net = [value for value in net_amounts if value is not None]
         margin = loaded["margin_detail"]
+        from service.margin_quality import balance_issues
+        margin_issues = [dict(trade_date=row.get('trade_date'),ts_code=row.get('ts_code'),issues=balance_issues(row))
+                         for row in margin if balance_issues(row)]
         northbound = loaded["hk_hold"]
         blocks = loaded["block_trade"]
         chips = loaded["cyq_perf"]
@@ -4391,6 +4393,8 @@ class ResearchService:
                 },
                 "margin": {
                     "observations": len(margin),
+                    "quality": {"status":"partial" if margin_issues else "ready" if margin else "missing",
+                                "invalid_rows":margin_issues,"unit":"元"},
                     "latest": margin[0] if margin else None,
                     "financing_buy_sum": _round(sum(_number(row.get("rzmre")) or 0 for row in margin)) if margin else None,
                     "financing_repay_sum": _round(sum(_number(row.get("rzche")) or 0 for row in margin)) if margin else None,
@@ -4410,10 +4414,10 @@ class ResearchService:
                 "generated_at": datetime.now(timezone.utc),
                 "provenance": self._provenance(loaded),
                 "quality": {
-                    "status": "warning" if not money else "ready",
+                    "status": "warning" if not money or margin_issues else "ready",
                     "warnings": [
                         "event-like sources can legitimately be empty; absence is not treated as zero"
-                    ],
+                    ] + (["margin balances contain missing, invalid or inconsistent fields; see data.margin.quality"] if margin_issues else []),
                 },
             },
         }

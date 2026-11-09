@@ -1,16 +1,38 @@
 """Conservative per-feature input readiness, separate from execution/comparison.
 
-Only proven listing-age exclusions are accepted. A missing bar in an old
-security, missing financial input or an unclassified undefined result never
-becomes ready merely because another feature has a value.
+Only evidenced listing-age and explicitly checked formula-domain exclusions
+are accepted. Missing input or an unclassified result never becomes ready
+merely because another feature has a value.
 """
 import re
 import math
 
+import numpy as np
 import pandas as pd
 
-from .catalog import FACTOR_SPECS, MAX_ABS_FACTOR_VALUE
+from .alpha101 import minimum_history
+from .alpha101_formulas import ALPHA101_FORMULAS
+from .catalog import FACTOR_BY_NAME, FACTOR_SPECS, MAX_ABS_FACTOR_VALUE
 from .ownership import TECHNICAL_FEATURES, SHARED_TECHNICAL_FIELDS
+
+
+_INDUSTRY_LEVELS = {
+    f'alpha101_{n}': tuple(sorted(set(re.findall(r'IndClass\.(\w+)', formula))))
+    for n, formula in ALPHA101_FORMULAS.items() if 'IndClass.' in formula
+}
+
+
+def _missing_industry(name, code, alpha):
+    missing = []
+    for level in _INDUSTRY_LEVELS.get(name, ()):
+        groups = getattr(alpha, level, None)
+        if groups is None:
+            groups = getattr(alpha, 'industry', None)
+        value = (groups.iloc[-1].get(code) if isinstance(groups, pd.DataFrame) and len(groups)
+                 else groups.get(code) if isinstance(groups, pd.Series) else None)
+        if pd.isna(value) or value in ('', '__unknown__'):
+            missing.append(level)
+    return 'missing_market_inputs:industry_classification.' + ','.join(missing) if missing else None
 
 
 _TECHNICAL_REQUIRED_BARS = {
@@ -47,6 +69,24 @@ _ZERO_RANGE_FEATURES = frozenset({
 
 
 def required_bars(name: str) -> int | None:
+    # A 300-observation regression of 5-session volume-sum changes consumes
+    # 305 source sessions, not 301. Intraday price position needs no lag.
+    if name in {'volume_alpha_300d_000001', 'volume_alpha_300d_000300'}:
+        return 305
+    if name in FACTOR_BY_NAME and FACTOR_BY_NAME[name].computation_group == 'financial':
+        return None
+    if name == 'volume_beta_120d_000300':
+        return 125
+    if name == 'days_beyond_upper_lower_21d':
+        return 41
+    if name.startswith('alpha101_') and name in FACTOR_BY_NAME:
+        return minimum_history(int(name.rsplit('_', 1)[1]))
+    if name == 'rsrs':
+        return 217
+    if match := re.fullmatch(r"high_low_(\d+)d", name):
+        return int(match[1])
+    if name == 'price_position_ir_60d':
+        return 60
     if name in _TECHNICAL_REQUIRED_BARS:
         return _TECHNICAL_REQUIRED_BARS[name]
     match = re.fullmatch(r"ema_(\d+)_distance_pct", name)
@@ -59,6 +99,9 @@ def required_bars(name: str) -> int | None:
     # next window in names such as bias_turn_21d_504d.
     windows = [int(x) for x in re.findall(r"(?:^|_)(\d+)d(?=_|$)", name)]
     if windows:
+        if name.startswith(("avg_turnover_", "std_turnover_", "bias_turn_", "bias_std_turn_",
+                            "turnover_ma_", "amount_ma_")):
+            return max(windows)
         return max(windows) + 1
     match = re.fullmatch(r"(?:ema|sma|rsi|roc|atr|cci|natr|cost)_(\d+)", name)
     if match:
@@ -104,65 +147,135 @@ def _financial_exclusion(name: str, code: str, panel) -> str | None:
         if all(_finite(value) for value in (annual, five_year, profit, shares)):
             ratio = float(annual) / float(five_year) if float(five_year) else math.nan
             eps_ttm = float(profit) / float(shares) if float(shares) else math.nan
+            if ratio == 1 and shares != 0 and eps_ttm != 0:
+                return "undefined_for_zero_five_year_eps_growth"
             if not math.isfinite(ratio) or ratio <= 0 or eps_ttm == 0:
                 return "undefined_for_nonpositive_five_year_growth_base"
     return None
 
 
-def financial_input_diagnostic(name, code, panel):
-    """Explain missing inputs without turning absence into applicability proof."""
-    required = {
-        'ebitda_to_market': (('ttm', 'ebitda'),),
-        'fixed_asset_turnover': (('ttm', 'revenue'), ('current', 'fix_assets')),
-        'np_to_fixed_assets_yoy': tuple((b, m) for b in ('current', 'year_ago')
-                                      for m in ('net_profit', 'fix_assets')),
-        'pegh5': (('annual', 'basic_eps'), ('annual_five_year_ago', 'basic_eps'),
-                  ('ttm', 'net_profit_parent'), ('current', 'total_share')),
-        'lra_yoy': (('current', 'longterm_receivable'),
-                    ('year_ago', 'longterm_receivable')),
-        'np_to_deferred_tax_yoy': tuple((b, m) for b in ('current', 'year_ago')
-                                       for m in ('net_profit', 'defer_tax_assets')),
-        'gpm_qoq': tuple((b, m) for b in ('current', 'previous')
-                        for m in ('revenue', 'oper_cost')),
-        'delta_inventory_turnover': (('ttm', 'oper_cost'),
-                                     ('ttm_year_ago', 'oper_cost'),
-                                     ('current', 'inventories'),
-                                     ('year_ago', 'inventories')),
-        'delta_gpm': tuple((b, m) for b in ('ttm', 'ttm_year_ago')
-                           for m in ('revenue', 'oper_cost')),
-        'income_tax_yoy': (('ttm', 'income_tax'), ('ttm_year_ago', 'income_tax')),
-        'quality_composite': (
-            ('current', 'total_assets'), ('current', 'equity'),
-            *(( 'ttm', m) for m in ('total_profit', 'net_profit', 'revenue',
-                                   'operating_cash_inflow', 'investing_cash_inflow')),
-        ),
-        'np_to_total_expenses_yoy': tuple((b, m) for b in ('current', 'year_ago')
-                                        for m in ('net_profit', 'sell_exp', 'admin_exp', 'fin_exp')),
-        'expenses_to_equity_yoy': tuple((b, m) for b in ('current', 'year_ago')
-                                      for m in ('equity_parent', 'sell_exp', 'admin_exp', 'fin_exp')),
-        'np_to_inventory_yoy': tuple((b, m) for b in ('current', 'year_ago')
-                                    for m in ('net_profit', 'inventories')),
-    }.get(name)
-    if required is None or panel is None:
+def financial_input_diagnostic(name, code, panel, inputs=None):
+    """All financial formulas share their actual dependency contract."""
+    from .financial_dependencies import financial_dependencies, input_value
+    dependency = financial_dependencies().get(name)
+    if dependency is None or panel is None:
         return None
-    missing = [f'{bucket}.{metric}' for bucket, metric in required
-               if not _finite(panel.values(bucket, metric).get(code))]
-    if name == 'ebitda_to_market' and not _finite(panel.total_mv.get(code)):
-        missing.append('market.total_mv')
-    if name == 'pegh5' and not _finite(panel.close.get(code)):
-        missing.append('market.close')
+    values = {
+        key: inputs[key].get(code) if inputs is not None else input_value(panel, code, *key)
+        for key in sorted(dependency.required)
+    }
+    missing = ['.'.join(key) for key, value in values.items() if not _finite(value)]
     if missing:
+        conflicts = [bucket for bucket, metric in values if metric == 'equity_parent'
+                     and not _finite(values[bucket, metric])
+                     and panel.values(bucket, 'equity_parent_conflict').get(code) == 1]
+        if conflicts:
+            return 'conflicting_financial_inputs:' + ','.join(
+                bucket + '.equity_parent' for bucket in conflicts)
         return 'missing_financial_inputs:' + ','.join(missing)
-    # These are diagnostics, not exemptions: keep zero-domain cases unresolved
-    # until the contract explicitly declares their applicability.
-    zero = [f'{bucket}.{metric}' for bucket, metric in required
-            if panel.values(bucket, metric).get(code) == 0]
+    denominators = ['.'.join(key) for key in sorted(dependency.nonzero_required)
+                    if values.get(key) == 0]
+    if denominators:
+        return 'undefined_financial_zero_denominator:' + ','.join(denominators)
+    # Other zero inputs may be legitimate numerators.
+    zero = ['.'.join(key) for key, value in values.items() if value == 0]
     if zero:
         return 'financial_zero_input_requires_domain_audit:' + ','.join(zero)
     return 'nonfinite_result_with_present_financial_inputs'
 
 
-def audit_security(code, values, technical, panel, financial_panel=None) -> dict:
+def market_input_diagnostic(name, code, panel):
+    """Prove specific formula-domain failures; never excuse an input gap.
+
+    These are the exact windows consumed by the formulas. A documented
+    suspension can contribute a zero-range/zero-volume bar, but an absent
+    or nonfinite input must remain unresolved, even if another bar is flat.
+    """
+    if name == 'alpha101_53':
+        # delta(x, 9) reads only the two endpoints, not the intervening highs/lows.
+        if len(panel.alpha101.close) < 10:
+            return 'insufficient_market_window:required_10_sessions'
+        bars = pd.DataFrame({k: getattr(panel.alpha101, k)[code].iloc[[-10, -1]]
+                             for k in ('close','high','low')})
+        if not np.isfinite(bars.to_numpy()).all():
+            return 'missing_market_inputs:alpha101_53_endpoint_quotes'
+        if ((bars.close < bars.low) | (bars.close > bars.high) | (bars.low <= 0)).any():
+            return 'invalid_market_inputs:alpha101_53_endpoint_quotes'
+        if bars.close.eq(bars.low).any():
+            return 'undefined_alpha101_53_close_equals_low_at_delta_endpoint'
+        return 'nonfinite_result_with_present_market_inputs:alpha101_53'
+    if name in {'alpha101_32', 'alpha101_66'}:
+        alpha = panel.alpha101
+        required = required_bars(name)
+        if len(alpha.close.index) < required:
+            return f'insufficient_market_window:required_{required}_sessions'
+        price_fields = ('close',) if name == 'alpha101_32' else ('open', 'high', 'low')
+        prices = {field: getattr(alpha, field)[code].tail(required) for field in price_fields}
+        vwap_bars = 230 if name == 'alpha101_32' else 16
+        if getattr(alpha, 'amount', None) is None:
+            return 'missing_market_inputs:vwap_amount'
+        volume = alpha.volume[code].tail(vwap_bars)
+        amount = alpha.amount[code].tail(vwap_bars)
+        inputs = [*prices.values(), volume, amount]
+        if any(not np.isfinite(series.to_numpy()).all() for series in inputs):
+            return f'missing_market_inputs:{name}_price_volume_or_amount'
+        if any((series <= 0).any() for series in prices.values()) or (amount < 0).any() or (volume < 0).any():
+            return f'invalid_market_inputs:{name}_price_volume_or_amount'
+        if name == 'alpha101_66' and (
+            (prices['open'] < prices['low']) | (prices['open'] > prices['high'])
+        ).any():
+            return 'invalid_market_inputs:open_outside_bar'
+        if ((volume == 0) & (amount != 0)).any() or ((volume != 0) & (amount == 0)).any():
+            return 'invalid_market_inputs:inconsistent_volume_and_amount'
+        if (volume == 0).any():
+            return f'undefined_{name}_zero_volume_in_{vwap_bars}_session_vwap'
+        if name == 'alpha101_66':
+            source_spread = getattr(alpha, 'open_minus_midpoint', None)
+            spread = (source_spread[code].tail(required) if source_spread is not None
+                      else prices['open'] - (prices['high'] + prices['low']) / 2)
+            if not np.isfinite(spread.to_numpy()).all():
+                return 'missing_market_inputs:alpha101_66_midpoint_spread'
+            if (spread == 0).any():
+                return 'undefined_alpha101_66_zero_price_denominator_in_16_session_window'
+        return f'nonfinite_result_with_present_market_inputs:{name}'
+    if name == 'price_position_ir_60d':
+        window = pd.DataFrame({field: getattr(panel.alpha101, field)[code].tail(60)
+                               for field in ('open', 'high', 'low', 'close')})
+        if len(window) < 60:
+            return 'insufficient_market_window:required_60_sessions'
+        if not np.isfinite(window.to_numpy(dtype=float)).all():
+            return 'missing_market_inputs:60_session_ohlc'
+        ranges = window.high - window.low
+        if (ranges < 0).any():
+            return 'invalid_market_inputs:high_below_low'
+        if (ranges == 0).any():
+            return 'undefined_price_position_zero_range_in_complete_60_session_window'
+        positions = (window.close - window.open) / ranges
+        if positions.astype(float).std(ddof=1) == 0:
+            return 'undefined_price_position_zero_variance_in_complete_60_session_window'
+        return 'nonfinite_result_with_present_market_inputs:price_position_ir_60d'
+    if name in {'volume_alpha_300d_000001', 'volume_alpha_300d_000300'}:
+        volume = panel.alpha101.volume[code].tail(305)
+        benchmark = getattr(panel, 'benchmark_volume_' + name.rsplit('_', 1)[1])
+        inputs = pd.DataFrame({'stock': volume, 'benchmark': benchmark.reindex(volume.index)})
+        if len(inputs) < 305:
+            return 'insufficient_market_window:required_305_sessions'
+        if not np.isfinite(inputs.to_numpy(dtype=float)).all():
+            return 'missing_market_inputs:305_session_stock_or_benchmark_volume'
+        if (inputs < 0).any().any():
+            return 'invalid_market_inputs:negative_volume'
+        sums = inputs.rolling(5, min_periods=5).sum()
+        # The prior sum is the denominator of every pct_change observation.
+        if (sums.shift(1).tail(300) == 0).any().any():
+            return 'undefined_volume_regression_zero_base_in_complete_305_session_window'
+        changes = sums.pct_change(fill_method=None).tail(300)
+        if changes.benchmark.var(ddof=1) == 0:
+            return 'undefined_volume_regression_zero_benchmark_variance'
+        return 'nonfinite_result_with_present_market_inputs:volume_regression'
+    return None
+
+
+def audit_security(code, values, technical, panel, financial_panel=None, *, financial_inputs=None) -> dict:
     if code not in panel.alpha101.close.columns:
         return {"status": "not_expected", "technical_status": "not_expected", "reason": "no_target_daily_bar",
                 "unresolved": {}, "excluded": {}}
@@ -195,7 +308,10 @@ def audit_security(code, values, technical, panel, financial_panel=None) -> dict
             and math.isfinite(float(value))
             and abs(float(value)) > MAX_ABS_FACTOR_VALUE
         ):
-            excluded[name] = "numerically_unstable_extreme_value"
+            unresolved[name] = "numerically_unstable_extreme_value"
+        elif (name == 'etp5' and pd.notna(listed_at)
+              and ((dates > dates[-1] - pd.DateOffset(years=5)) & (dates < listed_at)).any()):
+            excluded[name] = "insufficient_listing_history_for_five_year_market_cap"
         elif age is not None and need is not None and age < need:
             excluded[name] = "insufficient_listing_history"
         elif (
@@ -210,8 +326,10 @@ def audit_security(code, values, technical, panel, financial_panel=None) -> dict
             excluded[name] = 'insufficient_traded_bars_with_documented_suspensions'
         elif name in _ZERO_RANGE_FEATURES and zero_range:
             excluded[name] = "undefined_for_zero_price_range"
+        elif reason := _missing_industry(name, code, panel.alpha101):
+            unresolved[name] = reason
         elif (
-            name.startswith("alpha101_")
+            name.startswith("alpha101_") and name not in {"alpha101_32", "alpha101_53", "alpha101_66"}
             and observed_sessions >= 512
             and unexplained_market_gaps == 0
             and all(frame[code].iloc[-512:].notna().all() for frame in (
@@ -219,21 +337,27 @@ def audit_security(code, values, technical, panel, financial_panel=None) -> dict
                 panel.alpha101.close, panel.alpha101.volume,
             ))
         ):
-            # Alpha101 formulae contain conditional ranks, powers and explicit
-            # divisions.  With a complete 512-session OHLCV input window, a
-            # non-finite result is a formula-domain outcome for that security;
-            # cross-sectional provider validation remains responsible for
-            # detecting an incorrect implementation.
-            excluded[name] = "undefined_formula_domain_with_complete_market_window"
+            # OHLCV alone does not prove the exact denominator, industry,
+            # VWAP or cross-sectional rank consumed by a particular formula.
+            unresolved[name] = "alpha101_result_requires_formula_input_review"
         elif reason := _financial_exclusion(
             name, code, financial_panel
         ):
             excluded[name] = reason
+        elif reason := market_input_diagnostic(name, code, panel):
+            if reason.startswith('undefined_'):
+                excluded[name] = reason
+            else:
+                unresolved[name] = reason
         else:
-            unresolved[name] = (
-                financial_input_diagnostic(name, code, financial_panel)
+            reason = (
+                financial_input_diagnostic(name, code, financial_panel, financial_inputs)
                 or "missing_input_or_undefined_requires_audit"
             )
+            if reason.startswith('undefined_financial_zero_denominator:'):
+                excluded[name] = reason
+            else:
+                unresolved[name] = reason
     if technical.get("adjustment_status") != "applied":
         unresolved["price_adjustment"] = "missing_or_incomplete_adjustment"
     return {"status": "partial" if unresolved else "ready",

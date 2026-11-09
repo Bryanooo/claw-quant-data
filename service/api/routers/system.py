@@ -41,4 +41,4 @@ def system_overview(
             data_health=health_service.overview(),
         )
 
-    return _OVERVIEW_CACHE.get_or_compute("overview", build, force=refresh)
+    return _OVERVIEW_CACHE.get_or_compute("overview", build, force=refresh, allow_stale=False)

@@ -217,7 +217,6 @@ def test_historical_replay_answers_without_a_provider_call(monkeypatch):
     # evidence; a certified window must be answered from the database without
     # touching the collector or spending quota.
     from collectors import tushare_raw
-    reference._DAY_CERTIFICATION_CACHE.clear()
     names = [spec.name for spec in reference.FACTOR_SPECS]
     sessions = [date(2026, 10, 28), date(2026, 10, 29), date(2026, 10, 30)]
     rows = [{'trade_date': day, 'factor_name': name,
@@ -239,27 +238,16 @@ def test_historical_replay_answers_without_a_provider_call(monkeypatch):
         assert entry['explicit_null_keys'] == [names[0]]
 
 
-def test_historical_replay_records_supplier_absence_from_history(monkeypatch):
-    reference._DAY_CERTIFICATION_CACHE.clear()
-    # On a certified day every factor was requested, so a security without a
-    # row for a factor is a genuine supplier absence; replay must record it
-    # instead of paying a provider call to relearn it.
-    from collectors import tushare_raw
-    names = [spec.name for spec in reference.FACTOR_SPECS]
+def test_history_counts_cannot_manufacture_supplier_absence(monkeypatch):
+    names = {spec.name for spec in reference.FACTOR_SPECS}
     sessions = [date(2026, 10, 30)]
     rows = [{'trade_date': sessions[0], 'factor_name': name, 'factor_value': 1.0}
-            for name in names[:-3]]
-    monkeypatch.setattr(reference, 'query',
-                        _replay_query(sessions, rows, len(names)))
-    monkeypatch.setattr(tushare_raw, 'CatalogRawCollector',
-                        lambda _: pytest.fail('replay must not call the provider'))
-    result = reference.acquire_reference(reference.plan_requests(execution())[0])
-    manifest = result.completion_evidence['day_manifests'][0]
-    assert manifest['supplier_missing_keys'] == sorted(names[-3:])
+            for name in sorted(names)[:-3]]
+    monkeypatch.setattr(reference, 'query', _replay_query(sessions, rows, len(names)))
+    assert reference._historical_sessions({'ts_code':'000000.SZ','trade_date':'20261030'}, names) is None
 
 
 def test_historical_replay_rejects_partially_collected_days(monkeypatch):
-    reference._DAY_CERTIFICATION_CACHE.clear()
     # A day whose stored rows miss part of the catalogue cannot distinguish
     # "the supplier returned nothing" from "we never asked", so the request
     # must fall back to the provider instead of manufacturing absence.
@@ -268,7 +256,7 @@ def test_historical_replay_rejects_partially_collected_days(monkeypatch):
     names = [spec.name for spec in reference.FACTOR_SPECS]
     sessions = [date(2026, 10, 30)]
     rows = [{'trade_date': sessions[0], 'factor_name': name, 'factor_value': 1.0}
-            for name in names]
+            for name in names[:-70]]
     monkeypatch.setattr(reference, 'query',
                         _replay_query(sessions, rows, len(names) - 70))
     frame = pd.DataFrame([dict(ts_code='000000.SZ', trade_date='20261030',

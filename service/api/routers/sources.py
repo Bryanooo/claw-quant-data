@@ -131,6 +131,24 @@ def query_financial_data(payload: dict[str, Any]) -> dict:
     }
 
 
+@router.get("/tushare/usage")
+def tushare_usage(request: Request, days: int = Query(default=1, ge=1, le=7)) -> dict:
+    """Count retained request records, not jobs, unique securities or billed units."""
+    rows = request.app.state.database.fetch_all("""
+        SELECT api_name, count(*) AS requests,
+               count(*) FILTER (WHERE status='success') AS successful,
+               count(*) FILTER (WHERE status='empty') AS empty,
+               count(*) FILTER (WHERE status='failed') AS failed,
+               max(requested_at) AS latest_at
+        FROM tushare_raw_request
+        WHERE requested_at >= NOW() - (%s * INTERVAL '1 day')
+        GROUP BY api_name ORDER BY requests DESC, api_name
+    """, (days,))
+    return {"days": days, "interfaces": rows,
+            "summary": {key: sum(row[key] for row in rows)
+                        for key in ("requests", "successful", "empty", "failed")}}
+
+
 @router.get("/ant_data/usage")
 @router.get("/financial_data/usage", deprecated=True)
 def financial_data_usage(

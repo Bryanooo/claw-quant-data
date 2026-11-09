@@ -10,7 +10,7 @@ from service.orchestration_v2.gap_repair import create_repair_executions
 from service.orchestration_v2.repair_planning import RepairInstanceProposal
 
 
-FINANCIAL_TASKS = ('income', 'balancesheet', 'cashflow', 'financial_indicator')
+from service.orchestration_v2.automation_status import FINANCIAL_ROLLING_REFRESH_TASKS as FINANCIAL_TASKS
 
 
 def recent_report_periods(as_of: date) -> tuple[date, date]:

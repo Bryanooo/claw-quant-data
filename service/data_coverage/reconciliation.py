@@ -18,9 +18,12 @@ class CoverageRuleReconciler:
         self._registry = registry
 
     def reconcile(self, *, limit_per_rule: int = 500) -> dict[str, int]:
-        requeued: dict[str, int] = {}
+        requeued = self._repository.queue_stale_partition_audits({
+            r.dataset_name: r.revision for r in self._registry.list()
+            if r.date_partitioned and r.revision > 1
+        }, limit=min(4, limit_per_rule))
         for rule in self._registry.list():
-            if rule.revision <= 1:
+            if rule.date_partitioned or rule.revision <= 1:
                 continue
             count = self._repository.requeue_stale_rule_audits(
                 rule.dataset_name,

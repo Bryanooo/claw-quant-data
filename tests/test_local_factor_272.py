@@ -234,7 +234,7 @@ def test_local_factor_task_is_dependency_scheduled_v2_transformation():
     assert task.output_datasets == ("local_factor_snapshot", "technical_factor_snapshot")
     assert "technical_factor_snapshot" not in task.dependency_task_keys
     assert "technical_factor_snapshot" not in SUPPORTED_TRANSFORMATION_TASK_KEYS
-    assert task.implementation_version == "unified-features-quality-v5"
+    assert task.implementation_version == "unified-features-pit-v6"
 
 
 def test_ten_year_capacity_uses_15m_rows_not_four_billion_rows():
@@ -255,3 +255,32 @@ def test_local_factor_catalog_and_query_names_keep_stable_positions():
     assert normalize_factor_names(["size", "size", "rsi"]) == ("size", "rsi")
     with pytest.raises(ValueError, match="unknown local factors"):
         normalize_factor_names(["not_a_factor"])
+
+
+def test_rolling_comovement_preserves_small_changes_on_large_levels():
+    from service.research.local_factors.alpha101 import Alpha101Evaluator
+    signal = np.array([0., 1., 3., 2., 4., 1., 2., 4., 3.])
+    x = pd.DataFrame({'A': 1e12 + signal, 'B': 1e9 - signal})
+    y = pd.DataFrame({'A': 1e12 - signal, 'B': 1e9 + signal})
+    y.loc[0, 'B'] = np.nan
+    corr = Alpha101Evaluator.correlation(x, y, 5)
+    cov = Alpha101Evaluator.covariance(x, y, 5)
+    for end in range(4, len(signal)):
+        for name in x:
+            if name == 'B' and end == 4:
+                assert pd.isna(corr.loc[end, name]) and pd.isna(cov.loc[end, name])
+            else:
+                assert np.isclose(corr.loc[end, name], -1)
+                assert np.isclose(cov.loc[end, name], -np.var(signal[end-4:end+1], ddof=1))
+
+
+def test_unknown_group_and_identity_powers_do_not_publish_values():
+    from service.research.local_factors.alpha101 import Alpha101Evaluator
+    p = _market_panel(days=10, securities=3).alpha101
+    e = Alpha101Evaluator(p)
+    values = pd.Series([1.,2.,3.], index=p.close.columns)
+    labels = pd.Series(['known',None,'__unknown__'], index=p.close.columns)
+    assert e._neutralize_one_date(values, labels).isna().tolist() == [False,True,True]
+    assert e.finite_power(1., np.nan).isna().all().all()
+    assert e.finite_power(np.nan, 0.).isna().all().all()
+    assert e.finite_power(3., 0.).eq(1).all().all()

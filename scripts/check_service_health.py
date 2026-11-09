@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from service.db import query
+from service.schema_migrations import missing_migrations
 
 
 def main() -> int:
@@ -26,12 +27,15 @@ def main() -> int:
         required=True,
     )
     parser.add_argument("--resource-class")
+    parser.add_argument("--short-only", action="store_true")
     args = parser.parse_args()
 
     threshold = int(os.getenv("SERVICE_HEARTBEAT_MAX_AGE_SECONDS", "90"))
     resource_filter = (
         "AND details->'resource_classes' ? %s" if args.resource_class else ""
     )
+    if args.short_only:
+        resource_filter += " AND details->>'short_only'='true'"
     parameters = (
         (args.component, args.resource_class)
         if args.resource_class
@@ -52,6 +56,9 @@ def main() -> int:
             f"{args.component}: heartbeat missing or stale "
             f"(age={age}, threshold={threshold}s)"
         )
+    missing = missing_migrations(query)
+    if missing:
+        raise RuntimeError(f"{args.component}: missing migrations: {', '.join(missing)}")
     return 0
 
 

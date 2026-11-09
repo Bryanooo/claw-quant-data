@@ -61,6 +61,10 @@ _RATE_LIMIT_SECONDS = {
 }
 
 _PAGE_SIZE_OVERRIDES = {
+    # A 2026-11-02 single market page contained all 5571 distinct stocks;
+    # consecutive 1000-row offset pages overlapped despite a short last page.
+    "stk_factor": 6000,
+    "stk_factor_pro": 6000,
     # Live probes on 2026-09-17 show eco_cal always returns at most 100 rows,
     # even when limit=500/1000. Standard offsets return distinct subsequent
     # pages, so the collector must use the real upstream boundary.
@@ -475,9 +479,12 @@ def derive_policy(contract: TushareInterfaceContract) -> TushareCollectionPolicy
         unsupported_required -= {"ts_code", "symbol", "code"}
     if contract.api_name in _REPORT_PERIOD_ALTERNATIVES:
         unsupported_required -= {"ts_code", "symbol", "code"}
+    # Legacy catalogue entries lack a document id. Only this live-verified,
+    # exact one-day collector has a scope-echo and cardinality guard.
+    documented = bool(contract.document_ids) or (contract.api_name == "ggt_daily" and strategy == "trade_date")
     automatic_safe = (
         contract.collectable
-        and bool(contract.document_ids)
+        and documented
         and strategy in {
             "snapshot",
             "trade_date",
@@ -494,7 +501,7 @@ def derive_policy(contract: TushareInterfaceContract) -> TushareCollectionPolicy
     )
     if not contract.collectable:
         reason = "interface is not collectable"
-    elif not contract.document_ids:
+    elif not documented:
         reason = "project extension lacks a complete official input contract"
     elif contract.api_name in _SAFE_LOW_FREQUENCY_APIS:
         reason = "dedicated bounded orchestration with distributed low-frequency pacing"

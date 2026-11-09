@@ -508,5 +508,19 @@ def test_main_business_collector_paginates_each_classification(monkeypatch):
     assert calls == [
         ("20261231", {"type": "I"}),
         ("20261231", {"type": "P"}),
+        ("20261231", {"type": "D"}),
     ]
-    assert len(result) == 2
+    assert len(result) == 3
+
+
+def test_main_business_completion_rejects_legacy_two_scope_certificate():
+    from collectors.stock.finance.fina_mainbz import FinaMainbzCollector
+    from service.data_coverage.transport import request_verified
+    collector = object.__new__(FinaMainbzCollector)
+    collector._pagination_scopes = [dict(parameters={'type': t}, period='20260930', exhausted=True,
+                                         rows_fetched=0, pages_completed=0) for t in 'IP']
+    assert not collector.partition_completion_evidence()['verified']
+    legacy = {'table_name': 'fina_mainbz', 'verified': True}
+    assert not request_verified({'completion_status': 'empty', 'completion_evidence': legacy})
+    collector._pagination_scopes.append(dict(collector._pagination_scopes[0], parameters={'type': 'D'}))
+    assert collector.partition_completion_evidence()['mainbz_classifications_verified']

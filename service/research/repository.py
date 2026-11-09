@@ -562,12 +562,10 @@ class ResearchRepository:
     def group_financial_rows(self, codes: list[str], *, report_period: date,
                              as_of: date) -> list[dict]:
         return self._database.fetch_all(
-            """SELECT DISTINCT ON (ts_code) ts_code, end_date, ann_date,
+            """SELECT ts_code, end_date, ann_date,
                       roe, roic, grossprofit_margin, netprofit_margin, debt_to_assets
-               FROM fina_indicator
-               WHERE ts_code=ANY(%s) AND end_date=%s AND ann_date<=%s
-               ORDER BY ts_code, ann_date DESC, report_type""",
-            (codes, report_period, as_of),
+               FROM fina_indicator_as_of(%s, %s, %s, %s)""",
+            (as_of, codes, report_period, report_period),
         )
 
     def group_aggregate_inputs(self, codes: list[str], *, report_period: date,
@@ -577,22 +575,22 @@ class ResearchRepository:
         prior = date(report_period.year - 1, report_period.month, report_period.day)
         return self._database.fetch_all(
             """WITH profits AS (
-                SELECT DISTINCT ON (ts_code,end_date) ts_code,end_date,n_income_attr_p
-                FROM income WHERE ts_code=ANY(%s) AND end_date=ANY(%s)
-                  AND COALESCE(f_ann_date,ann_date)<=%s
-                  AND report_type IN ('1','4','5')
-                ORDER BY ts_code,end_date,COALESCE(f_ann_date,ann_date) DESC,
-                         report_type DESC
+                SELECT ts_code,end_date,report_type,n_income_attr_p
+                FROM income_as_of(%s,%s,%s,%s) WHERE end_date=ANY(%s)
             ), equity AS (
-                SELECT DISTINCT ON (ts_code) ts_code,
-                       total_hldr_eqy_inc_min_int-minority_int AS parent_equity
-                FROM balancesheet WHERE ts_code=ANY(%s) AND end_date=%s
-                  AND COALESCE(f_ann_date,ann_date)<=%s
-                  AND report_type IN ('1','4','5')
-                ORDER BY ts_code,COALESCE(f_ann_date,ann_date) DESC,report_type DESC
+                SELECT ts_code,report_type,total_hldr_eqy_inc_min_int-minority_int AS parent_equity
+                FROM balancesheet_as_of(%s,%s,%s,%s)
             )
             SELECT d.ts_code,d.total_mv, e.parent_equity,
+                   c.report_type AS income_report_type, e.report_type AS equity_report_type,
+                   CASE WHEN c.n_income_attr_p IS NULL THEN 'missing_current'
+                        WHEN %s THEN 'complete'
+                        WHEN a.n_income_attr_p IS NULL THEN 'missing_prior_annual'
+                        WHEN p.n_income_attr_p IS NULL THEN 'missing_prior_period'
+                        WHEN c.report_type<>a.report_type OR c.report_type<>p.report_type
+                            THEN 'mixed_report_types' ELSE 'complete' END AS ttm_status,
                    CASE WHEN %s THEN c.n_income_attr_p
+                        WHEN c.report_type<>a.report_type OR c.report_type<>p.report_type THEN NULL
                         ELSE a.n_income_attr_p+c.n_income_attr_p-p.n_income_attr_p
                    END AS net_income_ttm
             FROM tushare_current_daily_basic d
@@ -601,8 +599,9 @@ class ResearchRepository:
             LEFT JOIN profits p ON p.ts_code=d.ts_code AND p.end_date=%s
             LEFT JOIN equity e ON e.ts_code=d.ts_code
             WHERE d.ts_code=ANY(%s) AND d.trade_date=%s""",
-            (codes, [report_period, annual, prior], as_of, codes, report_period,
-             as_of, report_period.month == 12, report_period, annual, prior, codes, as_of),
+            (as_of, codes, prior, report_period, [report_period, annual, prior],
+             as_of, codes, report_period, report_period, report_period.month == 12,
+             report_period.month == 12, report_period, annual, prior, codes, as_of),
         )
 
     def group_calendar(self, start: date, end: date) -> list[dict]:
@@ -853,13 +852,7 @@ class ResearchRepository:
             ), income_rows AS MATERIALIZED (
                 SELECT DISTINCT ON (i.ts_code, i.end_date)
                        i.ts_code, i.end_date, i.revenue, i.n_income_attr_p
-                FROM income AS i
-                JOIN members USING (ts_code)
-                WHERE i.end_date <= %s
-                  AND COALESCE(i.f_ann_date, i.ann_date) <= %s
-                ORDER BY i.ts_code, i.end_date,
-                         COALESCE(i.f_ann_date, i.ann_date) DESC NULLS LAST,
-                         i.report_type
+                FROM income_as_of(%s, %s, NULL, %s) AS i
             ), period_coverage AS (
                 SELECT end_date, count(*) AS companies
                 FROM income_rows
@@ -881,25 +874,14 @@ class ResearchRepository:
             ), cash_rows AS MATERIALIZED (
                 SELECT DISTINCT ON (c.ts_code, c.end_date)
                        c.ts_code, c.end_date, c.n_cashflow_act, c.free_cashflow
-                FROM cashflow AS c
-                JOIN members USING (ts_code)
-                WHERE c.end_date <= %s
-                  AND COALESCE(c.f_ann_date, c.ann_date) <= %s
-                ORDER BY c.ts_code, c.end_date,
-                         COALESCE(c.f_ann_date, c.ann_date) DESC NULLS LAST,
-                         c.report_type
+                FROM cashflow_as_of(%s, %s, NULL, %s) AS c
             ), current_cash AS (
                 SELECT c.* FROM cash_rows AS c JOIN target USING (end_date)
             ), indicators AS MATERIALIZED (
                 SELECT DISTINCT ON (f.ts_code, f.end_date)
                        f.ts_code, f.end_date, f.grossprofit_margin,
                        f.netprofit_margin, f.roe, f.roic, f.debt_to_assets
-                FROM fina_indicator AS f
-                JOIN members USING (ts_code)
-                WHERE f.end_date <= %s
-                  AND f.ann_date <= %s
-                ORDER BY f.ts_code, f.end_date, f.ann_date DESC NULLS LAST,
-                         f.report_type
+                FROM fina_indicator_as_of(%s, %s, NULL, %s) AS f
             ), current_indicators AS (
                 SELECT f.* FROM indicators AS f JOIN target USING (end_date)
             ), valuation_rows AS MATERIALIZED (
@@ -956,16 +938,9 @@ class ResearchRepository:
                     FROM valuation_rows WHERE dv_ttm IS NOT NULL) AS median_dv_ttm
             """,
             (
-                member_codes,
-                as_of,
-                as_of,
-                len(member_codes),
-                as_of,
-                as_of,
-                as_of,
-                as_of,
-                as_of,
-                len(member_codes),
+                member_codes, as_of, member_codes, as_of, len(member_codes),
+                as_of, member_codes, as_of, as_of, member_codes, as_of,
+                as_of, len(member_codes),
             ),
         )
 
@@ -981,19 +956,10 @@ class ResearchRepository:
             return []
         return self._database.fetch_all(
             """
-            WITH members AS (
-                SELECT unnest(%s::text[]) AS ts_code
-            ), rows AS MATERIALIZED (
-                SELECT DISTINCT ON (i.ts_code)
-                       i.ts_code, b.name, i.revenue, i.n_income_attr_p
-                FROM income AS i
-                JOIN members USING (ts_code)
+            WITH rows AS MATERIALIZED (
+                SELECT i.ts_code, b.name, i.revenue, i.n_income_attr_p, i.report_type
+                FROM income_as_of(%s, %s, %s, %s) AS i
                 LEFT JOIN stock_basic AS b USING (ts_code)
-                WHERE i.end_date = %s
-                  AND COALESCE(i.f_ann_date, i.ann_date) <= %s
-                ORDER BY i.ts_code,
-                         COALESCE(i.f_ann_date, i.ann_date) DESC NULLS LAST,
-                         i.report_type
             ), totals AS (
                 SELECT sum(revenue) AS revenue,
                        sum(n_income_attr_p) AS net_income
@@ -1008,7 +974,7 @@ class ResearchRepository:
             ORDER BY abs(rows.revenue) DESC NULLS LAST, rows.ts_code
             LIMIT %s
             """,
-            (member_codes, report_period, as_of, limit),
+            (as_of, member_codes, report_period, report_period, limit),
         )
 
     def industry_breadth(

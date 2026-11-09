@@ -22,12 +22,14 @@ const context={state:{activeView:'stock'},document:{hidden:false},
  fetchStockResearch:async()=>stockCalls++,
  api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject}))};
 vm.createContext(context);
+vm.runInContext(extract('function pagePath(', 'function pageFromURL('),context);
 vm.runInContext(extract('const workspaces=','renderWorkspaceNav("overview");'),context);
 vm.runInContext(extract('async function loadResearchPanels(','async function selectMarketIndex('),context);
 vm.runInContext(extract('async function refresh(','// ===== 盘中观察'),context);
 (async()=>{
  context.renderWorkspaceNav('calendar');
- assert.equal((nodes.primaryNavigation.innerHTML.match(/<button/g)||[]).length,6);
+ assert(nodes.primaryNavigation.innerHTML.includes('href="/dashboard/calendar"'));
+ assert(nodes.primaryNavigation.innerHTML.includes('aria-current="page"'));
  assert(nodes.workspaceNavigation.innerHTML.includes('覆盖审计'));
  await context.refresh();assert.equal(stockCalls,1);assert.equal(overviewCalls,0);
  await context.refresh({background:true});assert.equal(stockCalls,1);

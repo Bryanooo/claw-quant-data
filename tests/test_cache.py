@@ -42,6 +42,18 @@ def test_expired_entry_is_served_stale_then_revalidated():
     assert cache.get("k") == {"value": "new"}
 
 
+def test_operational_read_does_not_serve_expired_success(monkeypatch):
+    import pytest
+    now = [0]
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    cache = TTLCache(ttl_seconds=30)
+    cache.set("k", "ready")
+    now[0] = 31
+    with pytest.raises(RuntimeError):
+        cache.get_or_compute("k", lambda: (_ for _ in ()).throw(RuntimeError()), allow_stale=False)
+    assert cache.get_or_compute("k", lambda: "partial", allow_stale=False) == "partial"
+
+
 def test_cache_evicts_least_recently_used_entry():
     cache = TTLCache(ttl_seconds=60, max_entries=2)
     cache.set("a", 1)

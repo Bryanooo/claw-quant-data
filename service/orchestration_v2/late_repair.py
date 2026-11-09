@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
+from service.data_coverage.publication import NEXT_DAY_EMPTY_CONFIRMATION
+
 
 LATE_REPAIR_HOURS = (15, 18, 21, 23)
 LATE_REPAIR_MINUTE = 58
-LATE_PUBLISHED_DATASETS = frozenset({
+LATE_PUBLISHED_DATASETS = NEXT_DAY_EMPTY_CONFIRMATION | frozenset({
     "ccass_hold",
+    # Use dataset keys (ths_daily publishes industry_daily). Both can be
+    # incomplete at the initial evening run even when transport succeeded.
+    "industry_daily",
+    "index_daily",
     "etf_share_size",
     # Provider factor snapshots are published progressively after the close.
     # The first daily pass can be verified-empty or only partially cover the

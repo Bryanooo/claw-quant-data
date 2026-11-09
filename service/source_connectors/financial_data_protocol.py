@@ -23,6 +23,10 @@ def tabular_rows(response: Mapping[str, Any], *, route: str) -> list[dict[str, A
             f"financial-data response must contain exactly one result for {route}"
         )
     result = matching[0]
+    if result.get("status", "SUCCESS") != "SUCCESS":
+        raise FinancialDataProtocolError(
+            f"financial-data route {route} reported a non-success status"
+        )
     meta = result.get("meta")
     fields = meta.get("fields") if isinstance(meta, Mapping) else None
     data = result.get("data")

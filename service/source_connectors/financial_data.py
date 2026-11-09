@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
+import logging
+
 import requests
 
 from service.config import (
@@ -220,8 +222,11 @@ class FinancialDataConnector:
                         collector_name="financial_data_scheduled_pull",
                         error=exc,
                     )
-                except Exception:
-                    pass
+                except Exception as archive_error:
+                    logging.getLogger(__name__).warning(
+                        "Failed to archive provider error for %s (%s)",
+                        request.endpoint_key, type(archive_error).__name__,
+                    )
             raise
         return ConnectorResult(
             source_id=request.source_id,
@@ -256,11 +261,11 @@ class FinancialDataConnector:
                         error=exc,
                         requested_at=requested_at,
                     )
-                except Exception:
-                    # Provider availability must not depend on audit-storage
-                    # availability. The original provider error remains the
-                    # actionable failure.
-                    pass
+                except Exception as archive_error:
+                    logging.getLogger(__name__).warning(
+                        "Failed to archive provider error for %s (%s)",
+                        request.endpoint_key, type(archive_error).__name__,
+                    )
             raise
         status = response.get("status")
         if status not in {"SUCCESS", "FAILED"}:

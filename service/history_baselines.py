@@ -153,6 +153,10 @@ EXACT_TRADE_DATE_HISTORY_APIS = frozenset(
         "fund_daily",
         "fund_factor_pro",
         "fund_nav",
+        # Date windows alone are rejected for market-wide settlement and
+        # warehouse receipts; preserve the daily scope on historical replays.
+        "fut_settle",
+        "fut_wsr",
         "fx_daily",
         "idx_factor_pro",
         # The provider accepts start/end fields in metadata but rejects a

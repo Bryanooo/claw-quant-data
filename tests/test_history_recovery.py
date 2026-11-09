@@ -6,6 +6,15 @@ from service.history_recovery import (
 )
 
 
+def test_ggt_daily_repairs_use_only_the_requested_single_day():
+    day = date(2026, 10, 30)
+    plan = build_reverse_recovery_plan(dataset_apis={'ggt_daily':'ggt_daily'},
+        targets_by_dataset={'ggt_daily':[day]}, history_start=day, history_end=day,
+        trade_dates=[day])
+    assert not plan.unsupported
+    assert [s.parameters['parameters'] for s in plan.specs] == [{'trade_date':'20261030'}]
+
+
 def test_reverse_recovery_uses_exact_dates_for_high_cross_section_apis():
     plan = build_reverse_recovery_plan(
         dataset_apis={"bak_daily": "bak_daily", "cn_pmi": "cn_pmi"},

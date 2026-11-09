@@ -237,7 +237,7 @@ def build_reverse_recovery_plan(
         )
 
     generic_apis = requested_apis - special_apis - {
-        "cn_gdp", "ggt_monthly", "ggt_top10"
+        "cn_gdp", "ggt_monthly", "ggt_top10", "ggt_daily"
     }
     partitions.extend(
         item
@@ -251,14 +251,14 @@ def build_reverse_recovery_plan(
     )
     # ggt_top10 is a legacy SDK endpoint whose current generated catalog lacks
     # its historical parameters.  Exact trading dates are the proven contract.
-    if "ggt_top10" in requested_apis:
+    for ggt_api in sorted(requested_apis & {"ggt_top10", "ggt_daily"}):
         ggt_start = max(
             history_start,
-            UPSTREAM_HISTORY_STARTS["ggt_top10"],
+            UPSTREAM_HISTORY_STARTS.get(ggt_api, history_start),
         )
         partitions.extend(
             HistoryPartition(
-                api_name="ggt_top10",
+                api_name=ggt_api,
                 start_date=trade_date,
                 end_date=trade_date,
                 variant=None,

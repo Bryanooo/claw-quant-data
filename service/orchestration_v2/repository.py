@@ -31,6 +31,27 @@ from service.orchestration_v2.recovery_policy import (
 )
 
 
+def _input_rule_versions(names):
+    from service.data_coverage.registry import COVERAGE_RULES
+    return json.dumps({r.dataset_name: r.revision for r in COVERAGE_RULES.list()
+                       if r.dataset_name in names})
+
+
+# Historical execution success is immutable. A consumer can reuse an older
+# exact-day certificate only after the current rule independently confirms it.
+_CURRENT_INPUT_CERTIFICATE = """(
+    EXISTS (SELECT 1 FROM orchestration_v2.task_execution producer
+        WHERE producer.task_execution_id=s.source_execution_id
+          AND producer.status NOT IN ('cancelled','superseded')) AND (
+    substring(s.contract_version from '^coverage-rule:([0-9]+)$')::int
+        >= coalesce((%s::jsonb->>s.dataset_name)::int,1)
+    OR (s.observation_start=s.observation_end AND s.scope='{}'::jsonb AND EXISTS (
+        SELECT 1 FROM sys_data_coverage_partition p JOIN sys_data_coverage_audit a USING(audit_id)
+        WHERE p.dataset_name=s.dataset_name AND p.partition_date=s.observation_end
+          AND p.expected AND p.status='present' AND s.data_status='complete'
+          AND (a.evidence->>'rule_revision')::int=(%s::jsonb->>s.dataset_name)::int))))"""
+
+
 class OrchestrationV2Repository:
     """Small transactional repository; it does not activate the V2 engine."""
 
@@ -488,17 +509,14 @@ class OrchestrationV2Repository:
                               false
                             )
                   ), 0)
-                  AND payload->>'completion_status' IN ('complete','empty')
-                  AND COALESCE(
-                          (payload->'completion_evidence'->>'verified')::BOOLEAN,
-                          false
-                      )
                 ORDER BY COALESCE(payload->>'request_key', event_id::TEXT),
                          sequence_number DESC
                 """,
                 (execution_id, execution_id),
             )
-            return [dict(row["payload"] or {}) for row in cursor.fetchall()]
+            from service.data_coverage.transport import request_verified
+            return [dict(row["payload"]) for row in cursor.fetchall()
+                    if request_verified(row["payload"] or {})]
 
     def list_dataset_states(
         self,
@@ -606,21 +624,23 @@ class OrchestrationV2Repository:
 
         if not dataset_names:
             return {}
+        versions = _input_rule_versions(dataset_names)
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute(
                 """
-                SELECT DISTINCT ON (dataset_name)
-                       dataset_state_id, dataset_name, observation_key,
-                       observation_start, observation_end, revision,
-                       source_execution_id, published_at
-                FROM orchestration_v2.dataset_state
-                WHERE dataset_name = ANY(%s)
-                  AND observation_key=%s
-                  AND ready
-                ORDER BY dataset_name, revision DESC,
-                         updated_at DESC, dataset_state_id DESC
+                SELECT * FROM (
+                    SELECT DISTINCT ON (dataset_name)
+                           dataset_state_id, dataset_name, observation_key,
+                           observation_start, observation_end, revision,
+                           source_execution_id, published_at,
+                           (ready AND """ + _CURRENT_INPUT_CERTIFICATE + """) AS ready
+                    FROM orchestration_v2.dataset_state s
+                    WHERE dataset_name = ANY(%s) AND observation_key=%s
+                    ORDER BY dataset_name, revision DESC,
+                             updated_at DESC, dataset_state_id DESC
+                ) latest WHERE ready
                 """,
-                (list(dataset_names), observation_key),
+                (versions, versions, list(dataset_names), observation_key),
             )
             return {row["dataset_name"]: dict(row) for row in cursor.fetchall()}
 
@@ -632,6 +652,7 @@ class OrchestrationV2Repository:
 
         if not dataset_names:
             return {}
+        versions = _input_rule_versions(dataset_names)
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute(
                 """
@@ -639,8 +660,8 @@ class OrchestrationV2Repository:
                     SELECT DISTINCT ON (dataset_name, observation_key)
                            dataset_state_id, dataset_name, observation_key,
                            observation_start, observation_end, revision,
-                           source_execution_id, published_at, ready
-                    FROM orchestration_v2.dataset_state
+                           source_execution_id, published_at, (ready AND """ + _CURRENT_INPUT_CERTIFICATE + """) AS ready
+                    FROM orchestration_v2.dataset_state s
                     WHERE dataset_name = ANY(%s)
                     ORDER BY dataset_name, observation_key,
                              revision DESC, updated_at DESC,
@@ -661,7 +682,7 @@ class OrchestrationV2Repository:
                 WHERE latest.ready
                 ORDER BY latest.dataset_name
                 """,
-                (list(dataset_names), len(dataset_names)),
+                (versions, versions, list(dataset_names), len(dataset_names)),
             )
             return {row["dataset_name"]: dict(row) for row in cursor.fetchall()}
 
@@ -1169,6 +1190,30 @@ class OrchestrationV2Repository:
             )
             return {row[0] for row in cursor.fetchall()}
 
+    def published_endpoint_tasks(self) -> dict:
+        from service.source_connectors.ant_scheduled import SCHEDULED_ROUTES
+        with self._connection() as conn, self._dict_cursor(conn) as cur:
+            cur.execute("""
+                SELECT e.source_id,e.endpoint_key,t.task_key,t.task_definition_id
+                FROM orchestration_v2.task_definition t
+                CROSS JOIN LATERAL jsonb_array_elements_text(
+                    t.definition->'acquisition_endpoint_ids') AS ids(id)
+                JOIN orchestration_v2.acquisition_endpoint e
+                  ON e.acquisition_endpoint_id=ids.id::bigint
+                WHERE t.lifecycle_status='active'
+                ORDER BY t.task_key
+            """)
+            result = {}
+            for row in cur.fetchall():
+                source, key = row['source_id'], row['endpoint_key']
+                if source == 'financial_data' and key in SCHEDULED_ROUTES:
+                    key = SCHEDULED_ROUTES[key].route
+                elif source not in ('financial_data', 'tushare'):
+                    key = f'{source}/{key}'
+                result.setdefault((source, key), []).append({
+                    'task_key': row['task_key'], 'definition_id': row['task_definition_id']})
+            return result
+
     def endpoint_registry_pairs(self) -> list[dict]:
         """Join the flat registry against the versioned contract layer.
 
@@ -1344,6 +1389,27 @@ class OrchestrationV2Repository:
         if isinstance(payload, str):
             payload = json.loads(payload)
         return payload if isinstance(payload, dict) else None
+
+    def last_tushare_nonempty(self, api_name: str) -> dict | None:
+        """Direct endpoint evidence only; a sibling VIP task is not proof."""
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""
+                SELECT * FROM (
+                  (SELECT completed_at AS observed_at, row_count AS rows_fetched,
+                          'request' AS evidence_source
+                   FROM tushare_raw_request WHERE api_name=%s AND status='success'
+                     AND row_count>0 AND completed_at IS NOT NULL
+                   ORDER BY completed_at DESC LIMIT 1)
+                  UNION ALL
+                  (SELECT occurred_at, (payload->>'rows_fetched')::bigint, 'acquire_event'
+                   FROM orchestration_v2.task_execution_event
+                   WHERE event_type='node.acquire.request_completed' AND payload->>'api_name'=%s
+                     AND (payload->>'rows_fetched')::bigint>0
+                   ORDER BY occurred_at DESC LIMIT 1)
+                ) hits ORDER BY observed_at DESC LIMIT 1
+            """, (api_name, api_name))
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def interface_registry_rows(self) -> list[dict] | None:
         """Return the persisted interface inventory reshaped like the compiler.
@@ -1963,12 +2029,42 @@ class OrchestrationV2Repository:
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute("""
                 SELECT task_execution_id, task_key, observation_key,
-                       observation_start, observation_end, status
+                       observation_start, observation_end, status, eligible_at, updated_at
                 FROM orchestration_v2.task_execution
                 WHERE status IN ('created','queued','running','waiting_dependency',
                                  'retrying','validating','publishing')
             """)
             return [dict(row) for row in cursor.fetchall()]
+
+    def overdue_empty_attempts(self, task_keys):
+        with self._connection() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT DISTINCT task_key, observation_key
+                FROM orchestration_v2.task_execution
+                WHERE task_key=ANY(%s) AND observation_start=observation_end
+                  AND frozen_scope->'reasons' = '["recheck_empty"]'::jsonb
+                  AND (status IN ('created','queued','running','waiting_dependency',
+                                  'retrying','validating','publishing')
+                       OR (created_at AT TIME ZONE 'Asia/Shanghai')::date >= observation_end + 8)
+            """, (sorted(task_keys),))
+            return set(cur.fetchall())
+
+    def chip_security_progress(self):
+        """Aggregate the last audited security/date obligations, not request counts."""
+        with self._connection() as conn, self._dict_cursor(conn) as cur:
+            cur.execute("""WITH active AS MATERIALIZED (
+                SELECT observation_start, observation_end FROM orchestration_v2.task_execution
+                WHERE task_key='cyq_chips' AND status IN ('created','queued','running',
+                    'waiting_dependency','retrying','validating','publishing')
+            ) SELECT count(*) AS audited_partial_dates,
+                count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM active a
+                    WHERE partition_date BETWEEN a.observation_start AND a.observation_end))
+                    AS dates_without_active_window,
+                count(expected_entity_count) AS dates_with_denominator,
+                sum(expected_entity_count) AS expected_pairs,sum(entity_count) AS observed_pairs,
+                max(checked_at) AS last_checked_at,min(checked_at) AS earliest_checked_at
+                FROM sys_data_coverage_partition
+                WHERE dataset_name='cyq_chips' AND status='partial'""")
+            return dict(cur.fetchone())
 
     def factor_input_issues(self, trade_date) -> list[dict]:
         """Bounded persisted evidence; never recompute factors for the dashboard."""
@@ -1988,13 +2084,14 @@ class OrchestrationV2Repository:
             return [dict(row) for row in cursor.fetchall()]
 
     def latest_chip_history_window(self) -> dict | None:
+        from service.data_coverage.registry import COVERAGE_RULES
         with self._connection() as connection, self._dict_cursor(connection) as cursor:
             cursor.execute("""
                 SELECT execution.*, EXISTS (
                     SELECT 1 FROM orchestration_v2.dataset_state state
                     WHERE state.source_execution_id=execution.task_execution_id
                       AND state.dataset_name='cyq_chips' AND state.ready
-                      AND state.validation_summary->>'rule_revision'='3'
+                      AND state.validation_summary->>'rule_revision'=%s
                       AND state.observation_start<=execution.observation_start
                       AND state.observation_end>=execution.observation_end
                 ) AS certified
@@ -2004,7 +2101,7 @@ class OrchestrationV2Repository:
                   AND frozen_scope->>'history_order'='newest_first'
                   AND observation_start IS NOT NULL
                 ORDER BY observation_start, task_execution_id DESC LIMIT 1
-            """)
+            """, (str(COVERAGE_RULES.get('cyq_chips').revision),))
             row = cursor.fetchone()
             return dict(row) if row else None
 
@@ -2109,6 +2206,46 @@ class OrchestrationV2Repository:
                 )
                 reconciled += 1
         return reconciled
+
+    def revoke_obsolete_daily_certificates(self, *, limit=100, datasets=None):
+        """Revoke only an obsolete exact-day certificate disproved by a current audit.
+
+        Preserve the successful execution and original validation event as history.
+        Never infer a ready state from this reconciliation.
+        """
+        from service.data_coverage.registry import COVERAGE_RULES
+        versions = {r.dataset_name:r.revision for r in COVERAGE_RULES.list()
+                    if r.date_partitioned and r.revision > 1 and
+                    (datasets is None or r.dataset_name in datasets)}
+        with self._connection() as conn, self._dict_cursor(conn) as cur:
+            cur.execute("""SELECT s.dataset_state_id,s.dataset_name,s.source_execution_id,
+                         s.observation_key,s.contract_version,s.validation_event_id,p.audit_id,
+                         p.status, r.value AS revision,p.expected_entity_count,p.entity_count
+                FROM orchestration_v2.dataset_state s JOIN jsonb_each_text(%s::jsonb) r ON r.key=s.dataset_name
+                JOIN sys_data_coverage_partition p ON p.dataset_name=s.dataset_name
+                    AND p.partition_date=s.observation_end AND p.expected
+                JOIN sys_data_coverage_audit a ON a.audit_id=p.audit_id
+                WHERE s.ready AND s.scope='{}'::jsonb AND s.observation_start=s.observation_end
+                  AND s.observation_key=s.observation_end::text
+                  AND substring(s.contract_version from '^coverage-rule:([0-9]+)$')::int < r.value::int
+                  AND a.evidence->>'rule_revision'=r.value AND p.status IN ('missing','partial')
+                ORDER BY p.partition_date DESC,s.dataset_state_id LIMIT %s
+                FOR UPDATE OF s SKIP LOCKED FOR SHARE OF p""",(json.dumps(versions),limit))
+            rows = cur.fetchall()
+            for row in rows:
+                status = 'gaps' if row['status']=='missing' else 'partial'
+                proof = dict(row)
+                event = self._append_event(cur,row['source_execution_id'],event_type='dataset.validation.revoked',
+                    node_key='validate',attempt_number=None,event_key=None,payload=proof,
+                    evidence_references=[{'audit_id':row['audit_id']}])
+                cur.execute("""UPDATE orchestration_v2.dataset_state SET ready=false,data_status=%s,
+                    published_at=NULL,contract_version=%s,expected_count=1,actual_count=0,
+                    validation_summary=%s::jsonb,gap_summary=%s::jsonb,validation_event_id=%s,
+                    revision=revision+1,updated_at=now() WHERE dataset_state_id=%s""",
+                    (status,'coverage-rule:'+row['revision'],
+                     json.dumps({'rule_revision':int(row['revision']),'supersedes':proof}),
+                     json.dumps({row['status']:1}),event['event_id'],row['dataset_state_id']))
+            return len(rows)
 
     def reconcile_stale_audit_contract_executions(self, *, limit: int = 1000) -> int:
         """Retire pending executions whose frozen audit contract is obsolete.
@@ -2696,6 +2833,8 @@ class OrchestrationV2Repository:
         worker_id: str,
         resource_classes: Iterable[str],
         lease_seconds: int = 120,
+        execution_ids: tuple[int, ...] | None = None,
+        short_only: bool = False,
     ) -> dict | None:
         classes = tuple(resource_classes)
         if not classes:
@@ -2724,6 +2863,12 @@ class OrchestrationV2Repository:
                       AND queued.eligible_at <= NOW()
                       AND queued.attempt_count < queued.max_attempts
                       AND queued.resource_class = ANY(%s)
+                      AND (%s::bigint[] IS NULL OR queued.task_execution_id=ANY(%s::bigint[]))
+                      AND (NOT %s OR (queued.task_key <> 'share_float' AND EXISTS (
+                          SELECT 1 FROM orchestration_v2.task_definition short_definition
+                          WHERE short_definition.task_definition_id=queued.task_definition_id
+                            AND short_definition.definition->'scope_contract'->>'cadence'='daily'
+                      )))
                       -- The mutex is symmetric across routine and historical
                       -- pools. A daily arrival must not overlap an already
                       -- running full-market factor transform either.
@@ -2848,6 +2993,9 @@ class OrchestrationV2Repository:
                 (
                     list(classes),
                     list(classes),
+                    list(execution_ids) if execution_ids is not None else None,
+                    list(execution_ids) if execution_ids is not None else None,
+                    short_only,
                     list(sorted(SERIALIZED_ACQUISITION_TASKS)),
                     list(sorted(QUOTA_GUARDED_DATASETS)),
                     worker_id,

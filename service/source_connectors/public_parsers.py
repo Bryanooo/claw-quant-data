@@ -17,6 +17,8 @@ from zoneinfo import ZoneInfo
 from urllib.parse import urljoin, urlsplit
 import pandas as pd
 
+from service.clock import business_today
+
 TRANSPORT = ContextVar("public_source_transport")
 SSE_REFERENCE_TIME = ContextVar("sse_reference_time", default=None)
 
@@ -280,7 +282,7 @@ def chinabond_yield_curve(start, end=None, curve="all"):
     if curve not in CHINABOND_CURVES:
         raise ValueError("curve 只能是 " + " / ".join(CHINABOND_CURVES))
     first = datetime.strptime(_v39_date(start), "%Y-%m-%d").date()
-    last = datetime.strptime(_v39_date(end), "%Y-%m-%d").date() if end else date.today()
+    last = datetime.strptime(_v39_date(end), "%Y-%m-%d").date() if end else business_today()
     if first > last:
         raise ValueError("start 不能晚于 end")
     wanted = [k for k in CHINABOND_CURVE_NAMES if curve in ("all", k)]

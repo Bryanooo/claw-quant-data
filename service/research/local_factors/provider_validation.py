@@ -86,9 +86,9 @@ SELECT catalog.schema_version, %s, catalog.factor_position,
        END,
        CASE
            WHEN provider_total.available=0
-               THEN 'provider_date_not_published_yet'
+               THEN 'no_reference_values_in_local_date_sample'
            WHEN coalesce(provider_counts.available,0)=0
-               THEN 'provider_factor_not_published_yet'
+               THEN 'no_reference_values_for_factor_in_local_sample'
            WHEN coalesce(metrics.sample_size, 0)=0
                THEN 'local_values_missing_or_no_security_overlap'
            WHEN metrics.sample_size < 30
@@ -189,7 +189,7 @@ def write_provider_validation(
             AND EXISTS(SELECT 1 FROM factor_reference_keys k
                 WHERE k.ts_code=source.ts_code AND k.factor_name=source.factor_name)''')
         sql = sql.replace("THEN 'provider_pending'", "THEN 'not_comparable'")
-        for reason in ('provider_date_not_published_yet', 'provider_factor_not_published_yet'):
+        for reason in ('no_reference_values_in_local_date_sample', 'no_reference_values_for_factor_in_local_sample'):
             sql = sql.replace(f"'{reason}'", "'supplier_missing_or_null_in_frozen_sample'")
         sample_size = len(codes)
     cursor.execute(

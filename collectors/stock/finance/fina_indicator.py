@@ -16,6 +16,9 @@ _FIELDS = [
     "ar_turn","inv_turn","assets_turn","turn_days",
     "fcff","fcfe","salescash_to_or",
     "profit_dedt","extra_item",
+    # Provider indicator definitions; never substitute these into income or
+    # balancesheet fields merely because their names look similar.
+    "ebit","ebitda","daa","fa_turn","total_fa_trun","fixed_assets",
     "update_flag",
 ]
 

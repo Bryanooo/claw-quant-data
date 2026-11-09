@@ -65,7 +65,7 @@ _DEFINITIONS = (
     # A market-wide CCASS detail day can exceed one million rows. Per-stock
     # monthly windows keep every child bounded and independently resumable.
     FanoutDefinition(
-        "ccass_hold_detail", "stock", "ts_code", "date_window", 1, (), 31
+        "ccass_hold_detail", "hk_stock", "ts_code", "trade_date", 1
     ),
     FanoutDefinition("top10_cb_holders", "convertible_bond", "ts_code", "period", 20),
     FanoutDefinition("cyq_chips", "stock", "ts_code", "date_window", 1, (), 31),
@@ -187,6 +187,10 @@ def list_fanout_values(source: str, *, as_of: date | None = None,
     """Return an allow-listed point-in-time universe for one V2 acquire node."""
 
     statements = {
+        "hk_stock": """SELECT DISTINCT ts_code FROM tushare_norm_hk_basic
+                       WHERE ts_code LIKE '%%.HK' AND (%s::date IS NULL OR
+                         ((list_date IS NULL OR list_date<=%s) AND
+                          (delist_date IS NULL OR delist_date>=%s))) ORDER BY ts_code""",
         "stock": """
             SELECT ts_code FROM stock_basic
             WHERE ts_code IS NOT NULL
@@ -231,7 +235,7 @@ def list_fanout_values(source: str, *, as_of: date | None = None,
         statement = statements[source]
     except KeyError as exc:
         raise ValueError(f"unsupported fan-out universe: {source}") from exc
-    params = (as_of, as_of, as_of) if source in {"stock", "convertible_bond", "fund"} else None
+    params = (as_of, as_of, as_of) if source in {"stock", "hk_stock", "convertible_bond", "fund"} else None
     if active_since is not None:
         if source != 'stock' or as_of is None or active_since > as_of:
             raise ValueError('active_since requires an ordered stock date window')

@@ -27,6 +27,7 @@ from service.config import (
 )
 from service.orchestration_v2.gap_repair import (
     create_repair_executions,
+    dispatch_overdue_empty_rechecks,
     plan_current_repairs,
 )
 from service.orchestration_v2.repository import OrchestrationV2Repository
@@ -64,6 +65,8 @@ def run_v2_policy_dispatch() -> int:
     now = business_now()
     from service.orchestration_v2.scheduling import dispatch_weekly_reference_profiles
     reference = dispatch_weekly_reference_profiles(now.date())
+    from service.orchestration_v2.dated_reference import dispatch as dispatch_dated
+    reference['errors'].update(dispatch_dated(OrchestrationV2Repository(), now))
     result = dispatch_due_acquisitions(
         now.date(),
         include_current_daily=now.hour >= 19,
@@ -139,6 +142,9 @@ def run_coverage_rule_reconciler() -> int:
     requeued = CoverageRuleReconciler().reconcile()
     count = sum(requeued.values())
     repository = OrchestrationV2Repository()
+    revoked = repository.revoke_obsolete_daily_certificates()
+    if revoked:
+        logger.warning("revoked %s obsolete ready states contradicted by newer daily audits", revoked)
     resolved = repository.reconcile_resolved_attention_executions()
     duplicates = repository.reconcile_duplicate_attention_executions()
     redundant = repository.reconcile_redundant_pending_executions()
@@ -168,7 +174,7 @@ def run_coverage_rule_reconciler() -> int:
         )
     return (
         count + resolved + duplicates + redundant + stale_contracts
-        + normalized_priorities
+        + normalized_priorities + revoked
     )
 
 
@@ -224,7 +230,9 @@ def run_v2_late_repair_dispatch() -> int:
         "V2 late repair planned=%s created=%s existing=%s",
         len(proposals), result["created"], result["existing"],
     )
-    return int(result["created"])
+    overdue = (dispatch_overdue_empty_rechecks(repository, now.date())
+               if now.hour == 18 else {})
+    return int(result["created"]) + int(overdue.get("created", 0))
 
 
 def run_initialization_reconciler() -> int:

@@ -20,7 +20,7 @@ def test_chip_contract_requires_every_expected_security():
     assert COVERAGE_RULES.get('cyq_chips').min_entity_ratio == 1.0
     contract = dataset_audit_contract('cyq_chips')
     assert contract.min_entity_ratio == 1.0
-    assert contract.rule_revision == 3
+    assert contract.rule_revision == 4
 
 
 def test_absence_is_not_upstream_unavailable():

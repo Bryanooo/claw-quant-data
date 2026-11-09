@@ -209,7 +209,6 @@ def test_resume_does_not_requeue_cancelled_execution_instances(monkeypatch):
     assert resumed["status"] == "ready"
     assert repository.superseded_task_keys == (
         "cyq_perf",
-        "factor_value",
         "index_weight",
     )
 

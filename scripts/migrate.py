@@ -13,12 +13,11 @@ sys.path.insert(0, str(SCRIPT_PROJECT_ROOT))
 
 import psycopg2
 
-from service.config import DB_CONFIG, PROJECT_ROOT
+from service.config import DB_CONFIG
+from service.schema_migrations import MIGRATIONS_DIR, load_checksum_manifest as _load_checksum_manifest
 from service.source_connectors.persistence import sync_source_registry
 
 
-MIGRATIONS_DIR = PROJECT_ROOT / "sql" / "migrations"
-CHECKSUM_MANIFEST = MIGRATIONS_DIR / "checksums.sha256"
 LOCK_ID = 1_924_202_608
 NON_TRANSACTIONAL_DIRECTIVE = "-- migrate: no-transaction"
 _CONCURRENT_INDEX_NAME = re.compile(
@@ -73,27 +72,6 @@ def _checksum_is_compatible(version: str, stored: str, current: str) -> bool:
         return True
     compatible_current = FORMAT_ONLY_CHECKSUM_ALIASES.get(version, {}).get(stored)
     return compatible_current == current
-
-
-def _load_checksum_manifest(path: Path = CHECKSUM_MANIFEST) -> dict[str, str]:
-    entries: dict[str, str] = {}
-    for line_number, raw_line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(),
-        start=1,
-    ):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split()
-        if len(parts) != 2 or len(parts[0]) != 64:
-            raise RuntimeError(
-                f"invalid migration checksum manifest line {line_number}"
-            )
-        checksum, filename = parts
-        if filename in entries:
-            raise RuntimeError(f"duplicate migration checksum entry: {filename}")
-        entries[filename] = checksum
-    return entries
 
 
 def _validate_migration_files(paths: list[Path]) -> None:

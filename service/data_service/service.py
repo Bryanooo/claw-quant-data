@@ -9,6 +9,7 @@ from math import ceil
 import re
 from typing import Any
 
+from service.clock import business_today
 from service.data_service.models import (
     DatasetQuery,
     DatasetSpec,
@@ -164,6 +165,7 @@ class DataService:
         as_of: str | None = None,
         filter_mode: str = "standard",
         cursor: str | None = None,
+        consolidated_financials: bool = False,
     ) -> dict:
         if name == "tushare_raw" and (
             not exact_filters.get("api_name") or exact_filters.get("api_name") in INTERNAL_DATASETS
@@ -227,6 +229,7 @@ class DataService:
             offset=offset,
             include_total=include_total,
             cursor_values=cursor_values,
+            consolidated_financials=consolidated_financials,
         )
         rows = self._repository.records(dataset, query)
         total = self._repository.count(dataset, query) if include_total else None
@@ -321,8 +324,8 @@ class DataService:
         if financial_periods < 1 or financial_periods > 12:
             raise InvalidQueryError("financial_periods must be between 1 and 12")
 
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
-        historical_view = effective_as_of < datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
+        historical_view = effective_as_of < business_today()
         start_date = effective_as_of - timedelta(days=lookback_days - 1)
         basic_rows = self._latest_rows("stock_basic", {"ts_code": ts_code}, limit=1)
         if not basic_rows:
@@ -692,7 +695,7 @@ class DataService:
     ) -> dict:
         """Return one normalized sector universe across supported vendors."""
         providers = self._sector_providers(provider)
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
         needle = (query or "").strip().casefold()
         category_needle = (category or "").strip().casefold()
         market_needle = (market or "").strip().casefold()
@@ -738,7 +741,7 @@ class DataService:
         as_of: date | None = None,
     ) -> dict:
         """Resolve vendor sector memberships for one stock at a point in time."""
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
         memberships: list[dict] = []
         unresolved_catalogs: list[dict] = []
         for provider_name in self._sector_providers(provider):
@@ -804,7 +807,7 @@ class DataService:
             raise InvalidQueryError("max_sectors must be between 1 and 10")
         if limit < 1 or limit > 200:
             raise InvalidQueryError("limit must be between 1 and 200")
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
         memberships = self.stock_sectors(
             ts_code, provider=provider, as_of=effective_as_of
         )["data"]
@@ -893,7 +896,7 @@ class DataService:
         *,
         as_of: date | None = None,
     ) -> dict:
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
         bundle = self._sector_bundle(
             provider, sector_code, effective_as_of, lookback_days=30,
             member_limit=20,
@@ -919,7 +922,7 @@ class DataService:
         as_of: date | None = None,
         limit: int = 500,
     ) -> dict:
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
         provider_name = self._sector_providers(provider)[0]
         profile = self._sector_profile(provider_name, sector_code, effective_as_of)
         members, membership_date, member_count = self._sector_member_rows(
@@ -953,7 +956,7 @@ class DataService:
             raise InvalidQueryError("lookback_days must be between 30 and 730")
         if member_limit < 1 or member_limit > 2000:
             raise InvalidQueryError("member_limit must be between 1 and 2000")
-        effective_as_of = as_of or datetime.now(timezone.utc).date()
+        effective_as_of = as_of or business_today()
         bundle = self._sector_bundle(
             provider, sector_code, effective_as_of,
             lookback_days=lookback_days, member_limit=member_limit,
@@ -1272,6 +1275,7 @@ class DataService:
             limit=limit,
             offset=0,
             include_total=False,
+            consolidated_financials=True,
             as_of=as_of.isoformat() if as_of else None,
         )
         return result["data"]
@@ -1292,7 +1296,7 @@ class DataService:
         elif dataset.freshness_policy == "quarterly_disclosure":
             latest_date = self._parse_stored_date(dataset, latest)
             expected_latest_date = self._latest_required_report_period(
-                datetime.now(timezone.utc).date()
+                business_today()
             )
             status = (
                 "fresh" if latest_date >= expected_latest_date else "stale"
@@ -1304,7 +1308,7 @@ class DataService:
         else:
             latest_date = self._parse_stored_date(dataset, latest)
             max_age_days = ceil(dataset.freshness_sla_hours / 24)
-            age_days = (datetime.now(timezone.utc).date() - latest_date).days
+            age_days = (business_today() - latest_date).days
             status = "fresh" if age_days <= max_age_days else "stale"
 
         return {

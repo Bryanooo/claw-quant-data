@@ -37,7 +37,7 @@ FORMULA_VERSION = (
     f"{COMMON_INDICATOR_FORMULA_VERSION}+parameterized-technicals-v1"
 )
 SUPPORTED_TRANSFORMATION_TASK_KEYS = frozenset(
-    {"local_factor_snapshot", "fama_french_daily", "valuation_percentile_snapshot"}
+    {"local_factor_snapshot", "fama_french_daily", "valuation_percentile_snapshot", "ggt_monthly"}
 )
 
 # A-share Fama-French universe rule: a name listed for fewer than this many
@@ -539,10 +539,9 @@ def materialize_fama_french_daily(
                 ), latest_equity AS (
                     SELECT DISTINCT ON (b.ts_code)
                            b.ts_code, b.total_hldr_eqy_inc_min_int
-                    FROM balancesheet AS b
+                    FROM balancesheet_as_of(%(date)s,NULL,NULL,%(date)s) AS b
                     JOIN eligible AS e ON e.ts_code = b.ts_code
-                    WHERE b.ann_date <= %(date)s
-                      AND b.total_hldr_eqy_inc_min_int IS NOT NULL
+                    WHERE b.total_hldr_eqy_inc_min_int IS NOT NULL
                     ORDER BY b.ts_code, b.end_date DESC, b.ann_date DESC
                 )
                 SELECT dr.ts_code,
@@ -573,6 +572,10 @@ def materialize_fama_french_daily(
             for item in rows
         ]
         result = daily_factors(returns, caps, book_equity, risk_free=0.0)
+        # A mathematically constructible subset is not a valid daily result
+        # when source rows failed to join. Persist no usable numbers in that case.
+        if not input_complete:
+            result.update(status="insufficient_universe", mkt=None, smb=None, hml=None)
 
         with connection.cursor() as cursor:
             cursor.execute(
@@ -650,7 +653,9 @@ def run_transformation(
     frozen_scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from service.research.group_materializer import materialize_group_valuation
+    from service.ggt_monthly import materialize_ggt_monthly
     handlers = {
+        "ggt_monthly": materialize_ggt_monthly,
         "valuation_percentile_snapshot": materialize_group_valuation,
         "local_factor_snapshot": materialize_local_factor_snapshot,
         "fama_french_daily": materialize_fama_french_daily,

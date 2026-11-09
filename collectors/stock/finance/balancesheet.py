@@ -22,7 +22,7 @@ _FIELDS = [
     "total_cur_liab","lt_borr","bond_payable","lt_payable",
     "defer_tax_liab","total_ncl","total_liab",
     # 权益
-    "total_hldr_eqy_inc_min_int","total_share","cap_rese",
+    "total_hldr_eqy_inc_min_int","total_hldr_eqy_exc_min_int","total_share","cap_rese",
     "undistr_porfit","surplus_rese","treasury_share","minority_int",
     "update_flag",
 ]

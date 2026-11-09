@@ -103,7 +103,7 @@ def test_dashboard_exposes_financial_data_dependency_matrix():
     assert "接口依赖明细" in html
     assert "蚂蚁必需" in script
     assert "/api/v1/data/dependencies/interfaces" in script
-    assert "equivalence_class" in script
+    assert "linked_tasks" in script
 
 
 def test_dashboard_exposes_financial_data_real_usage_and_research_scope():
@@ -113,6 +113,11 @@ def test_dashboard_exposes_financial_data_real_usage_and_research_scope():
     assert "状态按批次统计" in html
     assert 'id="financialResearchCount"' in html
     assert "/api/v1/data/sources/ant_data/usage?limit=20" in script
+    audit_panel = html.split('data-panel="usage"', 1)[1].split('data-panel=', 1)[0]
+    assert 'id="financialUsageRows"' in audit_panel and 'id="tsUsageRows"' in audit_panel
+    assert '/api/v1/data/sources/tushare/usage?days=' in script
+    source_panel = html.split('data-panel="sources"', 1)[1].split('data-panel=', 1)[0]
+    assert 'financialUsageRows' not in source_panel
     assert "research_integration" in script
     assert 'u.latest_status==="failed"' in script
     assert "failed_last_24h" in script
@@ -151,7 +156,10 @@ def test_data_dependency_page_has_provider_and_supply_strategy_hierarchy():
     assert "interfaceDetailParts" in script
     assert "equivalenceLabels" in script
     assert "不落业务表" in script
-    assert "仅请求证据" in script
+    assert "/dashboard/tasks?definition=" in script
+    header = html.split('id="interfaceRows"')[0].rsplit("<thead>", 1)[1]
+    assert "数据库表" not in header and "输出数据集" not in header
+    assert "关联任务" in header and "提供字段" in header
     assert "data-goto-service" in script
     assert "data-goto-coverage" in script
     assert ".source-mapping-table" in css
@@ -179,6 +187,11 @@ def test_dashboard_has_stock_search_and_audited_multiframe_factor_charts():
     assert "牛门线与确认线按交易日定义" in html
     # 个股研究升级：研究模块页签（行情因子/筹码/基本面/事件/板块/产业链，懒加载）
     assert 'id="stockModuleTabs"' in html
+    assert html.index('id="stockModuleTabs"') < html.index('id="stockModuleMarket"')
+    assert 'data-sector-source="alipay"' in html
+    assert 'fundamentals?periods=8&include_external=false' in script
+    assert script.count('!(e.ctrlKey||e.metaKey)') >= 2
+    assert 'vol.onpointermove=hit.onpointermove' in script
     for module in ("market", "chips", "fundamentals", "events", "sectors", "chain"):
         assert f'data-stock-module="{module}"' in html
         assert f'data-stock-module-panel="{module}"' in html

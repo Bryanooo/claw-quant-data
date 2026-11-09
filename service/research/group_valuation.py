@@ -71,6 +71,16 @@ def aggregate_valuation(members, rows):
             'zero_denominator_members': sum(pair[1] == 0 for pair in pairs.values()),
             'methodology': 'ratio of sums on matched securities; negative and zero denominators included; not mean of ratios',
         }
+        type_field = 'income_report_type' if key == 'pe_ttm' else 'equity_report_type'
+        result[key]['report_types'] = {
+            row['ts_code']: row[type_field] for row in rows
+            if row['ts_code'] in members and row.get(type_field) is not None
+        }
+        if key == 'pe_ttm':
+            result[key]['ttm_issues'] = {
+                row['ts_code']: row['ttm_status'] for row in rows
+                if row['ts_code'] in members and row.get('ttm_status') not in (None, 'complete')
+            }
     return result
 
 
@@ -90,7 +100,14 @@ def summarize_valuation(members, rows, trade_date):
             else:
                 valid[code] = value
         values = list(valid.values())
+        absent = [code for code in missing if code not in observed]
         item = {'valid_count': len(values), 'missing_codes': missing,
+                'invalid_field_codes': [c for c in missing if c in observed
+                                        and observed[c].get(field) is not None],
+                'population': len(members), 'missing_member_rows': absent,
+                'unusable_field_codes': [code for code in missing if code in observed],
+                'sample_status': ('no_valid_sample' if not values else
+                                  'partial_sample' if missing else 'observed'),
                 'nonpositive_excluded_codes': excluded,
                 'coverage_pct': 100 * len(values) / len(members) if members else 0,
                 'mean': mean(values) if values else None,

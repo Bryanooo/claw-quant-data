@@ -23,7 +23,7 @@ def test_same_day_deduplicates_but_next_day_refreshes_same_report_period(monkeyp
     calls = [c.kwargs for c in enqueue.call_args_list]
     assert calls[0]['idempotency_prefix'] == calls[1]['idempotency_prefix']
     assert calls[0]['idempotency_prefix'] != calls[2]['idempotency_prefix']
-    assert len(calls[0]['proposals']) == 8
+    assert len(calls[0]['proposals']) == 10
     assert {p.task_key for p in calls[0]['proposals']} == set(refresh.FINANCIAL_TASKS)
     assert calls[0]['purpose'] == 'daily'
     assert calls[0]['trigger_source'] == 'schedule'

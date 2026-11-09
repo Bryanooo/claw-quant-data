@@ -1,9 +1,11 @@
 """Liveness and readiness endpoints."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
+from psycopg2 import Error as DatabaseError
 
 from service.api.schemas import LiveResponse, ReadyResponse
 from service.config import APP_VERSION
+from service.schema_migrations import missing_migrations
 
 router = APIRouter(prefix="/v1/ops/health", tags=["operations"])
 
@@ -17,10 +19,14 @@ def live() -> dict:
     }
 
 
-@router.get("/ready", response_model=ReadyResponse)
-def ready(request: Request) -> dict:
-    row = request.app.state.database.fetch_one("SELECT 1 AS ok")
-    return {
-        "status": "ready" if row and row["ok"] == 1 else "not_ready",
-        "database": "ok" if row and row["ok"] == 1 else "unavailable",
-    }
+@router.get("/ready", response_model=ReadyResponse, response_model_exclude_none=True)
+def ready(request: Request, response: Response) -> dict:
+    try:
+        missing = missing_migrations(request.app.state.database.fetch_all)
+    except DatabaseError:
+        response.status_code = 503
+        return {"status": "not_ready", "database": "unavailable"}
+    if missing:
+        response.status_code = 503
+        return {"status": "not_ready", "database": "ok", "missing_migrations": missing}
+    return {"status": "ready", "database": "ok"}

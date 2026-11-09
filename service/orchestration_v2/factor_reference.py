@@ -54,53 +54,19 @@ def _window_bounds(params):
     return day, day
 
 
-_DAY_CERTIFICATION_CACHE = {}
-
-
-def _certified_session_days(start, end):
-    """Per-session collection shape: (factor count, security count).
-
-    A wide day (more securities than one sample) was written by full-market
-    sweeps, one request per factor, so every factor was asked about every
-    security. A narrow day was written by per-security reference fetches, so
-    only the securities actually present were asked. This shape decides how
-    a missing (security, factor) row may be read.
-    """
-    key = (start, end)
-    cache = _DAY_CERTIFICATION_CACHE
-    if key not in cache:
-        if len(cache) > 64:
-            cache.clear()
-        rows = query('''SELECT trade_date,
-                               count(DISTINCT factor_name) AS factors,
-                               count(DISTINCT ts_code) AS codes
-            FROM tushare_norm_factor_value
-            WHERE trade_date BETWEEN %s AND %s GROUP BY trade_date''', (start, end))
-        cache[key] = {row['trade_date']: (int(row['factors'] or 0),
-                                          int(row['codes'] or 0)) for row in rows}
-    return cache[key]
-
-
 def _historical_sessions(params, names):
-    """Stored provider rows that already cover the whole request window.
+    """Replay only physically complete security/session factor catalogues.
 
-    Rows previously collected for the same security and dates are themselves
-    provider evidence: replaying them answers the request without spending
-    quota. Replay requires every session of the window to be certified --
-    the whole factor catalogue was requested that day -- and, on a day
-    written only by per-security fetches, that this security was among the
-    ones asked, so absence stays distinguishable from a collection hole.
+    Cross-sectional row counts cannot establish supplier absence for a
+    particular security. Missing keys require an actual response manifest.
+    Explicitly stored NULL values remain returned keys, not missing keys.
     """
-    from service.research.local_factors.reference_sampling import SAMPLE_SIZE
     start, end = _window_bounds(params)
     calendar = query('''SELECT cal_date FROM trade_cal WHERE exchange='SSE'
                         AND is_open=1 AND cal_date BETWEEN %s AND %s
                         ORDER BY cal_date''', (start, end))
     sessions = [row['cal_date'] for row in calendar if row.get('cal_date')]
     if not sessions:
-        return None
-    shape = _certified_session_days(start, end)
-    if any(shape.get(day, (0, 0))[0] < len(names) for day in sessions):
         return None
     rows = query('''SELECT trade_date, factor_name, factor_value
         FROM tushare_current_factor_value
@@ -110,11 +76,8 @@ def _historical_sessions(params, names):
     for row in rows or []:
         if row['factor_name'] in names:
             by_day.setdefault(row['trade_date'], {})[row['factor_name']] = row['factor_value']
-    for day in sessions:
-        # A day narrower than one sample was written per security; a security
-        # without any row there was simply never asked about that day.
-        if shape.get(day, (0, 0))[1] <= SAMPLE_SIZE and day not in by_day:
-            return None
+    if any(set(by_day.get(day, {})) != names for day in sessions):
+        return None
     manifests = []
     for day in sessions:
         present = by_day.get(day) or {}
@@ -291,6 +254,8 @@ def frozen_days(execution):
     if not days:
         days = [execution['observation_end']]
     days = sorted(set(days))
+    if any(day < execution['observation_start'] or day > execution['observation_end'] for day in days):
+        raise ValueError('reference sessions fall outside the frozen observation range')
     if len(days) > MAX_WINDOW_DAYS:
         raise ValueError(
             f'reference execution may cover at most {MAX_WINDOW_DAYS} sessions')
@@ -333,10 +298,18 @@ def audit_sample(execution):
     days = frozen_days(execution)
     wanted_days = {day.strftime('%Y%m%d') for day in days}
     names = [spec.name for spec in FACTOR_SPECS]
-    rows = query('''SELECT payload->'completion_evidence' AS manifest
+    rows = query('''SELECT DISTINCT ON (COALESCE(payload->>'request_key',
+            payload->'completion_evidence'->>'ts_code', event_id::text))
+            payload->'completion_evidence' AS manifest
         FROM orchestration_v2.task_execution_event WHERE task_execution_id=%s
-          AND event_type='node.acquire.request_completed' ORDER BY event_id''',
-        (execution['task_execution_id'],))
+          AND event_type='node.acquire.request_completed'
+          AND sequence_number > COALESCE((SELECT MAX(sequence_number)
+            FROM orchestration_v2.task_execution_event WHERE task_execution_id=%s
+              AND event_type='execution.operator_retry'
+              AND payload->>'reset_data_nodes'='true'), 0)
+          ORDER BY COALESCE(payload->>'request_key',
+            payload->'completion_evidence'->>'ts_code', event_id::text), sequence_number DESC''',
+        (execution['task_execution_id'], execution['task_execution_id']))
     manifests = {}
     for row in rows:
         item = row['manifest'] or {}
@@ -345,6 +318,10 @@ def audit_sample(execution):
         for entry in _manifest_sessions(item):
             returned = set(entry.get('returned_keys', []))
             absent = set(entry.get('supplier_missing_keys', []))
+            # Old replay manifests inferred absence from market-wide counts.
+            # They cannot certify missing keys for this security/session.
+            if entry.get('source', item.get('source')) == 'historical_db' and absent:
+                continue
             if (entry.get('trade_date') in wanted_days
                     and entry.get('ts_code') in codes and returned.isdisjoint(absent)
                     and returned | absent == set(names)

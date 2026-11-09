@@ -296,6 +296,11 @@ def factor_input_catalog() -> dict[str, Any]:
         },
         "delivery": {
             "read_api": "/api/v1/data/datasets/{dataset}/records",
+            "atomic_slice_api": {
+                "path": "/api/v1/research/factor-slices/csi300",
+                "scope": "one exact CSI300 session, 1-32 local factors",
+                "default_knowledge": "known_then",
+            },
             "snapshot_required": True,
             "atomic_database_snapshot": False,
             "availability_cutoff_required": True,

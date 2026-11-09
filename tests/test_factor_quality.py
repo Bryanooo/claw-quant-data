@@ -117,7 +117,7 @@ def test_investing_inflow_identity_is_same_statement_and_conservative():
 
 
 @pytest.mark.parametrize('name,needed', [
-    ('bias_turn_21d_504d', 505), ('bias_std_turn_42d_252d', 253),
+    ('bias_turn_21d_504d', 504), ('bias_std_turn_42d_252d', 252),
     ('return_63d', 64),
 ])
 def test_all_window_lengths_are_parsed(name, needed):
@@ -269,24 +269,28 @@ def test_absent_longterm_receivable_is_excluded_only_with_comparable_statements(
     )
 
 
-def test_alpha101_domain_null_is_excluded_only_with_complete_market_window():
+def test_complete_ohlcv_does_not_prove_an_alpha_formula_domain():
     market = _market_panel(days=600, securities=1)
     code = market.alpha101.close.columns[0]
     values = {s.name: pd.Series([1.], index=[code]) for s in FACTOR_SPECS}
     values['alpha101_53'].loc[code] = np.nan
     tech = {n: 1. for n in TECHNICAL_FEATURES}; tech['adjustment_status'] = 'applied'
     result = audit_security(code, values, tech, market)
-    assert result['status'] == 'ready'
-    assert result['excluded']['alpha101_53'] == (
-        'undefined_formula_domain_with_complete_market_window'
+    assert result['status'] == 'partial'
+    assert result['unresolved']['alpha101_53'] == (
+        'nonfinite_result_with_present_market_inputs:alpha101_53'
     )
 
     market.alpha101.close.loc[market.alpha101.close.index[:100], code] = np.nan
     result = audit_security(code, values, tech, market)
     assert result['status'] == 'partial'
     assert result['unresolved']['alpha101_53'] == (
-        'missing_input_or_undefined_requires_audit'
+        'nonfinite_result_with_present_market_inputs:alpha101_53'
     )
+
+    market.alpha101.close.iloc[-10, 0] = np.nan
+    result = audit_security(code, values, tech, market)
+    assert result['unresolved']['alpha101_53'] == 'missing_market_inputs:alpha101_53_endpoint_quotes'
 
 
 def test_numerically_unstable_extreme_value_is_not_certified():
@@ -296,8 +300,8 @@ def test_numerically_unstable_extreme_value_is_not_certified():
     values['lra_yoy'].loc[code] = 1e200
     tech = {n: 1. for n in TECHNICAL_FEATURES}; tech['adjustment_status'] = 'applied'
     result = audit_security(code, values, tech, market)
-    assert result['status'] == 'ready'
-    assert result['excluded']['lra_yoy'] == (
+    assert result['status'] == 'partial'
+    assert result['unresolved']['lra_yoy'] == (
         'numerically_unstable_extreme_value'
     )
 
@@ -308,3 +312,28 @@ def test_turnover_uses_actual_cny_not_adjusted_vwap_amount():
     original=MarketFactorEvaluator(p)._turnover_factors()['amount_ma_20d']
     p.alpha101.amount *= .5
     pd.testing.assert_series_equal(original,MarketFactorEvaluator(p)._turnover_factors()['amount_ma_20d'])
+
+
+def test_equal_nonzero_annual_eps_proves_zero_growth_but_missing_base_stays_open():
+    from service.research.local_factors.quality import _financial_exclusion
+    from service.research.local_factors.financial import FinancialCrossSection
+    code = 'stock'
+    value = pd.Series({code: 2.0})
+    panel = FinancialCrossSection(value.index, value, value,
+                                 annual={'basic_eps': value}, annual_five_year_ago={'basic_eps': value},
+                                 current={'total_share': value}, ttm={'net_profit_parent': value})
+    assert _financial_exclusion('pegh5', code, panel) == 'undefined_for_zero_five_year_eps_growth'
+    panel.annual_five_year_ago.clear()
+    assert _financial_exclusion('pegh5', code, panel) is None
+
+
+def test_reported_parent_equity_requires_disclosure_or_complete_identity():
+    from service.research.local_factors.materializer import _reported_parent_equity
+    import pandas as pd
+
+    parent = pd.Series([93., None, None, 93., 92.])
+    total = pd.Series([100., 100., 100., 100., None])
+    minority = pd.Series([None, None, 0., 9., 8.])
+    result = _reported_parent_equity(parent, total, minority)
+    assert result.iloc[0] == 93 and pd.isna(result.iloc[1])
+    assert result.iloc[2] == 100 and pd.isna(result.iloc[3]) and result.iloc[4] == 92

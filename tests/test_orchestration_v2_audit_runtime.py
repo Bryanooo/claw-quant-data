@@ -97,6 +97,7 @@ def test_task_audit_runtime_keeps_collection_success_separate_from_data_state():
 
 
 def test_task_audit_runtime_rejects_definition_code_drift():
+    assert TaskAuditContractDriftError.retryable is False
     rule = FakeRule()
     rule.revision = 2
     runtime = TaskAuditRuntime(repository=object(), registry=FakeRegistry(rule))
@@ -251,7 +252,9 @@ def test_expected_partition_cannot_succeed_with_zero_expectations():
 
 
 def test_verified_exact_slice_can_complete_before_coarser_period_matures():
-    runtime = TaskAuditRuntime(repository=object(), registry=FakeRegistry())
+    rule = FakeRule()
+    rule.strategy = CoverageStrategy.CALENDAR_MONTHLY
+    runtime = TaskAuditRuntime(repository=object(), registry=FakeRegistry(rule))
     calculator = FakeCalculator()
     original = calculator.audit
 
@@ -274,7 +277,9 @@ def test_verified_exact_slice_can_complete_before_coarser_period_matures():
 
     calculator.audit = empty_expectation
     runtime._calculator = calculator
-    document = TaskDefinitionDocument.model_validate(acquisition_definition())
+    definition = acquisition_definition()
+    definition['validation_contract']['dataset_audits'][0]['period_granularity'] = 'month'
+    document = TaskDefinitionDocument.model_validate(definition)
 
     result, state = runtime.audit_output(
         document,
@@ -294,3 +299,30 @@ def test_verified_exact_slice_can_complete_before_coarser_period_matures():
     assert result.evidence["aggregate_period_certified"] is False
     assert state.data_status.value == "empty_verified"
     assert state.ready is True
+
+
+@pytest.mark.parametrize(("request_day", "rows", "expected"), [
+    ("2026-09-24", 0, "indeterminate"), (None, 0, "indeterminate"),
+    ("2026-09-25", 0, "empty_verified"), ("2026-09-24", 1, "complete"),
+])
+def test_late_feed_requires_fresh_empty_request(request_day, rows, expected):
+    from service.orchestration_v2.audit_contracts import task_validation_contract
+
+    dataset = "ggt_daily"
+    validation = task_validation_contract((dataset,))
+    document = TaskDefinitionDocument.model_validate(acquisition_definition(
+        task_key=dataset, output_datasets=[dataset], validation_contract=validation,
+    ))
+    runtime = TaskAuditRuntime(repository=object())
+    runtime._calculator = FakeCalculator()
+    evidence = {"completion_status": "complete" if rows else "empty",
+                "completion_evidence": {"verified": True}, "rows_fetched": rows}
+    if request_day:
+        evidence["request_day"] = request_day
+    _, state = runtime.audit_output(
+        document, dataset_name=dataset, observation_key="2026-09-24",
+        start_date=date(2026, 9, 24), end_date=date(2026, 9, 24),
+        as_of=date(2026, 9, 30), transport_evidence=[evidence],
+    )
+    assert state.data_status.value == expected
+    assert state.ready == (expected != "indeterminate")

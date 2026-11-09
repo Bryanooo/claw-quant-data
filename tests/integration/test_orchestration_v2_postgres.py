@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_orchestration_v2_has_exactly_the_five_control_tables():
+def test_orchestration_v2_has_control_and_catalog_tables():
     connection = psycopg2.connect(**DB_CONFIG)
     try:
         with connection.cursor() as cursor:
@@ -36,6 +36,8 @@ def test_orchestration_v2_has_exactly_the_five_control_tables():
     assert tables == {
         "acquisition_endpoint",
         "dataset_state",
+        "field_lineage",
+        "interface_registry",
         "task_definition",
         "task_execution",
         "task_execution_event",

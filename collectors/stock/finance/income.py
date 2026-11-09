@@ -17,7 +17,7 @@ _FIELDS = [
     "operate_profit","non_oper_income","non_oper_exp",
     "total_profit","income_tax",
     "n_income","n_income_attr_p","minority_gain",
-    "ebit","ebitda",
+    "ebit","ebitda","fin_exp_int_exp","fin_exp_int_inc",
     "oth_compr_income","t_compr_income","compr_inc_attr_p",
     "update_flag",
 ]

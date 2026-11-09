@@ -6,6 +6,12 @@ class FakeRepository:
     def __init__(self):
         self.calls = []
 
+    def queue_stale_partition_audits(self, versions, *, limit):
+        assert versions == {r.dataset_name:r.revision for r in COVERAGE_RULES.list()
+                            if r.date_partitioned and r.revision > 1}
+        assert limit == 4
+        return {"index_daily": 2}
+
     def requeue_stale_rule_audits(
         self, dataset_name, *, rule_revision, limit
     ):
@@ -20,12 +26,9 @@ def test_rule_reconciler_only_requeues_versioned_obsolete_audits():
         limit_per_rule=100
     )
 
-    assert result == {"index_daily": 37}
+    assert result == {"index_daily": 2}
     assert repository.calls == [
         (rule.dataset_name, rule.revision, 100)
         for rule in COVERAGE_RULES.list()
-        if rule.revision > 1
+        if not rule.date_partitioned and rule.revision > 1
     ]
-    assert ("cyq_chips", 2, 100) in repository.calls
-    assert ("hk_daily", 2, 100) in repository.calls
-    assert ("stk_factor_pro", 5, 100) in repository.calls

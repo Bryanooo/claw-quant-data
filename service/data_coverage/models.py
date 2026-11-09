@@ -68,6 +68,10 @@ class CoverageRule:
     # can satisfy coverage.  This prevents an obsolete formula/schema version
     # from being counted as complete merely because the date exists.
     required_values: tuple[tuple[str, str], ...] = ()
+    # Explicit opt-in for derived outputs whose readiness is certified by
+    # current business-row predicates, never by a previous dataset_state.
+    row_readiness_authoritative: bool = False
+    finite_value_columns: tuple[str, ...] = ()
 
     @property
     def auditable(self) -> bool:
@@ -112,6 +116,9 @@ class ActualPartition:
     verified_empty: bool = False
     # Physical rows do not override an explicit truncated/incomplete attempt.
     known_incomplete: bool = False
+    invalid_balance_rows: int = 0
+    invalid_value_rows: int = 0
+    issues: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +130,7 @@ class CoveragePartition:
     expected: bool
     expected_entity_count: int | None = None
     entity_coverage_ratio: float | None = None
+    issues: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

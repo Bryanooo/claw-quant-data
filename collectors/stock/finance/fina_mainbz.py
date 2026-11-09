@@ -6,6 +6,7 @@ import logging
 
 import pandas as pd
 
+from collectors.tushare_raw import IncompleteCollectionError
 from collectors.stock.finance.base import BaseFinanceCollector
 
 logger = logging.getLogger("collector.fina_mainbz")
@@ -27,12 +28,26 @@ class FinaMainbzCollector(BaseFinanceCollector):
     CORE_FIELDS = _FIELDS
     PK_COLUMNS = ["ts_code", "end_date", "bz_item", "bz_code"]
 
+    def partition_completion_evidence(self):
+        proof = super().partition_completion_evidence()
+        scopes = proof["scopes"]
+        complete = (
+            len(scopes) == 3
+            and {s["parameters"].get("type") for s in scopes} == {"I", "P", "D"}
+            and len({s["period"] for s in scopes}) == 1
+        )
+        proof["mainbz_classifications_verified"] = proof["verified"] and complete
+        proof["verified"] = proof["mainbz_classifications_verified"]
+        return proof
+
     def fetch_period(self, period: str):
-        """取行业分类(I) + 产品分类(P)，合并"""
+        """按行业、产品和地区分别取完当前报告期。"""
         all_rows = []
-        for bz_type, label in [("I", "按行业"), ("P", "按产品")]:
+        for bz_type, label in [("I", "按行业"), ("P", "按产品"), ("D", "按地区")]:
             df = self._fetch_paginated(period, extra_params={"type": bz_type})
             if df is not None and len(df) > 0:
+                if "bz_code" not in df or not df["bz_code"].eq(bz_type).all():
+                    raise IncompleteCollectionError(f"fina_mainbz_vip returned a different classification for type={bz_type}")
                 logger.info(f"  fina_mainbz({period}, {label}): {len(df)} 行")
                 all_rows.append(df)
         if not all_rows:

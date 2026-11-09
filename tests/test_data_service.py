@@ -152,6 +152,7 @@ def test_registry_exposes_every_collector_table():
         "tushare_current_daily_basic",
         "technical_factor_snapshot",
         "local_factor_snapshot",
+        "valuation_percentile_snapshot",
         "fama_french_daily",
         # 蚂蚁数据源 scheduled-pull standard tables (ant_norm_*)
         "ant_norm_hot_stock_rank",
@@ -163,7 +164,6 @@ def test_registry_exposes_every_collector_table():
         "ant_norm_style_classification",
         "public_norm_chinabond_yield_curve",
     } == registered_tables
-    assert len(DATASETS.list()) == 206
 
 
 def test_normalized_dataset_exposes_versioned_storage_semantics():

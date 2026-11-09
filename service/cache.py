@@ -81,9 +81,10 @@ class TTLCache:
         factory: Callable[[], Any],
         *,
         force: bool = False,
+        allow_stale: bool = True,
     ) -> Any:
         fresh, value = self._peek(key) if not force else (False, None)
-        if value is not None:
+        if value is not None and (fresh or allow_stale):
             if not fresh:
                 self._revalidate_in_background(key, factory)
             return value
@@ -91,8 +92,8 @@ class TTLCache:
         pending, owner = self._claim(key)
         if not owner:
             pending.wait(timeout=60)
-            cached = self.get(key)
-            if cached is not None:
+            still_fresh, cached = self._peek(key)
+            if cached is not None and (still_fresh or allow_stale and not force):
                 return cached
             pending, owner = self._claim(key)
             if not owner:

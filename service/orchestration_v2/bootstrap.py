@@ -124,7 +124,7 @@ def task_documents(
             },
             "validation_contract": validation,
             "resource": {
-                "resource_class": task.resource_class or "default",
+                "resource_class": "share-float" if task.task_key == "share_float" else (task.resource_class or "default"),
                 # Adjustment factors are a hard dependency of every adjusted
                 # price, return and technical-factor service. Let confirmed
                 # factor repairs drain ahead of ordinary generic backfill.
@@ -171,7 +171,7 @@ def task_documents(
             },
             "validation_contract": validation,
             "resource": {
-                "resource_class": "derived",
+                "resource_class": "derived-valuation" if task.task_key == "valuation_percentile_snapshot" else "derived",
                 "priority": task.priority,
             },
         })

@@ -90,3 +90,26 @@ def test_finance_fetch_uses_standard_period_parameter(monkeypatch):
     monkeypatch.setattr(collector, "fetch_period", lambda period: expected)
 
     assert collector.fetch(period="20260630") is expected
+
+
+def test_finance_explicit_original_report_type_is_forwarded_and_verified():
+    import pytest
+    from collectors.stock.finance.income import IncomeCollector
+    from collectors.stock.finance.fina_indicator import FinaIndicatorCollector
+    from collectors.tushare_raw import IncompleteCollectionError
+    from types import SimpleNamespace
+    collector = object.__new__(IncomeCollector)
+    calls = []
+    def upstream(**params):
+        calls.append(params)
+        return pd.DataFrame([dict(ts_code='300750.SZ', end_date='20251231', report_type='5')])
+    collector.pro = SimpleNamespace(income_vip=upstream)
+    assert len(collector.fetch(period='20251231', report_type=5)) == 1
+    assert calls[0]['report_type'] == '5'
+    assert collector._pagination_scopes[0]['parameters'] == {'report_type':'5'}
+    with pytest.raises(IncompleteCollectionError, match='report_type'):
+        collector.fetch(period='20251231', report_type=4)
+    with pytest.raises(ValueError, match='report_type'):
+        collector.fetch(period='20251231', report_type=13)
+    with pytest.raises(ValueError, match='does not support'):
+        object.__new__(FinaIndicatorCollector).fetch(period='20251231', report_type=5)

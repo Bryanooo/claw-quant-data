@@ -56,6 +56,24 @@ def test_reference_dispatch_failure_does_not_block_other_profiles():
     assert set(result['errors']) == {'fund_basic'}
 
 
+def test_empty_forex_recheck_uses_trade_date_not_a_range():
+    definition = acquisition_definition(task_key='fx_daily', output_datasets=['forex_daily'], acquisition_endpoint_ids=[7])
+    definition['validation_contract']['outputs'] = ['forex_daily']
+    definition['validation_contract']['dataset_audits'][0]['dataset_name'] = 'forex_daily'
+    class Store:
+        def get_endpoint(self, _):
+            return {'acquisition_endpoint_id': 7, 'endpoint_key':'fx_daily',
+                    'source_id':'tushare','lifecycle_status':'active'}
+    day = date(2026, 10, 20)
+    spec, = OrchestrationV2Runtime(Store())._plan_acquisition(
+        TaskDefinitionDocument.model_validate(definition),
+        dict(purpose='backfill', observation_start=day, observation_end=day,
+             observation_key=str(day), frozen_scope={'reasons':['recheck_empty']}))
+    assert spec.parameters['parameters']['trade_date'] == '20261020'
+    assert 'start_date' not in spec.parameters['parameters']
+    assert spec.resource_class == 'backfill'
+
+
 @pytest.mark.parametrize('key', list(WEEKLY_REFERENCE_PROFILES))
 def test_reference_runtime_keeps_partitions_inside_acquire_node(key, monkeypatch):
     monkeypatch.setattr('service.orchestration_v2.runtime.list_fanout_values', lambda *a, **k: ['801010.SI'])

@@ -12,7 +12,11 @@ import logging
 import time
 
 import pandas as pd
-from collectors.base import BaseCollector
+from contextlib import closing
+from psycopg2 import sql
+from psycopg2.extras import execute_values
+from collectors.base import BaseCollector, get_db_conn
+from service.financial_statements import VERSIONED_STATEMENTS
 from collectors.contracts import EmptyPolicy, PaginationMode, ResourceClass
 from collectors.tushare_raw import IncompleteCollectionError, PaginationStalledError
 
@@ -40,6 +44,15 @@ class BaseFinanceCollector(BaseCollector):
         if not period:
             raise ValueError("financial collector requires period")
         self._pagination_scopes = []
+        # An explicit original/adjusted report request must not silently fall
+        # back to the provider's latest consolidated default (type 1).
+        report_type = _params.get("report_type")
+        if report_type is not None:
+            if self.TABLE_NAME not in {"income", "balancesheet", "cashflow"}:
+                raise ValueError(f"{self.TABLE_NAME} does not support report_type")
+            if str(report_type) not in {str(n) for n in range(1, 13)}:
+                raise ValueError("report_type must be an integer from 1 to 12")
+            return self._fetch_paginated(period, extra_params={"report_type": str(report_type)})
         return self.fetch_period(period)
 
     def partition_completion_evidence(self) -> dict:
@@ -92,6 +105,13 @@ class BaseFinanceCollector(BaseCollector):
             frame = fn(**request)
             if frame is None or frame.empty:
                 break
+            if "report_type" in request_scope:
+                types = (pd.to_numeric(frame["report_type"], errors="coerce")
+                         if "report_type" in frame else pd.Series(dtype=float))
+                if len(types) != len(frame) or not types.eq(int(request_scope["report_type"])).all():
+                    raise IncompleteCollectionError(
+                        f"{self.INTERFACE_NAME} ignored requested report_type={request_scope['report_type']}"
+                    )
             if "end_date" in frame.columns:
                 returned_periods = {
                     str(value) for value in frame["end_date"].dropna().unique()
@@ -145,7 +165,8 @@ class BaseFinanceCollector(BaseCollector):
         if not pages:
             return pd.DataFrame(columns=self.CORE_FIELDS)
         result = pd.concat(pages, ignore_index=True)
-        result = _select_latest_reports(result, self.PK_COLUMNS)
+        if self.TABLE_NAME not in VERSIONED_STATEMENTS:
+            result = _select_latest_reports(result, self.PK_COLUMNS)
         logger.info("  [%s] %s complete: %s 行", self.INTERFACE_NAME, period, len(result))
         return result
 
@@ -154,7 +175,23 @@ class BaseFinanceCollector(BaseCollector):
         if df is None or len(df) == 0:
             return 0
         normalized = df.reindex(columns=self.CORE_FIELDS).map(_to_val)
-        rows = super().store(normalized)
+        if self.TABLE_NAME in VERSIONED_STATEMENTS:
+            with closing(get_db_conn()) as conn, conn, conn.cursor() as cursor:
+                cursor.execute(sql.SQL(
+                    "CREATE TEMP TABLE finance_input (LIKE {} INCLUDING DEFAULTS) ON COMMIT DROP"
+                ).format(sql.Identifier(self.TABLE_NAME)))
+                statement = sql.SQL("INSERT INTO finance_input ({}) VALUES %s").format(
+                    sql.SQL(",").join(map(sql.Identifier, self.CORE_FIELDS))
+                )
+                values = [tuple(self._database_safe_value(_to_val(value), column)
+                                for column, value in zip(self.CORE_FIELDS, record))
+                          for record in normalized.itertuples(index=False, name=None)]
+                execute_values(cursor, statement, values, page_size=1000)
+                cursor.execute("SELECT archive_financial_batch(%s, 'pg_temp.finance_input', false)",
+                               (self.TABLE_NAME,))
+            rows = len(values)
+        else:
+            rows = super().store(normalized)
         periods = sorted(df["end_date"].unique()) if "end_date" in df.columns else ["?"]
         logger.info(f"  ✅ {self.TABLE_NAME} {periods}: upsert {rows} 行")
         return rows

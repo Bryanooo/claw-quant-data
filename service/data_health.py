@@ -307,6 +307,8 @@ class DataHealthService:
                         '部分历史区间正在补采（见下方实例）；其余缺口仍未验收，'
                         '请勿重复提交正在执行的范围。'
                     )
+            if issue['dataset']=='cyq_chips' and hasattr(self._orchestration,'chip_security_progress'):
+                issue['security_progress'] = self._orchestration.chip_security_progress()
         mapped_attention = {
             item["source_execution_id"]
             for item in issues
@@ -418,6 +420,12 @@ class DataHealthService:
                     guidance = "执行异常尚未归类；先查看节点事件和错误详情。"
                 if exhausted:
                     guidance = "自动恢复预算已耗尽；检查上游连接、额度和执行证据，修复后再重试。"
+                following = [s for s in active_scopes if s.get('task_key')==task_key
+                             and s.get('eligible_at') and s.get('task_execution_id',0)>execution_id]
+                next_scope = min(following,key=lambda s:s['eligible_at']) if following else None
+                if category=='rate_limited' and task_key.startswith('ant_') and next_scope:
+                    guidance = (f"旧周期限额失败仍未补齐；后续周期 {next_scope.get('observation_key')} "
+                                f"已有实例 #{next_scope['task_execution_id']}，不要重复发起请求。")
                 issues.append({
                     "kind": "task_execution_attention",
                     "severity": "warning" if rate_limited or transient else "critical",
@@ -445,6 +453,7 @@ class DataHealthService:
                     "source_execution_id": execution_id,
                     "error_category": category,
                     "automatic_recovery_exhausted": exhausted,
+                    "following_scope": next_scope if category=='rate_limited' else None,
                     "error_message": execution.get("final_error_message"),
                 })
                 execution_issue_ids.add(execution_id)

@@ -8,6 +8,7 @@ they are not split into scheduler-visible child tasks.
 """
 
 from datetime import datetime
+from hashlib import sha256
 import json
 
 from collectors.base import (
@@ -17,6 +18,14 @@ from collectors.base import (
     get_db_conn,
 )
 from collectors.contracts import CollectorResult
+
+
+class ShareFloatWindowDeferred(CollectorError):
+    defer_without_attempt = True
+
+    def __init__(self, resume_at, now):
+        super().__init__("share_float historical catch-up paused during trading hours")
+        self.retry_after_seconds = max(1, int((resume_at-now).total_seconds()))
 
 
 class ShareFloatCollector(BaseCollector):
@@ -68,7 +77,12 @@ class ShareFloatCollector(BaseCollector):
     def _completed_stock_codes(
         self, compact_date: str, *, page_size: int
     ) -> set[str]:
-        """Return only entity scopes with a continuous exhausted page chain."""
+        """Resume transport-proven empty scopes only.
+
+        A successful transport request does not prove that a later business
+        upsert committed. Nonempty scopes are deliberately replayed on resume;
+        the keyed upsert is safe and this avoids certifying lost writes.
+        """
         connection = get_db_conn()
         try:
             with connection.cursor() as cursor:
@@ -110,7 +124,7 @@ class ShareFloatCollector(BaseCollector):
             ]
             for terminal in sorted(terminal_offsets, reverse=True):
                 expected = set(range(0, terminal + page_size, page_size))
-                if expected <= offsets.keys():
+                if expected <= offsets.keys() and all(offsets[i][1] == 0 for i in expected):
                     completed.add(ts_code)
                     break
         return completed
@@ -146,6 +160,12 @@ class ShareFloatCollector(BaseCollector):
         for ts_code in universe:
             if ts_code in resumed:
                 continue
+            from service.clock import business_now
+            from service.acquisition_runtime.reliability import historical_resume_at
+            now = business_now()
+            resume_at = historical_resume_at("repair", now=now)
+            if compact_date < now.date().strftime("%Y%m%d") and resume_at is not None:
+                raise ShareFloatWindowDeferred(resume_at, now)
             result = BaseCollector.run_offset_paginated(
                 self,
                 page_size=page_size,
@@ -185,6 +205,7 @@ class ShareFloatCollector(BaseCollector):
                 "fallback_reason": fallback_reason,
                 "partition_date": compact_date,
                 "universe_source": "stock_basic_as_of_date",
+                "universe_sha256": sha256("\n".join(universe).encode()).hexdigest(),
                 "universe_total": len(universe),
                 "entities_completed": completed,
                 "entities_resumed": len(resumed & set(universe)),
@@ -228,7 +249,11 @@ class ShareFloatCollector(BaseCollector):
                 **params,
             )
         except (CollectorError, PartialCollectionError) as error:
-            if not exact_date or not self._is_offset_ceiling(error):
+            requires_symbol = (
+                "ts_code和ann_date必填一项" in str(error)
+                and not params.get("ts_code") and not params.get("ann_date")
+            )
+            if not exact_date or not (self._is_offset_ceiling(error) or requires_symbol):
                 raise
             return self._run_stock_partitioned(
                 page_size=page_size,

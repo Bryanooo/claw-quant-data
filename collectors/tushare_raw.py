@@ -8,7 +8,7 @@ fragile table and hand-written class for every upstream endpoint.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import hashlib
 import json
@@ -295,6 +295,11 @@ class CatalogRawCollector(BaseCollector):
                 "provider_verified_empty": True,
                 "provider_empty_reason": str(exc),
             }
+        if (self.API_NAME == 'stk_factor' and params.get('ts_code') and params.get('trade_date')
+                and frame is not None and not frame.empty and
+                (len(frame) != 1 or set(frame.ts_code) != {params['ts_code']}
+                 or set(frame.trade_date.astype(str)) != {params['trade_date']})):
+            raise IncompleteCollectionError("stk_factor provider returned rows outside the exact stock/day")
         self._last_fetch_count = 0 if frame is None else len(frame)
         records = [] if frame is None else frame.to_dict(orient="records")
         self._last_page_hash = _sha256(records) if records else ""
@@ -354,6 +359,9 @@ class CatalogRawCollector(BaseCollector):
                 f"{self.API_NAME} requires a {self.policy.parameter_strategy} "
                 "partition for complete collection"
             )
+        started = datetime.now(timezone.utc)
+        if self.API_NAME == 'fund_company':
+            self._directory_hashes = None
         rows = self.collect(**params)
         scope_evidence = verify_complete_response(
             self.API_NAME,
@@ -361,6 +369,9 @@ class CatalogRawCollector(BaseCollector):
             params,
             self._last_fetch_count,
         )
+        if (self.API_NAME == 'fund_company' and set(params) <= {'fields', 'skip_store'}
+                and not params.get('skip_store') and scope_evidence.get('verified')):
+            self._publish_fund_directory(started)
         self.completion_evidence = self._completion_evidence(
             **scope_evidence,
             **self._provider_empty_evidence,
@@ -368,6 +379,27 @@ class CatalogRawCollector(BaseCollector):
             rows_stored=rows,
         )
         return rows
+
+    def _publish_fund_directory(self, requested_at):
+        if not self._last_fetch_count:
+            raise IncompleteCollectionError('fund_company full directory returned zero rows')
+        hashes = self._directory_hashes
+        if hashes is None:
+            return  # A narrower field projection cannot replace the full directory.
+        connection = get_db_conn()
+        try:
+            with connection, connection.cursor() as cursor:
+                cursor.execute("SELECT count(*),count(DISTINCT name) FROM tushare_norm_fund_company "
+                               "WHERE _record_hash=ANY(%s) AND NULLIF(btrim(name),'') IS NOT NULL", (hashes,))
+                if cursor.fetchone() != (self._last_fetch_count, self._last_fetch_count):
+                    raise IncompleteCollectionError('fund_company snapshot names or normalized rows disagree')
+                cursor.execute("""INSERT INTO fund_company_snapshot_membership(singleton,requested_at,record_hashes)
+                    VALUES (true,%s,%s) ON CONFLICT(singleton) DO UPDATE SET
+                    requested_at=EXCLUDED.requested_at,record_hashes=EXCLUDED.record_hashes
+                    WHERE EXCLUDED.requested_at>fund_company_snapshot_membership.requested_at""",
+                    (requested_at,hashes))
+        finally:
+            connection.close()
 
     def collect_paginated(
         self,
@@ -666,6 +698,8 @@ class CatalogRawCollector(BaseCollector):
         records = list(unique_rows.items())
         try:
             self._normalize_stored_rows(request_hash, records)
+            if self.API_NAME == 'fund_company' and {f['name'] for f in self.contract.output_parameters} <= set(df.columns):
+                self._directory_hashes = sorted(unique_rows)
         except Exception:
             if TUSHARE_RAW_RECORD_CAPTURE_MODE == "anomalies_only":
                 self._raw_archive.archive_records(

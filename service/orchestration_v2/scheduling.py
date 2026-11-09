@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from service.config import APP_REVISION
@@ -26,6 +27,7 @@ from service.orchestration_v2.transformations import (
 
 # These inputs have financial/event periods, not the daily bar observation key.
 TRANSFORMATION_AUXILIARY_INPUTS = {
+    "ggt_monthly": ("ggt_daily",),
     "local_factor_snapshot": ("income", "balancesheet", "cashflow", "financial_indicator", "dividend"),
     "valuation_percentile_snapshot": ("index_weight",),
 }
@@ -75,6 +77,7 @@ def is_trade_day(value: date) -> bool:
 def dispatch_ready_transformations(
     *,
     repository: OrchestrationV2Repository | None = None,
+    observation_date: date | None = None,
 ) -> dict[str, Any]:
     """Create derived executions only for a common, certified input scope."""
 
@@ -92,27 +95,44 @@ def dispatch_ready_transformations(
             continue
         eligible += 1
         try:
-            if blueprint.task_key == 'valuation_percentile_snapshot':
+            if observation_date is not None and blueprint.task_key == 'ggt_monthly':
+                continue  # a daily recovery does not own the monthly period
+            if observation_date is None and blueprint.task_key == 'valuation_percentile_snapshot':
                 dispatch_group_weight_refresh(store, as_of=business_now().date())
             auxiliary_names = TRANSFORMATION_AUXILIARY_INPUTS.get(blueprint.task_key, ())
             daily_inputs = tuple(name for name in blueprint.input_datasets if name not in auxiliary_names)
-            states = store.latest_common_ready_input_states(daily_inputs)
-            missing = sorted(set(daily_inputs) - set(states))
-            if missing:
-                waiting[blueprint.task_key] = missing
-                continue
-            representative = next(iter(states.values()))
-            observation_key = str(representative["observation_key"])
-            start = min(
-                state["observation_start"]
-                for state in states.values()
-                if state.get("observation_start") is not None
-            )
-            end = max(
-                state["observation_end"]
-                for state in states.values()
-                if state.get("observation_end") is not None
-            )
+            if blueprint.task_key == 'ggt_monthly':
+                from service.ggt_monthly import source_audit
+                observation_key, start, end, _ = _routine_scope('monthly', business_now().date())
+                from service.data_coverage.registry import COVERAGE_RULES
+                if business_now().date() < end + timedelta(days=COVERAGE_RULES.get('ggt_monthly').grace_days):
+                    waiting[blueprint.task_key] = ['monthly_output_not_mature']
+                    continue
+                if source_audit(end).status != 'complete':
+                    waiting[blueprint.task_key] = ['whole_month_ggt_daily_unverified']
+                    continue
+                states = {}
+            else:
+                states = (
+                    store.ready_input_states(daily_inputs, observation_date.isoformat())
+                    if observation_date is not None else store.latest_common_ready_input_states(daily_inputs)
+                )
+                missing = sorted(set(daily_inputs) - set(states))
+                if missing:
+                    waiting[blueprint.task_key] = missing
+                    continue
+                representative = next(iter(states.values()))
+                observation_key = str(representative["observation_key"])
+                start = min(
+                    state["observation_start"]
+                    for state in states.values()
+                    if state.get("observation_start") is not None
+                )
+                end = max(
+                    state["observation_end"]
+                    for state in states.values()
+                    if state.get("observation_end") is not None
+                )
             auxiliary = {}
             auxiliary_names = TRANSFORMATION_AUXILIARY_INPUTS.get(blueprint.task_key, ())
             if auxiliary_names:
@@ -439,10 +459,13 @@ def dispatch_latest_daily_acquisitions(
             if next_morning_released
             else next((item for item in dates if item < target), target)
         )
+    # At midnight in Shanghai the previous US calendar date is still an
+    # open session. A zero-row pull then is not a verified empty delivery.
+    us_cutoff = min(as_of_date, business_now().astimezone(ZoneInfo("America/New_York")).date())
     us_rows = query(
         "SELECT cal_date FROM tushare_norm_us_tradecal WHERE is_open=1 "
         "AND cal_date < %s ORDER BY cal_date DESC LIMIT 1",
-        (as_of_date,),
+        (us_cutoff,),
     )
     if not us_rows:
         return {

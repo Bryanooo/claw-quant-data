@@ -2,7 +2,10 @@
 
 from collections.abc import Callable
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, timedelta
+from dataclasses import replace
+from functools import lru_cache
+from heapq import heappop, heappush
 from typing import Any
 
 import psycopg2
@@ -13,6 +16,7 @@ from service.acquisition_runtime.factor_value_contract import (
     FACTOR_VALUE_EXPECTED_COUNT,
 )
 from service.config import DB_CONFIG
+from service.data_coverage.transport import certified_execution_sql
 from service.data_coverage.models import (
     ActualPartition,
     CoverageAuditResult,
@@ -20,12 +24,72 @@ from service.data_coverage.models import (
     CoverageStrategy,
 )
 from service.data_service.models import DateStorage
+from service.data_coverage.publication import NEXT_DAY_EMPTY_CONFIRMATION
 
 
 # Upper bound for the per-day security detail copied into the audit evidence.
 # The full breakdown is already materialized per partition in
 # ``sys_data_coverage_partition.evidence``; the audit row only needs a rollup.
 SECURITY_DATE_SAMPLE = 5
+
+
+
+def _latest_scope_coverage(jobs, start, end):
+    """Evaluate distinct interval boundaries using the newest applicable execution."""
+    starts = {}
+    boundaries = {start, end + timedelta(days=1)}
+    for job in jobs:
+        first, last = max(start, job['observation_start']), min(end, job['observation_end'])
+        if last < first:
+            continue
+        starts.setdefault(first, []).append(job)
+        boundaries.update((first, last + timedelta(days=1)))
+    active = []
+    all_empty = True
+    for day in sorted(boundaries):
+        if day > end:
+            break
+        for job in starts.get(day, ()):
+            heappush(active, (-job['task_execution_id'], job['observation_end'], job))
+        while active and active[0][1] < day:
+            heappop(active)
+        latest = active[0][2] if active else None
+        if not latest or latest['status'] not in ('success','attention') or not latest['transport_verified']:
+            return False, False, day
+        all_empty = all_empty and latest['zero_rows']
+    return True, all_empty, None
+
+
+def _producer_task(rule):
+    # Endpoint aliases are not execution keys (e.g. fina_indicator and
+    # financial_indicator). Use the acquisition catalogue's output ownership.
+    return _producer_task_keys().get(rule.dataset_name, rule.collection_api_name or rule.dataset_name)
+
+
+@lru_cache(maxsize=1)
+def _producer_task_keys():
+    from service.orchestration_v2.catalog import acquisition_task_blueprints
+    return {name: task.task_key for task in acquisition_task_blueprints() for name in task.output_datasets}
+
+
+def _rule_versions():
+    from service.data_coverage.registry import COVERAGE_RULES
+    return psycopg2.extras.Json({r.dataset_name: r.revision for r in COVERAGE_RULES.list()})
+
+
+def _versioned_partitions(where):
+    """Narrow dates first, read revision evidence once per distinct audit, then filter status."""
+    return f"""WITH selected AS MATERIALIZED (
+        SELECT * FROM sys_data_coverage_partition WHERE {where}
+    ), stale AS MATERIALIZED (
+        SELECT a.audit_id FROM (SELECT DISTINCT audit_id FROM selected) ids
+        JOIN sys_data_coverage_audit a USING(audit_id)
+        JOIN jsonb_each_text(%s::jsonb) r ON r.key=a.dataset_name
+        WHERE COALESCE(NULLIF(a.evidence->>'rule_revision','')::int,1)<r.value::int
+    ), ledger AS (
+        SELECT p.*, CASE WHEN s.audit_id IS NULL THEN p.status ELSE 'pending' END AS effective_status
+        FROM selected p LEFT JOIN stale s USING(audit_id)
+    ) """
 
 
 def compact_audit_evidence(evidence: dict) -> dict:
@@ -308,6 +372,37 @@ class CoverageRepository:
             )
             return cursor.rowcount
 
+    def queue_stale_partition_audits(self, versions, *, limit=4):
+        """Queue DB-only rechecks of current partitions, including jobless V2 evidence."""
+        if not versions or limit <= 0:
+            return {}
+        with self._connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(210341, 1)")
+            cur.execute("""WITH stale AS MATERIALIZED (
+                SELECT a.audit_id, r.value::int AS revision
+                FROM sys_data_coverage_audit a JOIN jsonb_each_text(%s::jsonb) r
+                ON r.key=a.dataset_name
+                WHERE COALESCE(NULLIF(a.evidence->>'rule_revision','')::int,1)<r.value::int
+            ), batches AS (
+                SELECT dataset_name, min(partition_date) AS lo, max(partition_date) AS hi,
+                    concat_ws(':','rule-recheck',dataset_name,revision,
+                        to_char(partition_date,'YYYY-MM'),max(audit_id)) AS key
+                FROM sys_data_coverage_partition JOIN stale USING(audit_id)
+                GROUP BY dataset_name,revision,to_char(partition_date,'YYYY-MM')
+            ), inserted AS (
+                INSERT INTO sys_data_coverage_job(dataset_name,start_date,end_date,idempotency_key)
+                SELECT b.dataset_name,lo,hi,key FROM batches b
+                WHERE NOT EXISTS (SELECT 1 FROM sys_data_coverage_job j WHERE j.idempotency_key=b.key)
+                  AND NOT EXISTS (SELECT 1 FROM sys_data_coverage_job j WHERE j.dataset_name=b.dataset_name
+                    AND j.status IN ('queued','running') AND j.start_date<=b.hi AND j.end_date>=b.lo)
+                ORDER BY hi DESC,b.dataset_name
+                LIMIT (SELECT greatest(0,%s-count(*)) FROM sys_data_coverage_job
+                       WHERE status IN ('queued','running'))
+                ON CONFLICT (idempotency_key) DO NOTHING RETURNING dataset_name
+            ) SELECT dataset_name,count(*) FROM inserted GROUP BY dataset_name""",
+                        (psycopg2.extras.Json(versions), limit))
+            return dict(cur.fetchall())
+
     @staticmethod
     def _date_expression(rule: CoverageRule) -> sql.Composed:
         column = sql.Identifier(rule.date_column)
@@ -349,7 +444,7 @@ class CoverageRepository:
     ) -> list[ActualPartition]:
         current_transport_dates = verified_transport_dates or set()
         current_empty_dates = verified_empty_transport_dates or set()
-        collection_api_name = rule.collection_api_name or rule.dataset_name
+        collection_api_name = _producer_task(rule)
         date_expression = self._date_expression(rule)
         feature_quality = rule.dataset_name in {"local_factor_snapshot", "technical_factor_snapshot"}
         entity_expression = (
@@ -368,22 +463,76 @@ class CoverageRepository:
             sql.SQL(" AND {} = %s").format(sql.Identifier(column))
             for column, _value in required_values
         )
+        # PostgreSQL sorts NaN above Infinity; these strict bounds reject
+        # NULL, both infinities and NaN without accepting a ready label alone.
+        required_predicate += sql.SQL("").join(
+            sql.SQL(" AND {value} > '-Infinity'::float8 AND {value} < 'Infinity'::float8").format(
+                value=sql.Identifier(column)
+            ) for column in rule.finite_value_columns
+        )
+        from service.data_coverage.business_predicates import business_predicate
+        payload_predicate = business_predicate(rule.dataset_name)
+        if feature_quality:
+            # Exclude a placeholder only when its no-bar reason is supported
+            # by the source. Expected securities still need valid values.
+            payload_predicate = sql.SQL("""(CASE WHEN audit_status='not_expected' THEN
+                NOT EXISTS (SELECT 1 FROM daily d WHERE d.trade_date={t}.{day} AND d.ts_code={t}.ts_code)
+                AND EXISTS (SELECT 1 FROM local_factor_current f WHERE f.trade_date={t}.{day}
+                    AND f.ts_code={t}.ts_code AND f.audit_evidence->>'reason'='no_target_daily_bar')
+                ELSE ({payload}) END)""").format(t=sql.Identifier(rule.table), day=sql.Identifier(rule.date_column),
+                                                 payload=payload_predicate)
+        required_predicate += sql.SQL(" AND (") + payload_predicate + sql.SQL(")")
+        diagnostics = []
+        for column, value in required_values:
+            diagnostics.extend([sql.Literal("required_value_mismatch:" + column),
+                sql.SQL("count(*) FILTER (WHERE {} IS DISTINCT FROM {})").format(
+                    sql.Identifier(column), sql.Literal(value))])
+        for column in rule.finite_value_columns:
+            diagnostics.extend([sql.Literal("non_finite_value:" + column),
+                sql.SQL("count(*) FILTER (WHERE NOT COALESCE({v} > '-Infinity'::float8 AND {v} < 'Infinity'::float8, false))").format(v=sql.Identifier(column))])
+        if rule.dataset_name in {'local_factor_snapshot','technical_factor_snapshot','valuation_percentile_snapshot'}:
+            if rule.dataset_name == 'local_factor_snapshot':
+                pending = sql.SQL("""audit_status='partial' AND audit_evidence->>'status'='partial'
+                    AND jsonb_typeof(audit_evidence->'unresolved')='object'
+                    AND audit_evidence->'unresolved'<>'{}'::jsonb""")
+                reason = 'local_factor_issues_recorded'
+            elif rule.dataset_name == 'technical_factor_snapshot':
+                pending = sql.SQL("""audit_status='partial' AND EXISTS (
+                    SELECT 1 FROM local_factor_current f
+                    WHERE f.trade_date=technical_factor_snapshot.snapshot_date AND f.ts_code=technical_factor_snapshot.ts_code
+                      AND f.audit_evidence->>'technical_status'='partial')""")
+                reason = 'technical_factor_issues_recorded'
+            else:
+                warnings = [sql.SQL("snapshots->{code}->'meta'->'quality'->'warnings' ? 'some metric inputs are missing'").format(
+                    code=sql.Literal(code)) for code in ('000300.SH','000688.SH')]
+                pending = sql.SQL("audit_status='partial' AND ({checks}) AND ({warnings})").format(
+                    checks=business_predicate(rule.dataset_name, require_valuation_readiness=False),
+                    warnings=sql.SQL(' OR ').join(warnings))
+                reason = 'valuation_constituent_inputs_incomplete'
+            diagnostics.extend([sql.Literal(reason),
+                sql.SQL('count(*) FILTER (WHERE {})').format(pending),
+                sql.Literal('derived_payload_invalid'),
+                sql.SQL('count(*) FILTER (WHERE NOT COALESCE(({}), false) AND NOT COALESCE(({}), false))').format(
+                    pending, payload_predicate)])
         statement = sql.SQL(
             """
             SELECT {date_expression} AS partition_date,
                    count(*)::bigint AS row_count,
-                   {entity_expression}::bigint AS entity_count
+                   count(*) FILTER (WHERE NOT COALESCE(TRUE {required_predicate}, FALSE))::bigint AS invalid_value_rows,
+                   {entity_expression}::bigint AS entity_count,
+                   {diagnostics} AS value_violations
             FROM {table}
             WHERE {date_expression} BETWEEN %s AND %s
-                  {required_predicate}
             GROUP BY {date_expression}
             ORDER BY {date_expression}
             """
         ).format(
             date_expression=date_expression,
             entity_expression=entity_expression,
-            table=sql.Identifier(rule.table),
+            # Renaming a verified BSE identity does not add/remove rows.
+            table=sql.Identifier("stk_factor_pro" if rule.table == "canonical_stk_factor_pro" else rule.table),
             required_predicate=required_predicate,
+            diagnostics=sql.SQL('jsonb_build_object({})').format(sql.SQL(',').join(diagnostics)),
         )
         with (
             self._connection() as connection,
@@ -392,15 +541,18 @@ class CoverageRepository:
             cursor.execute(
                 statement,
                 (
+                    *(value for _column, value in required_values),
                     start_date,
                     end_date,
-                    *(value for _column, value in required_values),
                 ),
             )
             partitions = [
                 ActualPartition(
                     partition_date=row["partition_date"],
                     row_count=int(row["row_count"]),
+                    invalid_value_rows=int(row.get("invalid_value_rows") or 0),
+                    issues=tuple(key for key, count in (row.get("value_violations") or {}).items() if count),
+                    known_incomplete=bool(row.get("invalid_value_rows")),
                     entity_count=(
                         int(row["entity_count"])
                         if row["entity_count"] is not None
@@ -411,6 +563,21 @@ class CoverageRepository:
                 if row["partition_date"] is not None
             ]
             if rule.entity_reference == "stock_daily":
+                relation = sql.Identifier(rule.table)
+                bounds = ()
+                if rule.table == 'canonical_stk_factor_pro':
+                    # Push the requested dates into BOTH union branches
+                    # instead of probing the entire canonical view per stock.
+                    # A renamed old code has NO daily bar by definition, so
+                    # it cannot participate in this inner join. Direct keys
+                    # plus proved aliases give the same matched set without
+                    # expanding hundreds of factor columns or anti-joining
+                    # the entire provider history.
+                    relation = sql.SQL("""(SELECT ts_code,trade_date FROM stk_factor_pro
+                        WHERE trade_date BETWEEN %s AND %s UNION ALL
+                        SELECT canonical_code,trade_date FROM stk_factor_pro_verified_alias
+                        WHERE trade_date BETWEEN %s AND %s OFFSET 0)""")
+                    bounds = (start_date, end_date, start_date, end_date)
                 # Adjustment-like datasets are complete only for the exact
                 # lifecycle-valid security universe that has a daily bar on
                 # the same date.  Comparing independent row counts is not
@@ -441,7 +608,7 @@ class CoverageRepository:
                         GROUP BY daily.trade_date
                         """
                     ).format(
-                        source=sql.Identifier(rule.table),
+                        source=relation,
                         entity=sql.Identifier(rule.entity_column or "ts_code"),
                         source_date=sql.Identifier(rule.date_column),
                         source_required_predicate=sql.SQL("").join(
@@ -449,32 +616,33 @@ class CoverageRepository:
                             for column, _value in rule.required_values
                         ),
                     ),
-                    (start_date, end_date, *(value for _column, value in rule.required_values)),
+                    (*bounds, start_date, end_date, *(value for _column, value in rule.required_values)),
                 )
                 matched_entities = {
                     row["partition_date"]: int(row["matched_entities"])
                     for row in cursor.fetchall()
                 }
                 partitions = [
-                    ActualPartition(
-                        partition_date=item.partition_date,
-                        row_count=item.row_count,
-                        entity_count=matched_entities.get(item.partition_date, 0),
-                        verified_empty=item.verified_empty,
-                        known_incomplete=item.known_incomplete,
-                    )
+                    replace(item, entity_count=matched_entities.get(item.partition_date, 0))
                     for item in partitions
                 ]
+            if rule.entity_reference == 'fund_daily':
+                cursor.execute(sql.SQL("""SELECT d.trade_date, count(DISTINCT a.ts_code) AS matched
+                    FROM tushare_norm_fund_daily d LEFT JOIN {} a USING (trade_date,ts_code)
+                    WHERE d.trade_date BETWEEN %s AND %s GROUP BY d.trade_date""").format(sql.Identifier(rule.table)),
+                    (start_date,end_date))
+                matched = {r['trade_date']:int(r['matched']) for r in cursor.fetchall()}
+                partitions = [replace(p,entity_count=matched.get(p.partition_date,0)) for p in partitions]
             # V2 dataset state is the authoritative data fact.  A current
             # gaps/partial state keeps physical rows fail-closed until a later
             # V2 validation publishes a complete state for the same period.
             cursor.execute(
                 """
-                SELECT observation_start AS partition_date
+                SELECT observation_start AS partition_date, source_execution_id
                 FROM (
                     SELECT DISTINCT ON (state.dataset_name, state.observation_key)
                            state.dataset_name, state.observation_key,
-                           state.observation_start, state.data_status
+                           state.observation_start, state.data_status, state.source_execution_id
                     FROM orchestration_v2.dataset_state AS state
                     JOIN orchestration_v2.task_execution AS execution
                       ON execution.task_execution_id=state.source_execution_id
@@ -494,12 +662,15 @@ class CoverageRepository:
                 """,
                 (rule.dataset_name, start_date, end_date),
             )
-            incomplete_dates = {
-                row["partition_date"]
-                for row in cursor.fetchall()
-                if row["partition_date"] is not None
-            }
-            if feature_quality:
+            incomplete_rows = cursor.fetchall()
+            incomplete_execution_ids = {}
+            for row in incomplete_rows:
+                if row["partition_date"] is not None:
+                    incomplete_execution_ids[row["partition_date"]] = max(
+                        incomplete_execution_ids.get(row["partition_date"], 0),
+                        int(row.get("source_execution_id") or 0))
+            incomplete_dates = set(incomplete_execution_ids)
+            if feature_quality or rule.row_readiness_authoritative:
                 # Feature rows carry their own per-entity readiness evidence.
                 # Reusing a previous derived dataset_state as an independent
                 # incompleteness signal creates a circular latch: after an
@@ -507,7 +678,9 @@ class CoverageRepository:
                 # ever retire the old partial state.  The entity count above
                 # remains fail-closed (only explicitly ready rows count), so
                 # clearing this stale control-plane hint cannot hide a real
-                # missing or partial security.
+                # missing or partial security. Explicit scalar derived-output
+                # contracts similarly re-evaluate formula/status/finite-value
+                # predicates above instead of reusing their own old verdict.
                 incomplete_dates.clear()
             transport_proof_dates: set[date] = set()
             if rule.require_transport_proof or incomplete_dates:
@@ -520,11 +693,9 @@ class CoverageRepository:
                 # pagination/exhaustion evidence and the execution must have
                 # reached terminal success.
                 cursor.execute(
-                    """
-                    SELECT DISTINCT proof_day::date AS partition_date
+                    f"""
+                    SELECT DISTINCT proof_day::date AS partition_date, execution.task_execution_id
                     FROM orchestration_v2.task_execution AS execution
-                    JOIN orchestration_v2.task_execution_event AS event
-                      USING (task_execution_id)
                     CROSS JOIN LATERAL generate_series(
                         execution.observation_start,
                         execution.observation_end,
@@ -542,8 +713,7 @@ class CoverageRepository:
                       AND execution.observation_end IS NOT NULL
                       AND execution.observation_end >= %s
                       AND execution.observation_start <= %s
-                      AND event.event_type='node.acquire.request_completed'
-                      AND event.payload->'completion_evidence'->>'verified'='true'
+                      AND {certified_execution_sql()}
                     """,
                     (collection_api_name, start_date, end_date),
                 )
@@ -551,66 +721,11 @@ class CoverageRepository:
                     row["partition_date"]
                     for row in cursor.fetchall()
                     if row["partition_date"] is not None
+                    and int(row.get("task_execution_id") or 0) >= incomplete_execution_ids.get(row["partition_date"], 0)
                 }
-                if collection_api_name == "hk_hold":
-                    # hk_hold history was collected before the V2 cutover in
-                    # bounded market-wide windows.  The immutable raw ledger
-                    # records every page and the terminal empty page for each
-                    # logical request.  That terminal page is collector-owned
-                    # pagination exhaustion evidence, so it is valid transport
-                    # proof; merely having business rows is not.
-                    cursor.execute(
-                        """
-                        WITH exhausted AS (
-                            SELECT logical_request_hash,
-                                   logical_request_params,
-                                   CASE
-                                     WHEN logical_request_params ? 'trade_date'
-                                     THEN to_date(
-                                       logical_request_params->>'trade_date',
-                                       'YYYYMMDD'
-                                     )
-                                     ELSE to_date(
-                                       logical_request_params->>'start_date',
-                                       'YYYYMMDD'
-                                     )
-                                   END AS scope_start,
-                                   CASE
-                                     WHEN logical_request_params ? 'trade_date'
-                                     THEN to_date(
-                                       logical_request_params->>'trade_date',
-                                       'YYYYMMDD'
-                                     )
-                                     ELSE to_date(
-                                       logical_request_params->>'end_date',
-                                       'YYYYMMDD'
-                                     )
-                                   END AS scope_end
-                            FROM tushare_raw_request
-                            WHERE api_name='hk_hold'
-                            GROUP BY logical_request_hash,
-                                     logical_request_params
-                            HAVING bool_or(status='empty')
-                        )
-                        SELECT DISTINCT proof_day::date AS partition_date
-                        FROM exhausted
-                        CROSS JOIN LATERAL generate_series(
-                            exhausted.scope_start,
-                            exhausted.scope_end,
-                            INTERVAL '1 day'
-                        ) AS proof_day
-                        WHERE exhausted.scope_start IS NOT NULL
-                          AND exhausted.scope_end IS NOT NULL
-                          AND exhausted.scope_end >= %s
-                          AND exhausted.scope_start <= %s
-                        """,
-                        (start_date, end_date),
-                    )
-                    transport_proof_dates.update(
-                        row["partition_date"]
-                        for row in cursor.fetchall()
-                        if row["partition_date"] is not None
-                    )
+                # Legacy raw page ledgers have no frozen market-wide plan or
+                # normalization/store certificate. An isolated empty page is
+                # not evidence that all earlier pages were collected/stored.
                 if rule.require_transport_proof:
                     incomplete_dates.update(
                         item.partition_date
@@ -626,13 +741,7 @@ class CoverageRepository:
             incomplete_dates.difference_update(transport_proof_dates)
             if incomplete_dates:
                 partitions = [
-                    ActualPartition(
-                        partition_date=item.partition_date,
-                        row_count=item.row_count,
-                        entity_count=item.entity_count,
-                        verified_empty=item.verified_empty,
-                        known_incomplete=item.partition_date in incomplete_dates,
-                    )
+                    replace(item, known_incomplete=item.known_incomplete or item.partition_date in incomplete_dates)
                     for item in partitions
                 ]
             if rule.accept_verified_empty:
@@ -644,13 +753,25 @@ class CoverageRepository:
                     -- have identical start/end dates).  Reading the period
                     -- start here made a provider-verified empty quarter look
                     -- missing again during the next independent full audit.
-                    SELECT DISTINCT observation_end AS partition_date
-                    FROM orchestration_v2.dataset_state
-                    WHERE dataset_name=%s
-                      AND data_status='empty_verified' AND ready
-                      AND observation_end BETWEEN %s AND %s
-                    """,
-                    (rule.dataset_name, start_date, end_date),
+                    SELECT latest.observation_end AS partition_date FROM (
+                        SELECT DISTINCT ON (state.observation_end) state.observation_end,
+                               state.source_execution_id, state.data_status, state.ready, state.validation_summary
+                        FROM orchestration_v2.dataset_state state
+                        JOIN orchestration_v2.task_execution origin
+                          ON origin.task_execution_id=state.source_execution_id
+                        WHERE state.dataset_name=%s AND state.observation_end BETWEEN %s AND %s
+                          AND origin.status NOT IN ('superseded','cancelled')
+                        ORDER BY state.observation_end,state.source_execution_id DESC,state.updated_at DESC
+                    ) latest
+                    JOIN orchestration_v2.task_execution execution
+                      ON execution.task_execution_id=latest.source_execution_id
+                    WHERE latest.data_status='empty_verified' AND latest.ready
+                      AND execution.status IN ('success','attention') AND {empty_certificate}
+                      AND (NOT %s OR validation_summary->'evidence'
+                           ->>'empty_confirmed_after_window'='true')
+                    """.format(empty_certificate=certified_execution_sql(empty=True)),
+                    (rule.dataset_name, start_date, end_date,
+                     rule.dataset_name in NEXT_DAY_EMPTY_CONFIRMATION),
                 )
                 persisted_empty_dates = {
                     row["partition_date"] for row in cursor.fetchall()
@@ -677,11 +798,51 @@ class CoverageRepository:
                         or partition_date in transport_proof_dates
                     )
                 )
+            if rule.dataset_name in {'margin','margin_detail'}:
+                from service.margin_quality import valid_balance_sql
+                cursor.execute(sql.SQL('SELECT {day} AS day,count(*) AS n FROM {table} '
+                    'WHERE {day} BETWEEN %s AND %s AND NOT ({valid}) GROUP BY {day}').format(
+                        day=date_expression,table=sql.Identifier(rule.table),valid=sql.SQL(valid_balance_sql())),
+                    (start_date,end_date))
+                invalid = {r['day']:int(r['n']) for r in cursor.fetchall()}
+                # Run AFTER transport evidence: pagination exhaustion cannot
+                # certify missing fields or retire current invalid business rows.
+                partitions = [replace(p,known_incomplete=p.known_incomplete or bool(invalid.get(p.partition_date)),
+                    invalid_balance_rows=invalid.get(p.partition_date,0)) for p in partitions]
+            if rule.dataset_name == 'ggt_monthly':
+                from decimal import Decimal, ROUND_HALF_UP
+                from service.ggt_monthly import aggregate_month, month_bounds, source_audit, OUTPUT_FIELDS
+                checked = []
+                for item in partitions:
+                    start, end = month_bounds(item.partition_date)
+                    source = source_audit(end, self)
+                    cursor.execute('SELECT trade_date,buy_amount,buy_volume,sell_amount,sell_volume '
+                                   'FROM ggt_daily WHERE trade_date BETWEEN %s AND %s', (start,end))
+                    source_rows = list(cursor.fetchall())
+                    cursor.execute('SELECT * FROM ggt_monthly WHERE month=%s', (start.strftime('%Y%m'),))
+                    output = cursor.fetchone()
+                    valid = False
+                    try:
+                        expected = aggregate_month(source_rows, end)
+                        valid = bool(output) and all(
+                            output.get(field) is not None and Decimal(str(output[field])).is_finite()
+                            and Decimal(str(output[field])) == expected[field].quantize(
+                                Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                            for field in OUTPUT_FIELDS)
+                    except ValueError:
+                        pass
+                    checked.append(replace(item,
+                        known_incomplete=not valid or source.status != 'complete',
+                        invalid_value_rows=int(not valid),
+                        issues=tuple(code for code, failed in (
+                            ('monthly_aggregate_mismatch', not valid),
+                            ('monthly_source_scope_unverified', source.status != 'complete')) if failed)))
+                partitions = checked
             return sorted(partitions, key=lambda item: item.partition_date)
 
-    def snapshot_evidence(self, rule: CoverageRule) -> dict:
+    def snapshot_evidence(self, rule: CoverageRule, *, start_date: date, end_date: date) -> dict:
         """Return fail-closed proof for a non-temporal exhaustive snapshot."""
-        api_name = rule.collection_api_name or rule.dataset_name
+        api_name = _producer_task(rule)
         count_statement = sql.SQL("SELECT count(*)::bigint AS count FROM {}").format(
             sql.Identifier(rule.table)
         )
@@ -692,12 +853,11 @@ class CoverageRepository:
             cursor.execute(count_statement)
             row_count = int(cursor.fetchone()["count"])
             cursor.execute(
-                """
+                f"""
                 SELECT execution.task_execution_id AS job_id,
                        execution.status,
                        state.data_status AS completion_status,
-                       state.actual_count AS rows_fetched,
-                       state.actual_count AS rows_inserted,
+                       state.validation_summary->'evidence'->>'v2_transport_rows_fetched' AS rows_fetched,
                        execution.finished_at,
                        state.validation_summary AS completion_evidence
                 FROM orchestration_v2.task_execution AS execution
@@ -706,11 +866,18 @@ class CoverageRepository:
                  AND state.dataset_name=%s
                 WHERE execution.task_key=%s AND execution.status='success'
                   AND state.ready
+                  AND execution.observation_start <= %s AND execution.observation_end >= %s
+                  AND NOT EXISTS (SELECT 1 FROM orchestration_v2.task_execution newer
+                      WHERE newer.task_key=execution.task_key AND newer.task_execution_id>execution.task_execution_id
+                        AND newer.status NOT IN ('superseded','cancelled')
+                        AND newer.observation_end >= %s AND newer.observation_start <= %s)
+                  AND {certified_execution_sql()}
+                  AND (state.data_status<>'empty_verified' OR {certified_execution_sql(empty=True)})
                 ORDER BY execution.finished_at DESC NULLS LAST,
                          execution.task_execution_id DESC
                 LIMIT 1
                 """,
-                (rule.dataset_name, api_name),
+                (rule.dataset_name, api_name, start_date, end_date, start_date, end_date),
             )
             success = cursor.fetchone()
             cursor.execute(
@@ -718,6 +885,7 @@ class CoverageRepository:
                 SELECT count(*)::bigint AS failures
                 FROM orchestration_v2.task_execution AS failed
                 WHERE failed.task_key=%s AND failed.status='attention'
+                  AND failed.observation_end >= %s AND failed.observation_start <= %s
                   AND NOT EXISTS (
                       SELECT 1
                       FROM orchestration_v2.task_execution AS recovered
@@ -727,7 +895,7 @@ class CoverageRepository:
                         AND recovered.task_execution_id > failed.task_execution_id
                   )
                 """,
-                (api_name,),
+                (api_name, start_date, end_date),
             )
             unresolved_failures = int(cursor.fetchone()["failures"])
             cursor.execute(
@@ -735,13 +903,14 @@ class CoverageRepository:
                 SELECT count(*)::bigint AS active
                 FROM orchestration_v2.task_execution
                 WHERE task_key=%s
+                  AND observation_end >= %s AND observation_start <= %s
                   AND purpose IN ('backfill','initialization','repair')
                   AND status IN (
                     'created','queued','running','waiting_dependency','retrying',
                     'validating','publishing'
                   )
                 """,
-                (api_name,),
+                (api_name, start_date, end_date),
             )
             active_history_jobs = int(cursor.fetchone()["active"])
         evidence = dict(success["completion_evidence"] or {}) if success else {}
@@ -755,51 +924,32 @@ class CoverageRepository:
             "active_history_jobs": active_history_jobs,
         }
 
-    def collection_scope_evidence(self, rule: CoverageRule) -> dict:
-        """Audit terminal transport proof for every declared historical scope."""
-        api_name = rule.collection_api_name or rule.dataset_name
-        with (
-            self._connection() as connection,
-            connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
-        ):
-            cursor.execute(
-                f"""
-                SELECT
-                    count(*) FILTER (
-                        WHERE purpose IN ('backfill','initialization','repair')
-                    )::bigint AS declared_jobs,
-                    count(*) FILTER (
-                        WHERE purpose IN ('backfill','initialization','repair')
-                          AND status IN (
-                            'created','queued','running','waiting_dependency',
-                            'retrying','validating','publishing'
-                          )
-                    )::bigint AS active_jobs,
-                    count(*) FILTER (
-                        WHERE purpose IN ('backfill','initialization','repair')
-                          AND status='success'
-                    )::bigint AS verified_terminal_jobs,
-                    count(*) FILTER (
-                        WHERE status='attention'
-                          AND NOT EXISTS (
-                            SELECT 1
-                            FROM orchestration_v2.task_execution AS recovered
-                            WHERE recovered.task_key=execution.task_key
-                              AND recovered.observation_key=execution.observation_key
-                              AND recovered.status='success'
-                              AND recovered.task_execution_id > execution.task_execution_id
-                          )
-                    )::bigint AS unresolved_failures
+    def collection_scope_evidence(self, rule: CoverageRule, *, start_date: date, end_date: date) -> dict:
+        """Certify the requested interval, never borrow an unrelated old success."""
+        api_name = _producer_task(rule)
+        with self._connection() as connection, connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute(f"""
+                SELECT task_execution_id,status,purpose,observation_start,observation_end,
+                       {certified_execution_sql()} AS transport_verified,
+                       {certified_execution_sql(empty=True)} AS zero_rows
                 FROM orchestration_v2.task_execution AS execution
-                WHERE execution.task_key=%s
-                """,
-                (api_name,),
-            )
-            row = dict(cursor.fetchone())
-        return {
-            "api_name": api_name,
-            **{key: int(value or 0) for key, value in row.items()},
-        }
+                WHERE task_key=%s AND observation_end >= %s AND observation_start <= %s
+                  AND status NOT IN ('cancelled','superseded')
+                ORDER BY observation_start,task_execution_id
+            """, (api_name,start_date,end_date))
+            jobs = [dict(row) for row in cursor.fetchall()]
+        certified = [row for row in jobs if row['transport_verified'] and row['status'] in {'success','attention'}]
+        complete, empty, first_missing = _latest_scope_coverage(jobs, start_date, end_date)
+        unresolved = [row for row in jobs if row['status'] == 'attention' and not any(
+            other['task_execution_id'] >= row['task_execution_id']
+            and other['observation_start'] <= row['observation_start']
+            and other['observation_end'] >= row['observation_end'] for other in certified)]
+        return {'api_name':api_name,'declared_jobs':len(jobs),
+                'verified_terminal_jobs':len(certified),
+                'active_jobs':sum(row['status'] not in {'success','attention'} for row in jobs),
+                'unresolved_failures':len(unresolved),
+                'requested_scope_verified':complete, 'certified_zero_rows':empty,
+                'first_unverified_date':str(first_missing) if first_missing else None}
 
     def expected_market_partitions(
         self,
@@ -935,6 +1085,7 @@ class CoverageRepository:
             historical_counterparts = {
                 "stock_daily": ("tushare_current_daily_basic", "trade_date"),
                 "stock_daily_basic": ("daily", "trade_date"),
+                "daily_basic": ("daily", "trade_date"),
             }
             counterpart = historical_counterparts.get(rule.dataset_name)
             if counterpart:
@@ -1045,13 +1196,14 @@ class CoverageRepository:
         result: dict[date, int | None] = {}
         early_dates = (
             [item for item in dates if item < date(1993, 1, 1)]
-            if rule.dataset_name in {"stock_daily", "stock_daily_basic"}
+            if rule.dataset_name in {"stock_daily", "stock_daily_basic", "daily_basic"}
             else []
         )
         if early_dates:
             counterpart = {
                 "stock_daily": ("tushare_current_daily_basic", "trade_date"),
                 "stock_daily_basic": ("daily", "trade_date"),
+                "daily_basic": ("daily", "trade_date"),
             }[rule.dataset_name]
             with self._connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
@@ -1249,6 +1401,16 @@ class CoverageRepository:
         state would create a second and misleading execution identity.
         """
         with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(210342, hashtext(%s))", (result.dataset_name,))
+            cursor.execute("""SELECT EXISTS (
+                SELECT 1 FROM (SELECT DISTINCT audit_id FROM sys_data_coverage_partition
+                    WHERE dataset_name=%s AND partition_date BETWEEN %s AND %s) ids
+                JOIN sys_data_coverage_audit a USING(audit_id)
+                WHERE coalesce(nullif(a.evidence->>'rule_revision','')::int,1)>%s)""",
+                (result.dataset_name, result.start_date, result.end_date,
+                 int(result.evidence.get('rule_revision',1))))
+            if cursor.fetchone()[0]:
+                raise ValueError("obsolete coverage rule cannot replace a newer partition audit")
             cursor.execute(
                 """
                 INSERT INTO sys_data_coverage_audit
@@ -1322,6 +1484,13 @@ class CoverageRepository:
                         item.expected,
                         psycopg2.extras.Json(
                             {"semantics": "partition_and_entity_completeness",
+                             "issues": list(item.issues),
+                             "invalid_value_rows": result.evidence.get(
+                                 "invalid_value_rows", {}
+                             ).get(str(item.partition_date), 0),
+                             "invalid_balance_rows": result.evidence.get(
+                                 "invalid_balance_rows", {}
+                             ).get(str(item.partition_date), 0),
                              **security_evidence.get(str(item.partition_date), {})}
                         ),
                         audit_id,
@@ -1375,6 +1544,12 @@ class CoverageRepository:
                                0
                            ) AS observed_rule_revision
                     FROM sys_data_coverage_audit AS audit
+                ), obsolete AS MATERIALIZED (
+                    SELECT a.audit_id FROM revisioned a JOIN jsonb_each_text(%s::jsonb) r
+                      ON r.key=a.dataset_name WHERE greatest(a.observed_rule_revision,1)<r.value::int
+                ), stale_counts AS (
+                    SELECT dataset_name, count(*) AS stale_partitions
+                    FROM sys_data_coverage_partition JOIN obsolete USING(audit_id) GROUP BY dataset_name
                 ), revision_frontier AS (
                     SELECT dataset_name,
                            max(observed_rule_revision) AS observed_rule_revision
@@ -1443,7 +1618,7 @@ class CoverageRepository:
                     ORDER BY dataset_name, end_date DESC, start_date ASC,
                              finished_at DESC, audit_id DESC
                 )
-                SELECT representative.*,
+                SELECT representative.*, coalesce(stale_counts.stale_partitions,0) AS stale_partitions,
                        bounds.aggregate_start_date,
                        bounds.aggregate_end_date,
                        span.verified_start_date,
@@ -1454,6 +1629,7 @@ class CoverageRepository:
                        current.partial_partitions AS current_partial_partitions
                 FROM representative
                 JOIN audit_bounds AS bounds USING (dataset_name)
+                LEFT JOIN stale_counts USING(dataset_name)
                 LEFT JOIN LATERAL (
                     SELECT verified_start_date, verified_end_date
                     FROM verified_spans
@@ -1467,21 +1643,22 @@ class CoverageRepository:
                     SELECT
                         count(*) FILTER (WHERE partition.expected) AS expected_partitions,
                         count(*) FILTER (
-                            WHERE partition.expected AND partition.status='present'
+                            WHERE partition.expected AND partition.status='present' AND old.audit_id IS NULL
                         ) AS present_partitions,
                         count(*) FILTER (
-                            WHERE partition.expected AND partition.status='missing'
+                            WHERE partition.expected AND partition.status='missing' AND old.audit_id IS NULL
                         ) AS missing_partitions,
                         count(*) FILTER (
-                            WHERE partition.expected AND partition.status='partial'
+                            WHERE partition.expected AND partition.status='partial' AND old.audit_id IS NULL
                         ) AS partial_partitions
                     FROM sys_data_coverage_partition AS partition
+                    LEFT JOIN obsolete old USING(audit_id)
                     WHERE partition.dataset_name=representative.dataset_name
                       AND partition.partition_date BETWEEN
                           bounds.aggregate_start_date AND bounds.aggregate_end_date
                 ) AS current ON TRUE
                 ORDER BY representative.dataset_name
-                """
+                """, (_rule_versions(),)
             )
             result = {}
             for raw in cursor.fetchall():
@@ -1532,6 +1709,10 @@ class CoverageRepository:
                             if current_missing or current_partial
                             else "complete"
                         )
+                if row["stale_partitions"]:
+                    row["verified_start_date"] = row["verified_end_date"] = None
+                    if row["status"] != "gaps":
+                        row["status"] = "unverified"
                 result[row["dataset_name"]] = row
             return result
 
@@ -1552,27 +1733,27 @@ class CoverageRepository:
         if end_date:
             conditions.append("partition_date <= %s")
             params.append(end_date)
-        if status:
-            if status == "problem":
-                conditions.append("status IN ('missing', 'partial')")
-            else:
-                conditions.append("status = %s")
-                params.append(status)
+        status_filter = ""
+        status_params = ()
+        if status == "problem":
+            status_filter = "WHERE effective_status IN ('missing', 'partial')"
+        elif status:
+            status_filter = "WHERE effective_status = %s"
+            status_params = (status,)
         with (
             self._connection() as connection,
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
             cursor.execute(
-                f"""
-                SELECT dataset_name, partition_date, status, row_count,
+                _versioned_partitions(' AND '.join(conditions)) + f"""
+                SELECT dataset_name, partition_date, effective_status AS status, row_count,
                        entity_count, expected_entity_count, entity_coverage_ratio,
                        expected, evidence, audit_id, checked_at
-                FROM sys_data_coverage_partition
-                WHERE {' AND '.join(conditions)}
+                FROM ledger {status_filter}
                 ORDER BY partition_date DESC
                 LIMIT %s
                 """,
-                (*params, limit),
+                (*params, _rule_versions(), *status_params, limit),
             )
             return [dict(row) for row in cursor.fetchall()]
 
@@ -1589,26 +1770,25 @@ class CoverageRepository:
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
             cursor.execute(
-                """
+                _versioned_partitions("partition_date BETWEEN %s AND %s") + """
                 SELECT partition_date AS data_date,
                        count(*)::integer AS dataset_states,
                        count(*) FILTER (
-                           WHERE expected AND status='present'
+                           WHERE expected AND effective_status='present'
                        )::integer AS ready,
                        count(*) FILTER (
-                           WHERE NOT expected AND status='observed_only'
+                           WHERE NOT expected AND effective_status='observed_only'
                        )::integer AS observed,
                        count(*) FILTER (
-                           WHERE status IN ('missing','partial')
+                           WHERE effective_status IN ('missing','partial')
                        )::integer AS problems,
-                       count(*) FILTER (WHERE status='pending')::integer AS active,
+                       count(*) FILTER (WHERE effective_status='pending')::integer AS active,
                        COALESCE(sum(row_count), 0)::bigint AS rows
-                FROM sys_data_coverage_partition
-                WHERE partition_date BETWEEN %s AND %s
+                FROM ledger
                 GROUP BY partition_date
                 ORDER BY partition_date
                 """,
-                (start_date, end_date),
+                (start_date, end_date, _rule_versions()),
             )
             return [dict(row) for row in cursor.fetchall()]
 
@@ -1619,19 +1799,18 @@ class CoverageRepository:
             connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor,
         ):
             cursor.execute(
-                """
-                SELECT dataset_name, partition_date, status, row_count,
+                _versioned_partitions("partition_date=%s") + """
+                SELECT dataset_name, partition_date, effective_status AS status, row_count,
                        entity_count, expected_entity_count,
                        entity_coverage_ratio, expected, checked_at
-                FROM sys_data_coverage_partition
-                WHERE partition_date=%s
-                ORDER BY CASE status
+                FROM ledger
+                ORDER BY CASE effective_status
                            WHEN 'missing' THEN 0 WHEN 'partial' THEN 1
                            WHEN 'pending' THEN 2 WHEN 'present' THEN 3 ELSE 4
                          END,
                          dataset_name
                 """,
-                (data_date,),
+                (data_date, _rule_versions()),
             )
             return [dict(row) for row in cursor.fetchall()]
 
@@ -1643,8 +1822,9 @@ class CoverageRepository:
         end_date: date | None,
     ) -> dict | None:
         """Return the narrowest completed audit that proves the requested range."""
-        conditions = ["dataset_name=%s"]
-        params: list[Any] = [dataset_name]
+        from service.data_coverage.registry import COVERAGE_RULES
+        conditions = ["dataset_name=%s", "COALESCE(NULLIF(evidence->>'rule_revision','')::int,1)=%s"]
+        params: list[Any] = [dataset_name, COVERAGE_RULES.get(dataset_name).revision]
         if start_date:
             conditions.append("start_date <= %s")
             params.append(start_date)

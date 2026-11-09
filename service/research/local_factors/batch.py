@@ -11,7 +11,7 @@ from service.config import APP_REVISION
 from service.db import get_conn
 
 from .catalog import FACTOR_COUNT, FACTOR_SCHEMA_VERSION
-from .materializer import FORMULA_DIGEST, sync_factor_catalog
+from .materializer import FORMULA_DIGEST, IMPLEMENTATION_DIGEST, sync_factor_catalog
 
 
 def trading_dates(start_date: date, end_date: date) -> list[date]:
@@ -50,7 +50,8 @@ def published_dates(dates: Iterable[date]) -> set[date]:
                     FROM daily WHERE trade_date=ANY(%s) GROUP BY trade_date
                 ), snapshots AS (
                     SELECT trade_date, count(*)::INTEGER AS row_count,
-                           bool_and(formula_digest=%s) AS current_formula,
+                           bool_and(formula_digest=%s AND
+                                    COALESCE(audit_evidence->>'implementation_digest','')=%s) AS current_formula,
                            bool_and(audit_status IN ('ready', 'not_expected')
                                     AND technical_audit_status IN ('ready', 'not_expected')) AS quality_ready
                     FROM local_factor_snapshot
@@ -81,7 +82,7 @@ def published_dates(dates: Iterable[date]) -> set[date]:
                   AND validation.factor_count=%s
                 """,
                 (
-                    selected, FORMULA_DIGEST, FACTOR_SCHEMA_VERSION, selected,
+                    selected, FORMULA_DIGEST, IMPLEMENTATION_DIGEST, FACTOR_SCHEMA_VERSION, selected,
                     FACTOR_SCHEMA_VERSION, selected, FACTOR_SCHEMA_VERSION, FACTOR_COUNT,
                 ),
             )

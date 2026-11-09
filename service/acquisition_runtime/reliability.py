@@ -66,10 +66,33 @@ def historical_resume_at(
 
 def classify_failure(exc: Exception) -> str:
     """Return a stable operator-facing failure category."""
+    # Collector wrappers preserve the cause; classify the actual failure,
+    # not merely the generic CollectorError wrapper.
+    causes, seen = [], set()
+    current = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current)); causes.append(current)
+        current = current.__cause__ or current.__context__
+    if any(type(error).__module__.startswith("psycopg") for error in causes):
+        return "storage"
+    for cause in reversed(causes):
+        category = _classify_single_failure(cause)
+        if category != "upstream_or_internal":
+            return category
+    return "upstream_or_internal"
+
+
+def _classify_single_failure(exc: Exception) -> str:
+    if type(exc).__name__ in {"V2TransformationNotPublishableError", "GgtMonthlySourceError"}:
+        return "data_incomplete"
+    if type(exc).__name__ in {"TaskAuditNotImplementedError", "TaskAuditNoMatureExpectedPartitionError", "V2UnsupportedScopeError"}:
+        return "contract_error"
     name = type(exc).__name__.lower()
     message = str(exc).lower()
     response = getattr(exc, "response", None)
     status_code = getattr(response, "status_code", None)
+    if name == 'taskauditcontractdrifterror':
+        return 'contract_error'
     if getattr(exc, 'provider_error_code', None) == 'QUOTA_EXCEEDED':
         return 'quota'
     if status_code == 429 or "429 client error" in message:
@@ -80,6 +103,8 @@ def classify_failure(exc: Exception) -> str:
         return "timeout"
     if "incomplete" in name or "truncat" in message or "cap (" in message:
         return "completeness"
+    if any(marker in message for marker in ("violates not-null constraint", "violates unique constraint", "violates check constraint", "undefined column", "undefined table")):
+        return "storage"
     if "permission" in message or "访问权限" in message or "token" in message:
         return "permission"
     if (

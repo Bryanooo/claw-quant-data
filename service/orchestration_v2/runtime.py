@@ -24,7 +24,9 @@ from service.acquisition_runtime.fanout import (
     FANOUT_DEFINITIONS,
     list_fanout_values,
 )
-from service.clock import business_now
+from service.data_coverage.diagnostics import audit_failure_detail
+from service.data_coverage.transport import request_verified
+from service.clock import SHANGHAI_TIMEZONE, business_now
 from service.acquisition_runtime.registry import TASKS
 from service.acquisition_runtime.reliability import classify_failure, historical_resume_at
 from service.db import query
@@ -470,6 +472,7 @@ class OrchestrationV2Runtime:
                                      "backoff_seconds": delay},
                         ),
                     )
+                request_day = datetime.now(SHANGHAI_TIMEZONE).date().isoformat()
                 for spec, result in acquisition_results(specs, execution, execute_request):
                     outcome = self._normalize_outcome(result)
                     if outcome.completion_status not in {"complete", "empty"}:
@@ -486,6 +489,7 @@ class OrchestrationV2Runtime:
                             spec.expected_for.isoformat()
                             if spec.expected_for else None
                         ),
+                        "request_day": request_day,
                         "rows_fetched": outcome.rows_fetched,
                         "rows_inserted": outcome.rows_inserted,
                         "completion_status": outcome.completion_status,
@@ -600,6 +604,7 @@ class OrchestrationV2Runtime:
                 all_ready = all(
                     update.ready for _result, update, _validation in audit_results
                 )
+                failure_message, failure_detail = audit_failure_detail(audit_results)
                 node_status["publish"] = "success"
                 target = (
                     ExecutionStatus.SUCCESS
@@ -617,14 +622,9 @@ class OrchestrationV2Runtime:
                     error_message=(
                         None
                         if all_ready
-                        else "independent validation did not certify every output"
+                        else failure_message
                     ),
-                    error_detail={
-                        "outputs": {
-                            update.dataset_name: update.data_status.value
-                            for _result, update, _validation in audit_results
-                        }
-                    },
+                    error_detail=failure_detail,
                 )
         except Exception as exc:
             if getattr(exc, "defer_without_failure", False):
@@ -680,13 +680,14 @@ class OrchestrationV2Runtime:
                 )
                 # Monthly/event inputs are validated by the transform against
                 # its observation date, not a fictitious same-day dataset state.
-                auxiliary_names = ('index_weight',) if document.task_key == 'valuation_percentile_snapshot' else ()
+                auxiliary_names = ({'valuation_percentile_snapshot': ('index_weight',),
+                                    'ggt_monthly': ('ggt_daily',)}.get(document.task_key, ()))
                 daily_inputs = tuple(name for name in document.input_datasets if name not in auxiliary_names)
                 if auxiliary_names:
                     auxiliary = self._repository.auxiliary_input_revision(
                         auxiliary_names, execution['observation_end'])
                     if auxiliary['pending_count']:
-                        raise V2DependencyNotReadyError('index membership repairs still running')
+                        raise V2DependencyNotReadyError('auxiliary input repairs still running: ' + ', '.join(auxiliary_names))
                 input_states = self._repository.ready_input_states(
                     daily_inputs,
                     str(execution["observation_key"]),
@@ -825,6 +826,7 @@ class OrchestrationV2Runtime:
                 all_ready = all(
                     update.ready for _result, update, _validation in audit_results
                 )
+                failure_message, failure_detail = audit_failure_detail(audit_results)
                 node_status["publish"] = "success"
                 return self._repository.transition_execution(
                     execution_id,
@@ -841,8 +843,9 @@ class OrchestrationV2Runtime:
                     error_message=(
                         None
                         if all_ready
-                        else "independent validation did not certify every output"
+                        else failure_message
                     ),
+                    error_detail=failure_detail,
                 )
         except Exception as exc:
             if getattr(exc, "defer_without_failure", False):
@@ -880,7 +883,7 @@ class OrchestrationV2Runtime:
             None,
         )
         if callable(durable_reader):
-            return [dict(item) for item in durable_reader(execution_id)]
+            return [dict(item) for item in durable_reader(execution_id) if request_verified(item)]
         # Test doubles and older adapters retain the bounded event-reader
         # fallback. Production repositories always use the unbounded,
         # request-key-deduplicated query above.
@@ -895,8 +898,7 @@ class OrchestrationV2Runtime:
         return [
             item
             for item in evidence
-            if item.get("completion_status") in {"complete", "empty"}
-            and (item.get("completion_evidence") or {}).get("verified") is True
+            if request_verified(item)
         ]
 
     @staticmethod
@@ -976,6 +978,7 @@ class OrchestrationV2Runtime:
                 as_of=business_now(),
                 persist=True,
                 transport_evidence=transport_evidence,
+                expected_requests=(execution.get("frozen_scope") or {}).get("requests", []) if transport_evidence is not None else None,
             )
             validation = dict(update.validation_summary)
             values.append((result, update, validation))
@@ -1025,6 +1028,11 @@ class OrchestrationV2Runtime:
                 item["acquisition_endpoint_id"],
             ),
         )[0]
+        if document.task_key == 'express' and (execution.get('frozen_scope') or {}).get('disclosure_as_of'):
+            if not any(e['source_id'] == 'tushare' and e['endpoint_key'] == 'express_vip' for e in runnable):
+                raise V2UnsupportedScopeError('published express_vip endpoint required')
+            return (self._period_finance_spec(api_name='express_vip', period=execution['observation_end'],
+                                              purpose=execution['purpose']),)
         if selected["source_id"] in {
             "financial_data", "chinabond", "chinamoney",
         }:
@@ -1037,7 +1045,10 @@ class OrchestrationV2Runtime:
                     "start_date": execution["observation_start"].isoformat(),
                     "end_date": execution["observation_end"].isoformat(),
                 }
-                if selected["source_id"] == "chinamoney"
+                if selected["source_id"] == "chinamoney" or (
+                    selected["source_id"] == "chinabond"
+                    and execution["purpose"] in {"repair", "backfill"}
+                )
                 else {}
             )
             payload = {
@@ -1076,12 +1087,32 @@ class OrchestrationV2Runtime:
         end = execution["observation_end"]
         api_name = selected["endpoint_key"]
         policy = TusharePolicyRegistry().get(api_name)
+        missing_codes = (execution.get('frozen_scope') or {}).get('missing_factor_codes')
+        if missing_codes is not None:
+            if (api_name != 'stk_factor' or start != end or execution['purpose'] != 'backfill'
+                    or not isinstance(missing_codes, list) or not 0 < len(missing_codes) <= 20
+                    or any(not isinstance(c,str) or not c.endswith(('.BJ','.SH','.SZ'))
+                           or len(c)!=9 or not c[:6].isdigit() for c in missing_codes)):
+                raise V2UnsupportedScopeError('invalid targeted stock factor backfill scope')
+            return tuple(self._static_fanout_spec(api_name=api_name,parameter_name='ts_code',
+                         parameter_value=c,scope_kind='trade_date',observation_start=start,
+                         observation_end=end,purpose='backfill',policy=policy)
+                         for c in sorted(set(missing_codes)))
         profile = (execution.get('frozen_scope') or {}).get('reference_profile')
-        if profile:
+        dated = (execution.get('frozen_scope') or {}).get('dated_reference')
+        rewards = (execution.get('frozen_scope') or {}).get('annual_reward_codes')
+        if profile or dated or rewards is not None:
             from service.orchestration_v2.automation_status import WEEKLY_REFERENCE_PROFILES
-            if profile != api_name or profile not in WEEKLY_REFERENCE_PROFILES:
+            from service.orchestration_v2.dated_reference import partitions as dated_partitions
+            if dated and (dated != api_name or start != end or profile):
+                raise V2UnsupportedScopeError('invalid dated reference scope')
+            if rewards is not None and (api_name != 'stk_rewards' or profile or dated or start != end):
+                raise V2UnsupportedScopeError('invalid salary scope')
+            if rewards is None and not dated and (profile != api_name or profile not in WEEKLY_REFERENCE_PROFILES):
                 raise V2UnsupportedScopeError('unknown or mismatched reference profile')
-            partitions = WEEKLY_REFERENCE_PROFILES[profile]
+            from service.orchestration_v2.dated_reference import reward_partitions
+            partitions = (reward_partitions(end, rewards) if rewards is not None else
+                          dated_partitions(dated, end) if dated else WEEKLY_REFERENCE_PROFILES[profile])
             if profile in {'index_member_all', 'ci_index_member'}:
                 fanout = FANOUT_DEFINITIONS[profile]
                 values = list_fanout_values(fanout.source, as_of=end)
@@ -1098,7 +1129,8 @@ class OrchestrationV2Runtime:
                 specs.append(BatchChildSpec(
                     task_name='tushare_interface', parameters=payload,
                     idempotency_key=f"v2:reference:{api_name}:{execution['observation_key']}:{partition_key}",
-                    api_name=api_name, cadence='weekly', period_key=execution['observation_key'],
+                    api_name=api_name, cadence=('monthly' if rewards is not None else
+                              'daily' if dated == 'stock_hsgt' else 'weekly'), period_key=execution['observation_key'],
                     expected_for=end, handler=TASKS.handler_metadata('tushare_interface', payload),
                     priority=30, resource_class=document.resource.resource_class))
             return tuple(specs)
@@ -1204,7 +1236,9 @@ class OrchestrationV2Runtime:
         # History recipes deliberately favor start/end windows and fan-outs;
         # several live APIs instead require trade_date for today's partition.
         # The distinction belongs inside this node, not in separate tasks.
-        if execution["purpose"] == "daily":
+        exact_empty_recheck = (start == end and execution["purpose"] in ('repair','backfill')
+                               and (execution.get('frozen_scope') or {}).get('reasons') == ['recheck_empty'])
+        if execution["purpose"] == "daily" or exact_empty_recheck:
             contract = TushareInterfaceCatalog().require_collectable(api_name)
             policy = TusharePolicyRegistry().get(api_name)
             anchor_value = (execution.get("frozen_scope") or {}).get(
@@ -1220,6 +1254,13 @@ class OrchestrationV2Runtime:
                 today=policy_anchor,
                 trade_date=end.strftime("%Y%m%d"),
             )
+            if exact_empty_recheck:
+                requested_day = end.strftime("%Y%m%d")
+                exact = (len(parameters) == 1 and next(iter(parameters)) in
+                         {'trade_date','date','cal_date','ann_date','nav_date','ex_date'} and
+                         next(iter(parameters.values())) == requested_day)
+                if not exact and parameters != {'start_date': requested_day, 'end_date': requested_day}:
+                    raise V2UnsupportedScopeError("empty recheck requires an exact-date upstream request")
             payload = {
                 "api_name": api_name,
                 "parameters": parameters,
@@ -1231,14 +1272,14 @@ class OrchestrationV2Runtime:
             return (BatchChildSpec(
                 task_name="tushare_interface",
                 parameters=payload,
-                idempotency_key=f"v2:daily:{api_name}:{end.isoformat()}",
+                idempotency_key=f"v2:{execution['purpose']}:{api_name}:{end.isoformat()}",
                 api_name=api_name,
-                cadence="daily",
+                cadence="backfill" if exact_empty_recheck else "daily",
                 period_key=end.isoformat(),
                 expected_for=end,
                 handler=TASKS.handler_metadata("tushare_interface", payload),
-                priority=80,
-                resource_class="generic",
+                priority=30 if exact_empty_recheck else 80,
+                resource_class="backfill" if exact_empty_recheck else "generic",
             ),)
         trade_dates = [
             row["cal_date"]
@@ -1317,6 +1358,12 @@ class OrchestrationV2Runtime:
         purpose: str,
         frozen_scope: dict[str, Any] | None = None,
     ) -> tuple[BatchChildSpec, ...]:
+        if api_name == 'ccass_hold_detail':
+            codes = (frozen_scope or {}).get('fanout_values')
+            if (observation_start != observation_end or not isinstance(codes, list)
+                    or not 0 < len(codes) <= 20
+                    or any(not isinstance(code, str) or not code.endswith('.HK') for code in codes)):
+                raise V2UnsupportedScopeError('ccass_hold_detail requires 1–20 explicit HK codes and one date')
         values = (
             list_fanout_values(fanout.source, as_of=observation_end,
                               active_since=observation_start)
@@ -1357,24 +1404,8 @@ class OrchestrationV2Runtime:
             if not open_dates:
                 return ()
 
-        if api_name == "factor_value" and observation_start == observation_end:
-            # A provider quota can stop an execution after some factor-name
-            # requests have committed. Presence of one factor on the exact
-            # date proves that atomic child completed, so resume only missing
-            # factors instead of spending calls on already stored factors.
-            existing = {
-                str(row["factor_name"])
-                for row in query(
-                    """
-                    SELECT DISTINCT factor_name
-                    FROM tushare_norm_factor_value
-                    WHERE trade_date=%s AND factor_name IS NOT NULL
-                      AND factor_name<>''
-                    """,
-                    (observation_end,),
-                )
-            }
-            values = [value for value in values if value not in existing]
+        # Physical factor rows cannot certify a whole factor cross-section.
+        # Resume only from durable per-request evidence in _remaining_specs.
 
         scope_kind = (
             "date_window"

@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 
 import logging
+import re
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -233,6 +234,8 @@ def create_app(
     application.include_router(orchestration_v2.router, prefix="/api")
 
     dashboard_directory = PROJECT_ROOT / "service" / "dashboard"
+    dashboard_pages = frozenset(re.findall(r'data-panel="([a-z]+)"',
+                                (dashboard_directory / "index.html").read_text()))
     application.mount(
         "/dashboard-assets",
         StaticFiles(directory=dashboard_directory),
@@ -240,7 +243,10 @@ def create_app(
     )
 
     @application.get("/dashboard", include_in_schema=False)
-    def dashboard() -> FileResponse:
+    @application.get("/dashboard/{page}", include_in_schema=False)
+    def dashboard(page: str = "overview") -> FileResponse:
+        if page not in dashboard_pages:
+            raise StarletteHTTPException(status_code=404, detail="Unknown dashboard page")
         return FileResponse(dashboard_directory / "index.html")
 
     @application.get("/", include_in_schema=False)

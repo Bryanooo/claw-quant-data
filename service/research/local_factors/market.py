@@ -8,7 +8,7 @@ from math import ceil
 import numpy as np
 import pandas as pd
 
-from .alpha101 import Alpha101Evaluator, Alpha101Panel
+from .alpha101 import Alpha101Evaluator, Alpha101Panel, minimum_history
 
 
 # The longest Alpha101 primitive is 250 bars.  A 512-bar buffer covers nested
@@ -107,7 +107,7 @@ class MarketFactorEvaluator:
     def _price_regression(self, window: int, code: str):
         key = (window, code)
         if key not in self._price_regression_cache:
-            benchmark = getattr(self.panel, f"benchmark_close_{code}").pct_change()
+            benchmark = getattr(self.panel, f"benchmark_close_{code}").pct_change(fill_method=None)
             self._price_regression_cache[key] = _rolling_regression(self.returns, benchmark, window)
         return self._price_regression_cache[key]
 
@@ -249,12 +249,15 @@ class MarketFactorEvaluator:
         std21 = self.price.rolling(21, min_periods=21).std(ddof=1)
         zscore = (self.price - mean21) / std21
         output["days_beyond_upper_lower_21d"] = (
-            zscore.gt(1).rolling(21).sum() - zscore.lt(-1).rolling(21).sum()
+            (zscore.gt(1).astype(float) - zscore.lt(-1).astype(float))
+            .where(np.isfinite(zscore)).rolling(21, min_periods=21).sum()
         ).iloc[-1]
         for window in (21, 42, 63, 126, 252):
             output[f"return_std_{window}d"] = _last_rolling_std(self.returns, window)
             selected = self.price.tail(window)
-            output[f"high_low_{window}d"] = selected.max() / selected.min()
+            output[f"high_low_{window}d"] = (selected.max() / selected.min()).where(
+                np.isfinite(selected).sum().eq(window)
+            )
         for window in (60, 750):
             output[f"sharpe_{window}d"] = (
                 _last_rolling_mean(self.returns, window)
@@ -265,8 +268,8 @@ class MarketFactorEvaluator:
             _last_rolling_mean(self.returns, 750) / std750.pow(4)
         )
         benchmarks = {
-            "000300": self.panel.benchmark_close_000300.pct_change(),
-            "000001": self.panel.benchmark_close_000001.pct_change(),
+            "000300": self.panel.benchmark_close_000300.pct_change(fill_method=None),
+            "000001": self.panel.benchmark_close_000001.pct_change(fill_method=None),
         }
         for window, code in ((60, "000300"), (125, "000300"), (250, "000300"), (500, "000300"), (1000, "000300"), (1320, "000001")):
             _alpha, beta, sigma = self._price_regression(window, code)
@@ -277,7 +280,7 @@ class MarketFactorEvaluator:
                 self.panel.alpha101.volume.rolling(
                     5, min_periods=5
                 ).sum().pct_change(fill_method=None),
-            self.panel.benchmark_volume_000300.rolling(5, min_periods=5).sum().pct_change(),
+            self.panel.benchmark_volume_000300.rolling(5, min_periods=5).sum().pct_change(fill_method=None),
             120,
         )
         del alpha300
@@ -317,6 +320,14 @@ class MarketFactorEvaluator:
             exclude=excluded
         )
         values.update(alpha_exact)
+        if self.panel.listing_dates is not None:
+            listed = pd.to_datetime(self.panel.listing_dates.reindex(self.price.columns),
+                                    format="%Y%m%d", errors="coerce")
+            calendar = self.price.index
+            sessions = pd.Series(len(calendar) - calendar.searchsorted(listed), index=listed.index)
+            for name in values:
+                number = int(name.rsplit('_', 1)[1])
+                values[name] = values[name].mask(listed.notna() & (sessions < minimum_history(number)))
         for group in (
             self._turnover_factors(), self._momentum_factors(),
             self._reversal_factors(), self._risk_factors(), self._size_factors(),

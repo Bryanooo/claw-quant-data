@@ -18,6 +18,8 @@ from urllib.parse import urlencode
 import psycopg2
 import psycopg2.extras
 
+from service.clock import business_today
+
 from service.config import DB_CONFIG
 from service.source_connectors.contracts import (
     AcquisitionMode,
@@ -171,7 +173,7 @@ class ChinaBondConnector:
             raise ValueError("ChinaBond connector requires scheduled_pull mode")
         options = dict(request.parameters)
         endpoint_parameters = dict(options.get("parameters") or options)
-        today = date.today()
+        today = business_today()
         end = (
             _as_date(endpoint_parameters["end_date"], "end_date")
             if endpoint_parameters.get("end_date") else today

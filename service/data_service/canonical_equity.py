@@ -8,6 +8,7 @@ import json
 import re
 from typing import Any
 
+from service.clock import business_today
 from service.data_service.models import InvalidQueryError, UpstreamFallbackError
 from service.source_connectors.contracts import AcquisitionMode, ConnectorRequest
 from service.source_connectors.financial_data_protocol import tabular_rows
@@ -579,6 +580,7 @@ class CanonicalEquityDataService:
                     limit=1000,
                     offset=0,
                     include_total=False,
+                    as_of=business_today().isoformat(), consolidated_financials=True,
                 )
                 local_sections[section] = self._preferred_local_rows(
                     response["data"], report_dates=requested_dates

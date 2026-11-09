@@ -83,6 +83,7 @@ class DatasetQuery:
     offset: int = 0
     include_total: bool = False
     cursor_values: tuple[Any, ...] | None = None
+    consolidated_financials: bool = False
 
 
 class DataServiceError(Exception):

@@ -19,6 +19,7 @@ class LiveResponse(ApiModel):
 class ReadyResponse(ApiModel):
     status: str
     database: str
+    missing_migrations: list[str] | None = None
 
 
 class DatasetSummary(ApiModel):

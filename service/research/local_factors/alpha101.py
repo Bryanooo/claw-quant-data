@@ -8,7 +8,9 @@ making the otherwise generic WorldQuant ``IndClass`` choice explicit.
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
+from functools import lru_cache
 import re
 from types import SimpleNamespace
 from typing import Any
@@ -98,6 +100,71 @@ def compile_formula(expression: str) -> str:
     return result
 
 
+class _FormulaConditions(ast.NodeTransformer):
+    """Keep a missing comparison operand distinct from a false comparison."""
+
+    def visit_Compare(self, node):
+        self.generic_visit(node)
+        if len(node.ops) != 1 or type(node.ops[0]) not in (ast.Lt, ast.Eq):
+            raise ValueError('unsupported Alpha101 comparison')
+        function = 'less_than' if isinstance(node.ops[0], ast.Lt) else 'equal_to'
+        return ast.Call(ast.Name(function, ast.Load()), [node.left, node.comparators[0]], [])
+
+    def visit_BinOp(self, node):
+        self.generic_visit(node)
+        if isinstance(node.op, ast.Pow):
+            return ast.Call(ast.Name('finite_power', ast.Load()), [node.left, node.right], [])
+        if isinstance(node.op, ast.BitOr):
+            return ast.Call(ast.Name('logical_or', ast.Load()), [node.left, node.right], [])
+        return node
+
+
+@lru_cache(maxsize=202)
+def _expression(number, exact_midpoint):
+    expression = compile_formula(ALPHA101_FORMULAS[number])
+    if number == 66 and exact_midpoint:
+        expression = expression.replace("(open - ((high + low) / 2))", "open_minus_midpoint")
+    tree = _FormulaConditions().visit(ast.parse(expression, mode='eval'))
+    return compile(ast.fix_missing_locations(tree), '<Alpha101>', 'eval')
+
+
+def _minimum_history(node):
+    if isinstance(node, ast.Constant):
+        return 0
+    if isinstance(node, ast.Attribute):
+        return 1  # Dated industry classification.
+    if isinstance(node, ast.Name):
+        adv = re.fullmatch(r'adv(\d+)', node.id)
+        return int(adv[1]) if adv else (2 if node.id == 'returns' else 1)
+    if isinstance(node, ast.UnaryOp):
+        return _minimum_history(node.operand)
+    if isinstance(node, ast.Compare):
+        return max(map(_minimum_history, [node.left, *node.comparators]))
+    if isinstance(node, ast.BinOp):
+        combine = min if isinstance(node.op, ast.BitOr) else max
+        return combine(_minimum_history(node.left), _minimum_history(node.right))
+    if not isinstance(node, ast.Call):
+        raise ValueError('unreviewed Alpha101 syntax')
+    name = node.func.id
+    bars = [_minimum_history(arg) for arg in node.args]
+    if name == 'where':
+        return max(bars[0], min(bars[1:]))  # An untaken branch need not exist.
+    if name in ('delay', 'delta'):
+        return bars[0] + _window(node.args[-1].value)
+    rolling = {'correlation', 'covariance', 'decay_linear', 'stddev', 'ts_sum',
+               'ts_product', 'ts_max', 'ts_min', 'ts_argmax', 'ts_argmin', 'ts_rank'}
+    if name in rolling or (name in ('minimum','maximum') and isinstance(node.args[-1], ast.Constant)):
+        return max(bars[:-1]) + _window(node.args[-1].value) - 1
+    if name in ('minimum','maximum','signedpower','indneutralize','abs','sign','scale','rank','log'):
+        return max(bars)
+    raise ValueError(f'unreviewed Alpha101 operator {name}')
+
+
+@lru_cache(maxsize=101)
+def minimum_history(number):
+    return _minimum_history(ast.parse(compile_formula(ALPHA101_FORMULAS[number]), mode='eval').body)
+
+
 def _as_frame(value: Any, template: pd.DataFrame) -> pd.DataFrame:
     if isinstance(value, pd.DataFrame):
         return value
@@ -117,10 +184,16 @@ class Alpha101Panel:
     sector: pd.DataFrame | pd.Series | None = None
     subindustry: pd.DataFrame | pd.Series | None = None
 
+    # Adjusted (open - midpoint) calculated from exact source quotes before
+    # OHLC is compressed to float32. Exact zeros are part of Alpha 66's domain.
+    open_minus_midpoint: pd.DataFrame | None = None
+
     def __post_init__(self) -> None:
         shape = self.close.shape
         axes = (self.close.index, self.close.columns)
-        for name in ("open", "high", "low", "volume", "amount", "cap"):
+        for name in ("open", "high", "low", "volume", "amount", "cap", "open_minus_midpoint"):
+            if name == "open_minus_midpoint" and self.open_minus_midpoint is None:
+                continue
             value = getattr(self, name)
             if value.shape != shape or not value.index.equals(axes[0]) or not value.columns.equals(axes[1]):
                 raise ValueError(f"Alpha101 panel axis mismatch: {name}")
@@ -152,7 +225,7 @@ class Alpha101Panel:
             self.low.tail(observations), self.close.tail(observations),
             self.volume.tail(observations), self.amount.tail(observations),
             self.cap.tail(observations), selected(self.industry),
-            selected(self.sector), selected(self.subindustry),
+            selected(self.sector), selected(self.subindustry), selected(self.open_minus_midpoint),
         )
 
 
@@ -164,7 +237,7 @@ class Alpha101Evaluator:
 
     @staticmethod
     def rank(value: pd.DataFrame) -> pd.DataFrame:
-        return value.rank(axis=1, pct=True)
+        return value.replace([np.inf, -np.inf], np.nan).rank(axis=1, pct=True)
 
     @staticmethod
     def delay(value: pd.DataFrame, days: float) -> pd.DataFrame:
@@ -175,37 +248,54 @@ class Alpha101Evaluator:
         return value - value.shift(_window(days))
 
     @staticmethod
-    def correlation(left: pd.DataFrame, right: pd.DataFrame, days: float) -> pd.DataFrame:
+    def _rolling_comovement(left, right, days, *, correlation):
+        # E[XY] - E[X]E[Y] loses the entire covariance for large levels
+        # and small fluctuations. Center each complete window before taking
+        # products. Bound temporary arrays independently of the universe size.
         window = _window(days)
-        clean_left = left.replace([np.inf, -np.inf], np.nan)
-        clean_right = right.replace([np.inf, -np.inf], np.nan)
-        result = clean_left.rolling(window, min_periods=window).corr(clean_right)
-        complete = (
-            clean_left.notna() & clean_right.notna()
-        ).rolling(window, min_periods=window).sum().eq(window)
-        # A complete constant window has defined zero co-movement for the
-        # factor DSL.  Pandas returns NaN (and float32 round-off may produce
-        # +/-inf), which otherwise makes nested Ts_ArgMax/Ts_Rank chains lose
-        # nearly the whole universe.
-        return result.replace([np.inf, -np.inf], np.nan).mask(
-            complete & result.replace([np.inf, -np.inf], np.nan).isna(), 0.0
-        )
+        if not left.index.equals(right.index) or not left.columns.equals(right.columns):
+            left, right = left.align(right)
+        x_values = left.to_numpy(dtype=float).T
+        y_values = right.to_numpy(dtype=float).T
+        result = np.full(x_values.shape, np.nan)
+        if window == 1:
+            result[np.isfinite(x_values) & np.isfinite(y_values)] = 0.
+        elif x_values.shape[1] >= window:
+            num_windows = x_values.shape[1] - window + 1
+            batch = max(1, 500_000 // (num_windows * window))
+            for start in range(0, len(x_values), batch):
+                targets = slice(start, start + batch)
+                centered = []
+                for values in (x_values, y_values):
+                    blocks = np.lib.stride_tricks.sliding_window_view(
+                        np.ascontiguousarray(values[targets]), window, axis=1)
+                    with np.errstate(invalid='ignore'):
+                        deltas = blocks - blocks[..., :1]
+                        deltas -= deltas.mean(axis=-1, keepdims=True)
+                    centered.append(deltas)
+                x, y = centered
+                xy = np.einsum('ijk,ijk->ij', x, y)
+                if correlation:
+                    norm = np.sqrt(np.einsum('ijk,ijk->ij', x, x)) * np.sqrt(np.einsum('ijk,ijk->ij', y, y))
+                    with np.errstate(invalid='ignore', divide='ignore'):
+                        # The DSL assigns zero to complete constant windows.
+                        coeff = np.where((norm == 0) & np.isfinite(xy), 0., xy / norm)
+                    result[targets, window - 1:] = np.clip(coeff, -1., 1.)
+                else:
+                    result[targets, window - 1:] = xy / (window - 1)
+        return pd.DataFrame(result.T, index=left.index, columns=left.columns).replace([np.inf, -np.inf], np.nan)
 
-    @staticmethod
-    def covariance(left: pd.DataFrame, right: pd.DataFrame, days: float) -> pd.DataFrame:
-        window = _window(days)
-        clean_left = left.replace([np.inf, -np.inf], np.nan)
-        clean_right = right.replace([np.inf, -np.inf], np.nan)
-        result = clean_left.rolling(window, min_periods=window).cov(clean_right)
-        complete = (
-            clean_left.notna() & clean_right.notna()
-        ).rolling(window, min_periods=window).sum().eq(window)
-        return result.replace([np.inf, -np.inf], np.nan).mask(
-            complete & result.replace([np.inf, -np.inf], np.nan).isna(), 0.0
-        )
+    @classmethod
+    def correlation(cls, left: pd.DataFrame, right: pd.DataFrame, days: float) -> pd.DataFrame:
+        return cls._rolling_comovement(left, right, days, correlation=True)
+
+    @classmethod
+    def covariance(cls, left: pd.DataFrame, right: pd.DataFrame, days: float) -> pd.DataFrame:
+        return cls._rolling_comovement(left, right, days, correlation=False)
 
     @staticmethod
     def scale(value: pd.DataFrame, amount: float = 1.0) -> pd.DataFrame:
+        value = value.replace([np.inf, -np.inf], np.nan)
         denominator = value.abs().sum(axis=1).replace(0, np.nan)
         return value.div(denominator, axis=0).mul(amount)
 
@@ -224,8 +314,8 @@ class Alpha101Evaluator:
         # weight ``window``.  Looping over at most ~60 lags keeps memory O(T*N)
         # and performs each operation in NumPy instead of millions of Python
         # rolling callbacks.
-        for lag in range(window):
-            source = array[: len(array) - lag or None]
+        for lag in range(min(window, len(array))):
+            source = array[: len(array) - lag]
             finite = np.isfinite(source)
             target = result[lag:]
             target[finite] += source[finite] * (window - lag)
@@ -255,8 +345,8 @@ class Alpha101Evaluator:
         array = value.to_numpy(dtype=float, copy=False)
         result = np.ones_like(array)
         valid = np.zeros(array.shape, dtype=np.uint16)
-        for lag in range(window):
-            source = array[: len(array) - lag or None]
+        for lag in range(min(window, len(array))):
+            source = array[: len(array) - lag]
             finite = np.isfinite(source)
             result[lag:][finite] *= source[finite]
             valid[lag:][finite] += 1
@@ -277,8 +367,8 @@ class Alpha101Evaluator:
         valid = np.zeros(array.shape, dtype=np.uint16)
         current = array
         current_finite = np.isfinite(current)
-        for lag in range(window):
-            source = array[: len(array) - lag or None]
+        for lag in range(min(window, len(array))):
+            source = array[: len(array) - lag]
             target = current[lag:]
             mask = np.isfinite(source) & current_finite[lag:]
             less[lag:][mask] += source[mask] < target[mask]
@@ -307,8 +397,8 @@ class Alpha101Evaluator:
         valid = np.zeros(array.shape, dtype=np.uint16)
         # Oldest-to-newest plus strict comparison preserves NumPy/Pandas'
         # first-position tie convention.
-        for lag in range(window - 1, -1, -1):
-            source = array[: len(array) - lag or None]
+        for lag in range(min(window, len(array)) - 1, -1, -1):
+            source = array[: len(array) - lag]
             target_best = best[lag:]
             finite = np.isfinite(source)
             improve = finite & (
@@ -338,16 +428,34 @@ class Alpha101Evaluator:
         )
 
     def where(self, condition: Any, if_true: Any, if_false: Any) -> pd.DataFrame:
-        condition_frame = _as_frame(condition, self.template).fillna(False).astype(bool)
+        condition_frame = _as_frame(condition, self.template)
         true_frame = _as_frame(if_true, self.template)
         false_frame = _as_frame(if_false, self.template)
-        return true_frame.where(condition_frame, false_frame)
+        return true_frame.where(condition_frame.eq(1), false_frame).where(condition_frame.notna())
+
+    def finite_power(self, left, right):
+        left, right = _as_frame(left, self.template), _as_frame(right, self.template)
+        return left.pow(right).where(np.isfinite(left) & np.isfinite(right))
+
+    def less_than(self, left, right):
+        left, right = _as_frame(left, self.template), _as_frame(right, self.template)
+        return left.lt(right).astype('float32').where(np.isfinite(left) & np.isfinite(right))
+
+    def equal_to(self, left, right):
+        left, right = _as_frame(left, self.template), _as_frame(right, self.template)
+        return left.eq(right).astype('float32').where(np.isfinite(left) & np.isfinite(right))
+
+    def logical_or(self, left, right):
+        left, right = _as_frame(left, self.template), _as_frame(right, self.template)
+        true = left.eq(1) | right.eq(1)
+        return true.astype('float32').where(true | (left.eq(0) & right.eq(0)))
 
     @staticmethod
     def _neutralize_one_date(
         row: pd.Series, groups: pd.Series,
     ) -> pd.Series:
-        aligned = groups.reindex(row.index).fillna("__unknown__")
+        row = row.replace([np.inf, -np.inf], np.nan)
+        aligned = groups.reindex(row.index).replace({"__unknown__": None, "": None})
         return row - row.groupby(aligned).transform("mean")
 
     def indneutralize(
@@ -378,8 +486,9 @@ class Alpha101Evaluator:
             "IndClass": SimpleNamespace(
                 sector=sector, industry=panel.industry, subindustry=subindustry,
             ),
+            "less_than": self.less_than, "equal_to": self.equal_to, "logical_or": self.logical_or,
             "rank": self.rank, "delay": self.delay, "delta": self.delta,
-            "correlation": self.correlation, "covariance": self.covariance,
+            "correlation": self.correlation, "covariance": self.covariance, "finite_power": self.finite_power,
             "scale": self.scale, "signedpower": self.signedpower,
             "decay_linear": self.decay_linear, "ts_min": self.ts_min,
             "ts_max": self.ts_max, "ts_sum": self.ts_sum,
@@ -396,12 +505,13 @@ class Alpha101Evaluator:
         return namespace
 
     def evaluate(self, number: int) -> pd.DataFrame:
-        try:
-            formula = ALPHA101_FORMULAS[number]
-        except KeyError as exc:
-            raise ValueError(f"unknown Alpha101 formula: {number}") from exc
-        compiled = compile_formula(formula)
-        value = eval(compiled, {"__builtins__": {}}, self._namespace())  # noqa: S307
+        if number not in ALPHA101_FORMULAS:
+            raise ValueError(f"unknown Alpha101 formula: {number}")
+        exact_midpoint = number == 66 and self.panel.open_minus_midpoint is not None
+        namespace = self._namespace()
+        if exact_midpoint:
+            namespace = dict(namespace, open_minus_midpoint=self.panel.open_minus_midpoint.replace(0, np.nan))
+        value = eval(_expression(number, exact_midpoint), {"__builtins__": {}}, namespace)  # noqa: S307
         return _as_frame(value, self.template).replace([np.inf, -np.inf], np.nan)
 
     def evaluate_latest(

@@ -10,10 +10,18 @@ import psycopg2.extras
 from service.db import get_conn
 
 from .catalog import FACTOR_BY_NAME, FACTOR_SCHEMA_VERSION, FACTOR_SPECS
+from .issue import issue_category
 from .ownership import (
     SHARED_TECHNICAL_FIELDS, TECHNICAL_ALIASES, TECHNICAL_FEATURES,
     canonical_position, resolve_feature,
 )
+
+
+def _comparison_reason(reason):
+    return {
+        "provider_date_not_published_yet": "no_reference_values_in_local_date_sample",
+        "provider_factor_not_published_yet": "no_reference_values_for_factor_in_local_sample",
+    }.get(reason, reason)
 
 
 def factor_catalog_payload(*, family: str | None = None) -> dict[str, Any]:
@@ -127,13 +135,19 @@ def query_local_factor_values(
                 row["verification"] = {
                     name: {
                         "availability": "has_value" if row[name] is not None else "missing",
+                        "calculation_evidence": issue_category(resolve_feature(name)[0], row[name] is not None, row["audit_evidence"]),
                         "comparison_status": evidence.get((row["trade_date"], positions.get(name)), {}).get("validation_status", "not_compared"),
-                        "comparison_reason": evidence.get((row["trade_date"], positions.get(name)), {}).get("validation_reason"),
+                        "comparison_reason": _comparison_reason(evidence.get((row["trade_date"], positions.get(name)), {}).get("validation_reason")),
                         "input_issue": row["audit_evidence"].get("unresolved", {}).get(resolve_feature(name)[0]),
                         "exclusion": row["audit_evidence"].get("excluded", {}).get(resolve_feature(name)[0]),
                     }
                     for name in selected
                 }
+                for name, check in row["verification"].items():
+                    if check["calculation_evidence"] == "incorrect_short_window_value":
+                        row[name] = None
+                        check["availability"] = "blocked"
+
     finally:
         connection.close()
     return {
@@ -200,6 +214,7 @@ def factor_validation_payload(*, trade_date: date | None = None) -> dict[str, An
         connection.close()
     summary: dict[str, int] = {}
     for row in rows:
+        row["validation_reason"] = _comparison_reason(row["validation_reason"])
         status = str(row["validation_status"])
         summary[status] = summary.get(status, 0) + 1
     return {

@@ -9,6 +9,8 @@ import time
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
+import logging
+
 import requests
 
 from service.source_connectors import public_parsers as parsers
@@ -244,8 +246,11 @@ class PublicWebConnector:
             if self.archive is not None:
                 try:
                     self.archive.archive_failure(endpoint_key=request.endpoint_key, parameters=p, collector_name="public_query", error=exc, requested_at=started)
-                except Exception:
-                    pass
+                except Exception as archive_error:
+                    logging.getLogger(__name__).warning(
+                        "Failed to archive provider error for %s (%s)",
+                        request.endpoint_key, type(archive_error).__name__,
+                    )
             raise
         finally:
             parsers.TRANSPORT.reset(token)

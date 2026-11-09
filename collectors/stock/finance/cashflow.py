@@ -17,8 +17,9 @@ _FIELDS = [
     "c_recp_borrow","stot_cash_in_fnc_act","c_prepay_amt_borr",
     "c_pay_dist_dpcp_int_exp","stot_cashout_fnc_act","n_cash_flows_fnc_act",
     "free_cashflow","n_incr_cash_cash_equ","c_cash_equ_beg_period",
-    "c_cash_equ_end_period","net_profit","financian_exp",
-    "depr_fa_coga_dpba","oth_cash_pay_oper_act",
+    "c_cash_equ_end_period","net_profit","finan_exp",
+    "depr_fa_coga_dpba","amort_intang_assets","lt_amort_deferred_exp",
+    "use_right_asset_dep","oth_cash_pay_oper_act",
     "update_flag",
 ]
 

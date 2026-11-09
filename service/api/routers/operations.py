@@ -169,7 +169,11 @@ def tasks(
         asset_classes = task_asset_classes()
     except Exception:
         asset_classes = {}
+    from service.data_service.registry import DATASETS
+    storage = {dataset.name: dataset.table for dataset in DATASETS.list()}
     for item in items:
+        item['output_storage'] = [{'dataset': name, 'table': storage.get(name)}
+                                  for name in item.get('output_datasets', [])]
         item['automation'] = (automation.get(item['task_key'])
                               if item.get('lifecycle_status') == 'active' else None)
         item['asset_class'] = asset_classes.get(item['task_key'])
@@ -216,9 +220,13 @@ def task_relationships(
     instances = repository.list_executions(task_key=task["task_key"], limit=10)
     ids = [item["task_execution_id"] for item in instances]
     states = repository.execution_output_states(ids)
+    from service.data_service.registry import DATASETS
+    tables = {dataset.name: dataset.table for dataset in DATASETS.list()}
     return {
         "task": task,
         "sources": endpoints,
+        "output_storage": [{"dataset": name, "table": tables.get(name)}
+                           for name in task["definition"].get("output_datasets", [])],
         "recent_executions": [{key: item.get(key) for key in (
             "task_execution_id", "task_definition_id", "definition_version", "status",
             "observation_start", "observation_end", "purpose", "current_node_key",

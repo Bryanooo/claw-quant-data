@@ -479,6 +479,15 @@ def test_non_tushare_planning_uses_definition_resource_contract(source_id):
 
     assert len(specs) == 1
     assert specs[0].resource_class == "public-query"
+    if source_id == "chinabond":
+        historical = OrchestrationV2Runtime(Repository())._plan_acquisition(document, {
+            "purpose": "repair", "observation_key": "2026-11-06",
+            "observation_start": date(2026, 11, 6), "observation_end": date(2026, 11, 6),
+            "frozen_scope": {},
+        })
+        assert historical[0].parameters["parameters"] == {
+            "start_date": "2026-11-06", "end_date": "2026-11-06",
+        }
 
 
 def test_cn_lpr_prefers_official_chinamoney_source_with_bounded_period():
@@ -611,7 +620,7 @@ def test_dynamic_fanout_rejects_frozen_value_outside_universe(monkeypatch):
         )
 
 
-def test_factor_value_fanout_resumes_only_missing_factors(monkeypatch):
+def test_factor_value_rows_do_not_remove_unverified_requests(monkeypatch):
     monkeypatch.setattr(
         "service.orchestration_v2.runtime.list_fanout_values",
         lambda _source, as_of=None: ["alpha", "beta", "gamma"],
@@ -636,6 +645,7 @@ def test_factor_value_fanout_resumes_only_missing_factors(monkeypatch):
 
     assert [item.parameters["parameters"]["factor_name"] for item in specs] == [
         "alpha",
+        "beta",
         "gamma",
     ]
 

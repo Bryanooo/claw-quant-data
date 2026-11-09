@@ -27,6 +27,7 @@ class OrchestrationV2Worker:
         lease_seconds: int = 180,
         resource_classes: tuple[str, ...] = ("v2-backfill",),
         heartbeat_component: str = "worker-v2-backfill",
+        short_only: bool = False,
     ):
         self._repository = repository or OrchestrationV2Repository()
         self._runtime = OrchestrationV2Runtime(self._repository)
@@ -36,6 +37,7 @@ class OrchestrationV2Worker:
         self._resource_classes = resource_classes
         self._heartbeat_component = heartbeat_component
         self._stopping = False
+        self._short_only = short_only
         self._last_reclaim = 0.0
 
     def stop(self, *_args) -> None:
@@ -50,6 +52,7 @@ class OrchestrationV2Worker:
             worker_id=self._worker_id,
             resource_classes=self._resource_classes,
             lease_seconds=self._lease_seconds,
+            **({"short_only": True} if self._short_only else {}),
         )
         if not execution:
             return False
@@ -71,6 +74,7 @@ class OrchestrationV2Worker:
             details={
                 "resource_classes": list(self._resource_classes),
                 "orchestration_version": 2,
+                "short_only": self._short_only,
             },
         ).start()
         try:
@@ -100,6 +104,7 @@ def main() -> None:
         lease_seconds=int(os.getenv("V2_JOB_LEASE_SECONDS", "180")),
         resource_classes=resource_classes,
         heartbeat_component=os.getenv("V2_WORKER_COMPONENT", "worker-v2-backfill"),
+        short_only=os.getenv("V2_SHORT_ONLY", "false").lower() == "true",
     )
     signal.signal(signal.SIGTERM, worker.stop)
     signal.signal(signal.SIGINT, worker.stop)

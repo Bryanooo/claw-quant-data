@@ -9,6 +9,16 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from service.db import query
 
 
+def response_reason(row):
+    count = row.get('rows_fetched')
+    status = row.get('completion_status')
+    if count is None or status not in ('complete','empty','empty_verified'):
+        return 'provider_response_not_verified'
+    if status in ('empty','empty_verified') and int(count) != 0:
+        return 'provider_response_not_verified'
+    return 'provider_returned_empty' if int(count) == 0 else 'provider_response_did_not_fill_expected_dates'
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--audit-dir',type=Path,required=True)
@@ -45,7 +55,7 @@ def main():
         if not dates:
             continue
         evidence.append({**row,'missing_dates':dates,
-            'reason':'provider_returned_empty' if int(row['rows_fetched'] or 0)==0 else 'provider_response_did_not_fill_expected_dates',
+            'reason':response_reason(row),
             'permanent_unavailability_confirmed':False,
             'exempt_from_completeness':False})
     args.output.write_text(json.dumps({'generated_at':datetime.now(timezone.utc).isoformat(),

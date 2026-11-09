@@ -96,6 +96,23 @@ def test_daily_dispatch_does_not_create_weekend_work(monkeypatch):
     assert repository.requests == []
 
 
+def test_shanghai_midnight_does_not_select_open_new_york_date(monkeypatch):
+    from service.clock import business_time
+
+    cutoff = []
+    def query(statement, params):
+        if "tushare_norm_us_tradecal" in statement:
+            cutoff.append(params[0])
+            return [{"cal_date": date(2026, 11, 6)}]
+        return [{"cal_date": date(2026, 11, d)} for d in (10, 9, 6)]
+    monkeypatch.setattr(scheduling, "query", query)
+    monkeypatch.setattr(scheduling, "is_trade_day", lambda _: True)
+    with business_time("2026-11-10T00:15:00+08:00"):
+        scheduling.dispatch_latest_daily_acquisitions(
+            date(2026, 11, 10), include_current_daily=False, repository=_Repository())
+    assert cutoff == [date(2026, 11, 9)]  # US calendar query uses strict <
+
+
 def test_closed_day_keeps_next_morning_tasks_on_prior_open_day(monkeypatch):
     repository = _Repository()
     def calendar_query(statement, _params):
@@ -255,6 +272,7 @@ def test_daily_schedule_has_no_unbatched_dynamic_entity_fanout():
 
 def test_legacy_ggt_catalog_gap_still_builds_bounded_trade_date_request():
     policy = TusharePolicyRegistry().get("ggt_daily")
+    assert policy.automatic_safe
 
     assert parameters_for_policy(
         policy,

@@ -75,7 +75,7 @@ class FakeCoverageRepository:
     def expected_entity_count(self, rule, partition_date):
         return self.expected_entities
 
-    def snapshot_evidence(self, rule):
+    def snapshot_evidence(self, rule, **kwargs):
         return {
             "api_name": rule.collection_api_name or rule.dataset_name,
             "row_count": 3,
@@ -88,12 +88,13 @@ class FakeCoverageRepository:
             "active_history_jobs": 0,
         }
 
-    def collection_scope_evidence(self, rule):
+    def collection_scope_evidence(self, rule, **kwargs):
         return {
             "api_name": rule.collection_api_name or rule.dataset_name,
             "declared_jobs": 1,
             "active_jobs": 0,
             "verified_terminal_jobs": 1,
+            "certified_zero_rows": True,
             "unresolved_failures": 0,
         }
 
@@ -126,6 +127,25 @@ class CoverageOverviewRepository:
         return {"queued": 0, "running": 0}
 
 
+def test_one_invalid_margin_balance_cannot_hide_under_entity_tolerance():
+    day = date(2026, 10, 30)
+    repository = FakeCoverageRepository(
+        actual=[ActualPartition(
+            partition_date=day, row_count=4499, entity_count=4499,
+            known_incomplete=True, invalid_balance_rows=1,
+        )],
+        expected=[day, date(2026, 11, 2)], expected_entities=4500,
+    )
+    result = CoverageCalculator(repository).audit(
+        COVERAGE_RULES.get("margin_detail"), day, day, as_of=date(2026, 11, 4),
+        verified_transport_dates={day},
+    )
+    assert result.partitions[0].status == "partial"
+    assert result.partial_partitions == 1
+    assert result.present_partitions == 0
+    assert result.evidence["invalid_balance_rows"] == {"2026-10-30": 1}
+
+
 def test_latest_audits_materializes_verified_spans_once_per_overview():
     source = inspect.getsource(CoverageRepository.latest_audits)
 
@@ -145,7 +165,7 @@ def test_index_daily_rule_uses_adjacent_published_universe_baseline():
     assert rule.strategy is CoverageStrategy.TRADING_DAILY
     assert rule.entity_reference == "index_daily_adjacent"
     assert rule.min_entity_ratio == 0.85
-    assert rule.revision == 5
+    assert rule.revision == 6
     assert rule.entity_reference_max_age_days == 120
 
 
@@ -188,14 +208,14 @@ def test_stock_daily_rules_limit_entity_ratio_to_reconstructable_history():
         rule = COVERAGE_RULES.get(dataset_name)
         assert rule.min_entity_ratio == 0.90
         assert rule.entity_reference_max_age_days == 1825
-        assert rule.revision == 2
+        assert rule.revision == 3
 
 
 def test_technical_factor_snapshot_matches_governed_history_boundary():
     rule = COVERAGE_RULES.get("technical_factor_snapshot")
 
     assert rule.availability_start == date(2016, 1, 4)
-    assert rule.revision == 4
+    assert rule.revision == 5
     assert rule.required_values == (("audit_status", "ready"),)
 
 
@@ -209,8 +229,10 @@ def test_feature_quality_reaudit_is_not_latched_by_old_dataset_state():
 def test_fama_french_coverage_requires_current_formula_version():
     rule = COVERAGE_RULES.get("fama_french_daily")
 
-    assert rule.revision == 3
-    assert rule.required_values == (("formula_version", "ff3-sh-sz-v2"),)
+    assert rule.revision == 7
+    assert rule.required_values == (("formula_version", "ff3-sh-sz-v3"), ("status","ready"))
+    assert rule.row_readiness_authoritative
+    assert rule.finite_value_columns == ("mkt", "smb", "hml")
 
 
 def test_next_morning_margin_rules_do_not_expect_same_day_data():
@@ -219,8 +241,8 @@ def test_next_morning_margin_rules_do_not_expect_same_day_data():
         assert rule.grace_days == 1
         assert rule.release_after == time(9, 15)
         assert rule.release_on_next_trade_day is True
-    assert COVERAGE_RULES.get("margin").revision == 4
-    assert COVERAGE_RULES.get("margin_detail").revision == 4
+    assert COVERAGE_RULES.get("margin").revision == 6
+    assert COVERAGE_RULES.get("margin_detail").revision == 6
 
 
 def test_public_dataset_aliases_audit_their_actual_collection_api():
@@ -254,7 +276,7 @@ def test_known_provider_history_boundaries_are_shared_with_coverage_rules():
     cn_lpr = COVERAGE_RULES.get("cn_lpr")
     assert cn_lpr.availability_start == date(2013, 10, 25)
     assert cn_lpr.collection_api_name == "shibor_lpr"
-    assert cn_lpr.revision == 3
+    assert cn_lpr.revision == 4
 
 
 def test_authoritative_empty_exact_day_products_are_not_false_failures():
@@ -278,7 +300,7 @@ def test_financial_rules_only_compare_recent_point_in_time_universe():
     ):
         rule = COVERAGE_RULES.get(dataset_name)
         assert rule.strategy is CoverageStrategy.REPORT_QUARTERLY
-        assert rule.revision == 4
+        assert rule.revision == 5
         assert rule.entity_reference_max_age_days == 1825
         assert rule.accept_verified_empty is True
         assert rule.verified_empty_min_age_days == 1825
@@ -345,7 +367,7 @@ def test_manual_all_dataset_audit_includes_unscheduled_rules():
         include_unscheduled=True,
     )
 
-    assert result["total"] == len(COVERAGE_RULES.list()) == 206
+    assert result["total"] == len(COVERAGE_RULES.list())
     assert {item[0] for item in repository.calls} == {
         rule.dataset_name for rule in COVERAGE_RULES.list()
     }
@@ -444,13 +466,13 @@ def test_research_optional_datasets_have_strict_coverage_rules():
     assert chips.strategy is CoverageStrategy.TRADING_DAILY
     assert chips.entity_reference == "stock_daily"
     assert chips.min_entity_ratio == 0.90
-    assert chips.revision == 3
+    assert chips.revision == 4
     assert segments.strategy is CoverageStrategy.REPORT_QUARTERLY
     assert segments.require_transport_proof is True
-    assert segments.revision == 2
+    assert segments.revision == 4
     assert northbound.strategy is CoverageStrategy.OBSERVED_ONLY
     assert northbound.require_transport_proof is True
-    assert northbound.revision == 2
+    assert northbound.revision == 3
 
 
 def test_report_research_history_uses_calendar_daily_transport_audit():
@@ -464,7 +486,7 @@ def test_report_research_history_uses_calendar_daily_transport_audit():
     assert rule.availability_start == date(2010, 1, 1)
     assert rule.accept_verified_empty is True
     assert rule.require_transport_proof is True
-    assert rule.revision == 2
+    assert rule.revision == 3
 
 
 def test_calendar_daily_audit_includes_weekends_without_market_calendar():
@@ -512,11 +534,11 @@ def test_ownership_quarterly_history_has_exhaustive_transport_contracts():
     assert holders.strategy is CoverageStrategy.REPORT_QUARTERLY
     assert holders.availability_start == date(1990, 12, 31)
     assert holders.require_transport_proof is True
-    assert holders.revision == 2
+    assert holders.revision == 3
     assert float_holders.strategy is CoverageStrategy.REPORT_QUARTERLY
     assert float_holders.availability_start == date(2003, 3, 31)
     assert float_holders.require_transport_proof is True
-    assert float_holders.revision == 2
+    assert float_holders.revision == 3
 
 
 def test_observed_partition_without_required_transport_is_partial():
@@ -986,7 +1008,8 @@ def test_upstream_availability_boundary_does_not_create_fake_history_gaps():
 def test_every_public_dataset_has_an_explicit_coverage_classification():
     rules = COVERAGE_RULES.list()
 
-    assert len(rules) == len(DATASETS.list()) == 206
+    assert len(rules) == len(DATASETS.list())
+    assert 'valuation_percentile_snapshot' in {r.dataset_name for r in rules}
     assert {item.dataset_name for item in rules} == {
         item.name for item in DATASETS.list()
     }
@@ -1029,7 +1052,7 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert COVERAGE_RULES.get("adj_factor").availability_start == date(1991, 1, 3)
     assert COVERAGE_RULES.get("adj_factor").entity_reference == "stock_daily"
     assert COVERAGE_RULES.get("adj_factor").min_entity_ratio == 1.0
-    assert COVERAGE_RULES.get("adj_factor").revision == 3
+    assert COVERAGE_RULES.get("adj_factor").revision == 4
     repository_source = Path(
         "service/data_coverage/repository.py"
     ).read_text()
@@ -1045,7 +1068,7 @@ def test_only_proven_rules_are_automatically_scheduled():
     assert factor_value.entity_column == "factor_name"
     assert factor_value.entity_reference == "factor_catalog"
     assert factor_value.min_entity_ratio == 1.0
-    assert factor_value.revision == 4
+    assert factor_value.revision == 5
     assert COVERAGE_RULES.get("cn_gdp").strategy.value == "report_quarterly"
     assert COVERAGE_RULES.get("cn_gdp").availability_start == date(1992, 3, 31)
     assert COVERAGE_RULES.get("cn_pmi").strategy.value == "calendar_monthly"
@@ -1062,19 +1085,19 @@ def test_only_proven_rules_are_automatically_scheduled():
     sge_daily = COVERAGE_RULES.get("sge_daily")
     assert sge_daily.strategy.value == "trading_daily"
     assert sge_daily.accept_verified_empty is True
-    assert sge_daily.revision == 4
+    assert sge_daily.revision == 5
     etf_share = COVERAGE_RULES.get("etf_share_size")
     assert etf_share.accept_verified_empty is True
-    assert etf_share.revision == 4
+    assert etf_share.revision == 5
     tdx_daily = COVERAGE_RULES.get("tdx_daily")
     assert tdx_daily.availability_start == date(2025, 3, 28)
-    assert tdx_daily.revision == 2
+    assert tdx_daily.revision == 3
     repurchase = COVERAGE_RULES.get("repurchase")
     assert repurchase.strategy.value == "calendar_monthly"
     assert repurchase.availability_start == date(2015, 1, 1)
     assert repurchase.accept_verified_empty is True
     assert repurchase.require_transport_proof is True
-    assert repurchase.revision == 3
+    assert repurchase.revision == 4
 
 
 def test_manual_repair_queues_only_confirmed_problem_partitions():
@@ -1277,7 +1300,8 @@ def test_audit_evidence_without_security_dates_is_untouched():
     assert compact_audit_evidence(evidence) == evidence
 
 
-def test_save_audit_persists_the_compacted_evidence():
+@pytest.mark.parametrize("newer_exists", [False, True])
+def test_save_audit_persists_the_compacted_evidence(newer_exists):
     from service.data_coverage.models import CoverageAuditResult
     from service.data_coverage.repository import CoverageRepository
 
@@ -1288,6 +1312,8 @@ def test_save_audit_persists_the_compacted_evidence():
             statements.append((statement, parameters))
 
         def fetchone(self):
+            if "SELECT EXISTS" in statements[-1][0]:
+                return (newer_exists,)
             return (7,)
 
         def __enter__(self):
@@ -1332,6 +1358,11 @@ def test_save_audit_persists_the_compacted_evidence():
         },
     )
 
+    if newer_exists:
+        with pytest.raises(ValueError, match="obsolete coverage rule"):
+            repository.save_audit(None, result)
+        assert not any("DELETE FROM" in sql for sql, _ in statements)
+        return
     repository.save_audit(None, result)
 
     audit_insert = next(

@@ -26,6 +26,11 @@ def test_scheduler_contains_only_v2_control_jobs():
 
 def test_factor_provider_revalidation_is_bounded(monkeypatch):
     captured = {}
+    dispatched = []
+    monkeypatch.setattr(
+        "service.orchestration_v2.factor_reference.dispatch_reference_sample",
+        lambda repository, day: dispatched.append(day),
+    )
 
     def revalidate(**kwargs):
         captured.update(kwargs)
@@ -35,6 +40,7 @@ def test_factor_provider_revalidation_is_bounded(monkeypatch):
         scheduler_module, "revalidate_provider_pending_dates", revalidate
     )
     assert scheduler_module.run_factor_provider_revalidation() == 1
+    assert len(dispatched) == 1
     assert captured == {"limit": 8}
 
 
@@ -94,7 +100,7 @@ def test_ready_transformation_dispatch_freezes_exact_input_states():
     assert repository.request.task_key == "local_factor_snapshot"
     assert repository.request.observation_key == "2026-10-09"
     assert repository.request.trigger_source.value == "dependency"
-    assert "unified-features-quality-v5" in repository.request.idempotency_key
+    assert "unified-features-pit-v6" in repository.request.idempotency_key
     assert ":aux:financial-v1" in repository.request.idempotency_key
     assert repository.request.frozen_scope["input_dataset_states"] == {
         "stock_daily": {"dataset_state_id": 101, "revision": 2},
@@ -173,6 +179,9 @@ def test_coverage_reconciler_sums_dataset_counts(monkeypatch):
     class Repository:
         def reconcile_resolved_attention_executions(self):
             return 4
+
+        def revoke_obsolete_daily_certificates(self):
+            return 0
 
         def reconcile_duplicate_attention_executions(self):
             return 1

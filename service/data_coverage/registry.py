@@ -1,6 +1,7 @@
 """Coverage classification and audit rules for every public dataset."""
 
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import date, time
 
 from service.data_coverage.models import (
@@ -18,16 +19,29 @@ from service.history_baselines import (
 )
 
 
+# The acquisition window follows the provider's announcement / online issue
+# date. The public query API keeps its independent business-date ordering.
+REQUEST_DATE_COLUMNS = {'dividend': 'ann_date', 'stk_managers': 'ann_date', 'new_share': 'ipo_date',
+                        'fund_company': None, 'fut_weekly_detail': 'week_date'}
+
+
 class CoverageRuleRegistry:
     def __init__(self, rules: Iterable[CoverageRule]):
         by_name: dict[str, CoverageRule] = {}
         for rule in rules:
             if rule.dataset_name in by_name:
                 raise ValueError(f"duplicate coverage rule: {rule.dataset_name}")
+            if rule.row_readiness_authoritative and (
+                rule.require_transport_proof or not rule.required_values
+                # This JSON product has independent typed population/median
+                # predicates in business_predicates rather than scalar columns.
+                or (not rule.finite_value_columns and rule.dataset_name != "valuation_percentile_snapshot")
+            ):
+                raise ValueError(f"row readiness needs independent value predicates: {rule.dataset_name}")
             dataset = DATASETS.get(rule.dataset_name)
             if (
                 dataset.read_table != rule.table
-                or dataset.date_column != rule.date_column
+                or REQUEST_DATE_COLUMNS.get(dataset.name, dataset.date_column) != rule.date_column
             ):
                 raise ValueError(f"coverage rule disagrees with dataset: {rule.dataset_name}")
             by_name[rule.dataset_name] = rule
@@ -70,6 +84,8 @@ def _rule(
     entity_reference_max_age_days: int | None = None,
     calendar_exchange: str = "SSE",
     required_values: tuple[tuple[str, str], ...] = (),
+    row_readiness_authoritative: bool = False,
+    finite_value_columns: tuple[str, ...] = (),
 ) -> CoverageRule:
     dataset = DATASETS.get(dataset_name)
     if not dataset.date_column:
@@ -98,23 +114,26 @@ def _rule(
         entity_reference_max_age_days=entity_reference_max_age_days,
         calendar_exchange=calendar_exchange,
         required_values=required_values,
+        row_readiness_authoritative=row_readiness_authoritative,
+        finite_value_columns=finite_value_columns,
     )
 
 
 def _classified_rule(dataset_name: str) -> CoverageRule:
     dataset = DATASETS.get(dataset_name)
-    if dataset.date_column:
+    audit_date = REQUEST_DATE_COLUMNS.get(dataset_name, dataset.date_column)
+    if audit_date:
         strategy = CoverageStrategy.OBSERVED_ONLY
         description = (
-            "未配置可证明的预期日历；展示实际采集到的日期分区，不推断缺口"
+            "无可证明的固定发布日历；核对有界请求的穷尽和入库证据，不虚构逐日缺口"
         )
     else:
         strategy = CoverageStrategy.NON_TEMPORAL
-        description = "数据没有日期分区，日期覆盖审计不适用"
+        description = "无日期分区；按完整快照及对应请求范围的穷尽证据验收"
     return CoverageRule(
         dataset_name=dataset.name,
         table=dataset.read_table,
-        date_column=dataset.date_column,
+        date_column=audit_date,
         date_storage=dataset.date_storage,
         strategy=strategy,
         collection_api_name=dataset_name,
@@ -178,6 +197,7 @@ SAME_DAY_RELEASE_DATASETS = {
 
 
 _EXPLICIT_RULES = [
+
         _rule(
             "adj_factor",
             CoverageStrategy.TRADING_DAILY,
@@ -243,8 +263,10 @@ _EXPLICIT_RULES = [
             "valuation_percentile_snapshot", CoverageStrategy.TRADING_DAILY,
             collection_api_name=None, entity_column=None,
             availability_start=date(2026, 10, 30), scheduled=False,
-            required_values=(("formula_version", "group-valuation-v1"), ("audit_status", "ready")),
-            description="两指定指数的同日估值分布；仅ready分区可验收，partial诊断不能算完成",
+            required_values=(("formula_version", "group-valuation-v2-sample-contract"), ("audit_status", "ready")),
+            description="两指定指数同日有效样本估值分布；源NULL保持未知，成员缺行或独立数值检查失败仍阻断",
+            revision=2,
+            row_readiness_authoritative=True,
         ),
         _rule(
             "fama_french_daily",
@@ -265,8 +287,10 @@ _EXPLICIT_RULES = [
             default_lookback_days=120,
             scheduled=False,
             require_transport_proof=False,
-            revision=3,
-            required_values=(("formula_version", "ff3-sh-sz-v2"),),
+            revision=6,
+            required_values=(("formula_version", "ff3-sh-sz-v3"), ("status","ready")),
+            row_readiness_authoritative=True,
+            finite_value_columns=("mkt", "smb", "hml"),
             description=(
                 "自2020年起回溯并前向维护，由 stock_daily、daily_basic 与 stock_st "
                 "的同一交易日数据生成，按公告日读取当时可见财报，并严格核对日线与市值行；"
@@ -396,7 +420,7 @@ _EXPLICIT_RULES = [
                 "自 2010-03-31 融资融券业务启动日起，按交易日检查"
                 "当期已开展业务的交易所汇总是否全部发布"
             ),
-            revision=4,
+            revision=5,
         ),
         _rule(
             "margin_detail",
@@ -412,7 +436,7 @@ _EXPLICIT_RULES = [
                 "自 2010-03-31 融资融券业务启动日起，按交易日及当日"
                 "两融标的池识别交易所分批发布或截断"
             ),
-            revision=4,
+            revision=5,
         ),
         _rule(
             "cyq_perf",
@@ -445,7 +469,7 @@ _EXPLICIT_RULES = [
             accept_verified_empty=True,
             require_transport_proof=True,
             description=(
-                "按已到披露期限的报告期审计主营行业/产品构成；稀疏季度"
+                "按已到披露期限的报告期审计主营行业、产品及地区构成；稀疏季度"
                 "必须由 VIP 全市场分页穷尽证书证明，不能以已有行数代替完整性"
             ),
             revision=2,
@@ -840,8 +864,8 @@ _EXPLICIT_RULES = [
                     else None
                 ),
                 min_entity_ratio=(
-                    0.90
-                    if dataset_name in {"fund_adj", "stk_factor", "stk_factor_pro"}
+                    1.0 if dataset_name in {"stk_factor", "stk_factor_pro"}
+                    else 0.90 if dataset_name == "fund_adj"
                     else None
                 ),
                 description="按 SSE 交易日检查每日稳定发布的数据分区",
@@ -869,8 +893,8 @@ _EXPLICIT_RULES = [
                     else UPSTREAM_HISTORY_STARTS.get(dataset_name)
                 ),
                 revision=(
-                    5
-                    if dataset_name in {"fund_adj", "stk_factor", "stk_factor_pro"}
+                    6 if dataset_name in {"stk_factor", "stk_factor_pro"}
+                    else 5 if dataset_name == "fund_adj"
                     else 4
                     if dataset_name == "etf_share_size"
                     else 4
@@ -894,13 +918,34 @@ _EXPLICIT_RULES = [
             for dataset_name in SSE_TRADING_DAILY_DATASETS
         ],
 ]
+# Both API names read the same canonical table: the raw alias must not bypass
+# the daily calendar and security-universe contract used by its public alias.
+_EXPLICIT_RULES.append(replace(
+    next(rule for rule in _EXPLICIT_RULES if rule.dataset_name == "stock_daily_basic"),
+    dataset_name="daily_basic", collection_api_name="daily_basic", scheduled=False,
+))
+# A date with a few rows is not an exhausted market partition. Acquisitions
+# require whole-request evidence in addition to any business/universe checks.
+_DERIVED_OUTPUTS = frozenset({"ggt_monthly", "fama_french_daily", "local_factor_snapshot",
+                              "technical_factor_snapshot", "valuation_percentile_snapshot"})
+AUDIT_PREVIOUS_RULE_REVISIONS = {
+    dataset.name: next((rule.revision for rule in _EXPLICIT_RULES
+                        if rule.dataset_name == dataset.name), 1)
+    for dataset in DATASETS.list()
+}
+_EXPLICIT_RULES = [
+replace(rule,
+    require_transport_proof=(rule.require_transport_proof or (
+        rule.strict_audit_mode == "expected_partition" and rule.dataset_name not in _DERIVED_OUTPUTS)),
+    revision=rule.revision + (2 if rule.dataset_name in {'local_factor_snapshot', 'fina_mainbz'} else 1)
+    ) for rule in _EXPLICIT_RULES]
 _EXPLICIT_NAMES = {rule.dataset_name for rule in _EXPLICIT_RULES}
 
 COVERAGE_RULES = CoverageRuleRegistry(
     [
         *_EXPLICIT_RULES,
         *(
-            _classified_rule(dataset.name)
+            replace(_classified_rule(dataset.name), revision=3 if dataset.name in REQUEST_DATE_COLUMNS else 2)
             for dataset in DATASETS.list()
             if dataset.name not in _EXPLICIT_NAMES
         ),

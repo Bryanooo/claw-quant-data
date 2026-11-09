@@ -5,6 +5,7 @@ from typing import Any
 
 from psycopg2 import sql
 
+from service.financial_statements import VERSIONED_STATEMENTS
 from service.data_service.models import DatasetQuery, DatasetSpec
 
 
@@ -27,8 +28,22 @@ class DatasetRepository:
             (dataset.read_table,),
         )
 
+    @staticmethod
+    def _read_relation(dataset: DatasetSpec, query: DatasetQuery):
+        if query.as_of is None or dataset.table not in VERSIONED_STATEMENTS:
+            return sql.Identifier(dataset.read_table), ()
+        code = query.exact_filters.get("ts_code")
+        relation = sql.SQL("{}(%s, %s, %s, %s, %s, %s)").format(
+            sql.Identifier(dataset.table + "_as_of")
+        )
+        return relation, (query.as_of, [code] if code else None,
+                          query.date or query.start_date, query.date or query.end_date,
+                          query.exact_filters.get("report_type"), not query.consolidated_financials)
+
     def records(self, dataset: DatasetSpec, query: DatasetQuery) -> list[dict]:
         where_sql, params = self._where_clause(dataset, query)
+        relation, source_params = self._read_relation(dataset, query)
+        params = (*source_params, *params)
         direction = sql.SQL("DESC" if dataset.default_descending else "ASC")
         order_columns = dataset.stable_order
         # PostgreSQL applies a trailing direction only to the immediately
@@ -53,7 +68,7 @@ class DatasetRepository:
                 "SELECT * FROM {table}{where} ORDER BY {order} "
                 "LIMIT %s OFFSET %s"
             ).format(
-                table=sql.Identifier(dataset.read_table),
+                table=relation,
                 where=where_sql,
                 order=order_sql,
             )
@@ -64,6 +79,8 @@ class DatasetRepository:
 
     def count(self, dataset: DatasetSpec, query: DatasetQuery) -> int:
         where_sql, params = self._where_clause(dataset, query)
+        relation, source_params = self._read_relation(dataset, query)
+        params = (*source_params, *params)
         if self._requires_point_in_time_projection(dataset, query):
             statement = sql.SQL(
                 "SELECT count(*) AS total FROM ({projection}) AS point_in_time"
@@ -72,7 +89,7 @@ class DatasetRepository:
             statement = sql.SQL(
                 "SELECT count(*) AS total FROM {table}{where}"
             ).format(
-                table=sql.Identifier(dataset.read_table),
+                table=relation,
                 where=where_sql,
             )
         row = self._database.fetch_one(statement, params)
@@ -249,7 +266,8 @@ class DatasetRepository:
                 conditions.append(sql.SQL("{} <= %s").format(date_column))
                 params.append(query.end_date)
 
-        if query.as_of is not None and dataset.availability_column:
+        if (query.as_of is not None and dataset.availability_column
+                and dataset.table not in VERSIONED_STATEMENTS):
             conditions.append(
                 sql.SQL("{} <= %s").format(
                     sql.Identifier(dataset.availability_column)

@@ -622,7 +622,7 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
         "daily", "adj_factor", "daily_basic", "index_daily", "stock_basic"
     ]
     assert technical_snapshot.scope_contract["implementation_version"] == (
-            "unified-features-quality-v5"
+            "unified-features-pit-v6"
     )
     fama_french = by_key["fama_french_daily"]
     assert fama_french.input_datasets == (

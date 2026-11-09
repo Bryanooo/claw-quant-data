@@ -42,9 +42,10 @@ IMPLEMENTATION_DIGEST = hashlib.sha256(json.dumps(
         "implementation_version": FACTOR_IMPLEMENTATION_VERSION,
         "source_digests": {
             name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
-            for name in ("materializer.py", "financial.py", "market.py", "alpha101.py", "alpha101_formulas.py", "quality.py")
+            for name in ("materializer.py", "financial.py", "financial_dependencies.py", "market.py", "alpha101.py", "alpha101_formulas.py", "quality.py")
         } | {name: hashlib.sha256((Path(__file__).parents[2] / name).read_bytes()).hexdigest()
-             for name in ("research/technical_indicators.py", "orchestration_v2/transformations.py")},
+             for name in ("research/technical_indicators.py", "orchestration_v2/transformations.py",
+                          "financial_filing_facts.py")},
         "factors": [
             {
                 "position": item.position,
@@ -64,6 +65,37 @@ IMPLEMENTATION_DIGEST = hashlib.sha256(json.dumps(
 ).encode()).hexdigest()
 
 MAX_MARKET_LOOKBACK = 1325
+
+# Keep provider identities in the evidence. A BSE rename is not a missing
+# bar; ambiguous mappings and competing traded identities are not accepted.
+# suspend_d: S = suspension, R = resumption; a nonempty timing is intraday.
+# Contract: https://tushare.pro/document/2?doc_id=214
+FULL_DAY_SUSPENSION_SQL = """
+    WITH bounds AS (
+        SELECT %s::date AS start_date, %s::date AS end_date, %s::text[] AS codes
+    ), full_days AS MATERIALIZED (
+        SELECT s.* FROM suspend_d s, bounds b
+        WHERE s.trade_date BETWEEN b.start_date AND b.end_date
+          AND s.suspend_type='S' AND COALESCE(btrim(s.suspend_timing), '')=''
+    ), mapped AS (
+        SELECT s.trade_date, s.ts_code, s.ts_code AS provider_ts_code
+        FROM full_days s, bounds b WHERE s.ts_code=ANY(b.codes)
+        UNION
+        SELECT s.trade_date, m.n_code AS ts_code, s.ts_code AS provider_ts_code
+        FROM full_days s JOIN bse_mapping m ON m.o_code=s.ts_code
+        CROSS JOIN bounds b
+        WHERE m.n_code=ANY(b.codes) AND m.n_code<>m.o_code
+          AND right(m.n_code,3)='.BJ' AND right(m.o_code,3)='.BJ'
+          AND m.list_date<=s.trade_date
+          AND NOT EXISTS (SELECT 1 FROM bse_mapping other
+              WHERE (other.o_code=m.o_code AND other.n_code<>m.n_code)
+                 OR (other.n_code=m.n_code AND other.o_code<>m.o_code))
+          AND NOT EXISTS (SELECT 1 FROM daily old
+              WHERE old.ts_code=m.o_code AND old.trade_date=s.trade_date)
+    )
+    SELECT DISTINCT trade_date, ts_code, provider_ts_code FROM mapped
+    ORDER BY trade_date, ts_code, provider_ts_code
+"""
 
 
 def sync_factor_catalog(connection: Any) -> None:
@@ -210,6 +242,9 @@ def _fill_documented_suspension_sessions(
             documented_missing,
             previous_close,
         )
+    if "open_minus_midpoint" in matrices:
+        matrices["open_minus_midpoint"] = matrices["open_minus_midpoint"].mask(
+            documented_missing & previous_close.notna(), 0.0)
     for field in ("vol", "amount", "turnover_rate"):
         matrices[field] = matrices[field].mask(documented_missing, 0.0)
     for field in ("total_mv", "circ_mv"):
@@ -234,6 +269,30 @@ def _fill_documented_suspension_sessions(
     return traded_amount_cny, unexplained, int(documented_missing.sum().sum())
 
 
+def _market_history_dates(connection: Any, target_date: date) -> list[date]:
+    # Jump between distinct date keys in idx_daily_trade_date. A DISTINCT scan
+    # walks every security's entry for each of the 1,325 sessions.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            WITH RECURSIVE sessions(trade_date, n) AS (
+                (SELECT trade_date, 1 FROM daily WHERE trade_date <= %s
+                 ORDER BY trade_date DESC LIMIT 1)
+                UNION ALL
+                SELECT prior.trade_date, sessions.n + 1
+                FROM sessions CROSS JOIN LATERAL (
+                    SELECT trade_date FROM daily WHERE trade_date < sessions.trade_date
+                    ORDER BY trade_date DESC LIMIT 1
+                ) prior
+                WHERE sessions.n < %s
+            )
+            SELECT trade_date FROM sessions ORDER BY trade_date DESC
+            """,
+            (target_date, MAX_MARKET_LOOKBACK),
+        )
+        return [row[0] for row in cursor.fetchall()]
+
+
 def _load_market_panel(
     connection: Any, target_date: date,
 ) -> tuple[MarketFactorPanel, pd.Index, dict[str, int]]:
@@ -241,10 +300,7 @@ def _load_market_panel(
         connection,
         """
         WITH selected_dates AS (
-            SELECT trade_date
-            FROM (SELECT DISTINCT trade_date FROM daily WHERE trade_date <= %s) AS dates
-            ORDER BY trade_date DESC
-            LIMIT %s
+            SELECT unnest(%s::date[]) AS trade_date
         ), target_codes AS (
             SELECT ts_code FROM daily WHERE trade_date=%s
         ), factors AS (
@@ -272,6 +328,7 @@ def _load_market_panel(
                daily.open::DOUBLE PRECISION AS open,
                daily.high::DOUBLE PRECISION AS high,
                daily.low::DOUBLE PRECISION AS low,
+               (daily.open - (daily.high + daily.low) / 2)::double precision AS open_minus_midpoint,
                daily.close::DOUBLE PRECISION AS close,
                daily.vol::DOUBLE PRECISION AS vol,
                daily.amount::DOUBLE PRECISION AS amount,
@@ -285,7 +342,7 @@ def _load_market_panel(
         LEFT JOIN basics USING (ts_code, trade_date)
         ORDER BY daily.trade_date, daily.ts_code
         """,
-        (target_date, MAX_MARKET_LOOKBACK, target_date),
+        (_market_history_dates(connection, target_date), target_date),
     )
     if rows.empty:
         raise RuntimeError(f"no stock daily bars for local factors on {target_date}")
@@ -294,7 +351,7 @@ def _load_market_panel(
     securities = pd.Index(sorted(current.astype(str).unique()), name="ts_code")
     numeric = (
         "open", "high", "low", "close", "vol", "amount", "adj_factor",
-        "turnover_rate", "total_mv", "circ_mv",
+        "turnover_rate", "total_mv", "circ_mv", "open_minus_midpoint",
     )
     for field in numeric:
         rows[field] = pd.to_numeric(rows[field], errors="coerce")
@@ -310,7 +367,7 @@ def _load_market_panel(
         .set_index("ts_code")["adj_factor"]
     )
     adjustment = rows["adj_factor"] / rows["ts_code"].map(latest_adjustment)
-    for field in ("open", "high", "low", "close", "amount"):
+    for field in ("open", "high", "low", "close", "amount", "open_minus_midpoint"):
         rows[field] = rows[field] * adjustment
     matrices = {field: _pivot(rows, field, columns=securities) for field in numeric}
     industries = (
@@ -321,13 +378,7 @@ def _load_market_panel(
     first_date = rows["trade_date"].min().date()
     suspension_rows = _read_frame(
         connection,
-        """
-        SELECT DISTINCT trade_date, ts_code
-        FROM suspend_d
-        WHERE trade_date BETWEEN %s AND %s
-          AND ts_code=ANY(%s)
-        ORDER BY trade_date, ts_code
-        """,
+        FULL_DAY_SUSPENSION_SQL,
         (first_date, target_date, list(securities)),
     )
     traded_amount_cny, unexplained_market_gaps, suspension_cells_filled = (
@@ -362,11 +413,13 @@ def _load_market_panel(
     alpha_panel = Alpha101Panel(
         matrices["open"], matrices["high"], matrices["low"], matrices["close"],
         matrices["vol"], matrices["amount"], matrices["total_mv"], industries,
+        open_minus_midpoint=matrices["open_minus_midpoint"],
     )
     diagnostics = {
         "market_rows": int(len(rows)),
         "market_dates": int(rows["trade_date"].nunique()),
         "securities": int(len(securities)),
+        "missing_target_adj": int(latest_adjustment.isna().sum()),
         "missing_adjustment_rows": int(rows["adj_factor"].isna().sum()),
         "missing_daily_basic_rows": int(rows["total_mv"].isna().sum()),
         "market_input_digest": source_digest,
@@ -403,6 +456,7 @@ _BALANCE_COLUMNS = {
     "total_cur_liab": "total_cur_liab", "total_ncl": "total_ncl",
     "total_liab": "total_liab", "total_hldr_eqy_inc_min_int": "equity",
     "minority_int": "minority_int", "total_share": "total_share",
+    "total_hldr_eqy_exc_min_int": "equity_parent",
     "lt_rec": "longterm_receivable",
 }
 _CASHFLOW_COLUMNS = {
@@ -415,10 +469,23 @@ _CASHFLOW_COLUMNS = {
     "c_paid_to_for_empl": "staff_paid", "free_cashflow": "free_cashflow",
 }
 _INDICATOR_COLUMNS = {"profit_dedt": "profit_dedt"}
+_REPORT_TYPE_BY_METRIC = {
+    **dict.fromkeys(_INCOME_COLUMNS.values(), "income_report_type"),
+    **dict.fromkeys(_CASHFLOW_COLUMNS.values(), "cashflow_report_type"),
+}
 _FLOW_METRICS = frozenset({
     *_INCOME_COLUMNS.values(), *_CASHFLOW_COLUMNS.values(),
     *_INDICATOR_COLUMNS.values(),
 }) - {"basic_eps"}
+
+
+def _reported_parent_equity(reported: pd.Series, total: pd.Series, minority: pd.Series) -> pd.Series:
+    """Use the direct amount or a complete same-version accounting identity."""
+    derived = total - minority
+    # Allow a cent of reporting precision plus binary conversion at large balances.
+    tolerance = 0.01 + np.finfo(float).eps * (total.abs() + minority.abs() + reported.abs())
+    conflict = reported.notna() & derived.notna() & (reported - derived).abs().gt(tolerance)
+    return reported.combine_first(derived).mask(conflict)
 
 
 def _statement_rows(
@@ -426,26 +493,44 @@ def _statement_rows(
     table: str,
     columns: dict[str, str],
     target_date: date,
+    *,
+    securities: pd.Index | None = None,
 ) -> pd.DataFrame:
+    symbols = None if securities is None else list(securities)
     selected = ", ".join(columns)
-    availability = "ann_date" if table == "fina_indicator" else "greatest(ann_date, f_ann_date)"
-    report_filter = "" if table == "fina_indicator" else "AND report_type IN ('1', '4')"
+    filing_enabled = table in {"income", "cashflow", "balancesheet"}
+    if filing_enabled:
+        selected += ", report_type, greatest(ann_date,f_ann_date) AS _disclosure"
     rows = _read_frame(
         connection,
-        f"""
-        SELECT DISTINCT ON (ts_code, end_date)
-               ts_code, end_date, ann_date, {selected}
-        FROM {table}
-        WHERE {availability} <= %s
-          {report_filter}
-          AND end_date >= %s
-        ORDER BY ts_code, end_date, {availability} DESC, ann_date DESC, created_at DESC
-        """,
-        (target_date, target_date - timedelta(days=6 * 366)),
+        f"SELECT ts_code, end_date, ann_date, {selected} FROM {table}_as_of(%s,%s,%s,%s)",
+        (target_date, symbols, target_date - timedelta(days=6 * 366), target_date),
     )
-    if rows.empty:
-        return rows
-    return rows.rename(columns=columns)
+    evidence = []
+    if filing_enabled:
+        from service.financial_filing_facts import recover_rows
+        facts = _read_frame(connection, """SELECT * FROM financial_filing_fact
+            WHERE statement_table=%s AND revoked_at IS NULL
+              AND available_on<=%s AND end_date BETWEEN %s AND %s
+              AND (%s::text[] IS NULL OR ts_code=ANY(%s::text[]))""",
+            (table, target_date, target_date-timedelta(days=6*366), target_date, symbols, symbols))
+        if not facts.empty:
+            # Evidence is sparse: do not turn the full multi-year market frame
+            # into hundreds of thousands of Python dictionaries for one filing.
+            affected = rows['ts_code'].isin(facts['ts_code'])
+            recovered, evidence = recover_rows(rows.loc[affected].to_dict('records'), facts.to_dict('records'),
+                table=table, fields=list(columns), cutoff=target_date)
+            rows = pd.concat([rows.loc[~affected], pd.DataFrame(recovered)], ignore_index=True)
+            rows = rows.sort_values(['ts_code','end_date']).reset_index(drop=True)
+    if not rows.empty:
+        rows = rows.drop(columns=['_disclosure'], errors='ignore')
+        if table in {'income', 'cashflow'}:
+            rows = rows.rename(columns={'report_type': f'{table}_report_type'})
+        else:
+            rows = rows.drop(columns=['report_type'], errors='ignore')
+        rows = rows.rename(columns=columns)
+    rows.attrs['filing_evidence'] = evidence
+    return rows
 
 
 def _single_quarter(record: pd.Series, prior: pd.Series | None, metric: str) -> float:
@@ -458,6 +543,9 @@ def _single_quarter(record: pd.Series, prior: pd.Series | None, metric: str) -> 
     if end.month == 3:
         return float(value)
     if prior is None:
+        return np.nan
+    kind = _REPORT_TYPE_BY_METRIC.get(metric)
+    if kind in record and record[kind] != prior[kind]:
         return np.nan
     prior_end = pd.Timestamp(prior["end_date"])
     prior_value = prior.get(metric)
@@ -479,6 +567,10 @@ def _ttm_value(records: pd.DataFrame, position: int, metric: str, *, indexed=Non
     if indexed is None:
         indexed = records.set_index("end_date")
     if prior_year_end not in indexed.index or prior_period_end not in indexed.index:
+        return np.nan
+    kind = _REPORT_TYPE_BY_METRIC.get(metric)
+    if kind in indexed and not (record[kind] == indexed.at[prior_year_end, kind]
+                                == indexed.at[prior_period_end, kind]):
         return np.nan
     annual = indexed.loc[prior_year_end, metric]
     previous_period = indexed.loc[prior_period_end, metric]
@@ -510,6 +602,23 @@ def _derive_investing_inflow(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     return result, evidence
 
 
+def _complete_annual_mean(records: pd.DataFrame, annual_end, metrics: list[str]) -> pd.Series:
+    """Five consecutive annual reports, with no per-field skipna shortcut."""
+    expected = pd.DatetimeIndex([annual_end-pd.DateOffset(years=n) for n in range(5)])
+    # The panel builder already normalized every metric to numeric. Repeating
+    # per-column coercion here for each security dominates whole-market audits.
+    values = records.set_index('end_date').reindex(expected)[metrics]
+    return values.mean(skipna=False).where(np.isfinite(values).all())
+
+
+def _complete_market_mean(values: pd.DataFrame, expected: list[date], securities: pd.Index) -> pd.Series:
+    """No shortened history or missing-session average masquerading as five years."""
+    if not expected or not isinstance(values.index, pd.DatetimeIndex):
+        return pd.Series(np.nan,index=securities,dtype=float)
+    selected = values.reindex(index=pd.DatetimeIndex(expected),columns=securities)
+    return selected.mean(skipna=False).where(np.isfinite(selected).all()) * 10_000.0
+
+
 def _load_financial_panel(
     connection: Any,
     target_date: date,
@@ -517,14 +626,20 @@ def _load_financial_panel(
     market_panel: MarketFactorPanel,
     *,
     include_lag: bool = True,
+    include_period_lineage: bool = False,
+    scope_statements_to_securities: bool = False,
 ) -> tuple[FinancialCrossSection, dict[str, int]]:
+    # Focused read-only diagnostics need not load the whole market. Keep the
+    # production default unchanged: freshness audits fingerprint full inputs.
+    statement_securities = securities if scope_statements_to_securities else None
     frames = [
-        _statement_rows(connection, "income", _INCOME_COLUMNS, target_date),
-        _statement_rows(connection, "balancesheet", _BALANCE_COLUMNS, target_date),
-        _statement_rows(connection, "cashflow", _CASHFLOW_COLUMNS, target_date),
-        _statement_rows(connection, "fina_indicator", _INDICATOR_COLUMNS, target_date),
+        _statement_rows(connection, "income", _INCOME_COLUMNS, target_date, securities=statement_securities),
+        _statement_rows(connection, "balancesheet", _BALANCE_COLUMNS, target_date, securities=statement_securities),
+        _statement_rows(connection, "cashflow", _CASHFLOW_COLUMNS, target_date, securities=statement_securities),
+        _statement_rows(connection, "fina_indicator", _INDICATOR_COLUMNS, target_date, securities=statement_securities),
     ]
     input_digests = [frame_digest(item) for item in frames]
+    filing_evidence = [item.attrs.get('filing_evidence', []) for item in frames]
     frames[2], cashflow_derivation = _derive_investing_inflow(frames[2])
     nonempty = [item for item in frames if not item.empty]
     if not nonempty:
@@ -533,7 +648,8 @@ def _load_financial_panel(
             market_panel.total_mv.iloc[-1],
         )
         return empty, {"statement_rows": 0, "statement_securities": 0,
-                       "financial_input_digests": input_digests}
+                       "financial_input_digests": input_digests,
+                       "official_filing_evidence": filing_evidence}
     statements = nonempty[0]
     for frame in nonempty[1:]:
         statements = statements.merge(
@@ -549,8 +665,12 @@ def _load_financial_panel(
         if metric not in statements:
             statements[metric] = np.nan
         statements[metric] = pd.to_numeric(statements[metric], errors="coerce")
-    statements["equity_parent"] = statements["equity"] - statements["minority_int"].fillna(0)
-    metric_names.append("equity_parent")
+    reported = statements["equity_parent"]
+    statements["equity_parent"] = _reported_parent_equity(
+        reported, statements["equity"], statements["minority_int"],
+    )
+    statements["equity_parent_conflict"] = (reported.notna() & statements["equity_parent"].isna()).astype(float)
+    metric_names.append("equity_parent_conflict")
     buckets = {
         name: {metric: {} for metric in metric_names}
         for name in (
@@ -559,6 +679,7 @@ def _load_financial_panel(
             "annual_five_year_ago", "five_year_mean",
         )
     }
+    period_lineage = {}
     for ts_code, records in statements.groupby("ts_code"):
         if ts_code not in securities:
             continue
@@ -587,6 +708,19 @@ def _load_financial_panel(
             "annual_year_ago": lookup.get(records.iloc[annual_positions[-1]]["end_date"] - pd.DateOffset(years=1), -1) if annual_positions else -1,
             "annual_five_year_ago": lookup.get(records.iloc[annual_positions[-1]]["end_date"] - pd.DateOffset(years=5), -1) if annual_positions else -1,
         }
+        if include_period_lineage:
+            annual_end = records.iloc[annual_positions[-1]]['end_date'] if annual_positions else None
+            period_lineage[ts_code] = {
+                'current': str(current_end.date()),
+                'previous': str((current_end-pd.offsets.QuarterEnd(1)).date()),
+                'year_ago': str(year_end.date()),
+                'previous_year_ago': str((current_end-pd.offsets.QuarterEnd(1)-pd.DateOffset(years=1)).date()),
+                'annual': str(annual_end.date()) if annual_end is not None else None,
+                'annual_year_ago': str((annual_end-pd.DateOffset(years=1)).date()) if annual_end is not None else None,
+                'annual_five_year_ago': str((annual_end-pd.DateOffset(years=5)).date()) if annual_end is not None else None,
+                'five_year_mean_observed_periods': [str(records.iloc[i]['end_date'].date()) for i in annual_positions[-5:]],
+                'five_year_mean_expected_periods': [str((annual_end-pd.DateOffset(years=i)).date()) for i in range(5)] if annual_end is not None else [],
+            }
         for bucket, position in positions.items():
             if position < 0:
                 continue
@@ -614,12 +748,10 @@ def _load_financial_panel(
                     if metric in _FLOW_METRICS
                     else records.iloc[position].get(metric)
                 )
-        recent_annual = annual_positions[-5:]
-        if recent_annual:
+        if annual_positions:
+            annual_mean = _complete_annual_mean(records, records.iloc[annual_positions[-1]]['end_date'], metric_names)
             for metric in metric_names:
-                buckets["five_year_mean"][metric][ts_code] = pd.to_numeric(
-                    records.iloc[recent_annual][metric], errors="coerce"
-                ).mean()
+                buckets["five_year_mean"][metric][ts_code] = annual_mean[metric]
     # Construct aligned arrays once, instead of millions of scalar Series.loc
     # writes. Missing security/metric pairs still remain NaN, never zero.
     buckets = {
@@ -633,9 +765,13 @@ def _load_financial_panel(
     current_market_cap_cny = (
         market_panel.total_mv.iloc[-1].reindex(securities) * 10_000.0
     )
-    buckets["five_year_mean"]["market_cap"] = (
-        market_panel.total_mv.mean().reindex(securities) * 10_000.0
-    )
+    five_year_start = (pd.Timestamp(target_date)-pd.DateOffset(years=5)).date()
+    calendar = _read_frame(connection, """SELECT cal_date FROM trade_cal
+        WHERE exchange='SSE' AND is_open=1 AND cal_date>%s AND cal_date<=%s
+        ORDER BY cal_date""", (five_year_start,target_date))
+    expected_market_dates = list(calendar['cal_date']) if 'cal_date' in calendar else []
+    buckets["five_year_mean"]["market_cap"] = _complete_market_mean(
+        market_panel.total_mv, expected_market_dates, securities)
     dividends = _read_frame(
         connection,
         """
@@ -673,7 +809,10 @@ def _load_financial_panel(
             result = cursor.fetchone()
         if result:
             lag_panel, lag_diagnostics = _load_financial_panel(
-                connection, result[0], securities, market_panel, include_lag=False)
+                connection, result[0], securities, market_panel, include_lag=False,
+                include_period_lineage=include_period_lineage,
+                scope_statements_to_securities=scope_statements_to_securities)
+            lag_diagnostics['as_of'] = str(result[0])
             panel.roe_ttm_lag63d = (
                 lag_panel.values("ttm", "net_profit_parent")
                 / lag_panel.values("current", "equity").replace(0, np.nan))
@@ -681,9 +820,11 @@ def _load_financial_panel(
         "statement_rows": int(len(statements)),
         "statement_securities": int(statements["ts_code"].nunique()),
         "financial_input_digests": input_digests,
+        "official_filing_evidence": filing_evidence,
         "cashflow_derivation": cashflow_derivation,
         "dividend_input_digest": frame_digest(dividends),
         "lag63_input": lag_diagnostics,
+        **({'period_lineage': period_lineage} if include_period_lineage else {}),
     }
 
 
@@ -796,7 +937,8 @@ def _reuse_certified_snapshot(
                     FROM daily WHERE trade_date=%s
                 ), snapshot AS (
                     SELECT count(*)::INTEGER AS actual_count,
-                           bool_and(formula_digest=%s) AS current_formula,
+                           bool_and(formula_digest=%s AND
+                                    COALESCE(audit_evidence->>'implementation_digest','')=%s) AS current_formula,
                            count(*) FILTER (WHERE audit_status='ready')::INTEGER AS ready,
                            count(*) FILTER (WHERE audit_status NOT IN ('ready', 'not_expected')
                                OR technical_audit_status NOT IN ('ready', 'not_expected'))::INTEGER AS partial
@@ -822,7 +964,7 @@ def _reuse_certified_snapshot(
                 FROM expected CROSS JOIN snapshot CROSS JOIN validation
                 """,
                 (
-                    target_date, FORMULA_DIGEST, FACTOR_SCHEMA_VERSION,
+                    target_date, FORMULA_DIGEST, IMPLEMENTATION_DIGEST, FACTOR_SCHEMA_VERSION,
                     target_date, FACTOR_SCHEMA_VERSION, target_date,
                     target_date, FACTOR_SCHEMA_VERSION,
                 ),
@@ -947,12 +1089,16 @@ def materialize_local_factor_snapshot(
             source_execution_id=source_execution_id,
             input_revision_digest=input_revision_digest,
         )
+        from .financial_dependencies import dependency_inputs
+        financial_inputs = dependency_inputs(financial_panel)
         quality = {code: audit_security(
-            code, values, technical_by_code[code], market_panel, financial_panel
+            code, values, technical_by_code[code], market_panel, financial_panel,
+            financial_inputs=financial_inputs
         )
                    for code in output_securities}
         rows = [(*row, psycopg2.extras.Json(technical_payload(technical_by_code[row[2]])),
-                 quality[row[2]]["status"], psycopg2.extras.Json(quality[row[2]]),
+                 quality[row[2]]["status"], psycopg2.extras.Json({**quality[row[2]],
+                     "implementation_digest": IMPLEMENTATION_DIGEST}),
                  quality[row[2]]["technical_status"]) for row in rows]
         with connection.cursor() as cursor:
             psycopg2.extras.execute_values(

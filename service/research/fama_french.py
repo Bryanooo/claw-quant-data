@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-FF3_FORMULA_VERSION = "ff3-sh-sz-v2"
+FF3_FORMULA_VERSION = "ff3-sh-sz-v3"
 
 # A session with fewer than this many eligible names is recorded as
 # insufficient_universe rather than fabricating a split from a thin sample.

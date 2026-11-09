@@ -5,13 +5,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV UV_PROJECT_ENVIRONMENT=/opt/claw-venv \
+    PATH="/opt/claw-venv/bin:${PATH}"
+
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv==0.11.32 && \
+    uv sync --locked --no-dev --no-install-project --no-cache
 
 FROM base AS test
 
-COPY requirements-dev.txt .
-RUN pip install --no-cache-dir -r requirements-dev.txt
+RUN uv sync --locked --no-install-project --no-cache
 
 COPY . .
 

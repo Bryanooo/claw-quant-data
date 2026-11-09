@@ -53,3 +53,6 @@ reports/tushare_interface_matrix.md
 # 仅忽略 reports/ 下的日期化子目录（原始证据 json、快照、图表）；
 # 顶层结论文档（*_latest.md/json、tushare_permission_recheck.* 等）仍纳入版本管理。
 reports/*/
+
+# Downloaded source documents and temporary rendering artifacts.
+/tmp/

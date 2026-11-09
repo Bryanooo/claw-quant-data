@@ -222,7 +222,7 @@ verify_application_images() {
 
     expected_image="$(docker inspect --format '{{.Image}}' "$(compose ps -q api)")"
     [[ -n "${expected_image}" ]] || die "无法读取 API 镜像标识"
-    for service in api worker-v2-routine worker-v2-backfill auditor scheduler; do
+    for service in api "$@"; do
         container_ids="$(compose ps -q "${service}")"
         [[ -n "${container_ids}" ]] || die "应用服务没有运行容器：${service}"
         while IFS= read -r container_id; do
@@ -384,7 +384,7 @@ main() {
         done
     '
 
-    compose run --rm --no-deps api python scripts/migrate.py
+    compose run --rm --no-deps migrate
 
     table_count="$(compose exec -T postgres psql \
         -U "$(read_env_value "DB_USER")" \
@@ -393,9 +393,23 @@ main() {
     [[ "${table_count}" -ge 113 ]] || die "数据库表数量异常：${table_count}"
     success "数据库迁移完成，共 ${table_count} 张表"
 
-    info "启动 REST API、V2 日常/历史 Worker、覆盖 Auditor 与调度器..."
-    compose up -d --force-recreate \
-        api worker-v2-routine worker-v2-backfill auditor scheduler
+    local workers=(scheduler auditor intraday-worker worker-factor-backfill)
+    local pool replica_var replicas
+    for pool in routine backfill derived; do
+        case "${pool}" in
+            routine) replica_var=V2_ROUTINE_WORKER_REPLICAS ;;
+            backfill) replica_var=V2_BACKFILL_WORKER_REPLICAS ;;
+            derived) replica_var=V2_DERIVED_WORKER_REPLICAS ;;
+        esac
+        replicas="${!replica_var:-$(read_env_value "${replica_var}")}"
+        if [[ "${replicas}" != 0 ]]; then
+            workers+=("worker-v2-${pool}")
+        fi
+    done
+
+    info "启动 REST API、调度器及采集和派生服务..."
+    compose up -d --no-deps --force-recreate api scheduler auditor intraday-worker \
+        worker-factor-backfill worker-v2-derived worker-v2-routine worker-v2-backfill
 
     info "验证调度器到 PostgreSQL 的连接..."
     compose exec -T scheduler python - <<'PY'
@@ -412,11 +426,11 @@ PY
 
     wait_for_api
     success "REST API 已进入 healthy 状态"
-    for component in scheduler worker-v2-routine worker-v2-backfill auditor; do
+    for component in "${workers[@]}"; do
         wait_for_component "${component}"
     done
     success "Scheduler、V2 Worker 资源池、Auditor 进程心跳正常"
-    verify_application_images
+    verify_application_images "${workers[@]}"
     success "所有应用容器均使用同一镜像"
 
     info "验证 REST API..."

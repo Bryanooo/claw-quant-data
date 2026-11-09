@@ -1,3 +1,8 @@
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
 x-app-build: &app-build
   context: .
   target: runtime
@@ -61,6 +66,7 @@ x-app-service: &app-service
 
 services:
   postgres:
+    logging: *bounded-logging
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -80,6 +86,7 @@ services:
       start_period: 5s
 
   backup:
+    logging: *bounded-logging
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -91,9 +98,10 @@ services:
       BACKUP_DIR: /backups
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
-      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-3}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-2}
       BACKUP_EXCLUDE_TABLE_DATA: ${BACKUP_EXCLUDE_TABLE_DATA:-tushare_raw_record}
       BACKUP_COMPRESSION: ${BACKUP_COMPRESSION:-zstd:1}
+      BACKUP_FREE_RESERVE_KIB: ${BACKUP_FREE_RESERVE_KIB:-5242880}
     volumes:
       - ./backups:/backups
       - ./scripts/backup_loop.sh:/scripts/backup_loop.sh:ro
@@ -109,6 +117,7 @@ services:
       start_period: 30s
 
   migrate:
+    logging: *bounded-logging
     image: claw-quant-data:app
     build: *app-build
     environment: *app-environment
@@ -117,13 +126,16 @@ services:
       - -c
       - >-
         python scripts/migrate.py &&
-        python scripts/bootstrap_orchestration_v2.py --apply-drafts --publish-ready
+        python scripts/bootstrap_orchestration_v2.py --apply-drafts --publish-ready &&
+        python scripts/sync_interface_registry.py --apply &&
+        python scripts/sync_field_lineage.py --apply
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
 
   scheduler:
+    logging: *bounded-logging
     <<: *app-service
     command: ["python", "-m", "collectors.scheduler"]
     healthcheck:
@@ -134,6 +146,7 @@ services:
       start_period: 20s
 
   worker-v2-backfill:
+    logging: *bounded-logging
     <<: *app-service
     deploy:
       replicas: ${V2_BACKFILL_WORKER_REPLICAS:-1}
@@ -150,6 +163,7 @@ services:
       start_period: 20s
 
   worker-v2-routine:
+    logging: *bounded-logging
     <<: *app-service
     deploy:
       replicas: ${V2_ROUTINE_WORKER_REPLICAS:-3}
@@ -167,7 +181,62 @@ services:
       retries: 3
       start_period: 20s
 
+  # Reserved capacity: weekly universe crawls and per-security share_float
+  # cannot consume this worker, regardless of the general pool's backlog.
+  worker-v2-short:
+    logging: *bounded-logging
+    <<: *app-service
+    cpus: 1
+    mem_limit: 2g
+    environment:
+      <<: *app-environment
+      V2_JOB_RESOURCE_CLASSES: generic,reference,market,moneyflow,finance,catalog,default
+      V2_SHORT_ONLY: "true"
+      V2_WORKER_COMPONENT: worker-v2-routine
+    command: ["python", "-m", "service.orchestration_v2.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-routine", "--short-only"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker-v2-share-float:
+    logging: *bounded-logging
+    <<: *app-service
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+      V2_JOB_RESOURCE_CLASSES: share-float
+      V2_WORKER_COMPONENT: worker-v2-routine
+    command: ["python", "-m", "service.orchestration_v2.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-routine", "--resource-class", "share-float"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  worker-v2-valuation:
+    logging: *bounded-logging
+    <<: *app-service
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+      V2_JOB_RESOURCE_CLASSES: derived-valuation
+      V2_WORKER_COMPONENT: worker-v2-derived
+    command: ["python", "-m", "service.orchestration_v2.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-derived", "--resource-class", "derived-valuation"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   worker-v2-derived:
+    logging: *bounded-logging
     <<: *app-service
     deploy:
       replicas: ${V2_DERIVED_WORKER_REPLICAS:-1}
@@ -186,6 +255,7 @@ services:
       start_period: 20s
 
   worker-factor-backfill:
+    logging: *bounded-logging
     <<: *app-service
     cpus: 1.0
     mem_limit: 6g
@@ -207,6 +277,7 @@ services:
       start_period: 30s
 
   auditor:
+    logging: *bounded-logging
     <<: *app-service
     command:
       - python
@@ -220,6 +291,7 @@ services:
       start_period: 20s
 
   intraday-worker:
+    logging: *bounded-logging
     <<: *app-service
     command: ["python", "-m", "service.intraday.worker"]
     healthcheck:
@@ -230,6 +302,7 @@ services:
       start_period: 20s
 
   api:
+    logging: *bounded-logging
     <<: *app-service
     command:
       - uvicorn
@@ -252,6 +325,7 @@ services:
       start_period: 5s
 
   test:
+    logging: *bounded-logging
     build:
       context: .
       target: test

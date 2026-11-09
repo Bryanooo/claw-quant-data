@@ -1,0 +1,15 @@
+title = "claw-quant-data secret detection"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "tushare-token"
+description = "Tushare-shaped 56-character hexadecimal credential"
+regex = '''\b[0-9a-fA-F]{56}\b'''
+entropy = 3.0
+
+# Exact application identifiers reviewed as non-secret metadata.
+[[allowlists]]
+description = "Known task and handler names, matched as complete values"
+regexTarget = "secret"
+regexes = ['''^(derived\.compute\.v1|top10_(cb_holders|floatholders|holders))$''']

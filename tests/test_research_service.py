@@ -672,6 +672,16 @@ def test_technicals_uses_long_daily_history_instead_of_shallow_factor_table():
     assert result["data"]["chart"]["points"][-1]["niumen_confirmation_line"] is not None
     assert result["data"]["timeframes"]["1d"]["trend"]["systems"]["niumen_breakout"]["status"] == "ready"
     assert result["data"]["timeframes"]["1w"]["trend"]["systems"]["niumen_breakout"]["status"] == "not_applicable"
+    xiongmen = result["data"]["trend"]["systems"]["xiongmen_rebound"]
+    assert xiongmen["status"] == "ready"
+    assert result["data"]["timeframes"]["1d"]["trend"]["systems"]["xiongmen_rebound"] == xiongmen
+    assert result["data"]["chart"]["points"][-1]["xiongmen_line"] == xiongmen["values"]["xiongmen_line"]
+    assert isinstance(result["data"]["chart"]["points"][-1]["xiongmen_bear_state"], bool)
+    for period in ("1w", "1mo"):
+        frame = result["data"]["timeframes"][period]
+        assert frame["trend"]["systems"]["xiongmen_rebound"]["status"] == "not_applicable"
+        assert not any(key.startswith("xiongmen_") for point in frame["chart"]["points"] for key in point)
+
     chart_points = [
         result["data"]["chart"]["points"][-1],
         result["data"]["timeframes"]["1d"]["chart"]["points"][-1],
@@ -879,6 +889,13 @@ def test_instrument_technicals_supports_non_stock_assets(
         ["niumen_breakout"]["status"]
         == "not_applicable"
     )
+    daily = result["data"]["timeframes"]["1d"]
+    assert daily["trend"]["systems"]["xiongmen_rebound"]["status"] == "ready"
+    assert daily["chart"]["points"][-1]["xiongmen_bear_entry_line"] is not None
+    for period in ("1w", "1mo"):
+        frame = result["data"]["timeframes"][period]
+        assert frame["trend"]["systems"]["xiongmen_rebound"]["status"] == "not_applicable"
+        assert "xiongmen_line" not in frame["chart"]["points"][-1]
     assert result["data"]["timeframes"]["1w"]["levels"]["pivot_systems"]["classic"]
     assert result["meta"]["provenance"][0] == {
         "dataset": dataset, "returned": 300
@@ -1069,15 +1086,15 @@ def test_etf_flow_series_computes_share_and_flow_dual_series():
 def test_capability_catalog_separates_derived_backfill_and_new_sources():
     catalog = ResearchService(FakeDataService({}), FakeRepository()).capabilities()
     assert catalog["api_namespace"]["path"] == "/api/v1/research"
-    assert catalog["summary"]["agent_endpoints"] == 45
-    assert catalog["summary"]["derived_endpoints"] == 41
+    assert catalog["summary"]["agent_endpoints"] == 46
+    assert catalog["summary"]["derived_endpoints"] == 42
     assert catalog["summary"]["backfill_workstreams"] == 6
     assert catalog["summary"]["new_source_todos"] == 6
-    assert catalog["summary"]["baseline_techniques"] == 97
-    assert catalog["summary"]["currently_served"] == 89
+    assert catalog["summary"]["baseline_techniques"] == 98
+    assert catalog["summary"]["currently_served"] == 90
     assert catalog["summary"]["planned_from_existing_sources"] == 0
     assert catalog["summary"]["external_or_constrained"] == 8
-    assert len(catalog["techniques"]["served"]) == 89
+    assert len(catalog["techniques"]["served"]) == 90
     assert len(catalog["techniques"]["gaps"]) == 8
     screening = next(
         item for item in catalog["techniques"]["served"]
@@ -1171,3 +1188,20 @@ def test_valuation_batches_peer_market_rows_through_repository():
         "pb": 1.0,
         "ps_ttm": 2.0,
     }]
+
+
+def test_xiongmen_chart_cropping_keeps_expanding_history_and_matured_signals():
+    from math import sin, pi
+    closes = [1000.] * 250 + [700 * .94 ** (i // 30) * (1 + .15 * sin(2*pi*i/30)) for i in range(700)]
+    rows = _daily_rows("000300.SH", count=len(closes), start=date(2020, 1, 1))
+    for row, close in zip(reversed(rows), closes):
+        row.update(open=close-.5, high=close+1, low=close-1, close=close)
+    service = ResearchService(FakeDataService({"index_daily": rows}), FakeRepository())
+    full = service.instrument_technicals("index", "000300.SH", lookback_days=1500, chart_points=1200)
+    cropped = service.instrument_technicals("index", "000300.SH", lookback_days=1500, chart_points=50)
+    daily = full["data"]["timeframes"]["1d"]
+    short = cropped["data"]["timeframes"]["1d"]
+    assert short["chart"]["points"] == daily["chart"]["points"][-50:]
+    assert short["trend"]["systems"]["xiongmen_rebound"] == daily["trend"]["systems"]["xiongmen_rebound"]
+    assert short["trend"]["systems"]["xiongmen_rebound"]["statistics"]["matured_samples"] >= 15
+    assert any(point["xiongmen_reduction_signal"] for point in short["chart"]["points"])

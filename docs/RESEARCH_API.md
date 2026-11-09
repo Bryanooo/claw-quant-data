@@ -15,6 +15,32 @@ GET /api/v1/research/readiness
 GET /api/v1/research/capabilities
 ```
 
+## 沪深 300 历史因子切片
+
+沪深 300 的**单日成分 × 因子截面**另有入口：
+
+```http
+GET /api/v1/research/factor-slices/csi300?day=2026-10-30&factor=return_5d&factor=roe_y
+```
+
+此契约仅覆盖一个历史交易日、指数 000300.SH、1～32 个本地 272 目录内因子。
+默认 `known_then` 以北京时间当日 24:00 为界：只读此前已首次入库的当日权重、
+此前已计算且仍保留的当日因子版本，不可用于模拟当日盘中信号。事后补算须显式用
+`knowledge=reconstructed`，不能解释为当时系统已掌握。缺当天完整的 300 个成分返回
+409，不以前月或未来权重回填。缺因子仍保留成分行、空值和原因；可用掩码不等于
+供应商逐值校验通过。清单同时给出导出时的分区审计（没有记录即无证据）、计算时间和输入摘要。
+
+离线冻结（DuckDB 仅用于导出，无需安装到服务容器）：
+
+```sh
+uv pip install --python .venv/bin/python duckdb==1.4.3
+.venv/bin/python scripts/export_index_slice.py --day 2026-10-30 --factor return_5d --factor roe_y --output csi300-20261030.zip
+```
+
+归档包括强类型长表 `factors.parquet`、逐成分证据 `rows.json` 和 `manifest.json`。
+同一数据库事务读取所有底表；固定内容可重复导出，不覆盖已有文件。数据或审计发生修订后可能产生新 ID，
+复现实验应保留原归档。此接口不推断停牌、可成交性或全市场历史完整性。
+
 ## 行业与指数成分估值分布
 
 ```http
@@ -179,6 +205,43 @@ SIGNAL = MA(C, 10)
 `below_niumen` 表示仍在牛门线下方。该公式只在日线执行，周线、月线明确返回
 `not_applicable`，避免把“14个交易日”误算成14周或14个月。全部价格和K线采用相同
 复权口径，计算时点为日线收盘后。
+
+## 熊门线与熊市反弹提示
+
+与牛门线使用同一套复权日线，股票主视图的 `data.trend.systems.xiongmen_rebound`
+及所有标的的 `data.timeframes.1d.trend.systems.xiongmen_rebound` 返回最新状态。
+周/月线返回 `not_applicable`，图表不包含熊门字段。
+
+日线 `chart.points` 的价格字段：
+
+| 字段 | 原公式 | 含义 |
+| --- | --- | --- |
+| `xiongmen_line` | BML | 前20日最低价减当日半个简单ATR14 |
+| `xiongmen_foundation` | DJ | 当日及此前共20日最低收盘 |
+| `xiongmen_floor_1/2/3` | LT1/2/3 | LL20到HH60收盘区间的38.2%、50%、61.8% |
+| `xiongmen_recovery_ma_60` | JTX | 收盘MA60 |
+| `xiongmen_bear_entry_line` | RXX | 250日最高收盘×0.8 |
+
+`xiongmen_bear_state` 对应XS；`xiongmen_candidate` 对应SJ；
+`xiongmen_sample_count/lower_count/lower_rate_pct` 对应NK/NW/JLV。
+`xiongmen_reduction_signal` 是 `减一`、`减二` 或 null，
+`xiongmen_marker_price` 是相应的 C×1.03/C×1.05，仅供绘图。
+BF/ATRV同时在逐日字段中提供，布尔值、整数计数和文字标签保留类型。
+
+版本 `xiongmen-tongdaxin-v1` 保留用户原式的
+`FILTER(XS AND crossing,10) AND NOT(DY)` 顺序：大涨日被排除后仍占用10日过滤间隔。
+DY按收盘价相对昨收的涨点计算，BF包含当日变化。仅在SJ发生20个交易日后结算，
+统计对象是SJ，不是最终减仓提示；到期收盘必须严格低于信号日收盘。
+至少15个已结算样本且下跌比例至少65%才显示减字，不代表策略盈利胜率。
+
+沿用牛门线的完整窗口原则：BML至少21根日线，楼层/MA60至少60根，XS至少250根；
+暖机阶段相应价格/状态为null，不用缩短窗口模拟250日历史，也不回填历史信号。
+统计在当前请求的全部可用历史上累计、完成后才裁剪图表点，缩放/平移不改变统计；
+改变查询历史范围可能改变累计样本和提示。摘要公开历史长度、统计口径和过滤顺序。
+
+标的研究、指数与板块K线提供“熊门体系”开关，显示六条参考线和减仓标记；
+入熊线独立开关且默认关闭。浅色主题使用灰色熊门线，深色主题使用白色；
+悬停显示各线价格、当日提示及已结算样本统计。前端不重新计算熊门信号。
 
 ## 常用技术指标包
 

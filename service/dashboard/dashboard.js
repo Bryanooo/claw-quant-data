@@ -440,11 +440,42 @@ const stockLineDefinitions={
   cost_20:{label:"成本20",color:"#b96a93"},cost_60:{label:"成本60",color:"#8753a6"},niumen_line:{label:"牛门线",color:"#e07a35"},niumen_confirmation_line:{label:"确认线",color:"#c94848"},
   niumen_signal_ma_10:{label:"信号MA10",color:"#e7a85c"},bollinger_upper:{label:"BOLL上轨",color:"#8795a1"},bollinger_middle:{label:"BOLL中轨",color:"#a4afb8"},bollinger_lower:{label:"BOLL下轨",color:"#8795a1"},keltner_upper:{label:"KC上轨",color:"#4d91a8"},keltner_middle:{label:"KC中轨",color:"#71aabd"},keltner_lower:{label:"KC下轨",color:"#4d91a8"}
 };
+const XIONGMEN_MAIN_LINES=["xiongmen_line","xiongmen_foundation","xiongmen_floor_1","xiongmen_floor_2","xiongmen_floor_3","xiongmen_recovery_ma_60"];
+Object.assign(stockLineDefinitions,{
+  xiongmen_line:{label:"熊门线",color:"var(--xiongmen-line)"},
+  xiongmen_foundation:{label:"地基",color:"#17855b"},
+  xiongmen_floor_1:{label:"一楼",color:"#b58a00"},
+  xiongmen_floor_2:{label:"二楼",color:"#bc59b5"},
+  xiongmen_floor_3:{label:"三楼",color:"#d95252"},
+  xiongmen_recovery_ma_60:{label:"解套线 MA60",color:"#28a6b6",dash:true},
+  xiongmen_bear_entry_line:{label:"入熊线",color:"#8795a1",dash:true}
+});
+function xiongmenMarkers(points,x,y){
+  return points.map((point,index)=>{
+    const signal=point.xiongmen_reduction_signal,price=point.xiongmen_marker_price;
+    if(!["减一","减二"].includes(signal)||price==null||!Number.isFinite(Number(price)))return "";
+    const color=stockLineDefinitions[signal==="减二"?"xiongmen_floor_2":"xiongmen_floor_1"].color;
+    return `<text class="xiongmen-marker" x="${x(index)}" y="${y(Number(price))}" text-anchor="middle" fill="${color}">${signal}</text>`;
+  }).join("");
+}
+function xiongmenTooltip(point){
+  if(point.xiongmen_bear_state==null)return '<span>熊门体系：不足250根日线</span>';
+  const count=point.xiongmen_sample_count||0;
+  return `<span>${point.xiongmen_bear_state?"处于入熊区间":"未处于入熊区间"}${point.xiongmen_reduction_signal?` · ${esc(point.xiongmen_reduction_signal)}`:""}</span><span>20日后收盘更低：${count?`${stockNumber(point.xiongmen_lower_rate_pct,1)}%`:"—"} · ${count}次已结算</span>`;
+}
+function xiongmenSummary(summary){
+  if(summary?.status==="not_applicable")return {label:"仅日线提供",detail:"熊门体系按交易日计算"};
+  if(summary?.status!=="ready")return {label:"历史不足",detail:"入熊判断需250根日线；参考线按各自窗口展示"};
+  const stats=summary.statistics||{};
+  return {label:summary.events?.reduction_signal||(summary.state==="bear_rebound_watch"?"处于入熊区间":"未处于入熊区间"),detail:`20日后收盘更低 ${stats.matured_samples?`${stockNumber(stats.lower_close_rate_pct,1)}%`:"—"} · ${stats.matured_samples||0}次已结算 · 当前查询历史`};
+}
 const stockNumber=(value,digits=2)=>value==null||Number.isNaN(Number(value))?"—":Number(value).toLocaleString("zh-CN",{minimumFractionDigits:digits,maximumFractionDigits:digits});
 const stockPercent=value=>value==null||Number.isNaN(Number(value))?"—":`${Number(value)>=0?"+":""}${stockNumber(value,2)}%`;
 const stockStateLabel=value=>({bullish:"多头",bearish:"空头",mixed:"震荡",above_niumen:"站上牛门线",confirmed_breakout:"确认突破",below_niumen:"牛门线下方",normal:"常态",expanding:"放量",contracting:"缩量",accumulation:"价量偏强",distribution:"价量偏弱",neutral:"中性"}[value]||value||"—");
 const stockDailyOnlyLines=new Set(["cost_20","cost_60","niumen_line","niumen_confirmation_line","niumen_signal_ma_10"]);
-function stockActiveLines(){return [...state.stock.overlays].flatMap(key=>key==="bollinger"?["bollinger_upper","bollinger_middle","bollinger_lower"]:key==="keltner"?["keltner_upper","keltner_middle","keltner_lower"]:[key]).filter(key=>state.stock.timeframe==="1d"||!stockDailyOnlyLines.has(key));}
+XIONGMEN_MAIN_LINES.forEach(key=>stockDailyOnlyLines.add(key));
+stockDailyOnlyLines.add("xiongmen_bear_entry_line");
+function stockActiveLines(){return [...state.stock.overlays].flatMap(key=>key==="xiongmen"?XIONGMEN_MAIN_LINES:key==="bollinger"?["bollinger_upper","bollinger_middle","bollinger_lower"]:key==="keltner"?["keltner_upper","keltner_middle","keltner_lower"]:[key]).filter(key=>state.stock.timeframe==="1d"||!stockDailyOnlyLines.has(key));}
 function stockVolumeScale(value){const number=Number(value)||0;if(Math.abs(number)>=100000000)return {value:number/100000000,unit:"亿手",digits:2};if(Math.abs(number)>=10000)return {value:number/10000,unit:"万手",digits:2};return {value:number,unit:"手",digits:0};}
 function stockVolumeText(value,forcedUnit=null){const scale=forcedUnit==="亿手"?{value:(Number(value)||0)/100000000,unit:forcedUnit,digits:2}:forcedUnit==="万手"?{value:(Number(value)||0)/10000,unit:forcedUnit,digits:2}:forcedUnit==="手"?{value:Number(value)||0,unit:forcedUnit,digits:0}:stockVolumeScale(value);return `${stockNumber(scale.value,scale.digits)} ${scale.unit}`;}
 function stockVisiblePoints(points){const viewport=state.stock.viewport;if(viewport.timeframe!==state.stock.timeframe||viewport.total!==points.length||!viewport.count){const preferred=Math.max(30,Number($("stockPoints").value)||180);viewport.timeframe=state.stock.timeframe;viewport.total=points.length;viewport.count=Math.min(preferred,points.length);viewport.start=Math.max(0,points.length-viewport.count);}viewport.count=Math.max(Math.min(viewport.count,points.length),Math.min(30,points.length));viewport.start=Math.max(0,Math.min(viewport.start,points.length-viewport.count));return points.slice(viewport.start,viewport.start+viewport.count);}
@@ -461,7 +492,7 @@ function stockEnsureMacd(points){
 
 function stockPath(points,key,x,y){
   let path="",drawing=false;
-  points.forEach((point,index)=>{const value=Number(point[key]);if(!Number.isFinite(value)){drawing=false;return;}path+=`${drawing?"L":"M"}${x(index).toFixed(2)},${y(value).toFixed(2)} `;drawing=true;});
+  points.forEach((point,index)=>{const value=Number(point[key]);if(point[key]==null||!Number.isFinite(value)){drawing=false;return;}path+=`${drawing?"L":"M"}${x(index).toFixed(2)},${y(value).toFixed(2)} `;drawing=true;});
   return path.trim();
 }
 
@@ -477,14 +508,15 @@ function stockCurrentPoints(){return state.stock._view?.points||[];}
 function renderStockPriceChart(points){
   const svg=$("stockPriceChart"),width=1200,height=430,margin={left:12,right:72,top:15,bottom:28},plotWidth=width-margin.left-margin.right,plotHeight=height-margin.top-margin.bottom;
   if(!points.length){svg.innerHTML='<text x="600" y="215" text-anchor="middle" class="axis-label">没有可展示的行情</text>';state.stock.priceScale=null;return;}
-  const active=stockActiveLines();
-  const values=points.flatMap(point=>[point.high,point.low,...active.map(key=>point[key])]).map(Number).filter(Number.isFinite),rawMin=Math.min(...values),rawMax=Math.max(...values),padding=Math.max((rawMax-rawMin)*.06,rawMax*.005),min=rawMin-padding,max=rawMax+padding;
+  const active=stockActiveLines(),showXiongmen=state.stock.timeframe==="1d"&&state.stock.overlays.has("xiongmen");
+  const values=points.flatMap(point=>[point.high,point.low,...active.map(key=>point[key]),...(showXiongmen?[point.xiongmen_marker_price]:[])]).filter(value=>value!=null).map(Number).filter(Number.isFinite),rawMin=Math.min(...values),rawMax=Math.max(...values),padding=Math.max((rawMax-rawMin)*.06,rawMax*.005),min=rawMin-padding,max=rawMax+padding;
   const x=index=>stockX(index,points.length),y=value=>margin.top+(max-value)/(max-min)*plotHeight,step=plotWidth/points.length,bodyWidth=Math.max(1.5,Math.min(7,step*.64));
   let markup="";
   for(let tick=0;tick<=5;tick++){const value=max-(max-min)*tick/5,py=margin.top+plotHeight*tick/5;markup+=`<line class="grid-line" x1="${margin.left}" y1="${py}" x2="${width-margin.right}" y2="${py}"/><text class="axis-label" x="${width-margin.right+8}" y="${py+3}">${stockNumber(value,2)}</text>`;}
   const dateTicks=Math.min(6,points.length);for(let tick=0;tick<dateTicks;tick++){const index=Math.round(tick*(points.length-1)/Math.max(dateTicks-1,1));markup+=`<text class="axis-label" text-anchor="middle" x="${x(index)}" y="${height-7}">${esc(String(points[index].trade_date).slice(5,10))}</text>`;}
   points.forEach((point,index)=>{const opened=Number(point.open),closed=Number(point.close),high=Number(point.high),low=Number(point.low),up=closed>=opened,top=y(Math.max(opened,closed)),bottom=y(Math.min(opened,closed)),bodyHeight=Math.max(1,bottom-top),className=up?"candle-up":"candle-down";markup+=`<line class="${className}" x1="${x(index)}" y1="${y(high)}" x2="${x(index)}" y2="${y(low)}"/><rect class="${className}" x="${x(index)-bodyWidth/2}" y="${top}" width="${bodyWidth}" height="${bodyHeight}"/>`;});
-  active.forEach(key=>{const definition=stockLineDefinitions[key],dash=key.startsWith("niumen")?' stroke-dasharray="6 4"':"";markup+=`<path class="factor-line" d="${stockPath(points,key,x,y)}" stroke="${definition.color}"${dash}/>`;});
+  active.forEach(key=>{const definition=stockLineDefinitions[key],dash=(key.startsWith("niumen")||definition.dash)?' stroke-dasharray="6 4"':"";markup+=`<path class="factor-line" d="${stockPath(points,key,x,y)}" stroke="${definition.color}"${dash}/>`;});
+  if(showXiongmen)markup+=xiongmenMarkers(points,x,y);
   markup+=`<g id="stockCrosshair"></g><rect class="hit-area" x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}"/>`;
   svg.innerHTML=markup;
   state.stock.priceScale={min,max,plotHeight,margin,active,points};
@@ -513,7 +545,7 @@ function stockPaintMainCrosshair(index,event,pinned){
   const pctChg=point.pct_chg!=null?`<span class="${Number(point.pct_chg)>=0?"up":"down"}">涨跌幅 ${stockPercent(point.pct_chg)}</span>`:"";
   const tip=$("stockTooltip"),rect=svg.getBoundingClientRect(),left=event?Math.min(rect.width-285,Math.max(6,event.clientX-rect.left+12)):8,top=event?Math.min(rect.height-Math.max(155,75+active.length*18),Math.max(6,event.clientY-rect.top-55)):8;
   tip.style.left=`${left}px`;tip.style.top=`${top}px`;
-  tip.innerHTML=`<strong>${esc(point.trade_date)}${pinned?' <small>已选中</small>':''}</strong><div class="stock-tooltip-grid"><span>开 ${stockNumber(point.open)}</span><span>高 ${stockNumber(point.high)}</span><span>低 ${stockNumber(point.low)}</span><span>收 ${stockNumber(point.close)}</span><span>成交量 ${stockVolumeText(point.volume)}</span>${point.turnover_rate!=null?`<span>换手率 ${stockNumber(point.turnover_rate,2)}%</span>`:""}${pctChg}${factorRows}</div>`;
+  tip.innerHTML=`<strong>${esc(point.trade_date)}${pinned?' <small>已选中</small>':''}</strong><div class="stock-tooltip-grid"><span>开 ${stockNumber(point.open)}</span><span>高 ${stockNumber(point.high)}</span><span>低 ${stockNumber(point.low)}</span><span>收 ${stockNumber(point.close)}</span><span>成交量 ${stockVolumeText(point.volume)}</span>${point.turnover_rate!=null?`<span>换手率 ${stockNumber(point.turnover_rate,2)}%</span>`:""}${pctChg}${factorRows}${state.stock.timeframe==="1d"&&state.stock.overlays.has("xiongmen")?xiongmenTooltip(point):""}</div>`;
   tip.classList.remove("hidden");
 }
 function stockClearCrosshair(){
@@ -703,6 +735,8 @@ function renderStockFactors(timeframe,points){
   const histogram=trend.macd!=null&&trend.macd_signal!=null?Number(trend.macd)-Number(trend.macd_signal):null;$("stockMacd").textContent=histogram==null?"—":histogram>=0?"多头动能":"空头动能";$("stockMacdDetail").textContent=`DIF ${stockNumber(trend.macd,3)} · DEA ${stockNumber(trend.macd_signal,3)} · 柱 ${stockNumber(histogram,3)}`;
   $("stockRsi").textContent=`RSI ${stockNumber(momentum.rsi_14,1)}`;$("stockKdj").textContent=`K ${stockNumber(momentum.kdj?.k,1)} · D ${stockNumber(momentum.kdj?.d,1)} · J ${stockNumber(momentum.kdj?.j,1)}`;
   if(state.stock.timeframe==="1d"){$("stockCost").textContent=`${stockNumber(cost["20_day"]?.value||latest.cost_20)} / ${stockNumber(cost["60_day"]?.value||latest.cost_60)}`;$("stockCostDistance").textContent=`距20日成本 ${stockPercent(cost["20_day"]?.distance_from_close_pct)} · 距60日成本 ${stockPercent(cost["60_day"]?.distance_from_close_pct)}`;$("stockNiumen").textContent=stockStateLabel(niumen.state);$("stockNiumenDetail").textContent=`牛门 ${stockNumber(niumenValues.niumen_line||latest.niumen_line)} · 确认 ${stockNumber(niumenValues.confirmation_line||latest.niumen_confirmation_line)}`;}else{$("stockCost").textContent="仅日线提供";$("stockCostDistance").textContent="成本线按20/60个交易日滚动计算";$("stockNiumen").textContent="仅日线提供";$("stockNiumenDetail").textContent="牛门线周期固定为交易日，不跨周期套用";}
+  const xiongmen=xiongmenSummary(trend.systems?.xiongmen_rebound);
+  $("stockXiongmen").textContent=xiongmen.label;$("stockXiongmenDetail").textContent=xiongmen.detail;
   const regime=analysis.price_volume_regime||{},boll=volatility.bollinger_20||{},bollWidth=Number(boll.middle)?(Number(boll.upper)-Number(boll.lower))/Number(boll.middle)*100:null,supertrend=trend.systems?.supertrend_10_3||{};$("stockVolumeState").textContent=stockStateLabel(regime.classification||analysis.activity?.state);$("stockVolumeDetail").textContent=`量能 5/20 比 ${stockNumber(volume.volume_5_to_20_ratio,2)} · 最新 ${stockVolumeText(latest.volume)}`;
   $("stockVolatility").textContent=`ATR ${stockNumber(volatility.atr_14)}`;$("stockVolatilityDetail").textContent=`20期年化 ${stockPercent(volatility.annualized_volatility_20_period_pct)} · BOLL宽 ${stockPercent(bollWidth)}`;
   $("stockStrength").textContent=`ADX ${stockNumber(strength.adx_14,1)}`;$("stockStrengthDetail").textContent=`+DI ${stockNumber(strength.plus_di_14,1)} · −DI ${stockNumber(strength.minus_di_14,1)} · Supertrend ${stockStateLabel(supertrend.direction)}`;
@@ -940,6 +974,7 @@ function toggleStockWatchlist(){const code=state.stock.selected?.ts_code||state.
 function renderStockResearch(){
   const response=state.stock.response;if(!response)return;const data=response.data||{},timeframe=data.timeframes?.[state.stock.timeframe];if(!timeframe)return;const allPoints=stockEnsureMacd(timeframe.chart?.points||[]),points=stockVisiblePoints(allPoints),selected=state.stock.selected||{},isEtf=stockIsEtf(),identity=data.instrument?.identity||{},instrument={...selected,...(isEtf?identity:data.instrument||{}),...selected},quality=response.meta?.quality||{};
   $("stockEmpty").classList.add("hidden");$("stockWorkspace").classList.remove("hidden");$("stockName").textContent=instrument.name||instrument.fullname||instrument.ts_code||(isEtf?"未知 ETF":"未知股票");$("stockCode").textContent=instrument.ts_code||instrument.code||response.meta?.code||"—";$("stockAvatar").textContent=(instrument.name||"标").slice(0,1);$("stockMeta").textContent=isEtf?[instrument.fund_type,instrument.management,instrument.benchmark&&`基准 ${instrument.benchmark}`].filter(Boolean).join(" · ")||"场内基金":[instrument.industry,instrument.market,instrument.exchange].filter(Boolean).join(" · ")||"A股";$("stockQuality").className=`pill ${quality.status==="ready"?"ready":"attention"}`;$("stockQuality").textContent=quality.status==="ready"?"数据已核验":"数据有提示";
+  document.querySelectorAll("[data-stock-overlay]").forEach(button=>button.classList.toggle("active",state.stock.overlays.has(button.dataset.stockOverlay)));
   renderStockWatchlist();document.querySelectorAll("[data-stock-timeframe]").forEach(button=>button.classList.toggle("active",button.dataset.stockTimeframe===state.stock.timeframe));document.querySelectorAll(".daily-only").forEach(button=>button.classList.toggle("disabled",state.stock.timeframe!=="1d"));$("stockDailyNote").classList.toggle("hidden",state.stock.timeframe!=="1d");const loadedFirst=allPoints[0]?.trade_date,loadedLast=allPoints.at(-1)?.trade_date,history=response.meta?.history||{},isDaily=state.stock.timeframe==="1d",truncated=isDaily&&history.truncated;$("stockHistoryRange").textContent=allPoints.length?`已加载 ${loadedFirst} → ${loadedLast} · ${allPoints.length} 根${truncated?" · 达到所选范围，可切换更长历史":" · 当前查询范围（不代表全历史完整）"}`:"没有可展示的历史行情";
   updateStockViewportControls(allPoints);
   state.stock._view={points,allPoints,timeframe};
@@ -994,7 +1029,7 @@ async function selectStock(item){
   state.stock.priceScale=null;state.stock.hoverIndex=null;state.stock._view=null;
   [
     "stockTrend","stockTrendDetail","stockMacd","stockMacdDetail",
-    "stockRsi","stockKdj","stockCost","stockCostDistance","stockNiumen","stockNiumenDetail",
+    "stockRsi","stockKdj","stockCost","stockCostDistance","stockNiumen","stockNiumenDetail","stockXiongmen","stockXiongmenDetail",
     "stockVolumeState","stockVolumeDetail","stockVolatility",
     "stockVolatilityDetail","stockStrength","stockStrengthDetail","stockMoneyFlow",
     "stockMoneyFlowDetail"
@@ -1085,8 +1120,9 @@ function renderResearchCandles(svgId,points,opts={}){
   const svg=$(svgId),width=1200,height=430,margin=RESEARCH_CHART_MARGIN,pw=width-margin.left-margin.right,ph=height-margin.top-margin.bottom;
   if(!points||!points.length){svg.innerHTML='<text x="600" y="215" text-anchor="middle" class="axis-label">没有可展示的行情</text>';return null;}
   const series=opts.maSeries||RESEARCH_MA_DEFS.map(([w])=>researchMA(points,w));
-  // 价格轴只按蜡烛高低点取值：均线在稀疏序列上可能因跳空失真，不应拉伸刻度
-  const values=points.flatMap(p=>[p.high,p.low]).map(Number).filter(Number.isFinite);
+  // 均线不拉伸刻度；主动勾选的参考线和减仓标记纳入刻度。
+  const overlays=opts.overlays||[];
+  const values=points.flatMap(p=>[p.high,p.low,...overlays.map(key=>p[key]),...(opts.showXiongmen?[p.xiongmen_marker_price]:[])]).filter(v=>v!=null).map(Number).filter(Number.isFinite);
   const rawMin=Math.min(...values),rawMax=Math.max(...values),pad=Math.max((rawMax-rawMin)*.06,rawMax*.005),min=rawMin-pad,max=rawMax+pad;
   const x=i=>margin.left+(i+.5)*pw/points.length,y=v=>margin.top+(max-v)/(max-min)*ph,step=pw/points.length,bw=Math.max(1.5,Math.min(7,step*.64));
   let m="";
@@ -1094,9 +1130,11 @@ function renderResearchCandles(svgId,points,opts={}){
   const ticks=Math.min(6,points.length);for(let t=0;t<ticks;t++){const i=Math.round(t*(points.length-1)/Math.max(ticks-1,1));m+=`<text class="axis-label" text-anchor="middle" x="${x(i)}" y="${height-7}">${esc(String(points[i].trade_date).slice(5,10))}</text>`;}
   points.forEach((p,i)=>{const o=Number(p.open),c=Number(p.close),up=c>=o,top=y(Math.max(o,c)),b=y(Math.min(o,c));m+=`<line class="${up?"candle-up":"candle-down"}" x1="${x(i)}" y1="${y(Number(p.high))}" x2="${x(i)}" y2="${y(Number(p.low))}"/><rect class="${up?"candle-up":"candle-down"}" x="${x(i)-bw/2}" y="${top}" width="${bw}" height="${Math.max(1,b-top)}"/>`;});
   series.forEach((vals,idx)=>{const color=RESEARCH_MA_DEFS[idx][1];let path="",draw=false;vals.forEach((v,i)=>{const gap=i>0?(Date.parse(points[i].trade_date)-Date.parse(points[i-1].trade_date))/86400000:0;if(gap>10)draw=false;if(!Number.isFinite(v)){draw=false;return;}path+=`${draw?"L":"M"}${x(i).toFixed(2)},${y(v).toFixed(2)} `;draw=true;});m+=`<path class="factor-line" d="${path.trim()}" stroke="${color}"/>`;});
+  overlays.forEach(key=>{const def=stockLineDefinitions[key];m+=`<path class="factor-line" d="${stockPath(points,key,x,y)}" stroke="${def.color}"${def.dash?' stroke-dasharray="6 4"':""}/>`;});
+  if(opts.showXiongmen)m+=xiongmenMarkers(points,x,y);
   m+=`<g id="${svgId}-cross"></g><rect class="hit-area" x="${margin.left}" y="${margin.top}" width="${pw}" height="${ph}"/>`;
   svg.innerHTML=m;
-  return {margin,width,pw,ph,x,y};
+  return {margin,width,pw,ph,x,y,overlays,showXiongmen:opts.showXiongmen};
 }
 function renderResearchVolume(svgId,points){
   const svg=$(svgId);if(!svg)return;
@@ -1135,7 +1173,9 @@ function renderResearchChart(prefix,points){
   gaps.sort((a,b)=>a-b);
   const dense=!gaps.length||gaps[Math.floor(gaps.length/2)]<=7;
   const maSeries=dense?RESEARCH_MA_DEFS.map(([win])=>researchMA(points,win).slice(w.start,w.start+w.count)):[[],[],[]];
-  const meta=renderResearchCandles(`${prefix}PriceChart`,visible,{maSeries});
+  view.overlays??=new Set();
+  const showXiongmen=view.overlays.has("xiongmen"),overlays=[...(showXiongmen?XIONGMEN_MAIN_LINES:[]),...(view.overlays.has("xiongmen_bear_entry_line")?["xiongmen_bear_entry_line"]:[])];
+  const meta=renderResearchCandles(`${prefix}PriceChart`,visible,{maSeries,overlays,showXiongmen});
   renderResearchVolume(`${prefix}VolumeChart`,visible);
   view._chart={meta,visible};
   if(meta)attachResearchChartEvents(prefix);
@@ -1176,7 +1216,7 @@ function attachResearchChartEvents(prefix){
     const pctChg=p.pct_chg!=null?`<span class="${Number(p.pct_chg)>=0?"up":"down"}">涨跌幅 ${stockPercent(p.pct_chg)}</span>`:"";
     tip.style.left=`${Math.min(rect.width-230,Math.max(6,e.clientX-rect.left+14))}px`;
     tip.style.top=`${Math.min(rect.height-120,Math.max(6,e.clientY-rect.top-60))}px`;
-    tip.innerHTML=`<strong>${esc(String(p.trade_date))}</strong><div class="stock-tooltip-grid">${rows}${pctChg}</div>`;
+    tip.innerHTML=`<strong>${esc(String(p.trade_date))}</strong><div class="stock-tooltip-grid">${rows}${pctChg}${meta.overlays.map(key=>p[key]==null?"":`<span style="color:${stockLineDefinitions[key].color}">${esc(stockLineDefinitions[key].label)} ${stockNumber(p[key])}</span>`).join("")}${meta.showXiongmen?xiongmenTooltip(p):""}</div>`;
     tip.classList.remove("hidden");
   };
   hit.onpointerleave=()=>{cross.innerHTML="";tip.classList.add("hidden");};
@@ -1187,7 +1227,7 @@ function researchIndicatorCards(timeframe){
   const trend=timeframe.trend||{},momentum=timeframe.momentum||{},volatility=timeframe.volatility||{},strength=timeframe.trend_strength||{},volume=timeframe.volume_price||{};
   const ma=trend.moving_averages||{},regimeLabel={bullish:"多头排列",bearish:"空头排列",mixed:"多空交织"}[trend.regime]||"—";
   const points=timeframe.chart?.points||[],windowHigh=window=>{const rows=points.slice(-window);const highs=rows.map(p=>Number(p.high)).filter(Number.isFinite),lows=rows.map(p=>Number(p.low)).filter(Number.isFinite);return {high:highs.length?Math.max(...highs):null,low:lows.length?Math.min(...lows):null}};
-  const recent=windowHigh(20),year=windowHigh(250);
+  const recent=windowHigh(20),year=windowHigh(250),xiongmen=xiongmenSummary(trend.systems?.xiongmen_rebound);
   return [
     researchFactorCard("趋势状态",regimeLabel,`MA20 ${stockNumber(ma["20"])} · MA60 ${stockNumber(ma["60"])} · MA250 ${stockNumber(ma["250"])}`),
     researchFactorCard("MACD",`${stockNumber(trend.macd,3)}`,`DIF ${stockNumber(trend.macd,3)} · DEA ${stockNumber(trend.macd_signal,3)}`),
@@ -1196,6 +1236,7 @@ function researchIndicatorCards(timeframe){
     researchFactorCard("波动率",`ATR ${stockNumber(volatility.atr_14)}`,`20期年化 ${researchPct(volatility.annualized_volatility_20_period_pct)} · NATR ${researchPct(volatility.natr_14_pct)}`),
     researchFactorCard("量能",`5/20 比 ${stockNumber(volume.volume_5_to_20_ratio,2)}`,`5日均量 ${stockVolumeText(volume.volume_5_average)} · 20日均量 ${stockVolumeText(volume.volume_20_average)}`),
     researchFactorCard("动量",`ROC12 ${researchPct(momentum.roc_12_pct)}`,`20日 ${researchPct(momentum.return_20_period_pct)} · 60日 ${researchPct(momentum.return_60_period_pct)}`),
+    researchFactorCard("熊门反弹体系",esc(xiongmen.label),esc(xiongmen.detail)),
     researchFactorCard("区间极值",`高 ${stockNumber(recent.high)} / 20日`,`低 ${stockNumber(recent.low)} / 20日 · 250日高 ${stockNumber(year.high)}`),
   ].join("");
 }
@@ -1986,4 +2027,14 @@ $("interfacePrev").onclick=()=>{if(state.interfaces.page>1){state.interfaces.pag
 $("lineagePrev").onclick=()=>{if(state.interfaces.lineagePage>1){state.interfaces.lineagePage--;renderFieldLineage();}};$("lineageNext").onclick=()=>{state.interfaces.lineagePage++;renderFieldLineage();};
 $("derivationPrev").onclick=()=>{if(state.derivations.page>1){state.derivations.page--;renderDerivationRows();}};$("derivationNext").onclick=()=>{state.derivations.page++;renderDerivationRows();};
 $("ondemandPrev").onclick=()=>{if(state.derivations.ondemandPage>1){state.derivations.ondemandPage--;renderOndemandRows();}};$("ondemandNext").onclick=()=>{state.derivations.ondemandPage++;renderOndemandRows();};
-$("todayDate").value=isoDate(new Date());$("calendarMonth").value=monthValue();$("investmentMonth").value=monthValue();$("initEnd").value=isoDate(new Date(Date.now()-86400000));if(localStorage.getItem("cq-theme")==="dark")document.body.classList.add("dark");if(localStorage.getItem("cq-sidebar")==="collapsed")$("sidebar").classList.add("collapsed");refresh();setInterval(()=>refresh({background:true}),30000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh({background:true});});
+$("todayDate").value=isoDate(new Date());$("calendarMonth").value=monthValue();$("investmentMonth").value=monthValue();$("initEnd").value=isoDate(new Date(Date.now()-86400000));if(localStorage.getItem("cq-theme")==="dark")document.body.classList.add("dark");if(localStorage.getItem("cq-sidebar")==="collapsed")$("sidebar").classList.add("collapsed");activate(pageFromURL(),false);setInterval(()=>refresh({background:true}),30000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh({background:true});});
+
+// Daily index and sector overlay controls use backend-calculated Xiongmen values.
+document.addEventListener("click",event=>{
+  const button=event.target.closest("[data-research-overlay]");if(!button)return;
+  const prefix=button.dataset.researchPrefix,view=state.research[prefix];if(!view)return;
+  view.overlays??=new Set();const key=button.dataset.researchOverlay;
+  view.overlays.has(key)?view.overlays.delete(key):view.overlays.add(key);
+  button.classList.toggle("active",view.overlays.has(key));
+  renderResearchChart(prefix,view.response?.data?.timeframes?.["1d"]?.chart?.points||[]);
+});

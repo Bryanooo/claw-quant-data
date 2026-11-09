@@ -211,6 +211,12 @@ def _contract_external_routes() -> dict[str, set[str]]:
 
 
 def research_endpoint_lineage(path: str) -> dict[str, Any]:
+    if path == "/api/v1/research/factor-slices/csi300":
+        return _lineage(
+            ["index_weight", "local_factor_snapshot", "trade_calendar"], origin="derived_db",
+            derivation="same-date index weights and local factor snapshots in one read-only transaction",
+            read_strategy="materialized_db_only",
+        )
     if path in {"/api/v1/research/factors/catalog", "/api/v1/research/factors/{ts_code}"}:
         return _lineage(
             ["local_factor_snapshot"], origin="derived_db",

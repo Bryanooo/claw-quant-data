@@ -7,7 +7,7 @@
   <title>Claw Quant · 数据控制台</title>
   <link rel="icon" type="image/png" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
   <link rel="apple-touch-icon" href="/dashboard-assets/claw-quant-icon.png?v=20261021" />
-  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261030-workspaces" />
+  <link rel="stylesheet" href="/dashboard-assets/dashboard.css?v=20261105-xiongmen" />
 </head>
 <body>
   <aside id="sidebar" class="sidebar">
@@ -56,8 +56,9 @@
           <div class="stock-overlay-legend" id="stockOverlayLegend">
             <button data-stock-overlay="ma_5"><i style="--line-color:#9b7bd4"></i>MA5</button><button data-stock-overlay="ma_10"><i style="--line-color:#d19b3f"></i>MA10</button><button class="active" data-stock-overlay="ma_20"><i style="--line-color:#348fcb"></i>MA20</button><button class="active" data-stock-overlay="ma_60"><i style="--line-color:#7b8794"></i>MA60</button><button data-stock-overlay="ma_120"><i style="--line-color:#4d8d7c"></i>MA120</button><button data-stock-overlay="ma_250"><i style="--line-color:#6a7480"></i>MA250</button><button data-stock-overlay="ema_12"><i style="--line-color:#35a78a"></i>EMA12</button><button data-stock-overlay="ema_26"><i style="--line-color:#2f6f9f"></i>EMA26</button><button data-stock-overlay="ema_20"><i style="--line-color:#35a78a"></i>EMA20</button><button data-stock-overlay="ema_50"><i style="--line-color:#2f6f9f"></i>EMA50</button><button data-stock-overlay="ema_200"><i style="--line-color:#17666f"></i>EMA200</button><button data-stock-overlay="bbi"><i style="--line-color:#945ca8"></i>BBI</button><button data-stock-overlay="bollinger"><i style="--line-color:#8795a1"></i>BOLL</button><button data-stock-overlay="keltner"><i style="--line-color:#4d91a8"></i>Keltner</button><button class="active daily-only" data-stock-overlay="cost_20"><i style="--line-color:#b96a93"></i>成本20</button><button class="active daily-only" data-stock-overlay="cost_60"><i style="--line-color:#8753a6"></i>成本60</button><button class="active daily-only" data-stock-overlay="niumen_line"><i style="--line-color:#e07a35"></i>牛门线</button><button class="active daily-only" data-stock-overlay="niumen_confirmation_line"><i style="--line-color:#c94848"></i>确认线</button><button class="daily-only" data-stock-overlay="niumen_signal_ma_10"><i style="--line-color:#e7a85c"></i>信号MA10</button>
           </div>
-          <div id="stockDailyNote" class="stock-method-note">牛门线与确认线按交易日定义，仅在日 K 展示；成本线使用成交额 / 成交量的严格滚动口径。</div>
-          <div class="stock-pan-row"><span>历史浏览</span><button id="stockPanPrev" title="向前浏览更早K线">←</button><input id="stockPan" type="range" min="0" max="0" value="0" aria-label="平移K线可视区间"/><button id="stockPanNext" title="向后浏览更新K线">→</button><small id="stockHistoryRange">可直接左右拖动 K 线；滚轮缩放</small></div>
+          <div class="stock-overlay-legend daily-only"><button class="daily-only" data-stock-overlay="xiongmen" title="显示熊门线、地基、一至三楼、解套线及减一/减二标记"><i style="--line-color:var(--xiongmen-line)"></i>熊门体系</button><button class="daily-only" data-stock-overlay="xiongmen_bear_entry_line" title="近250日最高收盘的80%；可单独关闭以避免压缩K线"><i style="--line-color:#8795a1"></i>入熊线</button><span class="xiongmen-legend">地基绿 · 一楼黄 · 二楼紫 · 三楼红 · 解套青</span></div>
+          <div id="stockDailyNote" class="stock-method-note">牛门线与确认线按交易日定义，仅在日 K 展示；成本线使用成交额 / 成交量的严格滚动口径。熊门体系仅日线；白/灰线是兜底参考，20日下跌比例不代表盈利胜率。</div>
+          <div class="stock-pan-row"><span>历史浏览</span><button id="stockPanPrev" title="向前浏览更早K线">←</button><input id="stockPan" type="range" min="0" max="0" value="0" aria-label="平移K线可视区间"/><button id="stockPanNext" title="向后浏览更新K线">→</button><small id="stockHistoryRange">可直接左右拖动 K 线；Ctrl / ⌘ + 滚轮缩放</small></div>
           <div id="stockChartStage" class="stock-chart-stage"><svg id="stockPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" aria-label="股票K线图"></svg><div id="stockTooltip" class="stock-tooltip hidden"></div></div>
           <div id="stockSubChartArea" class="stock-subchart-area"></div>
           <div class="stock-subchart-actions"><button id="stockAddSubChart" type="button">＋ 添加副图</button><small>副图指标可切换；悬停 / 点击任意图表，主图与副图十字光标联动</small></div>
@@ -69,6 +70,7 @@
           <article><span>RSI / KDJ</span><strong id="stockRsi">—</strong><small id="stockKdj">—</small></article>
           <article><span>20 / 60 日成本线</span><strong id="stockCost">—</strong><small id="stockCostDistance">—</small></article>
           <article><span>牛门突破体系</span><strong id="stockNiumen">—</strong><small id="stockNiumenDetail">—</small></article>
+          <article><span>熊门反弹体系</span><strong id="stockXiongmen">—</strong><small id="stockXiongmenDetail">—</small></article>
           <article><span>量价状态</span><strong id="stockVolumeState">—</strong><small id="stockVolumeDetail">—</small></article>
           <article><span>波动率 / ATR</span><strong id="stockVolatility">—</strong><small id="stockVolatilityDetail">—</small></article>
           <article><span>ADX / DMI 趋势强度</span><strong id="stockStrength">—</strong><small id="stockStrengthDetail">—</small></article>
@@ -113,6 +115,7 @@
           <section class="card stock-chart-card">
             <div class="card-head"><h3 id="marketChartTitle">日 K 与均线</h3></div>
             <div class="chart-toolbar"><span class="chart-zoom-status" id="marketZoomStatus"></span><div class="timeframe-switch" role="group" aria-label="K线缩放"><button id="marketZoomIn" type="button">放大</button><button id="marketZoomOut" type="button">缩小</button><button id="marketZoomReset" type="button">重置</button><button id="marketPanPrev" type="button">‹</button><button id="marketPanNext" type="button">›</button></div></div>
+            <div class="stock-overlay-legend"><button data-research-prefix="market" data-research-overlay="xiongmen" title="显示熊门线、地基、一至三楼、解套线及减仓标记"><i style="--line-color:var(--xiongmen-line)"></i>熊门体系</button><button data-research-prefix="market" data-research-overlay="xiongmen_bear_entry_line"><i style="--line-color:#8795a1"></i>入熊线</button><span class="xiongmen-legend">日线 · 地基绿 / 一楼黄 / 二楼紫 / 三楼红 / 解套青</span></div>
             <div class="stock-chart-stage"><svg id="marketPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" role="img" aria-label="指数K线"></svg><div id="marketTooltip" class="stock-tooltip hidden"></div></div>
             <svg id="marketVolumeChart" class="research-volume-chart" viewBox="0 0 1200 96" preserveAspectRatio="none" role="img" aria-label="指数成交量"></svg>
           </section>
@@ -236,6 +239,7 @@
             <section class="card stock-chart-card">
               <div class="card-head"><h3>板块日 K 与均线</h3></div>
               <div class="chart-toolbar"><span class="chart-zoom-status" id="sectorZoomStatus"></span><div class="timeframe-switch" role="group" aria-label="K线缩放"><button id="sectorZoomIn" type="button">放大</button><button id="sectorZoomOut" type="button">缩小</button><button id="sectorZoomReset" type="button">重置</button><button id="sectorPanPrev" type="button">‹</button><button id="sectorPanNext" type="button">›</button></div></div>
+              <div class="stock-overlay-legend"><button data-research-prefix="sector" data-research-overlay="xiongmen" title="显示熊门线、地基、一至三楼、解套线及减仓标记"><i style="--line-color:var(--xiongmen-line)"></i>熊门体系</button><button data-research-prefix="sector" data-research-overlay="xiongmen_bear_entry_line"><i style="--line-color:#8795a1"></i>入熊线</button><span class="xiongmen-legend">日线 · 地基绿 / 一楼黄 / 二楼紫 / 三楼红 / 解套青</span></div>
               <div class="stock-chart-stage"><svg id="sectorPriceChart" viewBox="0 0 1200 430" preserveAspectRatio="none" role="img" aria-label="板块K线"></svg><div id="sectorTooltip" class="stock-tooltip hidden"></div></div>
               <svg id="sectorVolumeChart" class="research-volume-chart" viewBox="0 0 1200 96" preserveAspectRatio="none" role="img" aria-label="板块成交量"></svg>
             </section>
@@ -424,6 +428,6 @@
   </main>
 
   <dialog id="detailDialog"><div class="dialog-head"><h2 id="detailTitle">详情</h2><button id="detailClose">关闭</button></div><div id="detailBody" class="detail-body"></div></dialog>
-  <script src="/dashboard-assets/dashboard.js?v=20261030-governance" defer></script>
+  <script src="/dashboard-assets/dashboard.js?v=20261105-xiongmen" defer></script>
 </body>
 </html>

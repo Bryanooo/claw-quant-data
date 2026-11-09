@@ -7,6 +7,13 @@ from typing import Any
 DERIVED_ENDPOINTS: tuple[dict[str, Any], ...] = (
     {
         "method": "GET",
+        "path": "/api/v1/research/factor-slices/csi300",
+        "name": "沪深300历史因子截面",
+        "domain": "量化研究数据",
+        "description": "单日精确成分与指定因子的只读快照，保留缺值、观察时点、审计和冻结标识。",
+    },
+    {
+        "method": "GET",
         "path": "/api/v1/research/capabilities",
         "name": "研究能力目录",
         "domain": "能力发现",
@@ -383,6 +390,7 @@ SERVED_TECHNIQUES: tuple[dict[str, Any], ...] = (
     {"id": "turnover-vwap", "name": "换手率归一化与日线锚定VWAP代理", "domain": "技术面", "endpoint": "technicals"},
     {"id": "rolling-cost-lines", "name": "20/60日实际成交成本线", "domain": "技术面", "endpoint": "technicals"},
     {"id": "niumen-breakout-lines", "name": "牛门线与突破确认线", "domain": "技术面", "endpoint": "technicals"},
+    {"id": "xiongmen-rebound-lines", "name": "熊门线与熊市反弹分位线", "domain": "技术面", "endpoint": "technicals"},
     # Capital, event and market (8)
     {"id": "main-money-flow", "name": "主力资金流", "domain": "资金", "endpoint": "capital-flow"},
     {"id": "margin-financing", "name": "两融行为", "domain": "资金", "endpoint": "capital-flow"},

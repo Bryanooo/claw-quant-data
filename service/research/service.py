@@ -24,6 +24,9 @@ from service.research.technical_indicators import (
     parameterized_indicator_pack as _parameterized_indicator_pack,
     niumen_breakout_lines as _niumen_breakout_lines,
     niumen_breakout_series as _niumen_breakout_series,
+    xiongmen_rebound_series as _xiongmen_rebound_series,
+    xiongmen_rebound_lines as _xiongmen_rebound_lines,
+    xiongmen_chart_point as _xiongmen_chart_point,
     parabolic_sar as _parabolic_sar,
     relative_risk_metrics as _relative_risk_metrics,
     rolling_pstdev_series,
@@ -1370,6 +1373,11 @@ def _timeframe_analysis(
             "reason": "Niumen windows are defined in trading days and are only calculated from daily bars",
         }
     )
+    xiongmen_series = _xiongmen_rebound_series(highs, lows, closes) if timeframe == "1d" else None
+    xiongmen_summary = (
+        _xiongmen_rebound_lines(highs, lows, closes) if timeframe == "1d"
+        else {"status": "not_applicable", "reason": "Xiongmen is defined only for daily bars"}
+    )
     turnover_by_day: dict[date, float] = {}
     for row in turnover_rows or []:
         observed = _day(row.get("trade_date"))
@@ -1458,6 +1466,7 @@ def _timeframe_analysis(
                 }
                 if niumen_series is not None else {}
             ),
+            **(_xiongmen_chart_point(xiongmen_series, index) if xiongmen_series is not None else {}),
             "bollinger_middle": _round(average),
             "bollinger_upper": _round(average + 2 * deviation) if average is not None and deviation is not None else None,
             "bollinger_lower": _round(average - 2 * deviation) if average is not None and deviation is not None else None,
@@ -1536,6 +1545,7 @@ def _timeframe_analysis(
             },
             "systems": {
                 "niumen_breakout": niumen_summary,
+                "xiongmen_rebound": xiongmen_summary,
                 "ichimoku": _ichimoku(highs, lows, latest_close),
                 "donchian_20": _donchian(highs, lows, latest_close, 20),
                 "donchian_55": _donchian(highs, lows, latest_close, 55),
@@ -2566,6 +2576,8 @@ class ResearchService:
         )
         niumen_series = _niumen_breakout_series(highs, lows, closes)
         niumen_summary = _niumen_breakout_lines(highs, lows, closes)
+        xiongmen_series = _xiongmen_rebound_series(highs, lows, closes)
+        xiongmen_summary = _xiongmen_rebound_lines(highs, lows, closes)
         chart_rows = []
         boll_average_series = _sma_series(closes, 20)
         boll_deviation_series = rolling_pstdev_series(closes, 20)
@@ -2627,6 +2639,7 @@ class ResearchService:
                 ),
                 "cost_20": _round(cost_20_series[index]),
                 "cost_60": _round(cost_60_series[index]),
+                **_xiongmen_chart_point(xiongmen_series, index),
                 "niumen_line": _round(niumen_series["niumen_line"][index]),
                 "niumen_confirmation_line": _round(
                     niumen_series["confirmation_line"][index]
@@ -2752,6 +2765,7 @@ class ResearchService:
                     },
                     "systems": {
                         "niumen_breakout": niumen_summary,
+                        "xiongmen_rebound": xiongmen_summary,
                         "ichimoku": _ichimoku(highs, lows, latest_close),
                         "donchian_20": _donchian(highs, lows, latest_close, 20),
                         "donchian_55": _donchian(highs, lows, latest_close, 55),

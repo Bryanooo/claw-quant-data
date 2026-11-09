@@ -53,6 +53,23 @@ def factor_inputs() -> dict:
     return factor_input_catalog()
 
 
+@router.get("/factor-slices/csi300")
+def csi300_factor_slice(day: date, factor: list[str] = Query(),
+                       knowledge: str = Query("known_then", pattern="^(known_then|reconstructed)$")) -> dict:
+    """One exact-date index universe; never drops securities with missing factors."""
+    import psycopg2
+    from service.research.index_slice import EvidenceUnavailable, build_slice
+
+    try:
+        return build_slice(day, factor, knowledge)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except EvidenceUnavailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (psycopg2.OperationalError, psycopg2.errors.QueryCanceled) as exc:
+        raise HTTPException(status_code=503, detail="Research database unavailable or timed out") from exc
+
+
 @router.get("/factors/local/catalog")
 @router.get("/factors/catalog")
 def local_factor_catalog(family: str | None = None) -> dict:

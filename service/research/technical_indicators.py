@@ -994,6 +994,130 @@ def niumen_breakout_lines(
     }
 
 
+XIONGMEN_PRICE_FIELDS = (
+    "xiongmen_line", "xiongmen_foundation", "xiongmen_floor_1",
+    "xiongmen_floor_2", "xiongmen_floor_3", "xiongmen_recovery_ma_60",
+    "xiongmen_bear_entry_line",
+)
+
+
+def xiongmen_rebound_series(
+    highs: list[float], lows: list[float], closes: list[float],
+) -> dict[str, list[Any]]:
+    """Daily Xiongmen, preserving the supplied FILTER(...,10) AND NOT(DY).
+
+    Require complete rolling windows, as for Niumen; never backfill warm-up
+    values. FILTER consumes a raw crossing even when DY subsequently rejects
+    it. Outcomes enter the expanding statistics only on their 20th later bar.
+    """
+    if not (len(highs) == len(lows) == len(closes)):
+        raise ValueError("highs, lows and closes must have equal length")
+    fields = (*XIONGMEN_PRICE_FIELDS, "xiongmen_bf_14", "xiongmen_atrv_14",
+              "xiongmen_bear_state", "xiongmen_large_up", "xiongmen_candidate",
+              "xiongmen_sample_count", "xiongmen_lower_count",
+              "xiongmen_lower_rate_pct", "xiongmen_reduction_signal",
+              "xiongmen_marker_price")
+    output: dict[str, list[Any]] = {key: [] for key in fields}
+    true_ranges: list[float] = []
+    changes: list[float] = []
+    last_filtered = -11
+    samples = lower = 0
+    for index, (high, low, close) in enumerate(zip(highs, lows, closes)):
+        previous_close = closes[index - 1] if index else close
+        true_ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+        changes.append(abs(close - previous_close))
+        atrv = mean(true_ranges[index - 13:index + 1]) if index >= 13 else None
+        bf = mean(changes[index - 13:index + 1]) if index >= 14 else None
+        ll = min(closes[index - 19:index + 1]) if index >= 19 else None
+        hh = max(closes[index - 59:index + 1]) if index >= 59 else None
+        floors = [ll + (hh - ll) * ratio for ratio in (.382, .5, .618)] if hh is not None else [None] * 3
+        entry = max(closes[index - 249:index + 1]) * .8 if index >= 249 else None
+        bear = close <= entry if entry is not None else None
+        large_up = close - previous_close > 3 * bf if bf is not None else None
+        crossing = any(
+            current is not None and prior is not None
+            and close >= current and previous_close < prior
+            for current, prior in zip(floors[:2], [
+                output[f"xiongmen_floor_{floor}"][-1] if index else None
+                for floor in (1, 2)
+            ])
+        )
+        filtered = bool(bear and crossing and index - last_filtered > 10)
+        if filtered:
+            last_filtered = index
+        candidate = filtered and large_up is False
+        if index >= 20 and output["xiongmen_candidate"][index - 20]:
+            samples += 1
+            lower += int(close < closes[index - 20])
+        rate = lower / max(samples, 1) * 100
+        signal = None
+        if candidate and samples >= 15 and rate >= 65:
+            signal = "减二" if close >= floors[1] else "减一"
+        values = {
+            "xiongmen_line": min(lows[index - 20:index]) - .5 * atrv if index >= 20 else None,
+            "xiongmen_foundation": ll,
+            "xiongmen_floor_1": floors[0],
+            "xiongmen_floor_2": floors[1],
+            "xiongmen_floor_3": floors[2],
+            "xiongmen_recovery_ma_60": mean(closes[index - 59:index + 1]) if index >= 59 else None,
+            "xiongmen_bear_entry_line": entry,
+            "xiongmen_bf_14": bf,
+            "xiongmen_atrv_14": atrv,
+            "xiongmen_bear_state": bear,
+            "xiongmen_large_up": large_up,
+            "xiongmen_candidate": candidate,
+            "xiongmen_sample_count": samples,
+            "xiongmen_lower_count": lower,
+            "xiongmen_lower_rate_pct": rate,
+            "xiongmen_reduction_signal": signal,
+            "xiongmen_marker_price": close * (1.05 if signal == "减二" else 1.03) if signal else None,
+        }
+        for key, value in values.items():
+            output[key].append(value)
+    return output
+
+
+def xiongmen_chart_point(series: dict[str, list[Any]], index: int) -> dict[str, Any]:
+    """Keep flags/counts/labels typed; only round numeric price/rate values."""
+    return {key: _round(values[index]) if isinstance(values[index], float) else values[index]
+            for key, values in series.items()}
+
+
+def xiongmen_rebound_lines(
+    highs: list[float], lows: list[float], closes: list[float],
+) -> dict[str, Any]:
+    series = xiongmen_rebound_series(highs, lows, closes)
+    latest = xiongmen_chart_point(series, len(closes) - 1) if closes else {}
+    ready = latest.get("xiongmen_bear_state") is not None
+    return {
+        "status": "ready" if ready else "insufficient_history",
+        "state": ("bear_rebound_watch" if latest["xiongmen_bear_state"] else "outside_bear_state") if ready else "unavailable",
+        "values": {key: latest.get(key) for key in XIONGMEN_PRICE_FIELDS},
+        "events": {
+            "candidate_today": latest.get("xiongmen_candidate", False),
+            "reduction_signal": latest.get("xiongmen_reduction_signal"),
+        },
+        "statistics": {
+            "matured_samples": latest.get("xiongmen_sample_count", 0),
+            "lower_close_count": latest.get("xiongmen_lower_count", 0),
+            "lower_close_rate_pct": latest.get("xiongmen_lower_rate_pct", 0.0),
+            "eligible": latest.get("xiongmen_sample_count", 0) >= 15 and latest.get("xiongmen_lower_rate_pct", 0) >= 65,
+            "definition": "SJ observations whose close exactly 20 trading days later is strictly lower; not strategy profitability",
+            "scope": "expanding over supplied history, before chart cropping",
+        },
+        "parameters": {"atr_window": 14, "bf_window": 14, "bear_window": 250,
+                       "bear_ratio": .8, "high_window": 60, "low_window": 20,
+                       "floor_ratios": [.382, .5, .618], "atr_multiplier": .5,
+                       "filter_window": 10, "outcome_window": 20,
+                       "minimum_samples": 15, "minimum_lower_rate_pct": 65},
+        "history_observations": len(closes),
+        "warmup_policy": "complete windows required; bear state needs 250 daily bars",
+        "filter_policy": "FILTER(XS AND crossing,10) AND NOT(DY); rejected large-up bars still consume cooldown",
+        "calculation_timing": "after_daily_close",
+        "formula_version": "xiongmen-tongdaxin-v1",
+    }
+
+
 def downside_risk(returns: list[float], periods_per_year: int) -> dict[str, Any]:
     """Return historical downside statistics without distribution assumptions."""
 

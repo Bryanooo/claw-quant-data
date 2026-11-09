@@ -743,3 +743,10 @@ th.sortable[data-dir="asc"]::after { content: " ↑"; font-size: 11px; color: va
 .etf-flow-single .valuation-grid { margin-bottom: 4px; }
 .module-line-chart { width: 100%; height: auto; display: block; }
 @media (max-width:900px) { .intraday-pipeline{grid-template-columns:1fr 1fr}.intraday-market{grid-template-columns:1fr}.intraday-hero{align-items:flex-start;flex-direction:column}.intraday-actions{justify-content:flex-start} }
+
+/* Xiongmen's white reference remains legible in both chart themes. */
+:root { --xiongmen-line: #596574; }
+body.dark { --xiongmen-line: #f1f3f5; }
+.xiongmen-marker { font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; pointer-events: none; }
+.xiongmen-legend { align-self: center; color: var(--subtle); font-size: 11px; }
+.stock-overlay-legend.disabled { display: none; }

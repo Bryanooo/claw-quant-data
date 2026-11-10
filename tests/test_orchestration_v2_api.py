@@ -135,9 +135,9 @@ def test_summary_separates_baseline_observation_and_activation():
     assert response.status_code == 200
     payload = response.json()
     assert payload["baseline"] == {
-        "acquisition": 200,
+        "acquisition": 202,
         "transformation": 15,
-        "total": 215,
+        "total": 217,
     }
     assert payload["control_plane"]["status"] == "installed"
     assert payload["activation"] == "active"

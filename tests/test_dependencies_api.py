@@ -71,11 +71,11 @@ def test_inventory_covers_all_registered_sources():
     by_source = {source: 0 for source in {item["source"] for item in items}}
     for item in items:
         by_source[item["source"]] += 1
-    assert by_source["tushare"] == 244
+    assert by_source["tushare"] == 245
     assert by_source["financial_data"] == 163
     assert by_source["sina"] == 3
     assert {"cninfo", "sse", "chinabond", "chinamoney", "pboc"} <= set(by_source)
-    assert len(items) == 415
+    assert len(items) == 417
 
 
 def test_tushare_status_partition_matches_registry():
@@ -83,8 +83,9 @@ def test_tushare_status_partition_matches_registry():
     statuses = {item["key"]: item["status"] for item in items}
     registered = sum(status == "active" for status in statuses.values())
     paused = [key for key, status in statuses.items() if status == "paused"]
-    assert registered == 194  # 201 callable endpoints minus 7 plain twins superseded by _vip
-    assert paused == ["us_daily"]
+    assert registered == 165  # 201 callable endpoints minus 7 plain twins superseded by _vip
+    from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
+    assert set(paused) == DEFERRED_RESEARCH_DATASETS
     no_permission = [key for key, status in statuses.items() if status == "no_permission"]
     assert len(no_permission) == 38
     assert statuses["adj_factor"] == "active"
@@ -153,12 +154,12 @@ def test_field_lineage_maps_table_fields_to_interfaces():
 
 def test_summary_counts_are_consistent():
     summary = dependency_summary()
-    assert summary["interfaces"] == 415
-    assert summary["datasets"] == 207
-    assert summary["tasks"] == 200
-    assert summary["by_source"]["tushare"] == 244
+    assert summary["interfaces"] == 417
+    assert summary["datasets"] == 209
+    assert summary["tasks"] == 202
+    assert summary["by_source"]["tushare"] == 245
     # 194 Tushare + 7 reviewed 蚂蚁 scheduled-pull routes
-    assert summary["by_status"]["active"] == 201
+    assert summary["by_status"]["active"] == 173
     # 11 Tushare (4 no-task + 7 plain twins superseded by _vip)
     # + 29 蚂蚁 routes whose quota fallback is disabled by policy
     # + 28 蚂蚁 adapter-pending overlap routes
@@ -192,7 +193,7 @@ def test_interfaces_endpoint_serves_filtered_inventory():
     assert response.status_code == 200
     payload = response.json()
     assert payload["runtime_available"] is True
-    assert payload["total"] == 194
+    assert payload["total"] == 165
     assert all(item["status"] == "active" for item in payload["items"])
     adj = next(item for item in payload["items"] if item["key"] == "adj_factor")
     assert adj["runtime"]["latest_execution"]["task_execution_id"] == 11
@@ -230,7 +231,7 @@ def test_summary_and_field_lineage_endpoints():
     client = _client()
     summary = client.get("/api/v1/data/dependencies/summary")
     assert summary.status_code == 200
-    assert summary.json()["interfaces"] == 415
+    assert summary.json()["interfaces"] == 417
     lineage = client.get(
         "/api/v1/data/dependencies/field-lineage",
         params={"q": "adj_factor"},

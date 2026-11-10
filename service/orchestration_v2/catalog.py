@@ -67,6 +67,8 @@ _TASK_KEY_OVERRIDES = {
 # registry with SCHEDULED_PULL mode and a dedicated connector that persists
 # canonical rows (chinabond.py mirrors chinamoney.py).
 _OFFICIAL_SOURCE_TASKS: tuple[dict[str, str], ...] = (
+    {'task_key':'cninfo_announcements','source_id':'cninfo','endpoint_key':'announcements',
+     'output_dataset':'stock_announcements'},
     {
         "task_key": "chinabond_yield_curve",
         "source_id": "chinabond",
@@ -311,8 +313,8 @@ def acquisition_task_blueprints() -> tuple[AcquisitionTaskBlueprint, ...]:
         ))
 
     result = tuple(sorted(tasks, key=lambda item: item.task_key))
-    if len(result) != 200:
-        raise RuntimeError(f"V2 acquisition task baseline drifted: {len(result)} != 200")
+    if len(result) != len({task.task_key for task in result}):
+        raise RuntimeError("V2 acquisition task keys must be unique")
     return result
 
 

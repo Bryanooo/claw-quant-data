@@ -7,6 +7,9 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from service.data_service.source_policy import (
     source_policy_catalog,

@@ -212,7 +212,8 @@ class FinancialDataConnector:
                         'weekly' if request.endpoint_key in {'stock_fnd.equity-structure', 'stock_fnd.free-float'}
                         else 'monthly_rotation')
             with budget_scope(category):
-                rows, evidence = run_scheduled_pull(spec, self._transport)
+                from service.source_connectors.ant_checkpoint import ScheduledCheckpoint
+                rows, evidence = run_scheduled_pull(spec, self._transport, checkpoint=ScheduledCheckpoint())
         except Exception as exc:
             if self._archive is not None:
                 try:

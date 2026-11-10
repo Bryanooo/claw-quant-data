@@ -37,8 +37,9 @@ def test_reference_profiles_are_bounded_and_week_idempotent():
     store = Store()
     dispatch_weekly_reference_profiles(date(2026,10,30), repository=store)
     dispatch_weekly_reference_profiles(date(2026,10,31), repository=store)
-    assert len(store.requests) == 8
-    assert [r.idempotency_key for r in store.requests[:4]] == [r.idempotency_key for r in store.requests[4:]]
+    assert len(store.requests) == 6
+    assert all(r.task_key != "fut_basic" for r in store.requests)
+    assert [r.idempotency_key for r in store.requests[:3]] == [r.idempotency_key for r in store.requests[3:]]
     assert len(WEEKLY_REFERENCE_PROFILES['fut_basic']) == 6
     assert {r['market'] for r in WEEKLY_REFERENCE_PROFILES['fund_basic']} == {'E','O'}
 
@@ -52,11 +53,11 @@ def test_reference_dispatch_failure_does_not_block_other_profiles():
                 raise ValueError('invalid binding')
             return {}, True
     result = dispatch_weekly_reference_profiles(date(2026,10,31), repository=Store())
-    assert result['created'] == 3
+    assert result['created'] == 2
     assert set(result['errors']) == {'fund_basic'}
 
 
-def test_empty_forex_recheck_uses_trade_date_not_a_range():
+def test_forex_recheck_is_bounded_to_a_share_context_symbols():
     definition = acquisition_definition(task_key='fx_daily', output_datasets=['forex_daily'], acquisition_endpoint_ids=[7])
     definition['validation_contract']['outputs'] = ['forex_daily']
     definition['validation_contract']['dataset_audits'][0]['dataset_name'] = 'forex_daily'
@@ -65,13 +66,15 @@ def test_empty_forex_recheck_uses_trade_date_not_a_range():
             return {'acquisition_endpoint_id': 7, 'endpoint_key':'fx_daily',
                     'source_id':'tushare','lifecycle_status':'active'}
     day = date(2026, 10, 20)
-    spec, = OrchestrationV2Runtime(Store())._plan_acquisition(
+    specs = OrchestrationV2Runtime(Store())._plan_acquisition(
         TaskDefinitionDocument.model_validate(definition),
         dict(purpose='backfill', observation_start=day, observation_end=day,
              observation_key=str(day), frozen_scope={'reasons':['recheck_empty']}))
-    assert spec.parameters['parameters']['trade_date'] == '20261020'
-    assert 'start_date' not in spec.parameters['parameters']
-    assert spec.resource_class == 'backfill'
+    assert {s.parameters['parameters']['ts_code'] for s in specs} == {'USDCNH.FXCM','USDOLLAR.FXCM'}
+    for spec in specs:
+        assert spec.parameters['parameters']['start_date'] == '20261020'
+        assert spec.parameters['parameters']['end_date'] == '20261020'
+        assert spec.resource_class == 'backfill'
 
 
 @pytest.mark.parametrize('key', list(WEEKLY_REFERENCE_PROFILES))

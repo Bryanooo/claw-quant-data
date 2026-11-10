@@ -247,11 +247,23 @@ def run_initialization_reconciler() -> int:
     return 1
 
 
+def run_ephemeral_maintenance():
+    from service.maintenance import prune_ephemeral_state
+    result = prune_ephemeral_state()
+    logger.info("Expired operational state cleanup: %s", result)
+    return result
+
+
 def create_scheduler(*, set_active: bool = True, **_ignored) -> BackgroundScheduler:
     global _ACTIVE_SCHEDULER
     scheduler = BackgroundScheduler(
         executors={"default": ThreadPoolExecutor(max_workers=3)},
         timezone="Asia/Shanghai",
+    )
+    scheduler.add_job(
+        run_ephemeral_maintenance, 'cron', hour=3, minute=20,
+        id='v2_ephemeral_maintenance', name='过期响应缓存与进程心跳清理',
+        replace_existing=True, coalesce=True, max_instances=1,
     )
     scheduler.add_job(
         run_history_continuation, 'interval', minutes=1,

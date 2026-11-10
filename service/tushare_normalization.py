@@ -19,7 +19,7 @@ from service.tushare_catalog import TushareInterfaceCatalog
 SCHEMA_VERSION = 1
 NORMALIZED_TABLE_PREFIX = "tushare_norm_"
 
-_TIMESTAMP_FIELDS = {"trade_time", "pub_time", "create_time", "update_time"}
+_TIMESTAMP_FIELDS = {"trade_time", "pub_time", "rec_time", "create_time", "update_time"}
 _TIME_FIELDS = {"time", "qt_time"}
 _DATE_ALIASES = {"imp_anndate"}
 _TECHNICAL_UPSTREAM_FIELDS = {"id", "create_by", "update_by", "create_time", "update_time"}
@@ -223,6 +223,7 @@ _REVIEWED_BUSINESS_IDENTITIES: dict[str, tuple[str, ...]] = {
 # to prevent a partially shaped row from silently entering a current-state
 # relation under an ambiguous identity.
 _REQUIRED_IDENTITY_OVERRIDES: dict[str, tuple[str, ...]] = {
+    "stk_seasoned": ("ts_code", "ann_date"),
     "eco_cal": ("date", "currency", "country", "event"),
     "factor_value": ("trade_date", "ts_code", "factor_name"),
     "fina_audit": ("ts_code", "end_date"),
@@ -245,6 +246,7 @@ _DATE_COLUMN_OVERRIDES: dict[str, str] = {
 
 
 _AVAILABILITY_COLUMN_OVERRIDES: dict[str, str] = {
+    "stk_seasoned": "ann_date",
     "fina_audit": "ann_date",
     "fund_manager": "ann_date",
     "fund_nav": "ann_date",
@@ -622,6 +624,11 @@ class TushareNormalizer:
 
         contract = self._registry.get(api_name)
         identities = contract.business_identity_fields or contract.identity_fields
+        if api_name == "stk_seasoned":
+            # No provider project id is exposed. Multiple projects/updates may
+            # share a stock and announcement date; count distinct observations
+            # without pretending that the stock alone is an issuance identity.
+            identities = ("_record_hash",)
         if not identities:
             return 0
         statement = sql.SQL(

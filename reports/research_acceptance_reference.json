@@ -916,5 +916,7 @@
     "Spot and ETF price samples succeeded with limited monthly history warnings; global gold fundamentals and ETF product quality still require external official data.",
     "Valuation returns inputs and null fair_value; no completed DCF or reverse-DCF engine was verified.",
     "Market breadth returned observations but no meta.quality; inspect date, universe and readiness without fabricating complete coverage."
-  ]
+  ],
+  "record_kind": "historical_acceptance_reference",
+  "not_current_runtime_status": true
 }

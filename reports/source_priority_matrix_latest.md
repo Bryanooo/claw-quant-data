@@ -1,6 +1,6 @@
 # 数据源优先级矩阵
 
-> 生成时间：`2026-10-31T13:24:23.125273+00:00`。机器可读版本见 [`source_priority_matrix_latest.json`](source_priority_matrix_latest.json)。
+> 生成时间：`2026-11-10T13:30:21.208827+00:00`。机器可读版本见 [`source_priority_matrix_latest.json`](source_priority_matrix_latest.json)。
 
 ## 统一规则
 

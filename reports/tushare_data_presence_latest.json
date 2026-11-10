@@ -1,11 +1,12 @@
 {
-  "generated_at": "2026-10-18T20:45:41.732294+08:00",
+  "generated_at": "2026-11-10T21:30:22.077172+08:00",
+  "normalized_evidence_mode": "existence_only_not_row_totals",
   "summary": {
-    "collectable_interfaces": 202,
-    "implemented_interfaces": 202,
-    "automatically_scheduled_interfaces": 153,
-    "interfaces_with_positive_rows": 198,
-    "interfaces_without_positive_row_evidence": 4
+    "collectable_interfaces": 203,
+    "implemented_interfaces": 203,
+    "automatically_scheduled_interfaces": 150,
+    "interfaces_with_positive_rows": 200,
+    "interfaces_without_positive_row_evidence": 3
   },
   "interfaces": [
     {
@@ -16,9 +17,11 @@
       "normalized_tables": [
         "tushare_norm_adj_factor"
       ],
-      "normalized_rows": 19150650,
-      "successful_jobs": 8666,
-      "last_success_at": "2026-10-16T11:15:04.692672+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 8713,
+      "last_success_at": "2026-11-10T12:39:16.172837+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -30,9 +33,11 @@
       "normalized_tables": [
         "bak_basic"
       ],
-      "normalized_rows": 10835077,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:02.807335+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:19.314261+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -44,23 +49,27 @@
       "normalized_tables": [
         "tushare_norm_bak_daily"
       ],
-      "normalized_rows": 10234660,
-      "successful_jobs": 54,
-      "last_success_at": "2026-10-16T11:15:11.634941+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 101,
+      "last_success_at": "2026-11-10T12:40:23.471727+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "balancesheet",
       "implementation_mode": "equivalent_specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "balancesheet"
       ],
-      "normalized_rows": 346127,
-      "successful_jobs": 42,
-      "last_success_at": "2026-09-28T19:51:04.762511+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 338,
+      "last_success_at": "2026-11-10T10:20:18.401505+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -72,7 +81,9 @@
       "normalized_tables": [
         "balancesheet"
       ],
-      "normalized_rows": 346127,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -81,14 +92,16 @@
     {
       "api_name": "bc_bestotcqt",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_bc_bestotcqt"
       ],
-      "normalized_rows": 19950,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:03.467575+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:21:45.186306+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -100,7 +113,9 @@
       "normalized_tables": [
         "tushare_norm_bc_otcqt"
       ],
-      "normalized_rows": 128247,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -114,37 +129,43 @@
       "normalized_tables": [
         "block_trade"
       ],
-      "normalized_rows": 2519,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:04.278031+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 1482,
+      "last_success_at": "2026-11-10T11:15:18.295072+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "bond_blk",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_bond_blk"
       ],
-      "normalized_rows": 69,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:05.677399+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:21:52.580703+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "bond_blk_detail",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_bond_blk_detail"
       ],
-      "normalized_rows": 120,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:06.196779+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:21:56.885336+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -156,9 +177,11 @@
       "normalized_tables": [
         "broker_recommend"
       ],
-      "normalized_rows": 822,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:13.046405+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-31T16:24:30.840315+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -170,23 +193,27 @@
       "normalized_tables": [
         "bse_mapping"
       ],
-      "normalized_rows": 248,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:19.300173+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:07:36.586684+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "cashflow",
       "implementation_mode": "equivalent_specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "cashflow"
       ],
-      "normalized_rows": 316975,
-      "successful_jobs": 78,
-      "last_success_at": "2026-10-12T15:47:31.450765+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 104,
+      "last_success_at": "2026-11-10T12:32:52.324795+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -198,7 +225,9 @@
       "normalized_tables": [
         "cashflow"
       ],
-      "normalized_rows": 316975,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -212,9 +241,11 @@
       "normalized_tables": [
         "tushare_norm_cb_basic"
       ],
-      "normalized_rows": 2811,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:19.472564+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:07:43.390706+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -226,9 +257,11 @@
       "normalized_tables": [
         "tushare_norm_cb_call"
       ],
-      "normalized_rows": 34,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:07.115073+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:20.235504+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -240,9 +273,11 @@
       "normalized_tables": [
         "tushare_norm_cb_daily"
       ],
-      "normalized_rows": 835293,
-      "successful_jobs": 1330,
-      "last_success_at": "2026-10-16T11:15:08.243969+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 1377,
+      "last_success_at": "2026-11-10T12:40:55.491401+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -254,9 +289,11 @@
       "normalized_tables": [
         "tushare_norm_cb_factor_pro"
       ],
-      "normalized_rows": 9448,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:08.518572+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 50,
+      "last_success_at": "2026-11-10T12:40:00.427018+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -268,9 +305,11 @@
       "normalized_tables": [
         "tushare_norm_cb_issue"
       ],
-      "normalized_rows": 12,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:09.115402+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:23.733846+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -282,7 +321,9 @@
       "normalized_tables": [
         "tushare_norm_cb_rate"
       ],
-      "normalized_rows": 5085,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -296,7 +337,9 @@
       "normalized_tables": [
         "tushare_norm_cb_rating"
       ],
-      "normalized_rows": 5200,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -310,7 +353,9 @@
       "normalized_tables": [
         "tushare_norm_cb_share"
       ],
-      "normalized_rows": 3580,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -319,14 +364,16 @@
     {
       "api_name": "ccass_hold",
       "implementation_mode": "specialized",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "ccass_hold"
       ],
-      "normalized_rows": 54319,
-      "successful_jobs": 9,
-      "last_success_at": "2026-10-16T01:15:03.819634+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 25,
+      "last_success_at": "2026-11-09T16:20:29.485906+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -338,11 +385,13 @@
       "normalized_tables": [
         "ccass_hold_detail"
       ],
-      "normalized_rows": 0,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 1,
+      "last_success_at": "2026-11-02T16:34:08.531029+00:00",
       "last_raw_at": null,
-      "data_status": "no_positive_row_evidence"
+      "data_status": "positive_rows"
     },
     {
       "api_name": "ci_daily",
@@ -352,23 +401,27 @@
       "normalized_tables": [
         "tushare_norm_ci_daily"
       ],
-      "normalized_rows": 1691224,
-      "successful_jobs": 11,
-      "last_success_at": "2026-10-16T11:15:09.871685+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 58,
+      "last_success_at": "2026-11-10T12:40:55.869108+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "ci_index_member",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_ci_index_member"
       ],
-      "normalized_rows": 5516,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 4,
+      "last_success_at": "2026-11-09T16:26:40.689129+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -380,9 +433,11 @@
       "normalized_tables": [
         "tushare_norm_cn_cpi"
       ],
-      "normalized_rows": 512,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:13.507985+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 14,
+      "last_success_at": "2026-11-10T12:40:10.211738+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -394,9 +449,11 @@
       "normalized_tables": [
         "tushare_norm_cn_gdp"
       ],
-      "normalized_rows": 178,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:16.999546+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 13,
+      "last_success_at": "2026-11-10T12:40:53.321873+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -408,9 +465,11 @@
       "normalized_tables": [
         "tushare_norm_cn_m"
       ],
-      "normalized_rows": 584,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:13.994372+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 14,
+      "last_success_at": "2026-11-10T12:40:50.155902+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -422,9 +481,11 @@
       "normalized_tables": [
         "tushare_norm_cn_pmi"
       ],
-      "normalized_rows": 262,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:14.523104+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 14,
+      "last_success_at": "2026-11-10T12:40:53.656799+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -436,9 +497,11 @@
       "normalized_tables": [
         "tushare_norm_cn_ppi"
       ],
-      "normalized_rows": 419,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:15.030311+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 14,
+      "last_success_at": "2026-11-10T12:40:51.686376+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -450,37 +513,43 @@
       "normalized_tables": [
         "tushare_norm_cn_schedule"
       ],
-      "normalized_rows": 176,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:15.528376+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 3,
+      "last_success_at": "2026-10-31T16:24:33.292235+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "cyq_chips",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "cyq_chips"
       ],
-      "normalized_rows": 61492278,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 35,
+      "last_success_at": "2026-11-02T02:51:02.358358+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "cyq_perf",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "cyq_perf"
       ],
-      "normalized_rows": 9378499,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-12T15:22:40.026275+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 6,
+      "last_success_at": "2026-11-02T03:51:49.640857+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -492,9 +561,11 @@
       "normalized_tables": [
         "daily"
       ],
-      "normalized_rows": 18329834,
-      "successful_jobs": 44,
-      "last_success_at": "2026-10-16T11:15:14.126809+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 82,
+      "last_success_at": "2026-11-10T12:41:29.950601+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -506,9 +577,11 @@
       "normalized_tables": [
         "tushare_norm_daily_basic"
       ],
-      "normalized_rows": 18307951,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:16.017561+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T11:15:10.391658+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -520,9 +593,11 @@
       "normalized_tables": [
         "tushare_norm_daily_info"
       ],
-      "normalized_rows": 131204,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:12.636854+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 57,
+      "last_success_at": "2026-11-10T12:40:56.652637+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -534,9 +609,11 @@
       "normalized_tables": [
         "dc_concept"
       ],
-      "normalized_rows": 18409,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:13.760209+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:27.881670+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -548,7 +625,9 @@
       "normalized_tables": [
         "dc_concept_cons"
       ],
-      "normalized_rows": 414490,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -562,9 +641,11 @@
       "normalized_tables": [
         "dc_daily"
       ],
-      "normalized_rows": 1472898,
-      "successful_jobs": 916,
-      "last_success_at": "2026-10-16T11:15:15.070364+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 963,
+      "last_success_at": "2026-11-10T12:40:57.958024+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -576,23 +657,27 @@
       "normalized_tables": [
         "dc_hot"
       ],
-      "normalized_rows": 16470,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:15.102830+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 46,
+      "last_success_at": "2026-11-10T08:00:34.396630+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "dc_index",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "dc_index"
       ],
-      "normalized_rows": 10080,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:35.420526+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -604,9 +689,11 @@
       "normalized_tables": [
         "dc_member"
       ],
-      "normalized_rows": 240006,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:16.204446+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:31.328941+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -618,7 +705,9 @@
       "normalized_tables": [
         "disclosure_date"
       ],
-      "normalized_rows": 310171,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 2,
       "last_success_at": "2026-09-30T16:06:19.776936+00:00",
       "last_raw_at": null,
@@ -632,9 +721,11 @@
       "normalized_tables": [
         "dividend"
       ],
-      "normalized_rows": 67577,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:18.154333+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:33.692507+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -646,9 +737,11 @@
       "normalized_tables": [
         "tushare_norm_eco_cal"
       ],
-      "normalized_rows": 101251,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:30.693384+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:54.832352+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -660,9 +753,11 @@
       "normalized_tables": [
         "tushare_norm_etf_basic"
       ],
-      "normalized_rows": 1833,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:20.041535+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:07:38.721686+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -674,23 +769,27 @@
       "normalized_tables": [
         "tushare_norm_etf_index"
       ],
-      "normalized_rows": 564,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:23.308731+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:07:45.494144+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "etf_sh_cons",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_etf_sh_cons"
       ],
-      "normalized_rows": 2354998,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 4,
+      "last_success_at": "2026-11-09T17:58:19.276310+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -702,37 +801,43 @@
       "normalized_tables": [
         "tushare_norm_etf_share_size"
       ],
-      "normalized_rows": 1995358,
-      "successful_jobs": 12,
-      "last_success_at": "2026-10-16T01:15:06.042143+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 60,
+      "last_success_at": "2026-11-10T12:41:01.055249+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "etf_sz_cons",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_etf_sz_cons"
       ],
-      "normalized_rows": 1604114,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 5,
+      "last_success_at": "2026-11-09T17:46:01.965041+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "express",
       "implementation_mode": "equivalent_specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "express"
       ],
-      "normalized_rows": 29598,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 10,
+      "last_success_at": "2026-11-10T10:20:19.199727+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -744,7 +849,9 @@
       "normalized_tables": [
         "express"
       ],
-      "normalized_rows": 29598,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -758,9 +865,11 @@
       "normalized_tables": [
         "tushare_norm_factor_value"
       ],
-      "normalized_rows": 18946380,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 20,
+      "last_success_at": "2026-10-30T11:36:03.886592+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -772,7 +881,9 @@
       "normalized_tables": [
         "tushare_norm_fina_audit"
       ],
-      "normalized_rows": 26,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -781,12 +892,14 @@
     {
       "api_name": "fina_indicator",
       "implementation_mode": "equivalent_specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "fina_indicator"
       ],
-      "normalized_rows": 376030,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -800,7 +913,9 @@
       "normalized_tables": [
         "fina_indicator"
       ],
-      "normalized_rows": 376030,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -814,9 +929,11 @@
       "normalized_tables": [
         "fina_mainbz"
       ],
-      "normalized_rows": 2096482,
-      "successful_jobs": 146,
-      "last_success_at": "2026-10-12T16:09:11.367153+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 147,
+      "last_success_at": "2026-11-05T08:00:03.101852+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -828,7 +945,9 @@
       "normalized_tables": [
         "fina_mainbz"
       ],
-      "normalized_rows": 2096482,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -842,7 +961,9 @@
       "normalized_tables": [
         "forecast"
       ],
-      "normalized_rows": 127953,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 2,
       "last_success_at": "2026-09-30T16:06:18.617652+00:00",
       "last_raw_at": null,
@@ -856,7 +977,9 @@
       "normalized_tables": [
         "forecast"
       ],
-      "normalized_rows": 127953,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -865,14 +988,16 @@
     {
       "api_name": "ft_limit",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_ft_limit"
       ],
-      "normalized_rows": 26916,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:17.261658+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:23:13.181002+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -884,23 +1009,27 @@
       "normalized_tables": [
         "tushare_norm_fund_adj"
       ],
-      "normalized_rows": 1403766,
-      "successful_jobs": 5146,
-      "last_success_at": "2026-10-16T11:15:22.657376+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 5193,
+      "last_success_at": "2026-11-10T12:41:01.973932+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fund_basic",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fund_basic"
       ],
-      "normalized_rows": 32768,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 4,
+      "last_success_at": "2026-11-09T16:07:30.432859+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -912,9 +1041,11 @@
       "normalized_tables": [
         "tushare_norm_fund_company"
       ],
-      "normalized_rows": 449,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:23.797825+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:07:47.283725+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -926,9 +1057,11 @@
       "normalized_tables": [
         "tushare_norm_fund_daily"
       ],
-      "normalized_rows": 1297172,
-      "successful_jobs": 5147,
-      "last_success_at": "2026-10-16T11:15:20.346318+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 5194,
+      "last_success_at": "2026-11-10T12:41:02.971951+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -940,9 +1073,11 @@
       "normalized_tables": [
         "tushare_norm_fund_div"
       ],
-      "normalized_rows": 902,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:21.750917+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:37.326568+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -954,9 +1089,11 @@
       "normalized_tables": [
         "tushare_norm_fund_factor_pro"
       ],
-      "normalized_rows": 61874,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:24.484619+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 51,
+      "last_success_at": "2026-11-10T12:40:09.873327+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -968,9 +1105,11 @@
       "normalized_tables": [
         "tushare_norm_fund_manager"
       ],
-      "normalized_rows": 87653,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:10:26.228770+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:10:13.668909+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -982,9 +1121,11 @@
       "normalized_tables": [
         "tushare_norm_fund_nav"
       ],
-      "normalized_rows": 6448978,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:24.093307+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:39.760997+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -996,7 +1137,9 @@
       "normalized_tables": [
         "tushare_norm_fund_portfolio"
       ],
-      "normalized_rows": 18945460,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 2,
       "last_success_at": "2026-09-30T16:06:23.309726+00:00",
       "last_raw_at": null,
@@ -1010,9 +1153,11 @@
       "normalized_tables": [
         "tushare_norm_fund_share"
       ],
-      "normalized_rows": 2712269,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:26.774293+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:46.298474+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1024,23 +1169,27 @@
       "normalized_tables": [
         "tushare_norm_fut_basic"
       ],
-      "normalized_rows": 22471,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 3,
+      "last_success_at": "2026-11-09T16:07:22.000995+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fut_daily",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fut_daily"
       ],
-      "normalized_rows": 34355,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:25.817709+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:23:47.265435+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1052,7 +1201,9 @@
       "normalized_tables": [
         "tushare_norm_fut_holding"
       ],
-      "normalized_rows": 1729722,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 170,
       "last_success_at": "2026-09-28T17:23:09.039406+00:00",
       "last_raw_at": null,
@@ -1066,65 +1217,75 @@
       "normalized_tables": [
         "tushare_norm_fut_index_daily"
       ],
-      "normalized_rows": 840,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 13,
+      "last_success_at": "2026-11-05T08:00:36.545575+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fut_mapping",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fut_mapping"
       ],
-      "normalized_rows": 6254,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:27.150576+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:06.098049+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fut_settle",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fut_settle"
       ],
-      "normalized_rows": 28564,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:28.296160+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:08.912617+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fut_trade_cal",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fut_trade_cal"
       ],
-      "normalized_rows": 13527,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:28.703172+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:11.073806+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fut_weekly_detail",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fut_weekly_detail"
       ],
-      "normalized_rows": 4000,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:27.219337+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 6,
+      "last_success_at": "2026-11-02T01:15:05.309349+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1136,7 +1297,9 @@
       "normalized_tables": [
         "tushare_norm_fut_weekly_monthly"
       ],
-      "normalized_rows": 12002,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -1145,14 +1308,16 @@
     {
       "api_name": "fut_wsr",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_fut_wsr"
       ],
-      "normalized_rows": 39293,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:29.851742+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:13.489115+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1164,23 +1329,27 @@
       "normalized_tables": [
         "fx_daily"
       ],
-      "normalized_rows": 622320,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:30.664669+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T08:00:36.766058+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "fx_obasic",
       "implementation_mode": "specialized",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "fx_obasic"
       ],
-      "normalized_rows": 69,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:28.289301+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:10:16.466714+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1193,9 +1362,11 @@
         "ggt_daily",
         "ggt_monthly"
       ],
-      "normalized_rows": 1143,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:31.123161+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T08:00:33.751440+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1207,23 +1378,27 @@
       "normalized_tables": [
         "ggt_top10"
       ],
-      "normalized_rows": 49850,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:31.670744+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:55.757637+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "gz_index",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_gz_index"
       ],
-      "normalized_rows": 1181,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:32.148067+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:23.064013+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1235,37 +1410,43 @@
       "normalized_tables": [
         "tushare_norm_hibor"
       ],
-      "normalized_rows": 5501,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:32.640513+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:57.259117+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "hk_basic",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_hk_basic"
       ],
-      "normalized_rows": 2858,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:31.589531+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:10:18.556469+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "hk_daily",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_hk_daily"
       ],
-      "normalized_rows": 56224,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:33.646305+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 30,
+      "last_success_at": "2026-11-09T16:21:51.744295+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1277,23 +1458,27 @@
       "normalized_tables": [
         "hk_hold"
       ],
-      "normalized_rows": 6955167,
-      "successful_jobs": 13,
-      "last_success_at": "2026-10-16T11:15:33.827116+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 50,
+      "last_success_at": "2026-11-10T08:00:36.266701+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "hk_tradecal",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_hk_tradecal"
       ],
-      "normalized_rows": 17532,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:34.321718+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:29.998670+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1305,9 +1490,11 @@
       "normalized_tables": [
         "hm_list"
       ],
-      "normalized_rows": 117,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:32.243377+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:10:20.048220+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1319,9 +1506,11 @@
       "normalized_tables": [
         "hsgt_top10"
       ],
-      "normalized_rows": 580,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:34.607361+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:59.797643+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1333,9 +1522,11 @@
       "normalized_tables": [
         "tushare_norm_idx_anns"
       ],
-      "normalized_rows": 59,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:35.183954+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:01.845981+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1347,23 +1538,27 @@
       "normalized_tables": [
         "tushare_norm_idx_factor_pro"
       ],
-      "normalized_rows": 10500536,
-      "successful_jobs": 481,
-      "last_success_at": "2026-10-16T11:15:38.103006+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 518,
+      "last_success_at": "2026-11-10T12:41:02.584370+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "income",
       "implementation_mode": "equivalent_specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "income"
       ],
-      "normalized_rows": 352802,
-      "successful_jobs": 61,
-      "last_success_at": "2026-09-28T19:53:22.633875+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 89,
+      "last_success_at": "2026-11-10T12:33:00.375816+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1375,7 +1570,9 @@
       "normalized_tables": [
         "income"
       ],
-      "normalized_rows": 352802,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -1389,9 +1586,11 @@
       "normalized_tables": [
         "index_basic"
       ],
-      "normalized_rows": 11768,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:06:57.927759+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:20.916322+00:00",
       "last_raw_at": "2026-09-28T17:52:04.596615+00:00",
       "data_status": "positive_rows"
     },
@@ -1403,9 +1602,11 @@
       "normalized_tables": [
         "tushare_norm_index_classify"
       ],
-      "normalized_rows": 705,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:36.280221+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:22.572275+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1417,9 +1618,11 @@
       "normalized_tables": [
         "index_daily"
       ],
-      "normalized_rows": 35189271,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-17T01:30:15.161656+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:42.147625+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1431,9 +1634,11 @@
       "normalized_tables": [
         "index_dailybasic"
       ],
-      "normalized_rows": 65985,
-      "successful_jobs": 11,
-      "last_success_at": "2026-10-16T11:15:36.620725+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 48,
+      "last_success_at": "2026-11-10T12:41:02.655863+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1445,23 +1650,27 @@
       "normalized_tables": [
         "index_global"
       ],
-      "normalized_rows": 168956,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:37.627838+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:44.250654+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "index_member_all",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_index_member_all"
       ],
-      "normalized_rows": 5920,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 4,
+      "last_success_at": "2026-11-09T16:18:16.122991+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1473,9 +1682,11 @@
       "normalized_tables": [
         "index_monthly"
       ],
-      "normalized_rows": 207266,
-      "successful_jobs": 402,
-      "last_success_at": "2026-09-30T16:06:22.054241+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 409,
+      "last_success_at": "2026-11-10T12:35:36.969623+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1487,23 +1698,27 @@
       "normalized_tables": [
         "index_weekly"
       ],
-      "normalized_rows": 964011,
-      "successful_jobs": 1279,
-      "last_success_at": "2026-10-13T08:00:11.269106+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 1293,
+      "last_success_at": "2026-11-10T12:35:45.057104+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "index_weight",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_index_weight"
       ],
-      "normalized_rows": 2900155,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 2,
+      "last_success_at": "2026-10-31T10:41:55.433942+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1515,9 +1730,11 @@
       "normalized_tables": [
         "kpl_concept_cons"
       ],
-      "normalized_rows": 4684255,
-      "successful_jobs": 13,
-      "last_success_at": "2026-10-16T11:15:49.149387+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 50,
+      "last_success_at": "2026-11-10T12:41:14.037963+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1529,23 +1746,27 @@
       "normalized_tables": [
         "kpl_list"
       ],
-      "normalized_rows": 1211,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:39.559206+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T08:00:35.219616+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "libor",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_libor"
       ],
-      "normalized_rows": 36735,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:39.576466+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:24:56.546351+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1557,9 +1778,11 @@
       "normalized_tables": [
         "limit_cpt_list"
       ],
-      "normalized_rows": 600,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:40.622478+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:05.801398+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1571,9 +1794,11 @@
       "normalized_tables": [
         "limit_list_d"
       ],
-      "normalized_rows": 2742,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:41.237679+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:07.355490+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1585,9 +1810,11 @@
       "normalized_tables": [
         "tushare_norm_limit_list_ths"
       ],
-      "normalized_rows": 1930,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:42.207004+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:08.991126+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1599,9 +1826,11 @@
       "normalized_tables": [
         "limit_step"
       ],
-      "normalized_rows": 375,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:42.735483+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:10.818867+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1613,9 +1842,11 @@
       "normalized_tables": [
         "tushare_norm_major_news"
       ],
-      "normalized_rows": 25091,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:41.814342+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 25,
+      "last_success_at": "2026-11-09T16:20:54.337446+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1627,9 +1858,11 @@
       "normalized_tables": [
         "margin"
       ],
-      "normalized_rows": 8922,
-      "successful_jobs": 3918,
-      "last_success_at": "2026-10-16T01:15:05.021914+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 3957,
+      "last_success_at": "2026-11-10T12:41:38.507737+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1641,9 +1874,11 @@
       "normalized_tables": [
         "margin_detail"
       ],
-      "normalized_rows": 6896304,
-      "successful_jobs": 3776,
-      "last_success_at": "2026-10-16T01:15:09.534852+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 3794,
+      "last_success_at": "2026-11-10T01:15:08.420024+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1655,9 +1890,11 @@
       "normalized_tables": [
         "margin_secs"
       ],
-      "normalized_rows": 134244,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:44.378695+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:15:44.960077+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1669,9 +1906,11 @@
       "normalized_tables": [
         "tushare_norm_mkt_idx_bmk"
       ],
-      "normalized_rows": 141,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:45.245680+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:25.919227+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1683,9 +1922,11 @@
       "normalized_tables": [
         "moneyflow"
       ],
-      "normalized_rows": 14716274,
-      "successful_jobs": 743,
-      "last_success_at": "2026-10-16T11:16:06.516206+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 780,
+      "last_success_at": "2026-11-10T12:41:12.254942+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1697,23 +1938,27 @@
       "normalized_tables": [
         "moneyflow_cnt_ths"
       ],
-      "normalized_rows": 197044,
-      "successful_jobs": 19,
-      "last_success_at": "2026-10-16T11:15:51.138463+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 56,
+      "last_success_at": "2026-11-10T12:41:36.569700+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "moneyflow_dc",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "moneyflow_dc"
       ],
-      "normalized_rows": 111919,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 5,
+      "last_success_at": "2026-11-09T18:29:45.736575+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1725,9 +1970,11 @@
       "normalized_tables": [
         "moneyflow_hsgt"
       ],
-      "normalized_rows": 25,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:54.221305+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:12.846838+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1739,9 +1986,11 @@
       "normalized_tables": [
         "moneyflow_ind_dc"
       ],
-      "normalized_rows": 371366,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:15:57.788822+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:14.636581+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1753,9 +2002,11 @@
       "normalized_tables": [
         "moneyflow_ind_ths"
       ],
-      "normalized_rows": 45270,
-      "successful_jobs": 24,
-      "last_success_at": "2026-10-16T11:16:00.661978+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 61,
+      "last_success_at": "2026-11-10T12:41:33.622802+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1767,9 +2018,11 @@
       "normalized_tables": [
         "moneyflow_mkt_dc"
       ],
-      "normalized_rows": 847,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:04.022175+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:14.803909+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1781,9 +2034,11 @@
       "normalized_tables": [
         "moneyflow_ths"
       ],
-      "normalized_rows": 2242375,
-      "successful_jobs": 13,
-      "last_success_at": "2026-10-16T11:16:08.177202+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 50,
+      "last_success_at": "2026-11-10T12:41:33.962442+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1795,7 +2050,9 @@
       "normalized_tables": [
         "stk_weekly_monthly"
       ],
-      "normalized_rows": 50319,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -1809,9 +2066,11 @@
       "normalized_tables": [
         "namechange"
       ],
-      "normalized_rows": 44,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:09.746208+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:15.815498+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1823,23 +2082,27 @@
       "normalized_tables": [
         "new_share"
       ],
-      "normalized_rows": 53,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:10.189212+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:16.247366+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "opt_basic",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_opt_basic"
       ],
-      "normalized_rows": 17487,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:51.385744+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:29.409205+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1851,9 +2114,11 @@
       "normalized_tables": [
         "tushare_norm_opt_daily"
       ],
-      "normalized_rows": 3714996,
-      "successful_jobs": 170,
-      "last_success_at": "2026-09-28T17:23:44.507935+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 196,
+      "last_success_at": "2026-11-09T16:27:42.337904+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1865,7 +2130,9 @@
       "normalized_tables": [
         "tushare_norm_p_get"
       ],
-      "normalized_rows": 0,
+      "normalized_rows": null,
+      "has_normalized_rows": false,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -1879,9 +2146,11 @@
       "normalized_tables": [
         "tushare_norm_p_list"
       ],
-      "normalized_rows": 0,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:04:55.750838+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": false,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:30.990449+00:00",
       "last_raw_at": null,
       "data_status": "no_positive_row_evidence"
     },
@@ -1893,23 +2162,27 @@
       "normalized_tables": [
         "pledge_detail"
       ],
-      "normalized_rows": 755,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:12.913777+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:17.273652+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "pledge_stat",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "pledge_stat"
       ],
-      "normalized_rows": 1735768,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 9,
+      "last_success_at": "2026-11-10T11:15:06.932771+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1921,9 +2194,11 @@
       "normalized_tables": [
         "tushare_norm_repo_daily"
       ],
-      "normalized_rows": 1292,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:13.510408+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:17.879073+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1935,9 +2210,11 @@
       "normalized_tables": [
         "report_rc"
       ],
-      "normalized_rows": 2900030,
-      "successful_jobs": 6124,
-      "last_success_at": "2026-10-16T11:16:17.143713+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 6154,
+      "last_success_at": "2026-11-10T08:00:47.703800+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1949,9 +2226,11 @@
       "normalized_tables": [
         "repurchase"
       ],
-      "normalized_rows": 60032,
-      "successful_jobs": 150,
-      "last_success_at": "2026-10-16T11:16:16.813933+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 168,
+      "last_success_at": "2026-11-10T11:16:35.792714+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1963,7 +2242,9 @@
       "normalized_tables": [
         "tushare_norm_rt_hk_k"
       ],
-      "normalized_rows": 1,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -1977,9 +2258,11 @@
       "normalized_tables": [
         "tushare_norm_sf_month"
       ],
-      "normalized_rows": 297,
-      "successful_jobs": 2,
-      "last_success_at": "2026-09-30T16:06:16.520207+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 14,
+      "last_success_at": "2026-11-10T12:41:03.520541+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -1991,9 +2274,11 @@
       "normalized_tables": [
         "sge_basic"
       ],
-      "normalized_rows": 13,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:05:00.206183+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:32.478624+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2005,9 +2290,11 @@
       "normalized_tables": [
         "sge_daily"
       ],
-      "normalized_rows": 23718,
-      "successful_jobs": 3209,
-      "last_success_at": "2026-10-16T11:16:19.521727+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 3246,
+      "last_success_at": "2026-11-10T12:41:35.141606+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2019,9 +2306,11 @@
       "normalized_tables": [
         "share_float"
       ],
-      "normalized_rows": 6602354,
-      "successful_jobs": 11,
-      "last_success_at": "2026-10-16T11:17:19.327592+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 24,
+      "last_success_at": "2026-11-04T11:16:31.333925+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2033,9 +2322,11 @@
       "normalized_tables": [
         "tushare_norm_shibor"
       ],
-      "normalized_rows": 4977,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:22.552143+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:15.273440+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2047,7 +2338,9 @@
       "normalized_tables": [
         "tushare_norm_shibor_lpr"
       ],
-      "normalized_rows": 1532,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 3,
       "last_success_at": "2026-09-30T14:46:12.212529+00:00",
       "last_raw_at": null,
@@ -2061,9 +2354,11 @@
       "normalized_tables": [
         "tushare_norm_shibor_quote"
       ],
-      "normalized_rows": 86116,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:25.729457+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:20.429626+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2075,9 +2370,11 @@
       "normalized_tables": [
         "slb_len"
       ],
-      "normalized_rows": 2811,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:29.020226+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:20.760522+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2089,9 +2386,11 @@
       "normalized_tables": [
         "tushare_norm_slb_len_mm"
       ],
-      "normalized_rows": 55214,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:32.169928+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:21.283391+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2103,9 +2402,11 @@
       "normalized_tables": [
         "tushare_norm_slb_sec"
       ],
-      "normalized_rows": 2287159,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:35.353474+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:22.264211+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2117,9 +2418,11 @@
       "normalized_tables": [
         "tushare_norm_slb_sec_detail"
       ],
-      "normalized_rows": 1043820,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:38.515795+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:22.800900+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2131,7 +2434,9 @@
       "normalized_tables": [
         "stock_st"
       ],
-      "normalized_rows": 722904,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2145,9 +2450,11 @@
       "normalized_tables": [
         "tushare_norm_stk_account"
       ],
-      "normalized_rows": 189,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:41.704664+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:23.248711+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2159,9 +2466,11 @@
       "normalized_tables": [
         "stk_ah_comparison"
       ],
-      "normalized_rows": 6164,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:42.768785+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:23.803017+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2173,9 +2482,11 @@
       "normalized_tables": [
         "stk_alert"
       ],
-      "normalized_rows": 52,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:43.261213+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:24.872678+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2187,9 +2498,11 @@
       "normalized_tables": [
         "stk_auction"
       ],
-      "normalized_rows": 2516143,
-      "successful_jobs": 299,
-      "last_success_at": "2026-10-16T11:16:45.144945+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 336,
+      "last_success_at": "2026-11-10T12:41:35.889874+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2201,9 +2514,11 @@
       "normalized_tables": [
         "stk_auction_c"
       ],
-      "normalized_rows": 122539,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:44.695137+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 45,
+      "last_success_at": "2026-11-09T16:26:32.910606+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2215,9 +2530,11 @@
       "normalized_tables": [
         "stk_auction_o"
       ],
-      "normalized_rows": 121573,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:45.710398+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 45,
+      "last_success_at": "2026-11-09T16:26:35.480532+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2229,9 +2546,11 @@
       "normalized_tables": [
         "tushare_norm_stk_factor"
       ],
-      "normalized_rows": 18578164,
-      "successful_jobs": 490,
-      "last_success_at": "2026-10-16T11:16:57.579509+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 564,
+      "last_success_at": "2026-11-10T12:41:32.601309+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2243,9 +2562,11 @@
       "normalized_tables": [
         "stk_factor_pro"
       ],
-      "normalized_rows": 18506807,
-      "successful_jobs": 613,
-      "last_success_at": "2026-10-16T11:16:54.921799+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 707,
+      "last_success_at": "2026-11-10T12:41:26.792681+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2257,9 +2578,11 @@
       "normalized_tables": [
         "stk_high_shock"
       ],
-      "normalized_rows": 7,
-      "successful_jobs": 11,
-      "last_success_at": "2026-10-16T11:16:56.239659+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 28,
+      "last_success_at": "2026-11-10T11:16:26.289842+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2271,9 +2594,11 @@
       "normalized_tables": [
         "stk_holdernumber"
       ],
-      "normalized_rows": 446016,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:57.742463+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:27.342848+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2285,9 +2610,11 @@
       "normalized_tables": [
         "stk_holdertrade"
       ],
-      "normalized_rows": 107369,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:16:58.765305+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:27.795956+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2299,9 +2626,11 @@
       "normalized_tables": [
         "stk_limit"
       ],
-      "normalized_rows": 16344307,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:02.839924+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:28.302644+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2313,9 +2642,11 @@
       "normalized_tables": [
         "stk_managers"
       ],
-      "normalized_rows": 265,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:00.270957+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:28.254222+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2327,7 +2658,9 @@
       "normalized_tables": [
         "tushare_norm_stk_mins"
       ],
-      "normalized_rows": 0,
+      "normalized_rows": null,
+      "has_normalized_rows": false,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2341,23 +2674,43 @@
       "normalized_tables": [
         "stk_nineturn"
       ],
-      "normalized_rows": 166538,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:02.262278+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:29.418775+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "stk_rewards",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "stk_rewards"
       ],
-      "normalized_rows": 10103,
-      "successful_jobs": 0,
-      "last_success_at": null,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 2,
+      "last_success_at": "2026-11-02T15:54:20.242363+00:00",
+      "last_raw_at": null,
+      "data_status": "positive_rows"
+    },
+    {
+      "api_name": "stk_seasoned",
+      "implementation_mode": "generic_raw",
+      "automatic_scheduling": true,
+      "raw_rows": 0,
+      "normalized_tables": [
+        "tushare_norm_stk_seasoned"
+      ],
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 8,
+      "last_success_at": "2026-11-09T17:19:47.419733+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2369,9 +2722,11 @@
       "normalized_tables": [
         "stk_shock"
       ],
-      "normalized_rows": 460,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:03.770742+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:29.800124+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2383,9 +2738,11 @@
       "normalized_tables": [
         "stk_surv"
       ],
-      "normalized_rows": 1266,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:04.236218+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:30.271751+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2397,7 +2754,9 @@
       "normalized_tables": [
         "tushare_norm_stk_week_month_adj"
       ],
-      "normalized_rows": 12000,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2411,7 +2770,9 @@
       "normalized_tables": [
         "stk_weekly_monthly"
       ],
-      "normalized_rows": 50319,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2425,9 +2786,11 @@
       "normalized_tables": [
         "stock_basic"
       ],
-      "normalized_rows": 5912,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:05:13.905636+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 19,
+      "last_success_at": "2026-11-10T11:16:01.464851+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2439,23 +2802,27 @@
       "normalized_tables": [
         "stock_company"
       ],
-      "normalized_rows": 6298,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:05:19.854456+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:35.634148+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "stock_hsgt",
       "implementation_mode": "specialized",
-      "automatic_scheduling": false,
+      "automatic_scheduling": true,
       "raw_rows": 0,
       "normalized_tables": [
         "stock_hsgt"
       ],
-      "normalized_rows": 139159,
-      "successful_jobs": 8,
-      "last_success_at": "2026-09-28T17:45:39.171314+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 34,
+      "last_success_at": "2026-11-10T11:16:39.784418+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2467,9 +2834,11 @@
       "normalized_tables": [
         "stock_st"
       ],
-      "normalized_rows": 722904,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:04.800382+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 67,
+      "last_success_at": "2026-11-10T12:41:35.597912+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2481,9 +2850,11 @@
       "normalized_tables": [
         "suspend_d"
       ],
-      "normalized_rows": 641892,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:05.257801+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 28,
+      "last_success_at": "2026-11-10T11:15:52.812810+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2495,9 +2866,11 @@
       "normalized_tables": [
         "tushare_norm_sw_daily"
       ],
-      "normalized_rows": 2384669,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:06.505738+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:30.700840+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2509,9 +2882,11 @@
       "normalized_tables": [
         "tushare_norm_sz_daily_info"
       ],
-      "normalized_rows": 69449,
-      "successful_jobs": 31,
-      "last_success_at": "2026-10-16T11:17:06.741729+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 68,
+      "last_success_at": "2026-11-10T12:41:34.000796+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2523,9 +2898,11 @@
       "normalized_tables": [
         "tdx_daily"
       ],
-      "normalized_rows": 218551,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:07.967995+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:31.444303+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2537,9 +2914,11 @@
       "normalized_tables": [
         "tdx_index"
       ],
-      "normalized_rows": 216101,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:08.324087+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 47,
+      "last_success_at": "2026-11-10T12:41:31.982903+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2551,7 +2930,9 @@
       "normalized_tables": [
         "tdx_member"
       ],
-      "normalized_rows": 1676101,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2565,9 +2946,11 @@
       "normalized_tables": [
         "ths_daily"
       ],
-      "normalized_rows": 227817,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:09.500967+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 46,
+      "last_success_at": "2026-11-10T12:41:36.308184+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2579,9 +2962,11 @@
       "normalized_tables": [
         "ths_hot"
       ],
-      "normalized_rows": 513644,
-      "successful_jobs": 82,
-      "last_success_at": "2026-10-16T11:17:09.780452+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 164,
+      "last_success_at": "2026-11-10T12:41:46.092997+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2593,9 +2978,11 @@
       "normalized_tables": [
         "ths_index"
       ],
-      "normalized_rows": 2517,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:05:23.859486+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:11:37.073919+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2607,9 +2994,11 @@
       "normalized_tables": [
         "ths_member"
       ],
-      "normalized_rows": 417874,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T19:53:41.818435+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 6,
+      "last_success_at": "2026-11-02T02:37:53.807954+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2621,7 +3010,9 @@
       "normalized_tables": [
         "tushare_norm_top10_cb_holders"
       ],
-      "normalized_rows": 60,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2635,7 +3026,9 @@
       "normalized_tables": [
         "top10_floatholders"
       ],
-      "normalized_rows": 3058545,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 95,
       "last_success_at": "2026-10-11T14:02:33.682889+00:00",
       "last_raw_at": null,
@@ -2649,7 +3042,9 @@
       "normalized_tables": [
         "top10_holders"
       ],
-      "normalized_rows": 3152384,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 144,
       "last_success_at": "2026-10-11T12:52:52.899325+00:00",
       "last_raw_at": null,
@@ -2663,9 +3058,11 @@
       "normalized_tables": [
         "top_inst"
       ],
-      "normalized_rows": 16898,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:10.882381+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:33.384285+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2677,9 +3074,11 @@
       "normalized_tables": [
         "top_list"
       ],
-      "normalized_rows": 1850,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:11.213052+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:34.291463+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2691,38 +3090,44 @@
       "normalized_tables": [
         "trade_cal"
       ],
-      "normalized_rows": 26858,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:12.263679+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 27,
+      "last_success_at": "2026-11-10T11:16:34.789331+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "us_basic",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_us_basic"
       ],
-      "normalized_rows": 24689,
-      "successful_jobs": 3,
-      "last_success_at": "2026-10-11T16:08:51.369382+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 7,
+      "last_success_at": "2026-11-09T16:19:00.139848+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "us_daily",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
-      "raw_rows": 60000,
+      "automatic_scheduling": false,
+      "raw_rows": 84000,
       "normalized_tables": [
         "tushare_norm_us_daily"
       ],
-      "normalized_rows": 65989,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
-      "last_raw_at": "2026-10-17T20:01:55.945743+00:00",
+      "last_raw_at": "2026-10-20T23:00:17.021755+00:00",
       "data_status": "positive_rows"
     },
     {
@@ -2733,9 +3138,11 @@
       "normalized_tables": [
         "tushare_norm_us_tbr"
       ],
-      "normalized_rows": 6191,
-      "successful_jobs": 9,
-      "last_success_at": "2026-10-16T23:15:02.273149+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:47:51.768511+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2747,23 +3154,27 @@
       "normalized_tables": [
         "tushare_norm_us_tltr"
       ],
-      "normalized_rows": 6688,
-      "successful_jobs": 9,
-      "last_success_at": "2026-10-16T23:15:01.855065+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:47:57.794881+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
     {
       "api_name": "us_tradecal",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_us_tradecal"
       ],
-      "normalized_rows": 17532,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:12.739381+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:27:12.242137+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2775,9 +3186,11 @@
       "normalized_tables": [
         "tushare_norm_us_trltr"
       ],
-      "normalized_rows": 6688,
-      "successful_jobs": 9,
-      "last_success_at": "2026-10-16T23:15:02.793113+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:47:54.820343+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2789,9 +3202,11 @@
       "normalized_tables": [
         "tushare_norm_us_trycr"
       ],
-      "normalized_rows": 5938,
-      "successful_jobs": 9,
-      "last_success_at": "2026-10-16T23:15:03.253826+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:48:01.173432+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2803,9 +3218,11 @@
       "normalized_tables": [
         "tushare_norm_us_tycr"
       ],
-      "normalized_rows": 9192,
-      "successful_jobs": 9,
-      "last_success_at": "2026-10-16T23:15:03.802484+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:48:04.170465+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     },
@@ -2817,7 +3234,9 @@
       "normalized_tables": [
         "stk_weekly_monthly"
       ],
-      "normalized_rows": 50319,
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
       "successful_jobs": 0,
       "last_success_at": null,
       "last_raw_at": null,
@@ -2826,14 +3245,16 @@
     {
       "api_name": "wz_index",
       "implementation_mode": "generic_raw",
-      "automatic_scheduling": true,
+      "automatic_scheduling": false,
       "raw_rows": 0,
       "normalized_tables": [
         "tushare_norm_wz_index"
       ],
-      "normalized_rows": 3151,
-      "successful_jobs": 10,
-      "last_success_at": "2026-10-16T11:17:13.736204+00:00",
+      "normalized_rows": null,
+      "has_normalized_rows": true,
+      "normalized_row_count_exact": false,
+      "successful_jobs": 26,
+      "last_success_at": "2026-11-09T16:27:14.730190+00:00",
       "last_raw_at": null,
       "data_status": "positive_rows"
     }

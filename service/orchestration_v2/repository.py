@@ -28,6 +28,7 @@ from service.orchestration_v2.contracts import (
 from service.orchestration_v2.recovery_policy import (
     QUOTA_GUARDED_DATASETS,
     SERIALIZED_ACQUISITION_TASKS,
+    DEFERRED_RESEARCH_DATASETS,
 )
 
 
@@ -1552,68 +1553,91 @@ class OrchestrationV2Repository:
             node_status = {node["key"]: "pending" for node in nodes}
             if nodes:
                 node_status[nodes[0]["key"]] = "ready"
-            cursor.execute(
-                """
-                INSERT INTO orchestration_v2.task_execution(
-                    task_definition_id, task_key, definition_version,
-                    definition_digest, purpose, trigger_source, status,
-                    idempotency_key, observation_key, observation_start,
-                    observation_end, observation_period, publication_date,
-                    data_available_at, frozen_scope, scope_digest,
-                    current_node_key, node_status, priority, resource_class,
-                    max_attempts, app_revision, image_digest
-                ) VALUES (
-                    %s,%s,%s,%s,%s,%s,'queued',%s,%s,%s,%s,%s,%s,%s,
-                    %s::jsonb,%s,%s,%s::jsonb,%s,%s,%s,%s,%s
+            superseded_id = None
+            for generation in range(2):
+                cursor.execute(
+                    """
+                    INSERT INTO orchestration_v2.task_execution(
+                        task_definition_id, task_key, definition_version,
+                        definition_digest, purpose, trigger_source, status,
+                        idempotency_key, observation_key, observation_start,
+                        observation_end, observation_period, publication_date,
+                        data_available_at, frozen_scope, scope_digest,
+                        current_node_key, node_status, priority, resource_class,
+                        max_attempts, app_revision, image_digest
+                    ) VALUES (
+                        %s,%s,%s,%s,%s,%s,'queued',%s,%s,%s,%s,%s,%s,%s,
+                        %s::jsonb,%s,%s,%s::jsonb,%s,%s,%s,%s,%s
+                    )
+                    ON CONFLICT DO NOTHING
+                    RETURNING *
+                    """,
+                    (
+                        definition["task_definition_id"],
+                        definition["task_key"],
+                        definition["version"],
+                        definition["definition_digest"],
+                        request.purpose,
+                        request.trigger_source,
+                        request.idempotency_key,
+                        request.observation_key,
+                        request.observation_start,
+                        request.observation_end,
+                        request.observation_period,
+                        request.publication_date,
+                        request.data_available_at,
+                        json.dumps(request.frozen_scope, ensure_ascii=False),
+                        scope_digest,
+                        nodes[0]["key"] if nodes else None,
+                        json.dumps(node_status, ensure_ascii=False),
+                        priority,
+                        resource_class,
+                        max(node["retry"]["max_attempts"] for node in nodes),
+                        request.app_revision or definition["app_revision"],
+                        request.image_digest or definition["image_digest"],
+                    ),
                 )
-                ON CONFLICT DO NOTHING
-                RETURNING *
-                """,
-                (
-                    definition["task_definition_id"],
-                    definition["task_key"],
-                    definition["version"],
-                    definition["definition_digest"],
-                    request.purpose,
-                    request.trigger_source,
-                    request.idempotency_key,
-                    request.observation_key,
-                    request.observation_start,
-                    request.observation_end,
-                    request.observation_period,
-                    request.publication_date,
-                    request.data_available_at,
-                    json.dumps(request.frozen_scope, ensure_ascii=False),
-                    scope_digest,
-                    nodes[0]["key"] if nodes else None,
-                    json.dumps(node_status, ensure_ascii=False),
-                    priority,
-                    resource_class,
-                    max(node["retry"]["max_attempts"] for node in nodes),
-                    request.app_revision or definition["app_revision"],
-                    request.image_digest or definition["image_digest"],
-                ),
-            )
-            created = cursor.fetchone()
-            if created:
-                return dict(created), True
-            # INSERT ... ON CONFLICT DO NOTHING reported a conflict.  The
-            # winner owns the unique idempotency_key, so re-read by that exact
-            # key first.  This is deterministic even when the competing
-            # transaction has already committed and moved the row to a
-            # terminal status.
-            cursor.execute(
-                """
-                SELECT * FROM orchestration_v2.task_execution
-                WHERE idempotency_key=%s
-                ORDER BY task_execution_id DESC
-                LIMIT 1
-                """,
-                (request.idempotency_key,),
-            )
-            existing = cursor.fetchone()
-            if existing:
-                return dict(existing), False
+                created = cursor.fetchone()
+                if created:
+                    if superseded_id is not None:
+                        self._append_event(cursor, created["task_execution_id"],
+                            event_type="execution.replanned_after_definition_change",
+                            node_key=None, attempt_number=None, event_key=None,
+                            payload={"superseded_execution_id": superseded_id,
+                                 "active_definition_id": definition["task_definition_id"]},
+                        evidence_references=[{"task_execution_id": superseded_id}])
+                    return dict(created), True
+                # INSERT ... ON CONFLICT DO NOTHING reported a conflict.  The
+                # winner owns the unique idempotency_key, so re-read by that exact
+                # key first.  This is deterministic even when the competing
+                # transaction has already committed and moved the row to a
+                # terminal status.
+                cursor.execute(
+                    """
+                    SELECT * FROM orchestration_v2.task_execution
+                    WHERE idempotency_key=%s
+                    ORDER BY task_execution_id DESC
+                    LIMIT 1
+                    """,
+                    (request.idempotency_key,),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    if (generation == 0 and existing["status"] == "superseded"
+                            and existing.get("final_error_category") in {
+                                "audit_contract_superseded", "definition_superseded"}
+                            and existing["definition_digest"] != definition["definition_digest"]):
+                        # Preserve the immutable old run and its original identity.
+                        # The replacement key is stable for this active definition;
+                        # repeated patrols therefore reuse exactly one new run.
+                        superseded_id = existing["task_execution_id"]
+                        request = request.model_copy(update={"idempotency_key":
+                            "v2:replanned:" + canonical_digest({
+                                "original_key": request.idempotency_key,
+                                "definition_digest": definition["definition_digest"],
+                            })})
+                        continue
+                    return dict(existing), False
             # Defensive fallback for pre-migration rows created under a
             # different idempotency spelling for the same logical cycle.
             cursor.execute(
@@ -1633,6 +1657,32 @@ class OrchestrationV2Repository:
             if not existing:
                 raise RuntimeError("execution insert conflicted but owner was not found")
             return dict(existing), False
+
+    def pause_out_of_scope_executions(self) -> list[dict]:
+        """Stop pending work by policy; preserve business rows and append audit events.
+
+        Running leases must be drained/stopped by the operator before this
+        maintenance action. The claim guard independently prevents new starts.
+        """
+        stopped = []
+        with self._connection() as connection, self._dict_cursor(connection) as cursor:
+            cursor.execute("""SELECT * FROM orchestration_v2.task_execution
+                WHERE task_key=ANY(%s) AND status IN ('queued','retrying')
+                ORDER BY task_execution_id FOR UPDATE""", (list(DEFERRED_RESEARCH_DATASETS),))
+            for row in cursor.fetchall():
+                execution_id = row['task_execution_id']
+                cursor.execute("""UPDATE orchestration_v2.task_execution
+                    SET status='superseded',finished_at=NOW(),updated_at=NOW(),
+                        lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL,
+                        final_error_category='paused_policy',
+                        final_error_message='A股日频策略停采；保留已有数据'
+                    WHERE task_execution_id=%s RETURNING *""", (execution_id,))
+                stopped.append(dict(cursor.fetchone()))
+                self._append_event(cursor,execution_id,event_type='execution_superseded',
+                    node_key=None,attempt_number=max(1,int(row['attempt_count'])),
+                    event_key=f'a-share-policy-pause:{execution_id}',
+                    payload={'reason':'paused_policy','preserve_business_data':True},evidence_references=[])
+        return stopped
 
     def supersede_not_expected_daily_scope(
         self,
@@ -2860,11 +2910,12 @@ class OrchestrationV2Repository:
                     LEFT JOIN task_recency AS recency
                       ON recency.task_key=queued.task_key
                     WHERE queued.status IN ('queued','retrying')
+                      AND NOT (queued.task_key = ANY(%s))
                       AND queued.eligible_at <= NOW()
                       AND queued.attempt_count < queued.max_attempts
                       AND queued.resource_class = ANY(%s)
                       AND (%s::bigint[] IS NULL OR queued.task_execution_id=ANY(%s::bigint[]))
-                      AND (NOT %s OR (queued.task_key <> 'share_float' AND EXISTS (
+                      AND (NOT %s OR (queued.task_key NOT IN ('share_float','cninfo_announcements') AND EXISTS (
                           SELECT 1 FROM orchestration_v2.task_definition short_definition
                           WHERE short_definition.task_definition_id=queued.task_definition_id
                             AND short_definition.definition->'scope_contract'->>'cadence'='daily'
@@ -2992,6 +3043,7 @@ class OrchestrationV2Repository:
                 """,
                 (
                     list(classes),
+                    list(sorted(DEFERRED_RESEARCH_DATASETS)),
                     list(classes),
                     list(execution_ids) if execution_ids is not None else None,
                     list(execution_ids) if execution_ids is not None else None,

@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import re
+import json
+import sys
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
-DATED_REPORT = re.compile(r"(?:19|20)\d{2}-\d{2}-\d{2}")
+DATED_REPORT = re.compile(r"(?:19|20)\d{2}-?\d{2}-?\d{2}")
 IGNORED_PREFIXES = ("http://", "https://", "mailto:", "#", "/api/")
 
 
@@ -46,7 +49,7 @@ def dated_report_snapshots() -> list[str]:
 
 
 def main() -> int:
-    errors = broken_relative_links() + dated_report_snapshots()
+    errors = broken_relative_links() + dated_report_snapshots() + stale_code_inventory()
     if errors:
         print("Documentation validation failed:")
         for error in errors:
@@ -54,6 +57,22 @@ def main() -> int:
         return 1
     print(f"Documentation validation passed ({len(markdown_files())} Markdown files).")
     return 0
+
+
+def stale_code_inventory() -> list[str]:
+    """Check deterministic code-owned counts; runtime snapshots retain dates."""
+    from scripts.generate_data_service_inventory import build_inventory
+    path = PROJECT_ROOT / 'reports/data_service_inventory_latest.json'
+    if not path.exists():
+        return ['missing data_service_inventory_latest.json; run scripts/generate_data_service_inventory.py']
+    try:
+        recorded = json.loads(path.read_text())['summary']
+    except (ValueError, KeyError):
+        return ['invalid data_service_inventory_latest.json']
+    expected = build_inventory()['summary']
+    if recorded != expected:
+        return ['stale data-service inventory; run python scripts/generate_data_service_inventory.py']
+    return []
 
 
 if __name__ == "__main__":

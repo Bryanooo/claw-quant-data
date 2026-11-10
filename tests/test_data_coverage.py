@@ -1045,7 +1045,7 @@ def test_fund_share_is_event_sparse_not_daily_expected():
 def test_only_proven_rules_are_automatically_scheduled():
     scheduled = COVERAGE_RULES.scheduled()
 
-    assert len(scheduled) == 61
+    assert len(scheduled) == 62
     assert all(item.auditable for item in scheduled)
     assert COVERAGE_RULES.get("adj_factor").scheduled is True
     assert COVERAGE_RULES.get("adj_factor").coverage_level == "expected_partitions"

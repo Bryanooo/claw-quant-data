@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-31T13:24:23.125273+00:00",
+  "generated_at": "2026-11-10T13:30:21.208827+00:00",
   "policy": "local canonical DB first; quota source only by explicit policy",
   "summary": {
     "routes": 163,

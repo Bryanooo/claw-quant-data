@@ -18,10 +18,18 @@ class FxDailyCollector(BaseCollector):
     CORE_FIELDS = _FIELDS
     pk_columns = ["ts_code", "trade_date"]
 
+    def fetch(self, **params):
+        code = params.get('ts_code')
+        if code not in {'USDCNH.FXCM','USDOLLAR.FXCM'}:
+            raise ValueError('A-share daily FX collection is restricted to CNH and dollar index')
+        result = super().fetch(**params)
+        if result is not None and not result.empty and set(result.ts_code) != {code}:
+            raise ValueError('FX provider ignored the requested identifier')
+        return result
+
     def collect_all_history(self, start_date="20200101", end_date="20250513"):
         """逐个品种拉历史日线"""
-        from service.db import query
-        codes = query("SELECT ts_code FROM fx_obasic")
+        codes = [{'ts_code': code} for code in ('USDCNH.FXCM', 'USDOLLAR.FXCM')]
         total = 0
         for r in codes:
             rows = self.collect(start_date=start_date, end_date=end_date, ts_code=r["ts_code"])
@@ -34,8 +42,7 @@ class FxDailyCollector(BaseCollector):
     def refresh_latest(self, days=30):
         """增量更新最近N天"""
         from datetime import datetime, timedelta
-        from service.db import query
-        codes = query("SELECT ts_code FROM fx_obasic")
+        codes = [{'ts_code': code} for code in ('USDCNH.FXCM', 'USDOLLAR.FXCM')]
         end = business_now().strftime("%Y%m%d")
         start = (business_now() - timedelta(days=days)).strftime("%Y%m%d")
         total = 0

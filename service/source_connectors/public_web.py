@@ -17,15 +17,16 @@ from service.source_connectors import public_parsers as parsers
 from service.source_connectors.contracts import AcquisitionMode, ConnectorResult
 from service.source_connectors.public_catalog import validate_public_request, QUOTE_FIELDS, GREEKS_FIELDS
 
-HOSTS = frozenset({"irm.cninfo.com.cn", "sns.sseinfo.com", "hq.sinajs.cn",
+HOSTS = frozenset({"irm.cninfo.com.cn", "www.cninfo.com.cn", "static.cninfo.com.cn", "sns.sseinfo.com", "hq.sinajs.cn",
                   "stock.finance.sina.com.cn", "yield.chinabond.com.cn",
                   "www.chinamoney.com.cn", "www.pbc.gov.cn", "pbc.gov.cn"})
 
 
 class BoundedTransport:
     """One query: <= 20 requests, 60 seconds, 12 MiB per response, fixed hosts."""
-    def __init__(self):
-        self.deadline = time.monotonic() + 60
+    def __init__(self, *, max_calls=20, seconds=60):
+        self.max_calls = max_calls
+        self.deadline = time.monotonic() + seconds
         self.calls = 0
         self.urls = []
 
@@ -34,7 +35,7 @@ class BoundedTransport:
         if parsed.scheme != "https" or parsed.hostname not in HOSTS or parsed.port not in (None, 443):
             raise RuntimeError("unapproved public source URL")
         remaining = self.deadline - time.monotonic()
-        if remaining <= 0 or self.calls >= 20:
+        if remaining <= 0 or self.calls >= self.max_calls:
             raise RuntimeError("public query request/time budget exhausted")
         self.calls += 1
         with requests.request(method, url, params=params, data=data,
@@ -274,4 +275,8 @@ class PublicWebConnector:
                       "observed_start": dates[0] if dates else None, "observed_end": dates[-1] if dates else None,
                       "history_verified": False}, warnings=tuple(warnings))
 
-    execute = query
+    def execute(self, request):
+        if request.source_id == 'cninfo' and request.endpoint_key == 'announcements' and request.acquisition_mode == AcquisitionMode.SCHEDULED_PULL:
+            from service.announcements import collect_announcements
+            return collect_announcements(request)
+        return self.query(request)

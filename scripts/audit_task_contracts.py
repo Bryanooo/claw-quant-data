@@ -106,6 +106,8 @@ def probe_database(records, as_of, output):
     for index, record in enumerate(records, 1):
         live = active.get(record['task_key'])
         record['active'] = bool(live)
+        from service.orchestration_v2.automation_status import task_automation
+        record['automation'] = task_automation(record['task_key'], live['definition'] if live else None, active.keys())
         record['schedule_mode'] = live['definition']['schedule']['mode'] if live else None
         record['frozen_contract_check'] = []
         if live and record['task_key'] != 'factor_reference_sample':
@@ -160,7 +162,7 @@ def probe_database(records, as_of, output):
                     matching = cur.fetchone()
                 probe['latest_overlapping_execution'] = dict(matching) if matching else None
                 if not matching:
-                    probe['request_state'] = ('no_automatic_request' if record['schedule_mode']=='disabled'
+                    probe['request_state'] = ('no_automatic_request' if not record['automation']['automatic']
                                               else 'no_execution_in_observation_scope')
                 else:
                     probe['request_state'] = matching['final_error_category'] or matching['status']
@@ -175,10 +177,15 @@ def probe_database(records, as_of, output):
 def write_markdown(records, output, as_of=None):
     counts=Counter(o.get('database_probe',{}).get('status','not_probed') for r in records for o in r['outputs'])
     active=sum(r.get('active',False) for r in records)
+    acquisitions = sum(r['kind'] == 'acquisition' and r['task_key'] != 'factor_reference_sample' for r in records)
+    transformations = sum(r['kind'] == 'transformation' for r in records)
+    samples = sum(r['task_key'] == 'factor_reference_sample' for r in records)
+    planned = sum(r['kind'] == 'transformation' and not r['handler_implemented'] for r in records)
+    automatic = sum(r.get('automation', {}).get('automatic', False) for r in records)
     lines=[
         f'# 任务审计逐项核查（{as_of or business_today()}）', '',
-        f'共 {len(records)} 个任务：200 个采集蓝图、15 个计算蓝图、1 个专项抽样流程；数据库启用 {active} 个。',
-        '11 个计算草稿尚未实现，已增加发布拦截。抽样任务只证明冻结样本的响应完整性，不证明全市场或数值等价。', '',
+        f'共 {len(records)} 个任务：{acquisitions} 个采集蓝图、{transformations} 个计算蓝图、{samples} 个专项抽样流程；数据库已发布 {active} 个，配置自动入口 {automatic} 个。',
+        f'{planned} 个计算草稿尚未实现，发布受阻。抽样任务只证明冻结样本的响应完整性，不证明全市场或数值等价。', '',
         '本报告核对每个输出的审计契约，并对启用任务的代表范围进行只读数据库审计。'
         '这不是全历史逐行重算报告；complete/empty 仅表示所列范围按该业务契约通过。'
         '稀疏事件不能凭日历虚构缺失；无时序快照必须有相应范围的完整请求证据；实体覆盖容差见 JSON 中 min_entity_ratio。', '',

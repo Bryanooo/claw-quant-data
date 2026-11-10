@@ -128,7 +128,8 @@ def task_documents(
                 # Adjustment factors are a hard dependency of every adjusted
                 # price, return and technical-factor service. Let confirmed
                 # factor repairs drain ahead of ordinary generic backfill.
-                "priority": 90 if task.task_key == "adj_factor" else 50,
+                "priority": (90 if task.task_key == "adj_factor" else
+                             25 if task.task_key in {"cninfo_announcements", "stk_seasoned"} else 50),
                 "source_quota_key": task.endpoints[0].source_id,
             },
         })

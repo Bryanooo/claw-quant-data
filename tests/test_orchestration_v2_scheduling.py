@@ -14,6 +14,9 @@ class _Repository:
         self.superseded = []
         self.requeued = []
 
+    def active_task_keys(self):
+        return set()
+
     def create_execution(self, request):
         self.requests.append(request)
         return ({"task_key": request.task_key}, True)
@@ -47,6 +50,7 @@ def test_daily_dispatch_creates_one_execution_per_daily_task(monkeypatch):
         if (
             item.cadence == "daily"
             and item.task_key not in scheduling.DEFERRED_RESEARCH_DATASETS
+            and item.task_key not in scheduling.CLOSED_CALENDAR_TASKS
         )
     }
     assert "stock_st" in expected

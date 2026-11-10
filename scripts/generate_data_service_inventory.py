@@ -61,7 +61,8 @@ def build_inventory() -> dict:
             "items": [
                 _entry(
                     item,
-                    "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+                    f"canonical_db ({sources[('tushare',)]} Tushare-only datasets; "
+                    f"{sum(count for source_ids, count in sources.items() if source_ids != ('tushare',))} other or multi-source datasets)",
                     "route + registry + query contract",
                 )
                 for item in STANDARD_GENERIC_ENDPOINTS

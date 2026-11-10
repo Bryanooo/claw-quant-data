@@ -36,10 +36,10 @@ from service.source_connectors.registry import SOURCE_REGISTRY
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Recorded operational pauses.  ``us_daily`` stays registered for stock
-# queries but scheduled collection is stopped (hourly rate limit; no active
-# US research).  See README「当前组成」.
-PAUSED_TUSHARE_APIS = frozenset({"us_daily"})
+# Use the same operational pause policy as dispatch, recovery and worker claims.
+from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
+
+PAUSED_TUSHARE_APIS = DEFERRED_RESEARCH_DATASETS
 
 # Tushare permission statuses that mean "token cannot call this today".
 _NO_PERMISSION_TOKEN = "无权限"
@@ -135,7 +135,12 @@ def _ant_asset_class(route: str) -> str:
 def _read_tushare_contracts() -> dict[str, dict[str, Any]]:
     path = ROOT / "docs" / "tushare" / "contracts.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    return {item["api_name"]: item for item in payload.get("interfaces", [])}
+    contracts = {item["api_name"]: item for item in payload.get("interfaces", [])}
+    supplements_path = path.with_name('official_contract_supplements.json')
+    if supplements_path.exists():
+        supplements = json.loads(supplements_path.read_text(encoding='utf-8'))
+        contracts.update({item['api_name']: item for item in supplements.get('interfaces', [])})
+    return contracts
 
 
 def _ant_contract_for(route: str) -> dict[str, Any]:
@@ -411,12 +416,20 @@ def _financial_data_scheduled_tasks() -> dict[str, list[dict[str, Any]]]:
     return tasks
 
 
+def _public_endpoint_specs():
+    return (*PUBLIC_ENDPOINTS, SOURCE_REGISTRY.get_endpoint('cninfo', 'announcements'))
+
+
 @lru_cache(maxsize=1)
 def _public_compilation() -> list[dict[str, Any]]:
     display = {source.source_id: source.display_name for source in PUBLIC_SOURCES}
     rows: list[dict[str, Any]] = []
-    for endpoint in PUBLIC_ENDPOINTS:
+    for endpoint in _public_endpoint_specs():
         fields = list(endpoint.capabilities.get("fields", []))
+        tasks = [task for task in acquisition_task_blueprints()
+                 if any(ref.source_id == endpoint.source_id and ref.endpoint_key == endpoint.endpoint_key
+                        for ref in task.endpoints)] if endpoint.acquisition_mode.value == 'scheduled_pull' else []
+        datasets = sorted({name for task in tasks for name in task.output_datasets})
         rows.append({
             "source": endpoint.source_id,
             "key": f"{endpoint.source_id}/{endpoint.endpoint_key}",
@@ -425,12 +438,13 @@ def _public_compilation() -> list[dict[str, Any]]:
             "asset_class": _PUBLIC_SOURCE_ASSET_CLASS.get(
                 endpoint.source_id, ASSET_CLASS_OTHER
             ),
-            "status": "public_registered",
-            "acquisition_kind": ACQUISITION_ON_DEMAND,
-            "cadence": "on_demand",
-            "tasks": [],
-            "datasets": [],
-            "tables": [],
+            "status": "active" if tasks else "public_registered",
+            "acquisition_kind": ACQUISITION_SCHEDULED if tasks else ACQUISITION_ON_DEMAND,
+            "cadence": endpoint.cadence if tasks else "on_demand",
+            "tasks": [{'task_key':task.task_key,'cadence':task.cadence,
+                       'output_datasets':list(task.output_datasets)} for task in tasks],
+            "datasets": datasets,
+            "tables": [DATASETS.get(name).table for name in datasets],
             "field_count": len(fields),
             "fields": [{"name": name, "type": "", "description": ""} for name in fields],
             "cache_ttl_seconds": endpoint.cache_ttl_seconds,
@@ -552,7 +566,7 @@ def interface_detail(source: str, key: str) -> dict[str, Any] | None:
         detail["request_parameters"] = dict(contract.get("request") or {})
         detail["response_parameters"] = dict(contract.get("response") or {})
     else:
-        for endpoint in PUBLIC_ENDPOINTS:
+        for endpoint in _public_endpoint_specs():
             if f"{endpoint.source_id}/{endpoint.endpoint_key}" == key:
                 detail["description"] = endpoint.title
                 detail["request_parameters"] = dict(endpoint.request_contract)

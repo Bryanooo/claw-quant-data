@@ -304,8 +304,9 @@ FF3 使用本项目已声明的日度分组方法与零无风险利率口径，�
   分区仅在 acquire 节点内部循环；保留分页、截断保护和后置审计。
 - 美股历史暂停、蚂蚁历史默认关闭等既有策略不因本轮治理恢复。
 
-仍无自动入口的22项由 `automation_status.MANUAL_REASONS` 逐项维护；
-上述数字为 10 月 31 日快照。11 月 2 日已给四项补充独立刷新入口：
+无自动入口的原因由 `automation_status.MANUAL_REASONS` 逐项维护；
+当前启用状态以 [完整能力核查](../reports/capability_coverage_latest.md) 和控制台配置审计为准。
+以下是 11 月 2 日新增的四项补充刷新入口：
 `express` 每日 18:20 调用已绑定的 express_vip，滚动复查最近两个已结束报告期；
 `stock_hsgt` 以收盘后的数据日期 + 四个互联互通类型采集；
 `pledge_stat` 晚间按最近八个自然日探测实际截止日（不假设每周五），再对非空分区核验尾页；
@@ -471,3 +472,14 @@ FF3 覆盖审计规则 r6 依据当前业务行的公式版本、ready 状态及
 也不能因列裁剪而重新使用旧版证明。只读取一个字段、跨公告截止日、冲突值和
 缺少组件的行为均有回归测试，真实 PostgreSQL 用例使用独立测试证券并回滚。
 
+
+
+### A股日频策略停采与质量修复
+
+弱相关数据的暂停清单位于 `service/orchestration_v2/recovery_policy.py`。更新任务版本后运行 `OrchestrationV2Repository.pause_out_of_scope_executions()`，仅作废 queued/retrying 实例并追加事件，先停止或排空已有运行租约；worker 独立拒绝领取清单中的任务。不删除存量业务数据。
+
+公告目录与增发实例采用较低优先级 25；公告由串行的 `worker-v2-events`（0.5 CPU、1 GiB）独立消费，不占用核心修复与短任务 worker。公告及增发使用 `dispatch_closed_calendar_events` 回查最近 7 个完整自然日，不依赖港美股日历。常规 A 股调度在美股任务暂停时不再因缺少美股日历而整体退出。
+
+蚂蚁白名单采集每批最多 10 个子请求。成功响应先规范化入库，再写 `ant_scheduled_checkpoint`；同一实际采集周重试复用成功子请求，失败项继续请求。检查点只保留 14 天、最多复用 7 天，并以日/周隔离，不提供跨周历史快照保证。额度分配、上游熔断和失败计费保持原约束；分批成功仍不等于全市场完整，只有全部分片通过后才进入独立数据验收。
+
+本地因子、融资融券和筹码数据继续走既有严格校验。缺失财务字段、额度延后或部分实体覆盖必须保留未就绪状态；重跑任务不得替代字段补齐与独立验收。可用 `scripts/audit_financial_factor_dependencies.py --date YYYY-MM-DD --output PATH` 冻结财务输入诊断，再用受控范围修复。

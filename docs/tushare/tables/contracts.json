@@ -8956,6 +8956,439 @@
       ]
     },
     {
+      "api_name": "stk_seasoned",
+      "table_name": "tushare_norm_stk_seasoned",
+      "schema_version": 1,
+      "date_column": "ann_date",
+      "availability_column": "ann_date",
+      "identity_fields": [
+        "ts_code",
+        "ann_date"
+      ],
+      "business_identity_fields": [
+        "ts_code",
+        "ann_date"
+      ],
+      "identity_confidence": "heuristic",
+      "current_view": null,
+      "fields": [
+        {
+          "name": "ts_code",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "股票代码"
+        },
+        {
+          "name": "ann_date",
+          "upstream_type": "str",
+          "sql_type": "DATE",
+          "description": "公告日期"
+        },
+        {
+          "name": "first_ann_date",
+          "upstream_type": "str",
+          "sql_type": "DATE",
+          "description": "首次发布公告日期"
+        },
+        {
+          "name": "proj_info_source",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "信息来源"
+        },
+        {
+          "name": "board_approval_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "董事会审议通过并公告日期"
+        },
+        {
+          "name": "sh_approval_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "股东大会决议公告日期"
+        },
+        {
+          "name": "sasac_approval_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "国资委通过公告日"
+        },
+        {
+          "name": "csrc_approval_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "证监会批准公告日"
+        },
+        {
+          "name": "fo_type",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "增发类别:公开;非公开"
+        },
+        {
+          "name": "fo_stock_type",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "增发A股类型"
+        },
+        {
+          "name": "cur_stage",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "进程:意向;董事会预案;监管审批;实施;终止"
+        },
+        {
+          "name": "valid_st_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "预案有效期起始日期"
+        },
+        {
+          "name": "valid_end_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "预案有效期截止日期"
+        },
+        {
+          "name": "plan_chg_type",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "方案变动类型 方案调整 增发变更 推迟 终止"
+        },
+        {
+          "name": "plan_chg_ann_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "方案变动公告日期"
+        },
+        {
+          "name": "pricing_method",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "定价方式 估值定价 协商定价 市价参考 询价方式投 限价约束"
+        },
+        {
+          "name": "pricing_base_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "定价基准日"
+        },
+        {
+          "name": "price_basis",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "价格制定依据"
+        },
+        {
+          "name": "fo_vol_high",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "预计发行量上限（股）"
+        },
+        {
+          "name": "fo_vol_low",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "预计发行量下限（股）"
+        },
+        {
+          "name": "fo_price_high",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "预计发行价上限（元）"
+        },
+        {
+          "name": "fo_price_low",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "预计发行价下限（元）"
+        },
+        {
+          "name": "fo_price_ratio",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "预计价格相对基准价格比例（%）"
+        },
+        {
+          "name": "fo_raise_total",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "预计募集资金总额（元）"
+        },
+        {
+          "name": "fo_purpose",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "增发目的"
+        },
+        {
+          "name": "fo_investor",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "预计发行对象"
+        },
+        {
+          "name": "sub_method",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "认购方式 纯现金 资产类 其他"
+        },
+        {
+          "name": "fo_price_act",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "发行价（元）"
+        },
+        {
+          "name": "fo_vol_act",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "发行量（股）"
+        },
+        {
+          "name": "fo_raise_total_act",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "募集资金总额（元）"
+        },
+        {
+          "name": "fo_raise_net_act",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "募集资金净额（元）"
+        },
+        {
+          "name": "fo_exp_total",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "发行费用总额（元）"
+        },
+        {
+          "name": "uw_fee",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "承销保荐费（元）"
+        },
+        {
+          "name": "fo_exp_audit",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "审计费（元）"
+        },
+        {
+          "name": "fo_exp_legal",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "律师费（元）"
+        },
+        {
+          "name": "fo_exp_inst",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "中介机构费（元）"
+        },
+        {
+          "name": "fo_exp_pub",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "上网发行费（元）"
+        },
+        {
+          "name": "fo_exp_reg",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "股票登记费（元）"
+        },
+        {
+          "name": "fo_exp_other",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "其他费用（元）"
+        },
+        {
+          "name": "fo_exp_per_share",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "每股发行费（元）"
+        },
+        {
+          "name": "issue_obj_type",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "发行对象类型 全体投资者 大股东及大股东关联方 机构投资者 自然人"
+        },
+        {
+          "name": "pe_issue",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "增发市盈率（按增发前总股本）"
+        },
+        {
+          "name": "pub_plac_qty",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "网上发行股数(股）"
+        },
+        {
+          "name": "onl_pch_vol",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "网上发行有效申购数量（股）"
+        },
+        {
+          "name": "onl_pch_num",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "网上发行有效申购户数（户）"
+        },
+        {
+          "name": "onl_pch_excess",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "网上发行超额认购倍数"
+        },
+        {
+          "name": "onl_winning_rate",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "网上发行中签率（%）"
+        },
+        {
+          "name": "inst_plac_qty",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "专业机构配售股数（股）"
+        },
+        {
+          "name": "inst_sub_eff_total",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "专业机构有效申购总量（股）"
+        },
+        {
+          "name": "inst_sub_eff_cnt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "专业机构有效申购户数（户）"
+        },
+        {
+          "name": "inst_oversub_times",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "专业机构超额认购倍数（倍）"
+        },
+        {
+          "name": "a_inv_plac_qty",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "A类投资者配售股数（股）"
+        },
+        {
+          "name": "b_inv_plac_qty",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "B类投资者配售股数（股）"
+        },
+        {
+          "name": "old_sh_pre_plac_qty",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "老股东优先配售股数（股）"
+        },
+        {
+          "name": "old_sh_pre_plac_ratio",
+          "upstream_type": "float",
+          "sql_type": "NUMERIC",
+          "description": "老股东优先配售比例 %"
+        },
+        {
+          "name": "clw_between_inst_pub",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "网上网下回拨股数(股)"
+        },
+        {
+          "name": "prospectus_pub_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "募集说明书对外披露日期"
+        },
+        {
+          "name": "offer_intent_pub_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "发行意向文件披露日期"
+        },
+        {
+          "name": "apply_date",
+          "upstream_type": "str",
+          "sql_type": "DATE",
+          "description": "申购日"
+        },
+        {
+          "name": "old_sh_pre_plac_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "老股东优先配售日期"
+        },
+        {
+          "name": "onl_issue_date",
+          "upstream_type": "str",
+          "sql_type": "DATE",
+          "description": "网上发行日期"
+        },
+        {
+          "name": "uw_start_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "承销期起始日"
+        },
+        {
+          "name": "uw_end_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "承销期截止日"
+        },
+        {
+          "name": "uw_mode",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "承销方式 券商包销 非包销代销 上市公司自销"
+        },
+        {
+          "name": "new_share_list_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "新增股份上市日期"
+        },
+        {
+          "name": "list_circ_qty",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "本次上市流通股数（股）"
+        },
+        {
+          "name": "right_reg_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "股权登记日"
+        },
+        {
+          "name": "ex_right_dt",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "除权日"
+        },
+        {
+          "name": "update_flag",
+          "upstream_type": "str",
+          "sql_type": "TEXT",
+          "description": "更新标识 默认为0 有更新时为1"
+        }
+      ]
+    },
+    {
       "api_name": "stk_week_month_adj",
       "table_name": "tushare_norm_stk_week_month_adj",
       "schema_version": 1,

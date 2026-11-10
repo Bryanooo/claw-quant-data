@@ -163,6 +163,7 @@ def test_registry_exposes_every_collector_table():
         "ant_norm_controlling_shareholder",
         "ant_norm_style_classification",
         "public_norm_chinabond_yield_curve",
+        "stock_announcements",
     } == registered_tables
 
 
@@ -249,7 +250,7 @@ def test_all_collectable_interfaces_have_a_public_data_path():
     service = InterfaceDataService(FakeRawRepository(), DATASETS)
     interfaces = service.list_interfaces()
 
-    assert len(interfaces) == 201
+    assert len(interfaces) == 202
     assert "factor_value" not in {item["api_name"] for item in interfaces}
     assert all(item["datasets"] for item in interfaces)
     assert all(

@@ -1,25 +1,25 @@
 {
-  "generated_at": "2026-10-18T12:46:43.106939+00:00",
-  "counting_rule": "68 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; upstream routes are not counted as separate local HTTP endpoints.",
+  "generated_at": "2026-11-10T13:30:20.843487+00:00",
+  "counting_rule": "95 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; upstream routes are not counted as separate local HTTP endpoints.",
   "summary": {
-    "catalogued_get_entrypoints": 68,
+    "catalogued_get_entrypoints": 95,
     "financial_data_query_gateways": 1,
-    "public_data_http_entrypoints": 69,
+    "public_data_http_entrypoints": 96,
     "tushare_raw_audit_entrypoints": 5,
     "canonical_store_entrypoints": 6,
     "canonical_hybrid_entrypoints": 24,
-    "derived_research_entrypoints": 33,
+    "derived_research_entrypoints": 60,
     "financial_data_business_routes": 163,
-    "standard_datasets": 197,
-    "tushare_only_datasets": 196,
-    "multi_source_datasets": 1
+    "standard_datasets": 209,
+    "tushare_only_datasets": 199,
+    "multi_source_datasets": 10
   },
   "testing": {
-    "route_catalog": "69 local HTTP entrypoints catalogued",
-    "dataset_registry": "197 standard datasets registered",
+    "route_catalog": "96 local HTTP entrypoints catalogued",
+    "dataset_registry": "209 standard datasets registered",
     "financial_data_catalog": "163 upstream business routes allowlisted",
     "canonical_catalog": "24 canonical routes registered",
-    "research_catalog": "33 research routes registered",
+    "research_catalog": "60 research routes registered",
     "research_live_acceptance": "13 representative end-to-end cases",
     "financial_data_live_acceptance": "protocol and query gateway covered; a full 163-route live sweep is intentionally not run in CI because it consumes provider quota and depends on mutable upstream sample data"
   },
@@ -86,7 +86,7 @@
           "path": "/api/v1/data/datasets",
           "name": "数据集目录",
           "description": "发现已登记的标准化数据资产。",
-          "origin": "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+          "origin": "canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets)",
           "test_scope": "route + registry + query contract",
           "route_contract": "covered"
         },
@@ -95,7 +95,7 @@
           "path": "/api/v1/data/datasets/{dataset_name}",
           "name": "数据集契约",
           "description": "查看字段、业务主键、日期和过滤能力。",
-          "origin": "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+          "origin": "canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets)",
           "test_scope": "route + registry + query contract",
           "route_contract": "covered"
         },
@@ -104,7 +104,7 @@
           "path": "/api/v1/data/datasets/{dataset_name}/records",
           "name": "标准记录查询",
           "description": "按字段、日期范围和历史时点查询强类型记录。",
-          "origin": "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+          "origin": "canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets)",
           "test_scope": "route + registry + query contract",
           "route_contract": "covered"
         },
@@ -113,7 +113,7 @@
           "path": "/api/v1/data/interfaces",
           "name": "上游映射",
           "description": "查看 Tushare 接口到标准数据集的实现映射。",
-          "origin": "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+          "origin": "canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets)",
           "test_scope": "route + registry + query contract",
           "route_contract": "covered"
         },
@@ -122,7 +122,7 @@
           "path": "/api/v1/data/interfaces/{api_name}/records",
           "name": "通用接口标准查询",
           "description": "查询契约通用采集器产生的强类型标准记录。",
-          "origin": "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+          "origin": "canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets)",
           "test_scope": "route + registry + query contract",
           "route_contract": "covered"
         },
@@ -131,7 +131,7 @@
           "path": "/api/v1/data/freshness",
           "name": "时效状态",
           "description": "查看数据集最新日期与时效判定。",
-          "origin": "canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset)",
+          "origin": "canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets)",
           "test_scope": "route + registry + query contract",
           "route_contract": "covered"
         }
@@ -367,10 +367,50 @@
       "items": [
         {
           "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/announcements",
+          "name": "A股公告目录",
+          "domain": "事件研究",
+          "description": "按首次观察时点查询公告元数据，正文按需获取。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/announcements/{record_hash}/document",
+          "name": "公告正文",
+          "domain": "事件研究",
+          "description": "按已存公告身份下载PDF或分页提取文本，正文不持久化。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/factor-slices/csi300",
+          "name": "沪深300历史因子截面",
+          "domain": "量化研究数据",
+          "description": "单日精确成分与指定因子的只读快照，保留缺值、观察时点、审计和冻结标识。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
           "path": "/api/v1/research/capabilities",
           "name": "研究能力目录",
           "domain": "能力发现",
           "description": "列出研究能力、数据动作、服务状态和待办缺口。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/factor-inputs",
+          "name": "量化研究输入包",
+          "domain": "能力发现",
+          "description": "列出供 factor-lab 冻结快照的版本化基础、财务、资金和技术描述数据契约。",
           "origin": "system-derived aggregation over canonical datasets",
           "test_scope": "route + calculation unit tests; representative live acceptance set",
           "route_contract": "covered"
@@ -591,6 +631,236 @@
           "name": "行业内部宽度",
           "domain": "行业研究",
           "description": "按时点成分计算涨跌分布、均线扩散和行情覆盖。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/instruments/search",
+          "name": "统一证券搜索",
+          "domain": "关系发现",
+          "description": "跨股票与 ETF 的统一主数据检索，返回可路由的资产类型判别。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/calendar",
+          "name": "交易日历",
+          "domain": "事件研究",
+          "description": "按交易所返回单个交易日的开市与会话状态。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/indices/{ts_code}/valuation",
+          "name": "指数估值",
+          "domain": "指数研究",
+          "description": "指数级 PE/PB/换手率历史序列与历史分位。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/indices/{ts_code}/valuation-distribution",
+          "name": "指数估值分布",
+          "domain": "指数研究",
+          "description": "按指定交易日计算指数成分股的估值分布与覆盖率。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/indices/{ts_code}/valuation-distribution/snapshot",
+          "name": "指数估值分布快照",
+          "domain": "指数研究",
+          "description": "读取已物化的指数估值分布快照及公式版本与审计状态。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/indices/{ts_code}/valuation-distribution/history",
+          "name": "指数估值分布历史",
+          "domain": "指数研究",
+          "description": "按交易日窗口逐日计算指数估值分布。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/market/funds",
+          "name": "市场资金全景",
+          "domain": "市场研究",
+          "description": "全市场两融余额、北向资金与市场资金流序列。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/etfs/directory",
+          "name": "ETF 目录",
+          "domain": "ETF研究",
+          "description": "按最新交易日成交额排序的上市 ETF 目录。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/etfs/{ts_code}/nav-shares",
+          "name": "ETF 净值与份额",
+          "domain": "ETF研究",
+          "description": "ETF 净值曲线、份额申赎代理与折溢价序列。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/etfs/flow-series",
+          "name": "ETF 资金流序列",
+          "domain": "ETF研究",
+          "description": "宽基 ETF 的每日份额变动、净申赎金额与二级成交额双序列。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/sectors/directory",
+          "name": "板块目录",
+          "domain": "板块研究",
+          "description": "跨同花顺与东方财富的板块目录、最新行情与资金流。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/sectors/alipay-hot-plates",
+          "name": "支付宝热门板块",
+          "domain": "板块研究",
+          "description": "支付宝（蚂蚁）热门板块热度排名，独立于价格派生的板块指数。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/sectors/{ts_code}/members",
+          "name": "板块成分",
+          "domain": "板块研究",
+          "description": "读取单个板块的当前成分股及其权重。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/sectors/{provider}/{sector_code}/valuation-distribution",
+          "name": "行业估值分布",
+          "domain": "行业研究",
+          "description": "按交易日计算行业成分股的估值分布与覆盖率。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/sectors/{provider}/{sector_code}/valuation-distribution/history",
+          "name": "行业估值分布历史",
+          "domain": "行业研究",
+          "description": "按交易日窗口逐日计算行业估值分布。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/chips",
+          "name": "筹码分布",
+          "domain": "个股研究",
+          "description": "筹码获利趋势、成本分位与最新筹码分布。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/events",
+          "name": "个股事件",
+          "domain": "事件研究",
+          "description": "业绩快报、预告、龙虎榜、涨跌停、限售解禁、质押与股东户数。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/sector-context",
+          "name": "所属板块上下文",
+          "domain": "关系发现",
+          "description": "股票所属板块、板块近期表现与资金流，以及同行。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/stocks/{ts_code}/industry-chain",
+          "name": "产业链",
+          "domain": "关系发现",
+          "description": "蚂蚁产业链归属与产业链树（额度约束的外部证据）。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/macro/rates",
+          "name": "宏观利率曲线",
+          "domain": "宏观研究",
+          "description": "中债与美债利率曲线及 10 年期利差。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/macro/schedule",
+          "name": "宏观数据日程",
+          "domain": "宏观研究",
+          "description": "即将发布的宏观数据发布日程。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/factors/catalog",
+          "name": "统一研究特征目录",
+          "domain": "量化研究",
+          "description": "正式特征身份、11类用途、唯一来源、别名和可用性；不供给内部对照值。",
+          "origin": "system-derived aggregation over canonical datasets",
+          "test_scope": "route + calculation unit tests; representative live acceptance set",
+          "route_contract": "covered"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/research/factors/{ts_code}",
+          "name": "日频研究特征",
+          "domain": "量化研究",
+          "description": "按名称选择已存储的因子及技术指标；共用值仅一个位置，缺失不回退供应商。",
           "origin": "system-derived aggregation over canonical datasets",
           "test_scope": "route + calculation unit tests; representative live acceptance set",
           "route_contract": "covered"

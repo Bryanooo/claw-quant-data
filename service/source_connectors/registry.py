@@ -388,6 +388,14 @@ def build_source_registry() -> SourceRegistry:
         registry.register_source(source)
     for endpoint in PUBLIC_ENDPOINTS:
         registry.register_endpoint(endpoint)
+    registry.register_endpoint(EndpointSpec(
+        source_id='cninfo', endpoint_key='announcements', title='A股公告元数据（巨潮公开目录）',
+        acquisition_mode=AcquisitionMode.SCHEDULED_PULL,resource_class='events',cadence='daily',
+        capabilities={'fields':['announcement_id','ts_code','ann_date','published_at','title','document_url','first_observed_at','last_seen_at']},
+        request_contract={'start_date':'YYYY-MM-DD','end_date':'YYYY-MM-DD; maximum 1 day',
+                          'body_policy':'on_demand_only'},
+        completeness_policy={'pagination':'verified_total_and_unique_ids','scope':'CNINFO returned A-share public catalog, not a regulatory completeness guarantee'},
+    ))
     return registry
 
 

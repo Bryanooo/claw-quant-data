@@ -513,11 +513,11 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
     transformations = transformation_task_blueprints()
 
     assert task_baseline_summary() == {
-        "acquisition": 200,
+        "acquisition": 202,
         "transformation": 15,
-        "total": 215,
+        "total": 217,
     }
-    assert len({item.task_key for item in acquisitions}) == 200
+    assert len({item.task_key for item in acquisitions}) == 202
     assert len({item.task_key for item in transformations}) == 15
     assert not (
         {item.task_key for item in acquisitions}
@@ -534,7 +534,7 @@ def test_v2_machine_task_baseline_is_complete_and_non_overlapping():
         item.endpoint_key
         for item in SOURCE_REGISTRY.list_endpoints("tushare")
     }
-    assert len(covered_tushare_endpoints) == len(expected_tushare_endpoints) == 202
+    assert len(covered_tushare_endpoints) == len(expected_tushare_endpoints) == 203
     assert set(covered_tushare_endpoints) == expected_tushare_endpoints
     for task in acquisitions:
         for endpoint in task.endpoints:
@@ -579,8 +579,8 @@ def test_v2_baseline_compiles_to_strong_shadow_definitions_without_database():
     }
     documents = task_documents(endpoint_ids)
 
-    assert len(endpoint_contracts()) == len(references) == 211
-    assert len(documents) == 215
+    assert len(endpoint_contracts()) == len(references) == 213
+    assert len(documents) == 217
     by_key = {document.task_key: document for document in documents}
     assert [node.kind.value for node in by_key["daily"].nodes] == [
         "condition", "scope_plan", "acquire", "validate", "publish"

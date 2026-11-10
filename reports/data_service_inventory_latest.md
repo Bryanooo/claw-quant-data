@@ -1,24 +1,24 @@
 # Data service inventory
 
-Generated: `2026-10-18T12:46:43.106939+00:00`
+Generated: `2026-11-10T13:30:20.843487+00:00`
 
-68 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; upstream routes are not counted as separate local HTTP endpoints.
+95 catalogued GET data-service entrypoints plus one authenticated Financial Data POST query-through gateway. The gateway exposes 163 allowlisted upstream business routes; upstream routes are not counted as separate local HTTP endpoints.
 
 ## Summary
 
 | Measure | Count |
 |---|---:|
-| `catalogued_get_entrypoints` | 68 |
+| `catalogued_get_entrypoints` | 95 |
 | `financial_data_query_gateways` | 1 |
-| `public_data_http_entrypoints` | 69 |
+| `public_data_http_entrypoints` | 96 |
 | `tushare_raw_audit_entrypoints` | 5 |
 | `canonical_store_entrypoints` | 6 |
 | `canonical_hybrid_entrypoints` | 24 |
-| `derived_research_entrypoints` | 33 |
+| `derived_research_entrypoints` | 60 |
 | `financial_data_business_routes` | 163 |
-| `standard_datasets` | 197 |
-| `tushare_only_datasets` | 196 |
-| `multi_source_datasets` | 1 |
+| `standard_datasets` | 209 |
+| `tushare_only_datasets` | 199 |
+| `multi_source_datasets` | 10 |
 
 ## Public service groups
 
@@ -36,12 +36,12 @@ Generated: `2026-10-18T12:46:43.106939+00:00`
 
 | Method | Path | Service | Origin | Test scope |
 |---|---|---|---|---|
-| GET | `/api/v1/data/datasets` | 数据集目录 | canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset) | route + registry + query contract |
-| GET | `/api/v1/data/datasets/{dataset_name}` | 数据集契约 | canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset) | route + registry + query contract |
-| GET | `/api/v1/data/datasets/{dataset_name}/records` | 标准记录查询 | canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset) | route + registry + query contract |
-| GET | `/api/v1/data/interfaces` | 上游映射 | canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset) | route + registry + query contract |
-| GET | `/api/v1/data/interfaces/{api_name}/records` | 通用接口标准查询 | canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset) | route + registry + query contract |
-| GET | `/api/v1/data/freshness` | 时效状态 | canonical_db (193 Tushare-only datasets; 1 ChinaMoney/Tushare merged dataset) | route + registry + query contract |
+| GET | `/api/v1/data/datasets` | 数据集目录 | canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets) | route + registry + query contract |
+| GET | `/api/v1/data/datasets/{dataset_name}` | 数据集契约 | canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets) | route + registry + query contract |
+| GET | `/api/v1/data/datasets/{dataset_name}/records` | 标准记录查询 | canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets) | route + registry + query contract |
+| GET | `/api/v1/data/interfaces` | 上游映射 | canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets) | route + registry + query contract |
+| GET | `/api/v1/data/interfaces/{api_name}/records` | 通用接口标准查询 | canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets) | route + registry + query contract |
+| GET | `/api/v1/data/freshness` | 时效状态 | canonical_db (199 Tushare-only datasets; 10 other or multi-source datasets) | route + registry + query contract |
 
 ### 规范语义服务 (24)
 
@@ -72,11 +72,15 @@ Generated: `2026-10-18T12:46:43.106939+00:00`
 | GET | `/api/v1/data/canonical/index-profiles` | 规范指数档案 | Tushare canonical DB first; Financial Data only after a verified local miss | route + canonical model + source-selection contract |
 | GET | `/api/v1/data/canonical/index-constituents` | 规范指数成分权重 | Tushare canonical DB first; Financial Data only after a verified local miss | route + canonical model + source-selection contract |
 
-### 系统聚合研究服务 (33)
+### 系统聚合研究服务 (60)
 
 | Method | Path | Service | Origin | Test scope |
 |---|---|---|---|---|
+| GET | `/api/v1/research/stocks/{ts_code}/announcements` | A股公告目录 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/announcements/{record_hash}/document` | 公告正文 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/factor-slices/csi300` | 沪深300历史因子截面 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/capabilities` | 研究能力目录 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/factor-inputs` | 量化研究输入包 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/readiness` | 研究数据就绪状态 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/validation-set` | 研究端到端验证集 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/search` | 股票搜索 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
@@ -99,6 +103,29 @@ Generated: `2026-10-18T12:46:43.106939+00:00`
 | GET | `/api/v1/research/sectors/{provider}/rotation` | 板块轮动 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/sectors/{provider}/{sector_code}/fundamentals` | 行业基本面 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/sectors/{provider}/{sector_code}/breadth` | 行业内部宽度 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/instruments/search` | 统一证券搜索 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/calendar` | 交易日历 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/indices/{ts_code}/valuation` | 指数估值 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/indices/{ts_code}/valuation-distribution` | 指数估值分布 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/indices/{ts_code}/valuation-distribution/snapshot` | 指数估值分布快照 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/indices/{ts_code}/valuation-distribution/history` | 指数估值分布历史 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/market/funds` | 市场资金全景 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/etfs/directory` | ETF 目录 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/etfs/{ts_code}/nav-shares` | ETF 净值与份额 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/etfs/flow-series` | ETF 资金流序列 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/sectors/directory` | 板块目录 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/sectors/alipay-hot-plates` | 支付宝热门板块 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/sectors/{ts_code}/members` | 板块成分 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/sectors/{provider}/{sector_code}/valuation-distribution` | 行业估值分布 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/sectors/{provider}/{sector_code}/valuation-distribution/history` | 行业估值分布历史 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/chips` | 筹码分布 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/events` | 个股事件 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/sector-context` | 所属板块上下文 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/stocks/{ts_code}/industry-chain` | 产业链 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/macro/rates` | 宏观利率曲线 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/macro/schedule` | 宏观数据日程 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/factors/catalog` | 统一研究特征目录 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
+| GET | `/api/v1/research/factors/{ts_code}` | 日频研究特征 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/snapshot` | 个股快照 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/research-pack` | 个股研究包 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
 | GET | `/api/v1/research/stocks/{ts_code}/sectors` | 股票所属板块 | system-derived aggregation over canonical datasets | route + calculation unit tests; representative live acceptance set |
@@ -280,10 +307,10 @@ The local gateway is `POST /api/v1/data/sources/financial_data/query`. It expose
 
 ## Contract posture
 
-- `route_catalog`: 69 local HTTP entrypoints catalogued
-- `dataset_registry`: 197 standard datasets registered
+- `route_catalog`: 96 local HTTP entrypoints catalogued
+- `dataset_registry`: 209 standard datasets registered
 - `financial_data_catalog`: 163 upstream business routes allowlisted
 - `canonical_catalog`: 24 canonical routes registered
-- `research_catalog`: 33 research routes registered
+- `research_catalog`: 60 research routes registered
 - `research_live_acceptance`: 13 representative end-to-end cases
 - `financial_data_live_acceptance`: protocol and query gateway covered; a full 163-route live sweep is intentionally not run in CI because it consumes provider quota and depends on mutable upstream sample data

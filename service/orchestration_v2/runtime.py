@@ -1034,7 +1034,7 @@ class OrchestrationV2Runtime:
             return (self._period_finance_spec(api_name='express_vip', period=execution['observation_end'],
                                               purpose=execution['purpose']),)
         if selected["source_id"] in {
-            "financial_data", "chinabond", "chinamoney",
+            "financial_data", "chinabond", "chinamoney", "cninfo",
         }:
             # 蚂蚁数据源 scheduled pulls are partition-free: the acquire node
             # resolves route parameters (market-wide ranking or local
@@ -1045,7 +1045,7 @@ class OrchestrationV2Runtime:
                     "start_date": execution["observation_start"].isoformat(),
                     "end_date": execution["observation_end"].isoformat(),
                 }
-                if selected["source_id"] == "chinamoney" or (
+                if selected["source_id"] in {"chinamoney", "cninfo"} or (
                     selected["source_id"] == "chinabond"
                     and execution["purpose"] in {"repair", "backfill"}
                 )
@@ -1087,6 +1087,13 @@ class OrchestrationV2Runtime:
         end = execution["observation_end"]
         api_name = selected["endpoint_key"]
         policy = TusharePolicyRegistry().get(api_name)
+        if api_name == 'fx_daily':
+            if (end-start).days > 30:
+                raise V2UnsupportedScopeError('A-share FX context requires a bounded <=31-day window')
+            return tuple(self._static_fanout_spec(api_name=api_name, parameter_name='ts_code',
+                parameter_value=code,scope_kind='date_window',observation_start=start,
+                observation_end=end,purpose=execution['purpose'],policy=policy)
+                for code in ('USDCNH.FXCM','USDOLLAR.FXCM'))
         missing_codes = (execution.get('frozen_scope') or {}).get('missing_factor_codes')
         if missing_codes is not None:
             if (api_name != 'stk_factor' or start != end or execution['purpose'] != 'backfill'

@@ -66,10 +66,9 @@ def task_automation(task_key, definition, active_keys):
     if definition is None:
         return {'state': 'not_published', 'label': '无已发布任务', 'automatic': False}
     mode = (definition.get('schedule') or {}).get('mode', 'unknown')
-    if task_key in {'factor_value', 'us_daily'}:
-        label = ('全市场采集停用；仅独立抽样参考任务' if task_key == 'factor_value'
-                 else '策略停采：额度与范围限制')
-        return {'state': 'paused_policy', 'label': label, 'automatic': False}
+    from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS, DEFERRED_REASONS
+    if task_key in DEFERRED_RESEARCH_DATASETS:
+        return {'state': 'paused_policy', 'label': DEFERRED_REASONS[task_key], 'automatic': False}
     supplementary = supplementary_automation(task_key, active_keys)
     if supplementary is not None:
         return {'state': 'supplementary', 'automatic': True, **supplementary}

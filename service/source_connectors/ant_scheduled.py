@@ -345,9 +345,14 @@ def store_rows(
 def run_scheduled_pull(
     spec: ScheduledRouteSpec,
     transport: Callable[[dict[str, Any]], Mapping[str, Any]],
+    *, checkpoint=None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Fetch every partition of one route and persist normalized rows."""
     trade_date = datetime.now(CST).date()
+    if checkpoint is not None:
+        from service.source_connectors.ant_checkpoint import resumable_transport
+        period = trade_date.isoformat() if spec.cadence == 'daily' else f'{trade_date.isocalendar().year}-W{trade_date.isocalendar().week:02}'
+        transport = resumable_transport(spec,transport,checkpoint,period)
     if spec.symbol_keyed:
         symbols = active_a_share_symbols()
         if not symbols:

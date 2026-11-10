@@ -197,7 +197,10 @@ SAME_DAY_RELEASE_DATASETS = {
 
 
 _EXPLICIT_RULES = [
-
+    CoverageRule(dataset_name='stock_announcements',table='stock_announcements',date_column='ann_date',
+        date_storage=DateStorage.DATE,strategy=CoverageStrategy.CALENDAR_DAILY,
+        collection_api_name='cninfo_announcements',scheduled=True,grace_days=1,
+        accept_verified_empty=True,require_transport_proof=True),
         _rule(
             "adj_factor",
             CoverageStrategy.TRADING_DAILY,
@@ -933,8 +936,7 @@ AUDIT_PREVIOUS_RULE_REVISIONS = {
                         if rule.dataset_name == dataset.name), 1)
     for dataset in DATASETS.list()
 }
-_EXPLICIT_RULES = [
-replace(rule,
+_EXPLICIT_RULES = [replace(rule,
     require_transport_proof=(rule.require_transport_proof or (
         rule.strict_audit_mode == "expected_partition" and rule.dataset_name not in _DERIVED_OUTPUTS)),
     revision=rule.revision + (2 if rule.dataset_name in {'local_factor_snapshot', 'fina_mainbz'} else 1)

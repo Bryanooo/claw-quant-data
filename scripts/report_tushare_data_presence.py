@@ -26,6 +26,7 @@ from service.collector_catalog import discover_collectors
 from service.clock import business_now
 from service.config import DB_CONFIG
 from service.orchestration_v2.catalog import acquisition_task_blueprints
+from service.orchestration_v2.repository import OrchestrationV2Repository
 from service.tushare_catalog import TushareInterfaceCatalog
 from service.tushare_normalization import normalized_table_name
 
@@ -91,10 +92,11 @@ def _scheduled_api_names(scheduled_task_keys: set[str]) -> set[str]:
     return result
 
 
-def build_report() -> dict[str, Any]:
+def build_report(*, exact_row_counts=False) -> dict[str, Any]:
     catalog = TushareInterfaceCatalog()
     implementation_tables = _implementation_tables()
     connection = psycopg2.connect(**DB_CONFIG)
+    connection.set_session(readonly=True)
     try:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -119,21 +121,14 @@ def build_report() -> dict[str, Any]:
                 for api_name, count, last_at in cursor.fetchall()
                 if api_name
             }
-            cursor.execute(
-                """
-                SELECT task_key
-                FROM orchestration_v2.task_definition
-                WHERE lifecycle_status='active'
-                  AND workflow_kind='acquisition'
-                  AND definition->'schedule'->>'mode'='cron'
-                """
-            )
-            scheduled_task_keys = {row[0] for row in cursor.fetchall()}
+            scheduled_task_keys = {key for key, state in OrchestrationV2Repository().automation_states().items()
+                                   if state['automatic']}
 
             table_counts: dict[str, int] = {}
             for table_name in sorted({t for values in implementation_tables.values() for t in values}):
                 cursor.execute(
-                    sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(table_name))
+                    sql.SQL("SELECT COUNT(*) FROM {}" if exact_row_counts
+                            else "SELECT EXISTS(SELECT 1 FROM {} LIMIT 1)").format(sql.Identifier(table_name))
                 )
                 table_counts[table_name] = int(cursor.fetchone()[0])
     finally:
@@ -156,7 +151,9 @@ def build_report() -> dict[str, Any]:
                 "automatic_scheduling": automatic,
                 "raw_rows": raw_rows,
                 "normalized_tables": tables,
-                "normalized_rows": normalized_rows,
+                "normalized_rows": normalized_rows if exact_row_counts else None,
+                "has_normalized_rows": bool(normalized_rows),
+                "normalized_row_count_exact": exact_row_counts,
                 "successful_jobs": jobs.get(contract.api_name, {}).get("successful_jobs", 0),
                 "last_success_at": jobs.get(contract.api_name, {}).get("last_success_at"),
                 "last_raw_at": raw.get(contract.api_name, {}).get("last_at"),
@@ -166,6 +163,7 @@ def build_report() -> dict[str, Any]:
 
     return {
         "generated_at": business_now(),
+        "normalized_evidence_mode": "exact_row_counts" if exact_row_counts else "existence_only_not_row_totals",
         "summary": {
             "collectable_interfaces": len(rows),
             "implemented_interfaces": sum(
@@ -200,26 +198,29 @@ def write_report(report: dict[str, Any], json_path: Path, markdown_path: Path) -
         "",
         "| 指标 | 数量 |",
         "|---|---:|",
-        f"| Token 可采集接口 | {summary['collectable_interfaces']} |",
+        f"| 契约登记可采集接口（本次未重新探测权限） | {summary['collectable_interfaces']} |",
         f"| 已实现接口 | {summary['implemented_interfaces']} |",
         f"| 已自动编排接口 | {summary['automatically_scheduled_interfaces']} |",
         f"| 当前有正行数证据 | {summary['interfaces_with_positive_rows']} |",
         f"| 当前无正行数证据 | {summary['interfaces_without_positive_row_evidence']} |",
         "",
-        "| API | 实现模式 | 自动编排 | 原始行 | 规范化行 | 数据状态 |",
+        "| API | 实现模式 | 自动编排 | 原始行 | 规范数据证据 | 数据状态 |",
         "|---|---|---:|---:|---:|---|",
     ]
     for item in report["interfaces"]:
+        normalized = (str(item['normalized_rows']) if item.get('normalized_row_count_exact', True)
+                      else '存在记录' if item['has_normalized_rows'] else '无记录')
         lines.append(
             f"| `{item['api_name']}` | {item['implementation_mode']} | "
             f"{'是' if item['automatic_scheduling'] else '否'} | "
-            f"{item['raw_rows']} | {item['normalized_rows']} | {item['data_status']} |"
+            f"{item['raw_rows']} | {normalized} | {item['data_status']} |"
         )
     markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--exact-row-counts', action='store_true', help='opt in to full table COUNT scans')
     parser.add_argument(
         "--json",
         type=Path,
@@ -231,7 +232,7 @@ def main() -> None:
         default=PROJECT_ROOT / "reports" / "tushare_data_presence_latest.md",
     )
     arguments = parser.parse_args()
-    report = build_report()
+    report = build_report(exact_row_counts=arguments.exact_row_counts)
     arguments.json.parent.mkdir(parents=True, exist_ok=True)
     arguments.markdown.parent.mkdir(parents=True, exist_ok=True)
     write_report(report, arguments.json, arguments.markdown)

@@ -28,6 +28,7 @@ from service.orchestration_v2.contracts import (
 from service.data_coverage.publication import NEXT_DAY_EMPTY_CONFIRMATION
 from service.data_coverage.transport import transport_manifest
 from service.data_coverage.diagnostics import audit_issues
+from service.clock import SHANGHAI_TIMEZONE, business_now
 from service.orchestration_v2.audit_contracts import (
     coverage_rule_audit_contract,
 )
@@ -55,6 +56,16 @@ class TaskAuditNoMatureExpectedPartitionError(TaskAuditNotImplementedError):
     can certify the exact slice; genuinely missing audit implementations keep
     raising :class:`TaskAuditNotImplementedError` and remain fail-closed.
     """
+
+
+class TaskAuditPublicationDeferred(RuntimeError):
+    """A real publication deadline has not arrived; preserve acquisition work."""
+
+    defer_without_failure = True
+
+    def __init__(self, dataset_name, deadline, observed_at):
+        self.retry_after_seconds = max(1, int((deadline - observed_at).total_seconds()) + 1)
+        super().__init__(f"{dataset_name} waits for publication at {deadline.isoformat()}")
 
 
 AuditHandler = Callable[
@@ -179,6 +190,16 @@ class TaskAuditRuntime:
             and result.partial_partitions == 0
             and result.evidence.get("calendar_complete_for_range") is not False
         ):
+            rule = self._registry.get(contract.dataset_name)
+            observed_at = as_of if isinstance(as_of, datetime) else business_now()
+            observed_at = observed_at.astimezone(SHANGHAI_TIMEZONE)
+            if (getattr(rule, "release_after", None)
+                    and result.evidence.get("before_release")
+                    and start_date <= observed_at.date() <= end_date):
+                deadline = datetime.combine(observed_at.date(), rule.release_after,
+                                            tzinfo=SHANGHAI_TIMEZONE)
+                if deadline > observed_at:
+                    raise TaskAuditPublicationDeferred(contract.dataset_name, deadline, observed_at)
             if (not transport_verified
                     or contract.period_granularity not in {"week", "month", "quarter"}
                     or start_date != end_date):

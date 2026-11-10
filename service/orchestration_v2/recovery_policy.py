@@ -34,7 +34,16 @@ SERIALIZED_ACQUISITION_TASKS = QUOTA_GUARDED_DATASETS | frozenset({
 # than an accidental side effect of a full-library audit.
 # factor_value is an internal reference endpoint. Only the separately frozen
 # factor_reference_sample workflow may collect it automatically.
-DEFERRED_RESEARCH_DATASETS = frozenset({"us_daily", "factor_value"})
+# A-share daily research scope. These remain registered and locally queryable.
+A_SHARE_PAUSED_DATASETS = frozenset({
+    'hk_basic','hk_daily','hk_tradecal','rt_hk_k','ccass_hold','ccass_hold_detail',
+    'us_basic','us_tradecal','us_daily',
+    'fut_basic','fut_daily','fut_trade_cal','fut_settle','fut_holding','fut_mapping',
+    'fut_index_daily','fut_weekly_detail','fut_weekly_monthly','fut_wsr','ft_limit',
+    'opt_basic','opt_daily','bc_otcqt','bc_bestotcqt','bond_blk','bond_blk_detail',
+    'libor','wz_index','gz_index','fx_obasic',
+})
+DEFERRED_RESEARCH_DATASETS = A_SHARE_PAUSED_DATASETS | frozenset({'factor_value'})
 
 # Why each deferred dataset is out of the routine programme.  The scheduler
 # holds the real authority over dispatching, so a deferred task whose
@@ -48,10 +57,16 @@ DEFERRED_REASONS: dict[str, str] = {
     ),
 }
 
+DEFERRED_REASONS.update({name: 'A股日频策略停采：保留库存与查询，不再自动补采'
+                         for name in A_SHARE_PAUSED_DATASETS})
+
 # These interfaces require an explicit scope or expand one missing date into a
 # large fan-out.  The audit may expose their gaps, but the generic auditor must
 # not turn those findings into provider calls automatically.
 MANUAL_SCOPE_REPAIR_DATASETS = frozenset({
+    "cninfo_announcements",
+    "stk_seasoned",
+    "fx_daily",
     "cyq_chips",
     "dc_index",
     "etf_sh_cons",

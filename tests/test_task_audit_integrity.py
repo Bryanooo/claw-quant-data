@@ -90,7 +90,7 @@ def test_wrapped_database_and_transform_errors_have_actionable_categories():
 
 def test_all_task_outputs_have_executable_audit_or_are_blocked_drafts():
     records = inventory()
-    assert len(records) == 216 and len({r['task_key'] for r in records}) == 216
+    assert len(records) == 218 and len({r['task_key'] for r in records}) == 218
     for record in records:
         if record['handler_implemented']:
             assert all(o['implemented'] for o in record['outputs']), record['task_key']

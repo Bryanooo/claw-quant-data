@@ -212,6 +212,8 @@ def create_app(
             "an unexpected error occurred",
         )
 
+    from service.api.routers import announcements
+    application.include_router(announcements.router, prefix="/api")
     application.include_router(health.router, prefix="/api")
     application.include_router(datasets.router, prefix="/api")
     application.include_router(interfaces.router, prefix="/api")

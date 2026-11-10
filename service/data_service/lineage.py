@@ -211,6 +211,11 @@ def _contract_external_routes() -> dict[str, set[str]]:
 
 
 def research_endpoint_lineage(path: str) -> dict[str, Any]:
+    if path == '/api/v1/research/stocks/{ts_code}/announcements':
+        return _lineage(['stock_announcements'], read_strategy='materialized_db_only')
+    if path == '/api/v1/research/announcements/{record_hash}/document':
+        return _lineage(['stock_announcements'], fallback_routes=['https://static.cninfo.com.cn/'],
+                        origin='official_document', read_strategy='explicit_on_demand_no_body_storage')
     if path == "/api/v1/research/factor-slices/csi300":
         return _lineage(
             ["index_weight", "local_factor_snapshot", "trade_calendar"], origin="derived_db",
@@ -276,7 +281,7 @@ def endpoint_with_sources(
             for source in dataset_sources.get(dataset, ["tushare"])
         }
     )
-    if lineage["fallback_routes"]:
+    if any(route.startswith("/api/v1/") for route in lineage["fallback_routes"]):
         upstream_sources.append("financial_data")
     return {
         **endpoint,

@@ -10,6 +10,7 @@ def test_scheduler_contains_only_v2_control_jobs():
     scheduler = create_scheduler(set_active=False)
     ids = {job.id for job in scheduler.get_jobs()}
     assert ids == {
+        'v2_ephemeral_maintenance',
         'v2_financial_disclosure_refresh',
         'v2_history_continuation',
         "service_heartbeat",

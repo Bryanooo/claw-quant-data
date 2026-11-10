@@ -9,31 +9,110 @@
       "category": "特色数据",
       "category_path": "股票数据/特色数据",
       "description": "获取中央结算系统持股汇总数据，覆盖全部历史数据，通常于下一交易日早上9点前更新",
-      "doc_ids": [295],
-      "official_urls": ["https://tushare.pro/document/2?doc_id=295"],
-      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "doc_ids": [
+        295
+      ],
+      "official_urls": [
+        "https://tushare.pro/document/2?doc_id=295"
+      ],
+      "http": {
+        "supported": true,
+        "method": "POST",
+        "url": "http://api.tushare.pro"
+      },
       "read_only": true,
       "collectable": true,
       "input_parameters": [
-        {"name": "ts_code", "type": "str", "required": "N", "description": "股票代码"},
-        {"name": "hk_code", "type": "str", "required": "N", "description": "港交所代码"},
-        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
-        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
-        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"}
+        {
+          "name": "ts_code",
+          "type": "str",
+          "required": "N",
+          "description": "股票代码"
+        },
+        {
+          "name": "hk_code",
+          "type": "str",
+          "required": "N",
+          "description": "港交所代码"
+        },
+        {
+          "name": "trade_date",
+          "type": "str",
+          "required": "N",
+          "description": "交易日期"
+        },
+        {
+          "name": "start_date",
+          "type": "str",
+          "required": "N",
+          "description": "开始日期"
+        },
+        {
+          "name": "end_date",
+          "type": "str",
+          "required": "N",
+          "description": "结束日期"
+        }
       ],
       "output_parameters": [
-        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
-        {"name": "ts_code", "type": "str", "default": "Y", "description": "股票代码"},
-        {"name": "name", "type": "str", "default": "Y", "description": "股票名称"},
-        {"name": "shareholding", "type": "str", "default": "Y", "description": "中央结算系统持股量"},
-        {"name": "hold_nums", "type": "str", "default": "Y", "description": "参与者数目"},
-        {"name": "hold_ratio", "type": "str", "default": "Y", "description": "持股占比"}
+        {
+          "name": "trade_date",
+          "type": "str",
+          "default": "Y",
+          "description": "交易日期"
+        },
+        {
+          "name": "ts_code",
+          "type": "str",
+          "default": "Y",
+          "description": "股票代码"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "default": "Y",
+          "description": "股票名称"
+        },
+        {
+          "name": "shareholding",
+          "type": "str",
+          "default": "Y",
+          "description": "中央结算系统持股量"
+        },
+        {
+          "name": "hold_nums",
+          "type": "str",
+          "default": "Y",
+          "description": "参与者数目"
+        },
+        {
+          "name": "hold_ratio",
+          "type": "str",
+          "default": "Y",
+          "description": "持股占比"
+        }
       ],
-      "example_parameters": {"trade_date": "20260907"},
-      "code_examples": ["df = pro.ccass_hold(trade_date='20260907')"],
+      "example_parameters": {
+        "trade_date": "20260907"
+      },
+      "code_examples": [
+        "df = pro.ccass_hold(trade_date='20260907')"
+      ],
       "response_examples": [],
-      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "5000积分每分钟300次，8000积分以上每分钟500次", "probed_code": 0, "probed_message": ""},
-      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/extra/ccass_hold.py:CcassHoldCollector"]}
+      "permission": {
+        "status": "有权限",
+        "basis": "2026-09-08 生产 Token 实测返回成功",
+        "official_text": "5000积分每分钟300次，8000积分以上每分钟500次",
+        "probed_code": 0,
+        "probed_message": ""
+      },
+      "implementation": {
+        "status": "已实现",
+        "mode": "specialized",
+        "references": [
+          "collectors/stock/extra/ccass_hold.py:CcassHoldCollector"
+        ]
+      }
     },
     {
       "api_name": "ccass_hold_detail",
@@ -41,32 +120,117 @@
       "category": "特色数据",
       "category_path": "股票数据/特色数据",
       "description": "获取中央结算系统机构席位持股明细；全市场单日数据量可超过百万行，必须使用受控范围",
-      "doc_ids": [274],
-      "official_urls": ["https://tushare.pro/document/2?doc_id=274"],
-      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "doc_ids": [
+        274
+      ],
+      "official_urls": [
+        "https://tushare.pro/document/2?doc_id=274"
+      ],
+      "http": {
+        "supported": true,
+        "method": "POST",
+        "url": "http://api.tushare.pro"
+      },
       "read_only": true,
       "collectable": true,
       "input_parameters": [
-        {"name": "ts_code", "type": "str", "required": "N", "description": "股票代码"},
-        {"name": "hk_code", "type": "str", "required": "N", "description": "港交所代码"},
-        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
-        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
-        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"}
+        {
+          "name": "ts_code",
+          "type": "str",
+          "required": "N",
+          "description": "股票代码"
+        },
+        {
+          "name": "hk_code",
+          "type": "str",
+          "required": "N",
+          "description": "港交所代码"
+        },
+        {
+          "name": "trade_date",
+          "type": "str",
+          "required": "N",
+          "description": "交易日期"
+        },
+        {
+          "name": "start_date",
+          "type": "str",
+          "required": "N",
+          "description": "开始日期"
+        },
+        {
+          "name": "end_date",
+          "type": "str",
+          "required": "N",
+          "description": "结束日期"
+        }
       ],
       "output_parameters": [
-        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
-        {"name": "ts_code", "type": "str", "default": "Y", "description": "股票代码"},
-        {"name": "name", "type": "str", "default": "Y", "description": "股票名称"},
-        {"name": "col_participant_id", "type": "str", "default": "Y", "description": "参与者编号"},
-        {"name": "col_participant_name", "type": "str", "default": "Y", "description": "机构名称"},
-        {"name": "col_shareholding", "type": "str", "default": "Y", "description": "持股量"},
-        {"name": "col_shareholding_percent", "type": "str", "default": "Y", "description": "持股占比"}
+        {
+          "name": "trade_date",
+          "type": "str",
+          "default": "Y",
+          "description": "交易日期"
+        },
+        {
+          "name": "ts_code",
+          "type": "str",
+          "default": "Y",
+          "description": "股票代码"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "default": "Y",
+          "description": "股票名称"
+        },
+        {
+          "name": "col_participant_id",
+          "type": "str",
+          "default": "Y",
+          "description": "参与者编号"
+        },
+        {
+          "name": "col_participant_name",
+          "type": "str",
+          "default": "Y",
+          "description": "机构名称"
+        },
+        {
+          "name": "col_shareholding",
+          "type": "str",
+          "default": "Y",
+          "description": "持股量"
+        },
+        {
+          "name": "col_shareholding_percent",
+          "type": "str",
+          "default": "Y",
+          "description": "持股占比"
+        }
       ],
-      "example_parameters": {"ts_code": "600519.SH", "trade_date": "20260907"},
-      "code_examples": ["df = pro.ccass_hold_detail(ts_code='600519.SH', trade_date='20260907')"],
+      "example_parameters": {
+        "ts_code": "600519.SH",
+        "trade_date": "20260907"
+      },
+      "code_examples": [
+        "df = pro.ccass_hold_detail(ts_code='600519.SH', trade_date='20260907')"
+      ],
       "response_examples": [],
-      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "8000积分可调取，每分钟300次", "probed_code": 0, "probed_message": ""},
-      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/extra/ccass_hold_detail.py:CcassHoldDetailCollector"]}
+      "permission": {
+        "status": "有权限",
+        "basis": "2026-09-08 生产 Token 实测返回成功",
+        "official_text": "8000积分可调取，每分钟300次",
+        "probed_code": 0,
+        "probed_message": ""
+      },
+      "implementation": {
+        "status": "已实现",
+        "mode": "specialized",
+        "references": [
+          "collectors/stock/extra/ccass_hold_detail.py:CcassHoldDetailCollector"
+        ]
+      }
     },
     {
       "api_name": "hk_hold",
@@ -74,33 +238,122 @@
       "category": "特色数据",
       "category_path": "股票数据/特色数据",
       "description": "获取沪深港股通持股明细；北向日度披露自2024-08-20停止，南向数据仍可返回",
-      "doc_ids": [188],
-      "official_urls": ["https://tushare.pro/document/2?doc_id=188"],
-      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "doc_ids": [
+        188
+      ],
+      "official_urls": [
+        "https://tushare.pro/document/2?doc_id=188"
+      ],
+      "http": {
+        "supported": true,
+        "method": "POST",
+        "url": "http://api.tushare.pro"
+      },
       "read_only": true,
       "collectable": true,
       "input_parameters": [
-        {"name": "code", "type": "str", "required": "N", "description": "交易所代码"},
-        {"name": "ts_code", "type": "str", "required": "N", "description": "TS股票代码"},
-        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
-        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
-        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"},
-        {"name": "exchange", "type": "str", "required": "N", "description": "SH/SZ/HK"}
+        {
+          "name": "code",
+          "type": "str",
+          "required": "N",
+          "description": "交易所代码"
+        },
+        {
+          "name": "ts_code",
+          "type": "str",
+          "required": "N",
+          "description": "TS股票代码"
+        },
+        {
+          "name": "trade_date",
+          "type": "str",
+          "required": "N",
+          "description": "交易日期"
+        },
+        {
+          "name": "start_date",
+          "type": "str",
+          "required": "N",
+          "description": "开始日期"
+        },
+        {
+          "name": "end_date",
+          "type": "str",
+          "required": "N",
+          "description": "结束日期"
+        },
+        {
+          "name": "exchange",
+          "type": "str",
+          "required": "N",
+          "description": "SH/SZ/HK"
+        }
       ],
       "output_parameters": [
-        {"name": "code", "type": "str", "default": "Y", "description": "原始代码"},
-        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
-        {"name": "ts_code", "type": "str", "default": "Y", "description": "TS代码"},
-        {"name": "name", "type": "str", "default": "Y", "description": "股票名称"},
-        {"name": "vol", "type": "int", "default": "Y", "description": "持股数量"},
-        {"name": "ratio", "type": "float", "default": "Y", "description": "持股占比"},
-        {"name": "exchange", "type": "str", "default": "Y", "description": "SH/SZ/HK"}
+        {
+          "name": "code",
+          "type": "str",
+          "default": "Y",
+          "description": "原始代码"
+        },
+        {
+          "name": "trade_date",
+          "type": "str",
+          "default": "Y",
+          "description": "交易日期"
+        },
+        {
+          "name": "ts_code",
+          "type": "str",
+          "default": "Y",
+          "description": "TS代码"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "default": "Y",
+          "description": "股票名称"
+        },
+        {
+          "name": "vol",
+          "type": "int",
+          "default": "Y",
+          "description": "持股数量"
+        },
+        {
+          "name": "ratio",
+          "type": "float",
+          "default": "Y",
+          "description": "持股占比"
+        },
+        {
+          "name": "exchange",
+          "type": "str",
+          "default": "Y",
+          "description": "SH/SZ/HK"
+        }
       ],
-      "example_parameters": {"trade_date": "20260907"},
-      "code_examples": ["df = pro.hk_hold(trade_date='20260907')"],
+      "example_parameters": {
+        "trade_date": "20260907"
+      },
+      "code_examples": [
+        "df = pro.hk_hold(trade_date='20260907')"
+      ],
       "response_examples": [],
-      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "2000积分可正常使用", "probed_code": 0, "probed_message": ""},
-      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/extra/hk_hold.py:HkHoldCollector"]}
+      "permission": {
+        "status": "有权限",
+        "basis": "2026-09-08 生产 Token 实测返回成功",
+        "official_text": "2000积分可正常使用",
+        "probed_code": 0,
+        "probed_message": ""
+      },
+      "implementation": {
+        "status": "已实现",
+        "mode": "specialized",
+        "references": [
+          "collectors/stock/extra/hk_hold.py:HkHoldCollector"
+        ]
+      }
     },
     {
       "api_name": "moneyflow_hsgt",
@@ -108,30 +361,577 @@
       "category": "资金流向数据",
       "category_path": "股票数据/资金流向数据",
       "description": "获取沪股通、深股通、港股通每日资金流向数据",
-      "doc_ids": [47],
-      "official_urls": ["https://tushare.pro/document/2?doc_id=47"],
-      "http": {"supported": true, "method": "POST", "url": "http://api.tushare.pro"},
+      "doc_ids": [
+        47
+      ],
+      "official_urls": [
+        "https://tushare.pro/document/2?doc_id=47"
+      ],
+      "http": {
+        "supported": true,
+        "method": "POST",
+        "url": "http://api.tushare.pro"
+      },
       "read_only": true,
       "collectable": true,
       "input_parameters": [
-        {"name": "trade_date", "type": "str", "required": "N", "description": "交易日期"},
-        {"name": "start_date", "type": "str", "required": "N", "description": "开始日期"},
-        {"name": "end_date", "type": "str", "required": "N", "description": "结束日期"}
+        {
+          "name": "trade_date",
+          "type": "str",
+          "required": "N",
+          "description": "交易日期"
+        },
+        {
+          "name": "start_date",
+          "type": "str",
+          "required": "N",
+          "description": "开始日期"
+        },
+        {
+          "name": "end_date",
+          "type": "str",
+          "required": "N",
+          "description": "结束日期"
+        }
       ],
       "output_parameters": [
-        {"name": "trade_date", "type": "str", "default": "Y", "description": "交易日期"},
-        {"name": "ggt_ss", "type": "float", "default": "Y", "description": "港股通（上海）"},
-        {"name": "ggt_sz", "type": "float", "default": "Y", "description": "港股通（深圳）"},
-        {"name": "hgt", "type": "float", "default": "Y", "description": "沪股通"},
-        {"name": "sgt", "type": "float", "default": "Y", "description": "深股通"},
-        {"name": "north_money", "type": "float", "default": "Y", "description": "北向资金"},
-        {"name": "south_money", "type": "float", "default": "Y", "description": "南向资金"}
+        {
+          "name": "trade_date",
+          "type": "str",
+          "default": "Y",
+          "description": "交易日期"
+        },
+        {
+          "name": "ggt_ss",
+          "type": "float",
+          "default": "Y",
+          "description": "港股通（上海）"
+        },
+        {
+          "name": "ggt_sz",
+          "type": "float",
+          "default": "Y",
+          "description": "港股通（深圳）"
+        },
+        {
+          "name": "hgt",
+          "type": "float",
+          "default": "Y",
+          "description": "沪股通"
+        },
+        {
+          "name": "sgt",
+          "type": "float",
+          "default": "Y",
+          "description": "深股通"
+        },
+        {
+          "name": "north_money",
+          "type": "float",
+          "default": "Y",
+          "description": "北向资金"
+        },
+        {
+          "name": "south_money",
+          "type": "float",
+          "default": "Y",
+          "description": "南向资金"
+        }
       ],
-      "example_parameters": {"trade_date": "20260907"},
-      "code_examples": ["df = pro.moneyflow_hsgt(trade_date='20260907')"],
+      "example_parameters": {
+        "trade_date": "20260907"
+      },
+      "code_examples": [
+        "df = pro.moneyflow_hsgt(trade_date='20260907')"
+      ],
       "response_examples": [],
-      "permission": {"status": "有权限", "basis": "2026-09-08 生产 Token 实测返回成功", "official_text": "2000积分起，5000积分每分钟500次", "probed_code": 0, "probed_message": ""},
-      "implementation": {"status": "已实现", "mode": "specialized", "references": ["collectors/stock/moneyflow/moneyflow_hsgt.py:MoneyflowHsgtCollector"]}
+      "permission": {
+        "status": "有权限",
+        "basis": "2026-09-08 生产 Token 实测返回成功",
+        "official_text": "2000积分起，5000积分每分钟500次",
+        "probed_code": 0,
+        "probed_message": ""
+      },
+      "implementation": {
+        "status": "已实现",
+        "mode": "specialized",
+        "references": [
+          "collectors/stock/moneyflow/moneyflow_hsgt.py:MoneyflowHsgtCollector"
+        ]
+      }
+    },
+    {
+      "api_name": "stk_seasoned",
+      "title": "A股增发事件",
+      "category": "股票数据",
+      "category_path": "股票数据/参考数据",
+      "description": "增发预案、审批、实施、终止和募集费用等公告事件；按公告日期采集并保留供应商版本。",
+      "doc_ids": [
+        494
+      ],
+      "official_urls": [
+        "https://tushare.pro/document/2?doc_id=494"
+      ],
+      "http": {
+        "supported": true,
+        "method": "POST",
+        "url": "http://api.tushare.pro"
+      },
+      "read_only": true,
+      "collectable": true,
+      "input_parameters": [
+        {
+          "name": "ts_code",
+          "type": "str",
+          "required": "N",
+          "description": "TS股票代码"
+        },
+        {
+          "name": "ann_date",
+          "type": "str",
+          "required": "N",
+          "description": "公告日期（YYYYMMDD）"
+        },
+        {
+          "name": "start_date",
+          "type": "str",
+          "required": "N",
+          "description": "开始日期（YYYYMMDD）"
+        },
+        {
+          "name": "end_date",
+          "type": "str",
+          "required": "N",
+          "description": "结束日期（YYYYMMDD）"
+        }
+      ],
+      "output_parameters": [
+        {
+          "name": "ts_code",
+          "type": "str",
+          "default": "Y",
+          "description": "股票代码"
+        },
+        {
+          "name": "ann_date",
+          "type": "str",
+          "default": "Y",
+          "description": "公告日期"
+        },
+        {
+          "name": "first_ann_date",
+          "type": "str",
+          "default": "Y",
+          "description": "首次发布公告日期"
+        },
+        {
+          "name": "proj_info_source",
+          "type": "str",
+          "default": "Y",
+          "description": "信息来源"
+        },
+        {
+          "name": "board_approval_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "董事会审议通过并公告日期"
+        },
+        {
+          "name": "sh_approval_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "股东大会决议公告日期"
+        },
+        {
+          "name": "sasac_approval_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "国资委通过公告日"
+        },
+        {
+          "name": "csrc_approval_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "证监会批准公告日"
+        },
+        {
+          "name": "fo_type",
+          "type": "str",
+          "default": "Y",
+          "description": "增发类别:公开;非公开"
+        },
+        {
+          "name": "fo_stock_type",
+          "type": "str",
+          "default": "Y",
+          "description": "增发A股类型"
+        },
+        {
+          "name": "cur_stage",
+          "type": "str",
+          "default": "Y",
+          "description": "进程:意向;董事会预案;监管审批;实施;终止"
+        },
+        {
+          "name": "valid_st_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "预案有效期起始日期"
+        },
+        {
+          "name": "valid_end_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "预案有效期截止日期"
+        },
+        {
+          "name": "plan_chg_type",
+          "type": "str",
+          "default": "Y",
+          "description": "方案变动类型 方案调整 增发变更 推迟 终止"
+        },
+        {
+          "name": "plan_chg_ann_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "方案变动公告日期"
+        },
+        {
+          "name": "pricing_method",
+          "type": "str",
+          "default": "Y",
+          "description": "定价方式 估值定价 协商定价 市价参考 询价方式投 限价约束"
+        },
+        {
+          "name": "pricing_base_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "定价基准日"
+        },
+        {
+          "name": "price_basis",
+          "type": "str",
+          "default": "Y",
+          "description": "价格制定依据"
+        },
+        {
+          "name": "fo_vol_high",
+          "type": "str",
+          "default": "Y",
+          "description": "预计发行量上限（股）"
+        },
+        {
+          "name": "fo_vol_low",
+          "type": "str",
+          "default": "Y",
+          "description": "预计发行量下限（股）"
+        },
+        {
+          "name": "fo_price_high",
+          "type": "float",
+          "default": "Y",
+          "description": "预计发行价上限（元）"
+        },
+        {
+          "name": "fo_price_low",
+          "type": "float",
+          "default": "Y",
+          "description": "预计发行价下限（元）"
+        },
+        {
+          "name": "fo_price_ratio",
+          "type": "float",
+          "default": "Y",
+          "description": "预计价格相对基准价格比例（%）"
+        },
+        {
+          "name": "fo_raise_total",
+          "type": "float",
+          "default": "Y",
+          "description": "预计募集资金总额（元）"
+        },
+        {
+          "name": "fo_purpose",
+          "type": "str",
+          "default": "Y",
+          "description": "增发目的"
+        },
+        {
+          "name": "fo_investor",
+          "type": "str",
+          "default": "Y",
+          "description": "预计发行对象"
+        },
+        {
+          "name": "sub_method",
+          "type": "str",
+          "default": "Y",
+          "description": "认购方式 纯现金 资产类 其他"
+        },
+        {
+          "name": "fo_price_act",
+          "type": "float",
+          "default": "Y",
+          "description": "发行价（元）"
+        },
+        {
+          "name": "fo_vol_act",
+          "type": "str",
+          "default": "Y",
+          "description": "发行量（股）"
+        },
+        {
+          "name": "fo_raise_total_act",
+          "type": "float",
+          "default": "Y",
+          "description": "募集资金总额（元）"
+        },
+        {
+          "name": "fo_raise_net_act",
+          "type": "float",
+          "default": "Y",
+          "description": "募集资金净额（元）"
+        },
+        {
+          "name": "fo_exp_total",
+          "type": "float",
+          "default": "Y",
+          "description": "发行费用总额（元）"
+        },
+        {
+          "name": "uw_fee",
+          "type": "float",
+          "default": "Y",
+          "description": "承销保荐费（元）"
+        },
+        {
+          "name": "fo_exp_audit",
+          "type": "float",
+          "default": "Y",
+          "description": "审计费（元）"
+        },
+        {
+          "name": "fo_exp_legal",
+          "type": "float",
+          "default": "Y",
+          "description": "律师费（元）"
+        },
+        {
+          "name": "fo_exp_inst",
+          "type": "float",
+          "default": "Y",
+          "description": "中介机构费（元）"
+        },
+        {
+          "name": "fo_exp_pub",
+          "type": "float",
+          "default": "Y",
+          "description": "上网发行费（元）"
+        },
+        {
+          "name": "fo_exp_reg",
+          "type": "float",
+          "default": "Y",
+          "description": "股票登记费（元）"
+        },
+        {
+          "name": "fo_exp_other",
+          "type": "float",
+          "default": "Y",
+          "description": "其他费用（元）"
+        },
+        {
+          "name": "fo_exp_per_share",
+          "type": "float",
+          "default": "Y",
+          "description": "每股发行费（元）"
+        },
+        {
+          "name": "issue_obj_type",
+          "type": "str",
+          "default": "Y",
+          "description": "发行对象类型 全体投资者 大股东及大股东关联方 机构投资者 自然人"
+        },
+        {
+          "name": "pe_issue",
+          "type": "float",
+          "default": "Y",
+          "description": "增发市盈率（按增发前总股本）"
+        },
+        {
+          "name": "pub_plac_qty",
+          "type": "str",
+          "default": "Y",
+          "description": "网上发行股数(股）"
+        },
+        {
+          "name": "onl_pch_vol",
+          "type": "str",
+          "default": "Y",
+          "description": "网上发行有效申购数量（股）"
+        },
+        {
+          "name": "onl_pch_num",
+          "type": "str",
+          "default": "Y",
+          "description": "网上发行有效申购户数（户）"
+        },
+        {
+          "name": "onl_pch_excess",
+          "type": "float",
+          "default": "Y",
+          "description": "网上发行超额认购倍数"
+        },
+        {
+          "name": "onl_winning_rate",
+          "type": "float",
+          "default": "Y",
+          "description": "网上发行中签率（%）"
+        },
+        {
+          "name": "inst_plac_qty",
+          "type": "str",
+          "default": "Y",
+          "description": "专业机构配售股数（股）"
+        },
+        {
+          "name": "inst_sub_eff_total",
+          "type": "str",
+          "default": "Y",
+          "description": "专业机构有效申购总量（股）"
+        },
+        {
+          "name": "inst_sub_eff_cnt",
+          "type": "str",
+          "default": "Y",
+          "description": "专业机构有效申购户数（户）"
+        },
+        {
+          "name": "inst_oversub_times",
+          "type": "float",
+          "default": "Y",
+          "description": "专业机构超额认购倍数（倍）"
+        },
+        {
+          "name": "a_inv_plac_qty",
+          "type": "str",
+          "default": "Y",
+          "description": "A类投资者配售股数（股）"
+        },
+        {
+          "name": "b_inv_plac_qty",
+          "type": "str",
+          "default": "Y",
+          "description": "B类投资者配售股数（股）"
+        },
+        {
+          "name": "old_sh_pre_plac_qty",
+          "type": "str",
+          "default": "Y",
+          "description": "老股东优先配售股数（股）"
+        },
+        {
+          "name": "old_sh_pre_plac_ratio",
+          "type": "float",
+          "default": "Y",
+          "description": "老股东优先配售比例 %"
+        },
+        {
+          "name": "clw_between_inst_pub",
+          "type": "str",
+          "default": "Y",
+          "description": "网上网下回拨股数(股)"
+        },
+        {
+          "name": "prospectus_pub_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "募集说明书对外披露日期"
+        },
+        {
+          "name": "offer_intent_pub_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "发行意向文件披露日期"
+        },
+        {
+          "name": "apply_date",
+          "type": "str",
+          "default": "Y",
+          "description": "申购日"
+        },
+        {
+          "name": "old_sh_pre_plac_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "老股东优先配售日期"
+        },
+        {
+          "name": "onl_issue_date",
+          "type": "str",
+          "default": "Y",
+          "description": "网上发行日期"
+        },
+        {
+          "name": "uw_start_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "承销期起始日"
+        },
+        {
+          "name": "uw_end_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "承销期截止日"
+        },
+        {
+          "name": "uw_mode",
+          "type": "str",
+          "default": "Y",
+          "description": "承销方式 券商包销 非包销代销 上市公司自销"
+        },
+        {
+          "name": "new_share_list_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "新增股份上市日期"
+        },
+        {
+          "name": "list_circ_qty",
+          "type": "str",
+          "default": "Y",
+          "description": "本次上市流通股数（股）"
+        },
+        {
+          "name": "right_reg_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "股权登记日"
+        },
+        {
+          "name": "ex_right_dt",
+          "type": "str",
+          "default": "Y",
+          "description": "除权日"
+        },
+        {
+          "name": "update_flag",
+          "type": "str",
+          "default": "Y",
+          "description": "更新标识 默认为0 有更新时为1"
+        }
+      ],
+      "permission": {
+        "status": "verified_accessible",
+        "basis": "2026-11-10 exact-date limit=1 live probe; not a full-market completeness certificate"
+      },
+      "implementation": {
+        "mode": "generic_raw",
+        "status": "已实现",
+        "references": [
+          "collectors/tushare_raw.py:TushareRawCollector"
+        ]
+      }
     }
   ]
 }

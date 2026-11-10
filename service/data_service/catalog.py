@@ -282,6 +282,10 @@ STANDARD_ENDPOINTS = (
 )
 
 RESEARCH_ENDPOINTS = (
+    {'method':'GET','path':'/api/v1/research/stocks/{ts_code}/announcements',
+     'name':'A股公告目录','domain':'事件研究','description':'按首次观察时点查询公告元数据，正文按需获取。'},
+    {'method':'GET','path':'/api/v1/research/announcements/{record_hash}/document',
+     'name':'公告正文','domain':'事件研究','description':'按已存公告身份下载PDF或分页提取文本，正文不持久化。'},
     *DERIVED_ENDPOINTS,
     {
         "method": "GET", "path": "/api/v1/research/factors/catalog",

@@ -737,6 +737,12 @@ def _inferred_freshness(
 def build_dataset_registry() -> DatasetRegistry:
     """Build the public allow-list and guarantee collector-table coverage."""
     datasets = _curated_datasets()
+    datasets.append(DatasetSpec(name='stock_announcements',table='stock_announcements',
+        description='A股公告元数据（巨潮公开目录，正文按需）',category='events',
+        primary_keys=('_record_hash',),exact_filters={'ts_code':'ts_code','source':'source'},
+        standard_filters=('ts_code','source'),date_column='ann_date',date_storage=DateStorage.DATE,
+        availability_column='ann_date',default_order=('ann_date','_record_hash'),
+        source='CNINFO',source_ids=('cninfo',),storage_semantics='versioned_payload'))
     registered_tables = {item.table for item in datasets}
     catalog = TushareInterfaceCatalog()
 

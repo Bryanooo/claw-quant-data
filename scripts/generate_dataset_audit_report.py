@@ -8,7 +8,10 @@ from collections import Counter, defaultdict
 from datetime import date, datetime
 import json
 from pathlib import Path
+import sys
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import psycopg2
 import psycopg2.extras
@@ -24,6 +27,7 @@ from service.orchestration_v2.catalog import (
 from service.orchestration_v2.audit_contracts import dataset_audit_contract
 from service.orchestration_v2.repair_planning import observation_identity
 from service.orchestration_v2.recovery_policy import DEFERRED_RESEARCH_DATASETS
+from service.orchestration_v2.repository import OrchestrationV2Repository
 from service.source_connectors.registry import SOURCE_REGISTRY
 
 
@@ -82,6 +86,7 @@ def classify_repair_state(
 
 
 def build_report(job_start: int | None, job_end: int | None) -> dict:
+    automation_states = OrchestrationV2Repository().automation_states()
     acquisition_tasks = acquisition_task_blueprints()
     all_tasks = (*acquisition_tasks, *transformation_task_blueprints())
     v2_task_by_dataset = {
@@ -428,6 +433,8 @@ def build_report(job_start: int | None, job_end: int | None) -> dict:
                 "api_name": api_name,
                 "audit_capability": "available",
                 "audit_mode": rule.strict_audit_mode,
+                "automation": automation_states.get(v2_task_key, {'state': 'not_published', 'automatic': False}),
+                "automatic_repair_safe": automatic_task.get(v2_task_key, False),
                 "absence_detection": (
                     "expected_calendar"
                     if rule.detects_missing_partitions

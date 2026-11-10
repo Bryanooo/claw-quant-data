@@ -56,3 +56,7 @@ reports/*/
 
 # Downloaded source documents and temporary rendering artifacts.
 /tmp/
+
+.pytest_cache/
+
+.ruff_cache/

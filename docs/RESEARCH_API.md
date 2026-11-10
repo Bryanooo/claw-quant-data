@@ -516,3 +516,10 @@ EMA20 需要完整窗口，两者可用性不同，不合并契约。筹码供�
 本机并行历史计算负载下实测：宁德时代 1200 日首次请求 16.96 秒、缓存命中 0.29 秒；
 沪深300 ETF 首次请求 23.64 秒、命中 0.31 秒。上证指数命中约 0.04–0.27 秒。
 这些是单次观测，不是性能 SLA；数据库共享磁盘负载下冷请求仍需进一步治理。
+
+
+## 公告目录与按需正文
+
+- `GET /api/v1/research/stocks/{ts_code}/announcements?as_of=YYYY-MM-DD&knowledge=known_then&limit=50`：本地公告目录。默认同时限制披露时间与首次观察时间；`knowledge=reconstructed` 允许事后重建，必须与当时已知口径区别使用。
+- `GET /api/v1/research/announcements/{record_hash}/document?format=text&page_start=0&page_count=10`：对已存公告的官方 PDF 按需下载并分页提取；`format=pdf` 返回原 PDF。最多 12 MiB、每次最多 25 页、文本最多 20 万字符；Linux 子进程内存 512 MiB、CPU 15 秒、总超时 20 秒。正文不持久化，扫描件返回无可提取文本，未启用 OCR。返回 SHA-256、下载时点，未保证历史 PDF 版本不变。
+- 增发明细使用 `GET /api/v1/data/datasets/stk_seasoned/records`，通过标准过滤器选择证券及公告日期。保留原始事件阶段、实际实施日期等字段，不能用最新实施结果回填过去的交易信号。

@@ -218,6 +218,24 @@ services:
       retries: 3
       start_period: 20s
 
+  # Serialize public announcement pagination without occupying core repair workers.
+  worker-v2-events:
+    logging: *bounded-logging
+    <<: *app-service
+    cpus: 0.5
+    mem_limit: 1g
+    environment:
+      <<: *app-environment
+      V2_JOB_RESOURCE_CLASSES: events
+      V2_WORKER_COMPONENT: worker-v2-routine
+    command: ["python", "-m", "service.orchestration_v2.worker"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/check_service_health.py", "--component", "worker-v2-routine", "--resource-class", "events"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   worker-v2-valuation:
     logging: *bounded-logging
     <<: *app-service

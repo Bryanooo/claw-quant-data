@@ -25,6 +25,8 @@ from service.orchestration_v2.transformations import (
 )
 
 
+CLOSED_CALENDAR_TASKS = frozenset({'cninfo_announcements', 'stk_seasoned', 'report_rc'})
+
 # These inputs have financial/event periods, not the daily bar observation key.
 TRANSFORMATION_AUXILIARY_INPUTS = {
     "ggt_monthly": ("ggt_daily",),
@@ -223,7 +225,7 @@ def dispatch_weekly_reference_profiles(as_of: date, *, repository=None):
     created = existing = 0
     errors = {}
     for key in WEEKLY_REFERENCE_PROFILES:
-        if key not in active:
+        if key not in active or key in DEFERRED_RESEARCH_DATASETS:
             continue
         try:
             _, added = store.create_execution(ExecutionRequest(
@@ -273,6 +275,7 @@ def dispatch_daily_acquisitions(
         if (
             blueprint.cadence == "daily"
             and blueprint.task_key not in DEFERRED_RESEARCH_DATASETS
+            and blueprint.task_key not in CLOSED_CALENDAR_TASKS
         )
     )
     created = 0
@@ -321,6 +324,52 @@ def dispatch_daily_acquisitions(
         "skipped": None,
         "errors": errors,
     }
+
+
+def dispatch_closed_calendar_events(as_of_date, *, repository, lookback=7):
+    """Reconcile recent closed calendar days, including weekends; metadata only."""
+    active = repository.active_task_keys()
+    created = existing = eligible = 0
+    errors = {}
+    from datetime import datetime
+    from service.clock import SHANGHAI_TIMEZONE
+    from service.data_coverage.registry import COVERAGE_RULES
+    for offset in range(0, lookback + 1):
+        day = as_of_date - timedelta(days=offset)
+        for key in sorted(CLOSED_CALENDAR_TASKS & active):
+            if offset == 0:
+                # These two catalogues certify closed natural days. Reports
+                # can certify today only after their explicit final release.
+                if key != 'report_rc':
+                    continue
+                release = COVERAGE_RULES.get('report_rc').release_after
+                if business_now() < datetime.combine(day, release, tzinfo=SHANGHAI_TIMEZONE):
+                    continue
+            eligible += 1
+            try:
+                prefix = 'daily' if key == 'report_rc' else 'calendar'
+                request = ExecutionRequest(
+                    task_key=key, purpose='daily', trigger_source='schedule',
+                    idempotency_key=f'v2:{prefix}:{key}:{day}' + (':event-pool-v1' if key == 'cninfo_announcements' else ''), observation_key=str(day),
+                    observation_start=day, observation_end=day, observation_period=str(day),
+                    publication_date=day, frozen_scope={'dispatch':'closed_calendar_event',
+                    'body_policy':'on_demand_only'}, app_revision=APP_REVISION)
+                execution, added = repository.create_execution(request)
+                if (key == 'report_rc' and not added
+                        and execution.get('status') == 'attention'
+                        and 'TaskAuditNoMatureExpectedPartitionError' in (execution.get('final_error_message') or '')):
+                    # Repair only the known early-release failure. Preserve
+                    # its receipt and deduplicate one final-publication run.
+                    _, added = repository.create_execution(request.model_copy(update={
+                        'idempotency_key': f'v2:publication-recovery:{key}:{day}',
+                        'frozen_scope': {**request.frozen_scope,
+                                         'publication_recovery_for': execution['task_execution_id']},
+                    }))
+                created += int(added)
+                existing += int(not added)
+            except Exception as exc:
+                errors[f'{key}:{day}'] = f'{type(exc).__name__}: {exc}'
+    return {'created':created,'existing':existing,'eligible':eligible,'errors':errors}
 
 
 def dispatch_due_acquisitions(
@@ -400,6 +449,11 @@ def dispatch_due_acquisitions(
         totals["created"] += created
         totals["existing"] += existing
         errors.update({f"{cadence}:{key}": value for key, value in cadence_errors.items()})
+    events = dispatch_closed_calendar_events(as_of_date, repository=store)
+    cadences['calendar_events'] = events
+    for name in ('eligible', 'created', 'existing'):
+        totals[name] += events[name]
+    errors.update(events['errors'])
     return {
         "as_of_date": as_of_date.isoformat(),
         **totals,
@@ -462,24 +516,26 @@ def dispatch_latest_daily_acquisitions(
     # At midnight in Shanghai the previous US calendar date is still an
     # open session. A zero-row pull then is not a verified empty delivery.
     us_cutoff = min(as_of_date, business_now().astimezone(ZoneInfo("America/New_York")).date())
-    us_rows = query(
-        "SELECT cal_date FROM tushare_norm_us_tradecal WHERE is_open=1 "
-        "AND cal_date < %s ORDER BY cal_date DESC LIMIT 1",
-        (us_cutoff,),
-    )
-    if not us_rows:
-        return {
-            "target_date": target.isoformat(),
-            "delayed_target_date": delayed.isoformat(),
-            "us_target_date": None,
-            "trade_day": True,
-            "eligible": 0,
-            "created": 0,
-            "existing": 0,
-            "skipped": "us_trade_calendar_has_no_completed_open_day",
-            "errors": {"us_daily": "US trade calendar has no completed open day"},
-        }
-    us_target = us_rows[0]["cal_date"]
+    us_target = target
+    if US_COMPLETED_SESSION_TASKS - DEFERRED_RESEARCH_DATASETS:
+        us_rows = query(
+            "SELECT cal_date FROM tushare_norm_us_tradecal WHERE is_open=1 "
+            "AND cal_date < %s ORDER BY cal_date DESC LIMIT 1",
+            (us_cutoff,),
+        )
+        if not us_rows:
+            return {
+                "target_date": target.isoformat(),
+                "delayed_target_date": delayed.isoformat(),
+                "us_target_date": None,
+                "trade_day": True,
+                "eligible": 0,
+                "created": 0,
+                "existing": 0,
+                "skipped": "us_trade_calendar_has_no_completed_open_day",
+                "errors": {"us_daily": "US trade calendar has no completed open day"},
+            }
+        us_target = us_rows[0]["cal_date"]
     store = repository or OrchestrationV2Repository()
     superseded = []
     requeued = []

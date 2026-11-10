@@ -23,6 +23,8 @@
 
 按策略暂停新增自动采集：`bc_bestotcqt`、`bc_otcqt`、`bond_blk`、`bond_blk_detail`、`ccass_hold`、`ccass_hold_detail`、`factor_value`、`ft_limit`、`fut_basic`、`fut_daily`、`fut_holding`、`fut_index_daily`、`fut_mapping`、`fut_settle`、`fut_trade_cal`、`fut_weekly_detail`、`fut_weekly_monthly`、`fut_wsr`、`fx_obasic`、`gz_index`、`hk_basic`、`hk_daily`、`hk_tradecal`、`libor`、`opt_basic`、`opt_daily`、`rt_hk_k`、`us_basic`、`us_daily`、`us_tradecal`、`wz_index`。
 
+另有独立于上述V2流程的盘中观察循环，消费4个蚂蚁路由，按当前代码每15分钟执行，只覆盖宽基ETF/指数代理、行业与明确开启观察的自选股。最近5个已结束交易日应有80轮，有记录48轮，状态{'success': 39, 'failed': 4, 'attention': 5}，缺少32轮。完整缺轮及问题回执列在JSON的 `intraday_review`；缺轮不能解释为上游没有数据。历史回放不算自动采集覆盖。
+
 自动采集流程的近期产出状态：{'complete': 78, 'unverified': 73, 'gaps': 6, 'sample_manifest_only': 1, 'empty': 2}。
 
 `complete` 只覆盖表内检查范围；`unverified` 表示缺少足够请求/范围证据；`gaps` 表示已定位到缺分区、实体不足或现行规则不通过；`empty` 只表示相应审计结果为空，须结合契约的 verified-empty 证据判断，不推定上游没有数据。检查超时保留为未核实。控制面已通过的某个周期与更宽窗口未通过可以同时成立。历史范围与旧规则问题另见 [历史审计账本汇总](dataset_audit_latest.md)，不能用本次近30日检查替代全历史认证。

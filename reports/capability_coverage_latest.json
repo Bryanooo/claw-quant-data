@@ -71959,6 +71959,7 @@
     },
     "capabilities_with_task": 213,
     "capabilities_with_automatic_task": 167,
+    "capabilities_with_intraday_consumer": 4,
     "acquisition_tasks": 203,
     "published_acquisitions": 203,
     "acquisition_automation": {
@@ -91775,7 +91776,7 @@
     "historical_acceptance_reference": "reports/research_acceptance_reference.json"
   },
   "code_file_digests": {
-    "scripts/audit_capability_coverage.py": "3ed49fb76e93fefbd6fa2f6eb679dbf18aa6594367444860dca1ca02e49871f7",
+    "scripts/audit_capability_coverage.py": "19f4ad472fc436403cdf24aa4ca5ef888ae59a293ccc28d7ce9c143d876f01a4",
     "service/orchestration_v2/scheduling.py": "877924f235a732253e4629442b6d19720aa70ec6f2d34b050b407becb1d01e90",
     "service/orchestration_v2/repository.py": "b3e6509688e170cc1e310c347e69ae35c3a5d36bf3566f3debe9f075deb4b61f",
     "service/orchestration_v2/audit_runtime.py": "97a5cefb14d9ed978afc219fcfc41f30de7b0d0a71f56866999c440e2d5361eb",
@@ -91840,6 +91841,173 @@
     "full_pytest": "1220 passed, 1 optional DuckDB test skipped",
     "database": "isolated PostgreSQL16; not production",
     "lint": "passed",
-    "documentation": "16 Markdown files passed"
+    "documentation": "16 Markdown files passed",
+    "followup_checks": "8 capability review tests passed, including the separate intraday process"
+  },
+  "intraday_review": {
+    "process": "intraday-worker",
+    "source": "financial_data",
+    "routes": [
+      "/api/v1/quote/basic-snapshot",
+      "/api/v1/quote/capital-flow-range",
+      "/api/v1/quote/kline-batch",
+      "/api/v1/sector/plate-list"
+    ],
+    "scope": "wide ETF/index proxies, industry list, explicitly enabled watchlist; not every stock",
+    "cadence_source": "IntradayObservationService.slot",
+    "review_trade_days": [
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-09",
+      "2026-11-10"
+    ],
+    "expected_slots": 80,
+    "recorded_slots": 48,
+    "status_counts": {
+      "success": 39,
+      "failed": 4,
+      "attention": 5
+    },
+    "missing_slots": [
+      "2026-11-06 09:30:00+08:00",
+      "2026-11-06 09:45:00+08:00",
+      "2026-11-06 10:00:00+08:00",
+      "2026-11-06 10:15:00+08:00",
+      "2026-11-06 10:30:00+08:00",
+      "2026-11-06 10:45:00+08:00",
+      "2026-11-06 11:00:00+08:00",
+      "2026-11-06 11:15:00+08:00",
+      "2026-11-06 13:00:00+08:00",
+      "2026-11-06 13:15:00+08:00",
+      "2026-11-06 13:30:00+08:00",
+      "2026-11-06 13:45:00+08:00",
+      "2026-11-06 14:00:00+08:00",
+      "2026-11-06 14:15:00+08:00",
+      "2026-11-06 14:30:00+08:00",
+      "2026-11-06 14:45:00+08:00",
+      "2026-11-09 09:30:00+08:00",
+      "2026-11-09 09:45:00+08:00",
+      "2026-11-09 10:00:00+08:00",
+      "2026-11-09 10:15:00+08:00",
+      "2026-11-09 10:30:00+08:00",
+      "2026-11-09 10:45:00+08:00",
+      "2026-11-09 11:00:00+08:00",
+      "2026-11-09 11:15:00+08:00",
+      "2026-11-09 13:00:00+08:00",
+      "2026-11-09 13:15:00+08:00",
+      "2026-11-09 13:30:00+08:00",
+      "2026-11-09 13:45:00+08:00",
+      "2026-11-09 14:00:00+08:00",
+      "2026-11-09 14:15:00+08:00",
+      "2026-11-09 14:30:00+08:00",
+      "2026-11-09 14:45:00+08:00"
+    ],
+    "problem_runs": [
+      {
+        "scheduled_for": "2026-11-04 06:00:00+00:00",
+        "status": "failed",
+        "trigger_source": "schedule",
+        "error_message": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n",
+        "evidence": {}
+      },
+      {
+        "scheduled_for": "2026-11-04 06:15:00+00:00",
+        "status": "failed",
+        "trigger_source": "schedule",
+        "error_message": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n",
+        "evidence": {}
+      },
+      {
+        "scheduled_for": "2026-11-04 06:30:00+00:00",
+        "status": "failed",
+        "trigger_source": "schedule",
+        "error_message": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n",
+        "evidence": {}
+      },
+      {
+        "scheduled_for": "2026-11-04 06:45:00+00:00",
+        "status": "failed",
+        "trigger_source": "schedule",
+        "error_message": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n",
+        "evidence": {}
+      },
+      {
+        "scheduled_for": "2026-11-05 01:30:00+00:00",
+        "status": "attention",
+        "trigger_source": "schedule",
+        "error_message": null,
+        "evidence": {
+          "hot_plates": [],
+          "missing_symbols": [
+            "399001.SZ"
+          ],
+          "provider_period": "P_Min1",
+          "provider_period_reason": "场内基金分钟K仅支持P_Min1；按15分钟轮次批量采集并持久化",
+          "collection_cadence_minutes": 15
+        }
+      },
+      {
+        "scheduled_for": "2026-11-05 02:30:00+00:00",
+        "status": "attention",
+        "trigger_source": "schedule",
+        "error_message": null,
+        "evidence": {
+          "hot_plates": [],
+          "missing_symbols": [
+            "399001.SZ"
+          ],
+          "provider_period": "P_Min1",
+          "provider_period_reason": "场内基金分钟K仅支持P_Min1；按15分钟轮次批量采集并持久化",
+          "collection_cadence_minutes": 15
+        }
+      },
+      {
+        "scheduled_for": "2026-11-05 05:30:00+00:00",
+        "status": "attention",
+        "trigger_source": "schedule",
+        "error_message": null,
+        "evidence": {
+          "hot_plates": [],
+          "missing_symbols": [
+            "399001.SZ"
+          ],
+          "provider_period": "P_Min1",
+          "provider_period_reason": "场内基金分钟K仅支持P_Min1；按15分钟轮次批量采集并持久化",
+          "collection_cadence_minutes": 15
+        }
+      },
+      {
+        "scheduled_for": "2026-11-05 06:30:00+00:00",
+        "status": "attention",
+        "trigger_source": "schedule",
+        "error_message": null,
+        "evidence": {
+          "hot_plates": [],
+          "missing_symbols": [
+            "399001.SZ"
+          ],
+          "provider_period": "P_Min1",
+          "provider_period_reason": "场内基金分钟K仅支持P_Min1；按15分钟轮次批量采集并持久化",
+          "collection_cadence_minutes": 15
+        }
+      },
+      {
+        "scheduled_for": "2026-11-10 01:30:00+00:00",
+        "status": "attention",
+        "trigger_source": "schedule",
+        "error_message": null,
+        "evidence": {
+          "hot_plates": [],
+          "missing_symbols": [
+            "399001.SZ"
+          ],
+          "provider_period": "P_Min1",
+          "provider_period_reason": "场内基金分钟K仅支持P_Min1；按15分钟轮次批量采集并持久化",
+          "collection_cadence_minutes": 15
+        }
+      }
+    ],
+    "scope_notice": "Five recent closed trading days under the current cadence, excluding historical replay. Missing slots mean no run receipt; a supplier no-data response is not established."
   }
 }

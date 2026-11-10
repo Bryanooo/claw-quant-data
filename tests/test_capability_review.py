@@ -52,6 +52,30 @@ def test_chunked_review_preserves_a_failed_day_as_unverified(monkeypatch):
     assert result['failed_scans'] == [{'start': date(2026, 11, 10), 'status': 'verification_timeout'}]
 
 
+def test_independent_intraday_worker_counts_current_slots_and_keeps_gaps():
+    from contextlib import contextmanager
+    from scripts.audit_capability_coverage import intraday_review
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self,*a): pass
+        def execute(self,*a): pass
+        def fetchall(self): return next(self.results)
+        results = iter([
+            [{'cal_date':date(2026,11,d)} for d in (4,5,6,9,10)],
+            [{'scheduled_for':datetime(2026,11,10,9,30,tzinfo=ZoneInfo('Asia/Shanghai')),
+              'status':'attention','trigger_source':'schedule'}]])
+    class Connection:
+        def cursor(self,**kw): return Cursor()
+    class Repo:
+        @contextmanager
+        def _connection(self): yield Connection()
+    result = intraday_review(Repo(),datetime(2026,11,10,21,tzinfo=ZoneInfo('Asia/Shanghai')))
+    assert result['expected_slots'] == 80
+    assert result['recorded_slots'] == 1
+    assert len(result['missing_slots']) == 79
+    assert result['status_counts'] == {'attention':1}
+
+
 def test_reports_include_weekends_and_wait_for_final_same_day_release():
     class Store:
         def __init__(self): self.requests = []

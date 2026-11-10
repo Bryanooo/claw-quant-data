@@ -321,6 +321,46 @@ def derived_history(repository, records, as_of):
     return result
 
 
+def intraday_review(repository, as_of):
+    """Audit the separate observation worker using its current slot function."""
+    from datetime import time as clock_time
+    from service.intraday.service import IntradayObservationService
+    from service.clock import SHANGHAI_TIMEZONE
+    today = as_of.date()
+    cutoff = today if as_of.time().replace(tzinfo=None) >= clock_time(15) else today-timedelta(days=1)
+    with repository._connection() as conn, conn.cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute("SELECT cal_date FROM trade_cal WHERE exchange='SSE' AND is_open=1 "
+                       "AND cal_date<=%s ORDER BY cal_date DESC LIMIT 5", (cutoff,))
+        days = sorted(r['cal_date'] for r in cursor.fetchall())
+        if len(days)!=5:
+            return {'status':'unverified_calendar','review_trade_days':days,
+                'expected_slots':None,'recorded_slots':0,'status_counts':{},'missing_slots':[],
+                'reason':'five mature trading dates are not available; no completeness claim'}
+        cursor.execute("""SELECT scheduled_for,status,trigger_source,error_message,evidence
+            FROM sys_intraday_collection_run
+            WHERE scheduled_for >= %s AND scheduled_for < %s
+              AND trigger_source<>'historical_backfill' ORDER BY scheduled_for""",
+            (datetime.combine(days[0],clock_time(),tzinfo=SHANGHAI_TIMEZONE),
+             datetime.combine(days[-1]+timedelta(days=1),clock_time(),tzinfo=SHANGHAI_TIMEZONE)))
+        rows = [dict(r) for r in cursor.fetchall()]
+    expected = {IntradayObservationService.slot(datetime.combine(day,clock_time(hour,minute),tzinfo=SHANGHAI_TIMEZONE))
+        for day in days for hour in (9,10,11,13,14) for minute in range(60)
+        if clock_time(9,30)<=clock_time(hour,minute)<clock_time(11,30)
+        or clock_time(13)<=clock_time(hour,minute)<clock_time(15)}
+    actual = {r['scheduled_for']:r for r in rows if r['scheduled_for'] in expected}
+    return {'process':'intraday-worker','source':'financial_data',
+        'routes':sorted(c for c in FINANCIAL_DATA_ROUTES if c in {
+            '/api/v1/quote/basic-snapshot','/api/v1/quote/kline-batch',
+            '/api/v1/quote/capital-flow-range','/api/v1/sector/plate-list'}),
+        'scope':'wide ETF/index proxies, industry list, explicitly enabled watchlist; not every stock',
+        'cadence_source':'IntradayObservationService.slot', 'review_trade_days': days,
+        'expected_slots':len(expected),'recorded_slots':len(actual),
+        'status_counts':dict(Counter(r['status'] for r in actual.values())),
+        'missing_slots':sorted(expected-actual.keys()),
+        'problem_runs':[r for r in actual.values() if r['status']!='success'],
+        'scope_notice':'Five recent closed trading days under the current cadence, excluding historical replay. Missing slots mean no run receipt; a supplier no-data response is not established.'}
+
+
 def render_markdown(report):
     stats = report['summary']
     lines = ['# 采集与派生能力核查', '', f"核查开始：{report['started_at']}；完成：{report.get('finished_at', '进行中')}。",
@@ -334,6 +374,13 @@ def render_markdown(report):
     for state, title in [('manual', '需明确范围后手动运行'), ('paused_policy', '按策略暂停新增自动采集')]:
         names = [r['task_key'] for r in report['tasks'] if r['kind']=='acquisition' and r['automation']['state']==state]
         lines += ['', f"{title}：" + '、'.join(f'`{name}`' for name in names) + '。']
+    intraday = report.get('intraday_review')
+    if intraday:
+        lines += ['', '另有独立于上述V2流程的盘中观察循环，消费4个蚂蚁路由，按当前代码每15分钟执行，'
+            '只覆盖宽基ETF/指数代理、行业与明确开启观察的自选股。最近5个已结束交易日应有'
+            f"{intraday['expected_slots']}轮，有记录{intraday['recorded_slots']}轮，状态{intraday['status_counts']}，"
+            f"缺少{len(intraday['missing_slots'])}轮。完整缺轮及问题回执列在JSON的 `intraday_review`；"
+            '缺轮不能解释为上游没有数据。历史回放不算自动采集覆盖。']
     lines += ['', f"自动采集流程的近期产出状态：{stats['automatic_acquisition_output_status']}。",
         '', '`complete` 只覆盖表内检查范围；`unverified` 表示缺少足够请求/范围证据；'
         '`gaps` 表示已定位到缺分区、实体不足或现行规则不通过；`empty` 只表示相应审计结果为空，'
@@ -394,6 +441,7 @@ def summary(report):
         "capabilities_by_source": dict(Counter(c["source"] for c in report["capabilities"])),
         "capabilities_with_task": sum(bool(c["task_keys"]) for c in report["capabilities"]),
         "capabilities_with_automatic_task": sum(bool(c["automatic_tasks"]) for c in report["capabilities"]),
+        "capabilities_with_intraday_consumer": sum(bool(c.get('intraday_consumer')) for c in report['capabilities']),
         "acquisition_tasks": len(acq), "published_acquisitions": sum(r["published"] for r in acq),
         "acquisition_automation": dict(Counter(r["automation"]["state"] for r in acq)),
         "derived_tasks": len(derived), "published_derived": sum(r["published"] for r in derived),
@@ -465,6 +513,7 @@ def main(argv=None):
         "tasks": records}
     report["capabilities"] = capabilities(records)
     report['derived_history'] = derived_history(repository, records, as_of)
+    report['intraday_review'] = intraday_review(repository, as_of)
     write_report(report, args.output)
     if not args.inventory_only:
         work = [(r, o) for r in records if r["published"] for o in r["outputs"] if o.get("rule")]
